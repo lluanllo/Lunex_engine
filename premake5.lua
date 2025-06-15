@@ -17,6 +17,8 @@ project "Stellara"
 	targetdir ("bin/%{outputdir}/%{prj.name}")
 	objdir ("bin-int/%{outputdir}/%{prj.name}")
 
+	pchheader "stpch.h"
+	pchsource "%{prj.name}/src/stpch.cpp"
 
 	files
 	{
@@ -28,13 +30,14 @@ project "Stellara"
 
 	includedirs
 	{
+		"%{prj.name}/src",
 		"%{sln.name}/vendor/spdlog/include",
 	}
 
 	filter "system:windows"
-		cppdialect "C++17"
+		cppdialect "C++20"
 		staticruntime "On"
-		systemversion "10.0.22621.0"
+		systemversion "latest"
 
 	
     filter "system:windows"

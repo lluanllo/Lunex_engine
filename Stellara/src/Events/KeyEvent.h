@@ -1,7 +1,7 @@
 #pragma once
 
+#include "stpch.h"
 #include "Event.h"
-#include <sstream>
 
 namespace Stellara {
 	class KeyEvent : public Event {
