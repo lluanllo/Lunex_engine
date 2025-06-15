@@ -18,7 +18,7 @@ project "Stellara"
 	objdir ("bin-int/%{outputdir}/%{prj.name}")
 
 	pchheader "stpch.h"
-	pchsource "%{prj.name}/src/stpch.cpp"
+	pchsource "Stellara/src/stpch.cpp"
 
 	files
 	{
@@ -31,7 +31,7 @@ project "Stellara"
 	includedirs
 	{
 		"%{prj.name}/src",
-		"%{sln.name}/vendor/spdlog/include",
+		"/vendor/spdlog/include",
 	}
 
 	filter "system:windows"
