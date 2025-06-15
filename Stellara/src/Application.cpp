@@ -1,3 +1,5 @@
+#include "stpch.h"
+
 #include "Events/ApplicationEvent.h"
 #include "Core/Stellara.hpp"
 
