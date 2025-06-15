@@ -1,3 +1,4 @@
+#include "stpch.h"
 #include "Core/Stellara.hpp"
 
 int main(int argc, char** argv) {
