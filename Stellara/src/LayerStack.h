@@ -1,14 +1,15 @@
 #pragma once
 
+#include "Core/Core.h"
 #include "Layer.h"
 
 #include <vector>
 
 namespace Stellara {
-	class LayerStack {
+	class STELLARA_API LayerStack {
 		public:
 
-			LayerStack() = default;
+			LayerStack();
 			~LayerStack();
 
 			void PushLayer(Layer* layer);

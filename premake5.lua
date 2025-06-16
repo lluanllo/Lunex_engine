@@ -17,7 +17,7 @@ include "vendor/GLFW"
 
 project "Stellara"
 	location "Stellara"
-	kind "ConsoleApp"
+	kind "SharedLib"
 	language "C++"
 
 	targetdir ("bin/%{outputdir}/%{prj.name}")
@@ -37,7 +37,7 @@ project "Stellara"
 	includedirs
 	{
 		"%{prj.name}/src",
-		"%{sln.name}/vendor/spdlog/include",
+		"../vendor/spdlog/include",
 		"%{IncludeDir.GLFW}"
 	}
 
@@ -48,24 +48,82 @@ project "Stellara"
 
 	filter "system:windows"
 		cppdialect "C++20"
-		staticruntime "Off"
+		staticruntime "On"
 		systemversion "latest"
 
+		defines{
+			"ST_PLATFORM_WINDOWS",
+			"ST_BUILD_DLL"
+		}
+
+		postbuildcommands{
+			("{COPY} %{cfg.buildtarget.relpath} ../bin/" .. outputdir .. "/Stellara")
+		}
 	
     filter "system:windows"
         buildoptions { "/utf-8" }
 
 	filter "configurations:Debug"
 		defines { "ST_DEBUG" }
-		runtime "Debug"
+		buildoptions { "/MDd"}
 		symbols "On"
 
 	filter "configurations:Release"
 	defines { "ST_RELEASE" }
-		runtime "Release"
+		buildoptions { "/MD"}
 		optimize "On"
 
 	filter "configurations:Dist"
 	defines { "ST_DIST" }
-		runtime "Release"
+		buildoptions { "/MD"}
+		optimize "On"
+
+project "Sandbox"
+	location "Sandbox"
+	kind "ConsoleApp"
+	language "C++"
+
+	targetdir ("bin/" .. outputdir .. "/%{prj.name}")
+	objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
+
+	files
+	{
+		"%{prj.name}/src/**.h",
+		"%{prj.name}/src/**.cpp"
+	}
+
+	includedirs
+	{
+		"../vendor/spdlog/include",
+		"Stellara/src/Core"
+	}
+
+	links
+	{
+		"Stellara"
+	}
+
+	filter "system:windows"
+		cppdialect "C++20"
+		staticruntime "On"
+		systemversion "latest"
+
+		defines
+		{
+			"ST_PLATFORM_WINDOWS"
+		}
+
+	filter "configurations:Debug"
+		defines "ST_DEBUG"
+		buildoptions "/MDd"
+		symbols "On"
+
+	filter "configurations:Release"
+		defines "ST_RELEASE"
+		buildoptions "/MD"
+		optimize "On"
+
+	filter "configurations:Dist"
+		defines "ST_DIST"
+		buildoptions "/MD"
 		optimize "On"

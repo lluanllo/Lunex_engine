@@ -1,15 +1,16 @@
 #pragma once
 
+#include "Core/Core.h"
 #include "Events/Event.h"
 
 #include <iostream>
 
 namespace Stellara {
 
-	class Layer {
+	class STELLARA_API Layer {
 		public:
 			Layer(const std::string& name = "Layer");
-			virtual ~Layer() = default;
+			virtual ~Layer();
 
 			virtual void OnAttach() {}
 			virtual void OnDetach() {}

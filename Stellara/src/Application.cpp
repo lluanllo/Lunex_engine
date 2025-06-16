@@ -1,7 +1,7 @@
 #include "stpch.h"
 
 #include "Events/ApplicationEvent.h"
-#include "Core/Stellara.hpp"
+#include "Application.h"
 
 #include <GLFW/glfw3.h>
 
@@ -22,18 +22,37 @@ namespace Stellara{
 		// Cleanup code here
 	}
 
+	void Stellara::Application::PushLayer(Layer* layer) {
+		m_LayerStack.PushLayer(layer);
+	}
+
+	void Stellara::Application::PushOverlay(Layer* overlay) {
+		m_LayerStack.PushOverlay(overlay);
+	}
+
 	void Stellara::Application::OnEvent(Event& e) {
 
 		EventDispatcher dispatcher(e);
 		dispatcher.Dispatch<WindowCloseEvent>(BIND_EVENT_FN(OnWindowClose));
 
 		STLR_LOG_TRACE("Event: {0}", e.ToString());
+		for (auto it = m_LayerStack.end(); it != m_LayerStack.begin();) {
+			(*--it)->OnEvent(e);
+			if (e.m_Handled) {
+				break;
+			}
+		}
 	}
 
 	void Stellara::Application::Run() {
 		while (m_Running){
 			glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT);
+
+			for (Layer* layer : m_LayerStack) {
+				layer->OnUpdate(0.0f); // Placeholder for deltaTime
+			}
+
 			m_Window->OnUpdate();
 		}
 	}
