@@ -19,7 +19,7 @@ namespace Stellara {
 			void OnEvent(Event& e);
 
 			void PushLayer(Layer* layer);
-			void PushOverlay(Layer* overlay);
+			void PushOverlay(Layer* layer);
 		private:
 			bool OnWindowClose(WindowCloseEvent& e);
 

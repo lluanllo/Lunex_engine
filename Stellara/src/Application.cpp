@@ -50,7 +50,7 @@ namespace Stellara{
 			glClear(GL_COLOR_BUFFER_BIT);
 
 			for (Layer* layer : m_LayerStack) {
-				layer->OnUpdate(0.0f); // Placeholder for deltaTime
+				layer->OnUpdate();
 			}
 
 			m_Window->OnUpdate();

@@ -6,12 +6,12 @@ class ExampleLayer : public Stellara::Layer{
 			: Layer("Example") {
 		}
 
-		void OnUpdate() {
-			STLR_LOG_INFO("ExampleLayer::Update");
+		void OnUpdate() override {
+			STLR_LOG_INFO("ExampleLayer Update");
 		}
 
 		void OnEvent(Stellara::Event& event) override {
-			STLR_LOG_TRACE("{0}", event);
+			STLR_LOG_TRACE("{0}", event.ToString());
 		}
 
 };
