@@ -1,7 +1,9 @@
 #include "stpch.h"
-#include "Application.h"
+
 #include "Events/ApplicationEvent.h"
-#include "Log/Log.h"
+#include "Core/Stellara.hpp"
+
+#include <GLFW/glfw3.h>
 
 namespace Stellara{
 
@@ -9,6 +11,8 @@ namespace Stellara{
 		Stellara::Log::Init();
 		STLR_LOG_INFO("Logger Initialized");
 		STLR_LOG_DEBUG("Stellara Application Initialized");
+
+		m_Window = std::unique_ptr<Window>(Window::Create());
 	}
 
 	Stellara::Application::~Application() {
@@ -16,10 +20,10 @@ namespace Stellara{
 	}
 
 	void Stellara::Application::Run() {
-		WindowResizeEvent resizeEvent(1280, 720);
-		STLR_LOG_INFO("Window Resize Event: {0}", resizeEvent.ToString());
 		while (true){
-
+			glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+			m_Window->OnUpdate();
 		}
 	}
 

@@ -9,6 +9,12 @@ workspace "Stellara"
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
+-- Include directories relative to the solution directory
+IncludeDir = {}
+IncludeDir["GLFW"] = "vendor/glfw/include"
+
+include "vendor/GLFW"
+
 project "Stellara"
 	location "Stellara"
 	kind "ConsoleApp"
@@ -31,12 +37,18 @@ project "Stellara"
 	includedirs
 	{
 		"%{prj.name}/src",
-		"/vendor/spdlog/include",
+		"%{sln.name}/vendor/spdlog/include",
+		"%{IncludeDir.GLFW}"
+	}
+
+	links{
+		"GLFW",
+		"opengl32.lib"
 	}
 
 	filter "system:windows"
 		cppdialect "C++20"
-		staticruntime "On"
+		staticruntime "Off"
 		systemversion "latest"
 
 	
