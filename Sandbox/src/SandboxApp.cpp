@@ -23,7 +23,6 @@ class Sandbox : public Stellara::Application{
 		}
 
 		~Sandbox() {
-
 		}
 
 };
