@@ -24,14 +24,22 @@ namespace Stellara{
 
 	void Stellara::Application::OnEvent(Event& e) {
 
+		EventDispatcher dispatcher(e);
+		dispatcher.Dispatch<WindowCloseEvent>(BIND_EVENT_FN(OnWindowClose));
+
+		STLR_LOG_TRACE("Event: {0}", e.ToString());
 	}
 
 	void Stellara::Application::Run() {
-		while (true){
+		while (m_Running){
 			glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT);
 			m_Window->OnUpdate();
 		}
 	}
 
+	bool Stellara::Application::OnWindowClose(WindowCloseEvent& e) {
+		m_Running = false;
+		return true;
+	}
 }
