@@ -10,6 +10,8 @@ namespace Stellara{
 		Stellara::Log::Init();
 		STLR_LOG_INFO("Logger Initialized");
 		STLR_LOG_DEBUG("Stellara Application Initialized");
+
+		m_Window = std::unique_ptr<Window>(Window::Create());
 	}
 
 	Stellara::Application::~Application() {
@@ -17,10 +19,8 @@ namespace Stellara{
 	}
 
 	void Stellara::Application::Run() {
-		WindowResizeEvent resizeEvent(1280, 720);
-		STLR_LOG_INFO("Window Resize Event: {0}", resizeEvent.ToString());
 		while (true){
-
+			m_Window->OnUpdate();
 		}
 	}
 

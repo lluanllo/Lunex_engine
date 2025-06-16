@@ -1,3 +1,4 @@
+#include "stpch.h"
 #include "Log.h"
 
 namespace Stellara {
