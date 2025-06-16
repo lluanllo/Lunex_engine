@@ -3,10 +3,6 @@
 #include "../Application.h"
 //--------------------------
 
-//---Logging----------------
-#include "../Log/Log.h"
-//--------------------------
-
 //---spdLog-----------------
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/stdout_color_sinks.h"

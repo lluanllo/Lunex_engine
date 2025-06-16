@@ -12,4 +12,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "Log/Log.h"
+
 #include <Windows.h>

@@ -3,6 +3,7 @@
 #include "Events/ApplicationEvent.h"
 #include "Core/Stellara.hpp"
 
+#include <GLFW/glfw3.h>
 
 namespace Stellara{
 
@@ -20,6 +21,8 @@ namespace Stellara{
 
 	void Stellara::Application::Run() {
 		while (true){
+			glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
 			m_Window->OnUpdate();
 		}
 	}
