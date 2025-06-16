@@ -1,6 +1,5 @@
 #pragma once
 
-#include "stpch.h"
 #include "Event.h"
 
 namespace Stellara {

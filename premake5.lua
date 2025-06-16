@@ -24,7 +24,7 @@ project "Stellara"
 	objdir ("bin-int/%{outputdir}/%{prj.name}")
 
 	pchheader "stpch.h"
-	pchsource "%{prj.name}/src/stpch.cpp"
+	pchsource "Stellara/src/stpch.cpp"
 
 	files
 	{
