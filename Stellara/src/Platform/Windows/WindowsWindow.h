@@ -1,12 +1,13 @@
 #pragma once
 
+#include "Core/Core.h"
 #include "../../Window.h"
 
 #include <GLFW/glfw3.h>
 
 namespace Stellara {
 
-	class WindowsWindow : public Window {
+	class STELLARA_API WindowsWindow : public Window {
 	
 		public:
 			WindowsWindow(const WindowProps& props);

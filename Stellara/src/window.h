@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Core.h"
 #include "stpch.h"
 
 #include "Events/Event.h"
@@ -18,7 +19,7 @@ namespace Stellara {
 		}
 	};
 
-	class Window {
+	class STELLARA_API Window {
 
 		public:
 			using EventCallbackFn = std::function<void(Event&)>;

@@ -1,6 +1,5 @@
 #include "stpch.h"
 #include "WindowsWindow.h"
-#include "Core/Stellara.hpp"
 
 #include "../../Events/ApplicationEvent.h"
 #include "../../Events/KeyEvent.h"
