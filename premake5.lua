@@ -13,9 +13,11 @@ outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 -- Include directories relative to the solution directory
 IncludeDir = {}
 IncludeDir["GLFW"] = "vendor/glfw/include"
+IncludeDir["Glad"] = "vendor/Glad/include"
 IncludeDir["Stellara"] = "Stellara/src"
 
 include "vendor/GLFW"
+include "vendor/Glad"
 
 project "Stellara"
     location "Stellara"
@@ -40,11 +42,13 @@ project "Stellara"
     {
         "%{prj.name}/src",
         "vendor/spdlog/include",
-        "%{IncludeDir.GLFW}"
+        "%{IncludeDir.GLFW}",
+        "%{IncludeDir.Glad}"
     }
 
     links{
         "GLFW",
+        "Glad",
         "opengl32.lib"
     }
 
@@ -55,7 +59,8 @@ project "Stellara"
 
         defines{
             "ST_PLATFORM_WINDOWS",
-            "ST_BUILD_DLL"
+            "ST_BUILD_DLL",
+            "GLFW_INCLUDE_NONE"
         }
 
 postbuildcommands {
