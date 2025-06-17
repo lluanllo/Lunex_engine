@@ -79,4 +79,32 @@ namespace Stellara {
 
 	}
 
+	void ImGuiLayer::OnMouseButtonPressedEvent(MouseButtonPressedEvent& e)
+	{
+	}
+
+	void ImGuiLayer::OnMouseButtonReleasedEvent(MouseButtonReleasedEvent& e)
+	{
+	}
+
+	void ImGuiLayer::OnMouseMovedEvent(MouseMovedEvent& e)
+	{
+	}
+
+	void ImGuiLayer::OnMouseScrolledEvent(MouseScrolledEvent& e)
+	{
+	}
+
+	void ImGuiLayer::OnKeyPressedEvent(KeyPressedEvent& e)
+	{
+	}
+
+	void ImGuiLayer::OnKeyReleasedEvent(KeyReleasedEvent& e)
+	{
+	}
+
+	void ImGuiLayer::OnWindowResizeEvent(WindowResizeEvent& e)
+	{
+	}
+
 }

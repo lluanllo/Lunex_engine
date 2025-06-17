@@ -1,7 +1,10 @@
 #pragma once
 
-#include "../Core/Core.h"
-#include "../layer.h"
+#include "layer.h"
+
+#include "Events/Event.h"
+#include "Events/MouseEvent.h"
+#include "Events/KeyEvent.h"
 
 namespace Stellara {
 
@@ -16,7 +19,17 @@ namespace Stellara {
 			void OnEvent(Event& event); 
 
 		private:
+			void OnMouseButtonPressedEvent(MouseButtonPressedEvent& e);
+			void OnMouseButtonReleasedEvent(MouseButtonReleasedEvent& e);
+			void OnMouseMovedEvent(MouseMovedEvent& e);
+			void OnMouseScrolledEvent(MouseScrolledEvent& e);
+			void OnKeyPressedEvent(KeyPressedEvent& e);
+			void OnKeyReleasedEvent(KeyReleasedEvent& e);
+			//void OnKeyTypedEvent(KeyTypedEvent& e);
+			void OnWindowResizeEvent(WindowResizeEvent& e);
+		private:
 			float m_Time = 0.0f;
+
 	};
 
 }
