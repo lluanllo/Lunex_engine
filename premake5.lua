@@ -14,10 +14,12 @@ outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 IncludeDir = {}
 IncludeDir["GLFW"] = "vendor/glfw/include"
 IncludeDir["Glad"] = "vendor/Glad/include"
-IncludeDir["Stellara"] = "Stellara/src"
+IncludeDir["ImGui"] = "vendor/imgui/include"
+IncludeDir["Stellara"] = "Stellara/src/Stellara"
 
 include "vendor/GLFW"
 include "vendor/Glad"
+include "vendor/imgui"
 
 project "Stellara"
     location "Stellara"
@@ -28,27 +30,29 @@ project "Stellara"
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
 
     pchheader "stpch.h"
-    pchsource "Stellara/src/stpch.cpp"
+    pchsource "Stellara/src/Stellara/stpch.cpp"
 
     files
     {
-        "%{prj.name}/src/**.h",
-        "%{prj.name}/src/**.cpp",
-        "%{prj.name}/src/**.hpp",
-        "%{prj.name}/src/**.c",
+        "%{prj.name}/src/Stellara/**.h",
+        "%{prj.name}/src/Stellara/**.cpp",
+        "%{prj.name}/src/Stellara/**.hpp",
+        "%{prj.name}/src/Stellara/**.c",
     }
 
     includedirs
     {
-        "%{prj.name}/src",
+        "%{prj.name}/src/Stellara",
         "vendor/spdlog/include",
         "%{IncludeDir.GLFW}",
-        "%{IncludeDir.Glad}"
+        "%{IncludeDir.Glad}",
+        "%{IncludeDir.ImGui}",
     }
 
     links{
         "GLFW",
         "Glad",
+        "ImGui",
         "opengl32.lib"
     }
 
@@ -101,8 +105,8 @@ project "Sandbox"
     includedirs
     {
         "vendor/spdlog/include",
-        "Stellara/src",
-        "Stellara/src/Core"
+        "Stellara/src/Stellara",
+        "Stellara/src/Stellara/Core"
     }
 
     links
