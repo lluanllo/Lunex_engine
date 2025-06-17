@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Core.h"
+
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/sinks/basic_file_sink.h"
@@ -7,7 +9,7 @@
 
 namespace Stellara{
 
-	class Log{
+	class STELLARA_API Log{
 		public:
 			static void Init();
 

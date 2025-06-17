@@ -1,10 +1,11 @@
 #include "stpch.h"
 #include "WindowsWindow.h"
-#include "Core/Stellara.hpp"
 
 #include "../../Events/ApplicationEvent.h"
 #include "../../Events/KeyEvent.h"
 #include "../../Events/MouseEvent.h"
+
+#include <glad/glad.h>
 
 namespace Stellara {
 
@@ -41,7 +42,13 @@ namespace Stellara {
 		}
 		m_Window = glfwCreateWindow((int)m_Data.Width, (int)m_Data.Height, m_Data.Title.c_str(), nullptr, nullptr);
 		ST_CORE_ASSERT(m_Window, "Could not create GLFW window!");
+
+		//hay que cargar GLAD antes de hacer cualquier llamada a OpenGL
 		glfwMakeContextCurrent(m_Window);
+
+		int status = gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+		ST_CORE_ASSERT(status, "Could not initialize GLAD!");
+
 		glfwSetWindowUserPointer(m_Window, &m_Data);
 		SetVSync(true);
 

@@ -14,4 +14,6 @@
 
 #include "Log/Log.h"
 
-#include <Windows.h>
+#ifdef ST_PLATFORM_WINDOWS
+	#include <Windows.h>
+#endif
