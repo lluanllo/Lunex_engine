@@ -14,12 +14,12 @@ outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 IncludeDir = {}
 IncludeDir["GLFW"] = "vendor/glfw/include"
 IncludeDir["Glad"] = "vendor/Glad/include"
-IncludeDir["ImGui"] = "vendor/imgui/include"
-IncludeDir["Stellara"] = "Stellara/src/Stellara"
+IncludeDir["ImGui"] = "vendor/imgui"
+IncludeDir["Stellara"] = "Stellara/src"
 
 include "vendor/GLFW"
 include "vendor/Glad"
-include "vendor/imgui"
+include "vendor/ImGui"
 
 project "Stellara"
     location "Stellara"
@@ -30,19 +30,19 @@ project "Stellara"
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
 
     pchheader "stpch.h"
-    pchsource "Stellara/src/Stellara/stpch.cpp"
+    pchsource "Stellara/src/stpch.cpp"
 
     files
     {
-        "%{prj.name}/src/Stellara/**.h",
-        "%{prj.name}/src/Stellara/**.cpp",
-        "%{prj.name}/src/Stellara/**.hpp",
-        "%{prj.name}/src/Stellara/**.c",
+        "%{prj.name}/src/**.h",
+        "%{prj.name}/src/**.cpp",
+        "%{prj.name}/src/**.hpp",
+        "%{prj.name}/src/**.c",
     }
 
     includedirs
     {
-        "%{prj.name}/src/Stellara",
+        "%{prj.name}/src",
         "vendor/spdlog/include",
         "%{IncludeDir.GLFW}",
         "%{IncludeDir.Glad}",
@@ -105,8 +105,8 @@ project "Sandbox"
     includedirs
     {
         "vendor/spdlog/include",
-        "Stellara/src/Stellara",
-        "Stellara/src/Stellara/Core"
+        "Stellara/src",
+        "Stellara/src/Core"
     }
 
     links
