@@ -59,7 +59,8 @@ project "Stellara"
 
         defines{
             "ST_PLATFORM_WINDOWS",
-            "ST_BUILD_DLL"
+            "ST_BUILD_DLL",
+            "GLFW_INCLUDE_NONE"
         }
 
 postbuildcommands {
