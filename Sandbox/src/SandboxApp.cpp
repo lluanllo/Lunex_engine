@@ -7,11 +7,11 @@ class ExampleLayer : public Stellara::Layer{
 		}
 
 		void OnUpdate() override {
-			STLR_LOG_INFO("ExampleLayer Update");
+			STLR_LOG_INFO("ExampleLayer::Update");
 		}
 
 		void OnEvent(Stellara::Event& event) override {
-			STLR_LOG_TRACE("{0}", event.ToString());
+			STLR_LOG_TRACE("{0}", event);
 		}
 
 };
