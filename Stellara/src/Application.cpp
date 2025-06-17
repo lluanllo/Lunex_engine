@@ -19,7 +19,6 @@ namespace Stellara{
 	}
 
 	Stellara::Application::~Application() {
-		// Cleanup code here
 	}
 
 	void Stellara::Application::PushLayer(Layer* layer) {
