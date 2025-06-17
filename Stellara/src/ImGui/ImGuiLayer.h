@@ -3,6 +3,7 @@
 #include "layer.h"
 
 #include "Events/Event.h"
+#include "Events/ApplicationEvent.h"
 #include "Events/MouseEvent.h"
 #include "Events/KeyEvent.h"
 
@@ -19,14 +20,14 @@ namespace Stellara {
 			void OnEvent(Event& event); 
 
 		private:
-			void OnMouseButtonPressedEvent(MouseButtonPressedEvent& e);
-			void OnMouseButtonReleasedEvent(MouseButtonReleasedEvent& e);
-			void OnMouseMovedEvent(MouseMovedEvent& e);
-			void OnMouseScrolledEvent(MouseScrolledEvent& e);
-			void OnKeyPressedEvent(KeyPressedEvent& e);
-			void OnKeyReleasedEvent(KeyReleasedEvent& e);
-			//void OnKeyTypedEvent(KeyTypedEvent& e);
-			void OnWindowResizeEvent(WindowResizeEvent& e);
+			bool OnMouseButtonPressedEvent(MouseButtonPressedEvent& e);
+			bool OnMouseButtonReleasedEvent(MouseButtonReleasedEvent& e);
+			bool OnMouseMovedEvent(MouseMovedEvent& e);
+			bool OnMouseScrolledEvent(MouseScrolledEvent& e);
+			bool OnKeyPressedEvent(KeyPressedEvent& e);
+			bool OnKeyReleasedEvent(KeyReleasedEvent& e);
+			//bool OnKeyTypedEvent(KeyTypedEvent& e);
+			bool OnWindowResizeEvent(WindowResizeEvent& e);
 		private:
 			float m_Time = 0.0f;
 
