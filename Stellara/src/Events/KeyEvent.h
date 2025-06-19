@@ -33,6 +33,7 @@ namespace Stellara {
 		private:
 			int m_RepeatCount;
 	};
+
 	class STELLARA_API KeyReleasedEvent : public KeyEvent {
 		public:
 			KeyReleasedEvent(int keyCode)
@@ -45,4 +46,20 @@ namespace Stellara {
 			}
 			EVENT_CLASS_TYPE(KeyReleased)
 	};
-} // namespace Stellara
+
+	class STELLARA_API KeyTypedEvent : public KeyEvent {
+		public:
+			KeyTypedEvent(int keycode)
+				: KeyEvent(keycode) {
+			}
+
+			std::string ToString() const override
+			{
+				std::stringstream ss;
+				ss << "KeyTypedEvent: " << m_KeyCode;
+				return ss.str();
+			}
+
+			EVENT_CLASS_TYPE(KeyTyped)
+	};
+} 
