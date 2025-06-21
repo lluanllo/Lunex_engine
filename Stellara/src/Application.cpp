@@ -9,10 +9,11 @@ namespace Stellara{
 
 	#define BIND_EVENT_FN(fn) std::bind(&Application::fn, this, std::placeholders::_1)
 
+	Application* Application::s_Instance = nullptr;
+
 	Stellara::Application::Application() {
-		Stellara::Log::Init();
-		STLR_LOG_INFO("Logger Initialized");
-		STLR_LOG_DEBUG("Stellara Application Initialized");
+		ST_CORE_ASSERT(s_Instance == nullptr, "Application already exists!");
+		s_Instance = this;
 
 		m_Window = std::unique_ptr<Window>(Window::Create());
 		m_Window->SetEventCallback(BIND_EVENT_FN(OnEvent));
@@ -23,10 +24,12 @@ namespace Stellara{
 
 	void Stellara::Application::PushLayer(Layer* layer) {
 		m_LayerStack.PushLayer(layer);
+		layer->OnAttach();
 	}
 
 	void Stellara::Application::PushOverlay(Layer* overlay) {
 		m_LayerStack.PushOverlay(overlay);
+		overlay->OnAttach();
 	}
 
 	void Stellara::Application::OnEvent(Event& e) {
@@ -45,7 +48,7 @@ namespace Stellara{
 
 	void Stellara::Application::Run() {
 		while (m_Running){
-			glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+			glClearColor(1.0f, 1.0f, 0.0f, 1.0f);
 			glClear(GL_COLOR_BUFFER_BIT);
 
 			for (Layer* layer : m_LayerStack) {
