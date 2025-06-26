@@ -55,10 +55,6 @@ namespace Stellara{
 
 			for (Layer* layer : m_LayerStack) {
 				layer->OnUpdate();
-
-				auto [x, y] = Input::GetMousePosition();
-				STLR_LOG_TRACE("{0}, {1}", x, y);
-
 			}
 
 			m_Window->OnUpdate();
