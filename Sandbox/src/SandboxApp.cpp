@@ -15,6 +15,10 @@ class ExampleLayer : public Stellara::Layer{
 		}
 
 		void OnEvent(Stellara::Event& event) override {
+			if (event.GetEventType() == Stellara::EventType::KeyPressed) {
+				Stellara::KeyPressedEvent& e = (Stellara::KeyPressedEvent&)event;
+				STLR_LOG_TRACE("Key pressed: {0}", (char)e.GetKeyCode());
+			}
 		}
 
 };

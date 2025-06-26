@@ -1,7 +1,7 @@
 #pragma once
 
 #include "layer.h"
-#include "imgui.h" // Añade esta inclusión para que ImGuiKey sea un tipo conocido
+#include "imgui.h"
 
 #include "Events/Event.h"
 #include "Events/ApplicationEvent.h"
@@ -14,13 +14,13 @@ namespace Stellara {
 	public:
 		ImGuiLayer();
 		~ImGuiLayer();
-
+		
 		void OnAttach();
 		void OnDetach();
 		void OnUpdate();
 		void OnEvent(Event& event);
 		ImGuiKey GLFWKeyToImGui(int key);
-
+		
 	private:
 		bool OnMouseButtonPressedEvent(MouseButtonPressedEvent& e);
 		bool OnMouseButtonReleasedEvent(MouseButtonReleasedEvent& e);
@@ -30,6 +30,7 @@ namespace Stellara {
 		bool OnKeyReleasedEvent(KeyReleasedEvent& e);
 		bool OnKeyTypedEvent(KeyTypedEvent& e);
 		bool OnWindowResizeEvent(WindowResizeEvent& e);
+		
 	private:
 		float m_Time = 0.0f;
 
