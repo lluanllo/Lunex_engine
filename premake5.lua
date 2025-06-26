@@ -12,9 +12,10 @@ outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
 -- Include directories relative to the solution directory
 IncludeDir = {}
-IncludeDir["GLFW"] = "vendor/glfw/include"
-IncludeDir["Glad"] = "vendor/Glad/include"
-IncludeDir["ImGui"] = "vendor/ImGuiLib"
+IncludeDir["GLFW"]     = "vendor/glfw/include"
+IncludeDir["Glad"]     = "vendor/Glad/include"
+IncludeDir["ImGui"]    = "vendor/ImGuiLib"
+IncludeDir["glm"]      = "vendor/glm"
 IncludeDir["Stellara"] = "Stellara/src"
 
 include "vendor/GLFW"
@@ -47,6 +48,7 @@ project "Stellara"
         "%{IncludeDir.GLFW}",
         "%{IncludeDir.Glad}",
         "%{IncludeDir.ImGui}",
+        "%{IncludeDir.glm}"
     }
 
     links{
@@ -106,7 +108,8 @@ project "Sandbox"
     {
         "vendor/spdlog/include",
         "Stellara/src",
-        "Stellara/src/Core"
+        "Stellara/src/Core",
+        "%{IncludeDir.glm}",
     }
 
     links
