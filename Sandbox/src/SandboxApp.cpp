@@ -7,11 +7,18 @@ class ExampleLayer : public Stellara::Layer{
 		}
 
 		void OnUpdate() override {
-			//STLR_LOG_INFO("ExampleLayer::Update");
+
+			if (Stellara::Input::IsKeyPressed(ST_KEY_TAB)) {
+				STLR_LOG_INFO("Tab key is pressed!");
+			}
+		
 		}
 
 		void OnEvent(Stellara::Event& event) override {
-			//STLR_LOG_TRACE("{0}", event);
+			if (event.GetEventType() == Stellara::EventType::KeyPressed) {
+				Stellara::KeyPressedEvent& e = (Stellara::KeyPressedEvent&)event;
+				STLR_LOG_TRACE("Key pressed: {0}", (char)e.GetKeyCode());
+			}
 		}
 
 };

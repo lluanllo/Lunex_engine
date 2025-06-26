@@ -39,7 +39,6 @@ namespace Stellara{
 		EventDispatcher dispatcher(e);
 		dispatcher.Dispatch<WindowCloseEvent>(BIND_EVENT_FN(OnWindowClose));
 
-		STLR_LOG_TRACE("Event: {0}", e.ToString());
 		for (auto it = m_LayerStack.end(); it != m_LayerStack.begin();) {
 			(*--it)->OnEvent(e);
 			if (e.m_Handled) {
@@ -55,10 +54,6 @@ namespace Stellara{
 
 			for (Layer* layer : m_LayerStack) {
 				layer->OnUpdate();
-
-				auto [x, y] = Input::GetMousePosition();
-				STLR_LOG_TRACE("{0}, {1}", x, y);
-
 			}
 
 			m_Window->OnUpdate();
