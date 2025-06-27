@@ -1,5 +1,7 @@
 #include <Stellara.h>
 
+#include "imgui.h"
+
 class ExampleLayer : public Stellara::Layer{
 	public:
 		ExampleLayer()
@@ -12,6 +14,14 @@ class ExampleLayer : public Stellara::Layer{
 				STLR_LOG_INFO("Tab key is pressed!");
 			}
 		}
+
+		/*
+		virtual void OnImGuiRender() override {
+			ImGui::Begin("Test");
+			ImGui::Text("Hello World");
+			ImGui::End();
+		}
+		*/
 
 		void OnEvent(Stellara::Event& event) override {
 			if (event.GetEventType() == Stellara::EventType::KeyPressed) {

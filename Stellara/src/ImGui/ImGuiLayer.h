@@ -1,7 +1,6 @@
 #pragma once
 
 #include "layer.h"
-#include "imgui.h"
 
 #include "Events/Event.h"
 #include "Events/ApplicationEvent.h"
@@ -17,7 +16,7 @@ namespace Stellara {
 		
 			virtual void OnDetach() override;
 			virtual void OnAttach() override;
-			virtual void OnImGuiRender() override;
+			virtual void OnImGuiRender();
 		
 			void Begin();
 			void End();
