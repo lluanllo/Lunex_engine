@@ -26,7 +26,6 @@ class Sandbox : public Stellara::Application{
 	public:
 		Sandbox() {
 			PushLayer(new ExampleLayer());
-			PushOverlay(new Stellara::ImGuiLayer());
 		}
 
 		~Sandbox() {
