@@ -109,7 +109,8 @@ project "Sandbox"
         "vendor/spdlog/include",
         "Stellara/src",
         "Stellara/src/Core",
-        "%{IncludeDir.glm}",
+        "vendor/ImGuiLib",
+        "%{IncludeDir.glm}"
     }
 
     links
