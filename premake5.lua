@@ -24,8 +24,10 @@ include "vendor/ImGuiLib"
 
 project "Stellara"
     location "Stellara"
-    kind "SharedLib"
+    kind "StaticLib"
     language "C++"
+    cppdialect "C++20"
+    staticruntime "on"
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
@@ -59,8 +61,6 @@ project "Stellara"
     }
 
     filter "system:windows"
-        cppdialect "C++20"
-        staticruntime "On"
         systemversion "latest"
 
         defines{
@@ -69,31 +69,30 @@ project "Stellara"
             "GLFW_INCLUDE_NONE"
         }
 
-postbuildcommands {
-    ("{COPY} %{cfg.buildtarget.relpath} ../bin/" .. outputdir .. "/Sandbox")
-}
 
         buildoptions { "/utf-8" }
 
     filter "configurations:Debug"
         defines { "ST_DEBUG" }
         buildoptions { "/MDd"}
-        symbols "On"
+        symbols "on"
 
     filter "configurations:Release"
         defines { "ST_RELEASE" }
         buildoptions { "/MD"}
-        optimize "On"
+        optimize "on"
 
     filter "configurations:Dist"
         defines { "ST_DIST" }
         buildoptions { "/MD"}
-        optimize "On"
+        optimize "on"
 
 project "Sandbox"
     location "Sandbox"
     kind "ConsoleApp"
     language "C++"
+    cppdialect "C++20"
+    staticruntime "on"
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
@@ -133,14 +132,14 @@ project "Sandbox"
     filter "configurations:Debug"
         defines "ST_DEBUG"
         buildoptions "/MDd"
-        symbols "On"
+        symbols "on"
 
     filter "configurations:Release"
         defines "ST_RELEASE"
         buildoptions "/MD"
-        optimize "On"
+        optimize "on"
 
     filter "configurations:Dist"
         defines "ST_DIST"
         buildoptions "/MD"
-        optimize "On"
+        optimize "on"
