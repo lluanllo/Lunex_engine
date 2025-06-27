@@ -1,10 +1,14 @@
 #pragma once
 
 #ifdef ST_PLATFORM_WINDOWS
-	#ifdef ST_BUILD_DLL
-		#define STELLARA_API __declspec(dllexport)
+	#if ST_DYNAMIC_LINK
+		#ifdef ST_BUILD_DLL
+			#define STELLARA_API __declspec(dllexport)
+		#else
+			#define STELLARA_API __declspec(dllimport)
+		#endif
 	#else
-		#define STELLARA_API __declspec(dllimport)
+		#define STELLARA_API
 	#endif
 #else
 	#error Stellara only supports Windows!
