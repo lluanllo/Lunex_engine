@@ -1,9 +1,10 @@
 #include "stpch.h"
 #include "WindowsWindow.h"
+#include "Platform/OpenGL/OpenGLContext.h"  // Añadir esta inclusión
 
-#include "../../Events/ApplicationEvent.h"
-#include "../../Events/KeyEvent.h"
-#include "../../Events/MouseEvent.h"
+#include "Events/ApplicationEvent.h"
+#include "Events/KeyEvent.h"
+#include "Events/MouseEvent.h"
 
 #include <glad/glad.h>
 
@@ -34,8 +35,8 @@ namespace Stellara {
 
 		STLR_LOG_INFO("Creating window: {0} ({1}, {2})", m_Data.Title, m_Data.Width, m_Data.Height);
 
-		m_context = new OpenGLContext(m_Window);
-		m_context->Init();
+		m_Context = new stellara::OpenGLContext(m_Window);  // Cambiar m_context a m_Context y añadir namespace
+		m_Context->Init();
 
 		if (!s_GLFWInitialized) {
 			int success = glfwInit();
@@ -45,12 +46,6 @@ namespace Stellara {
 		}
 		m_Window = glfwCreateWindow((int)m_Data.Width, (int)m_Data.Height, m_Data.Title.c_str(), nullptr, nullptr);
 		ST_CORE_ASSERT(m_Window, "Could not create GLFW window!");
-
-		//hay que cargar GLAD antes de hacer cualquier llamada a OpenGL
-		glfwMakeContextCurrent(m_Window);
-
-		int status = gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-		ST_CORE_ASSERT(status, "Could not initialize GLAD!");
 
 		glfwSetWindowUserPointer(m_Window, &m_Data);
 		SetVSync(true);
@@ -138,7 +133,7 @@ namespace Stellara {
 
 	void WindowsWindow::OnUpdate() {
 		glfwPollEvents();
-		m_context->SwapBuffers();
+		m_Context->SwapBuffers();
 	}
 
 	void WindowsWindow::SetVSync(bool enabled) {
