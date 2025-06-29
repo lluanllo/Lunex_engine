@@ -18,6 +18,11 @@ namespace stellara {
 		glfwMakeContextCurrent(m_WindowHandle);
 		int status = gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 		ST_CORE_ASSERT(status, "Failed to initialize Glad!");
+
+		STLR_LOG_INFO("OpenGL Info:");
+		//STLR_LOG_INFO("OpenGL Vendor: {0}", glGetString(GL_VENDOR));
+		//STLR_LOG_INFO("OpenGL Renderer: {0}", glGetString(GL_RENDERER));
+		//STLR_LOG_INFO("OpenGL Version: {0}", glGetString(GL_VERSION));
 	}
 
 	void OpenGLContext::SwapBuffers(){
