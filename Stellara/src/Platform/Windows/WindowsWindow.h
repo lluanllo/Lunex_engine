@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../../Core/Core.h"
-#include "../../Window.h"
+#include "Window.h"
+#include "Renderer/GraphicsContext.h"
 
 #include <GLFW/glfw3.h>
 
@@ -11,7 +11,7 @@ namespace Stellara {
 	
 		public:
 			WindowsWindow(const WindowProps& props);
-			virtual ~WindowsWindow();
+			~WindowsWindow();
 
 			void OnUpdate() override;
 
@@ -28,6 +28,7 @@ namespace Stellara {
 			virtual void Shutdown();
 		private:
 			GLFWwindow* m_Window;
+			stellara::GraphicsContext* m_Context;
 
 			struct WindowData {
 
