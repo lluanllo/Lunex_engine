@@ -35,17 +35,18 @@ namespace Stellara {
 
 		STLR_LOG_INFO("Creating window: {0} ({1}, {2})", m_Data.Title, m_Data.Width, m_Data.Height);
 
-		m_Context = new stellara::OpenGLContext(m_Window);  // Cambiar m_context a m_Context y añadir namespace
-		m_Context->Init();
-
 		if (!s_GLFWInitialized) {
 			int success = glfwInit();
 			ST_CORE_ASSERT(success, "Could not initialize GLFW!");
 			glfwSetErrorCallback(GLFWErrorCallback);
 			s_GLFWInitialized = true;
 		}
+
 		m_Window = glfwCreateWindow((int)m_Data.Width, (int)m_Data.Height, m_Data.Title.c_str(), nullptr, nullptr);
 		ST_CORE_ASSERT(m_Window, "Could not create GLFW window!");
+
+		m_Context = new stellara::OpenGLContext(m_Window);
+		m_Context->Init();
 
 		glfwSetWindowUserPointer(m_Window, &m_Data);
 		SetVSync(true);
