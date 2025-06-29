@@ -34,6 +34,9 @@ namespace Stellara {
 
 		STLR_LOG_INFO("Creating window: {0} ({1}, {2})", m_Data.Title, m_Data.Width, m_Data.Height);
 
+		m_context = new OpenGLContext(m_Window);
+		m_context->Init();
+
 		if (!s_GLFWInitialized) {
 			int success = glfwInit();
 			ST_CORE_ASSERT(success, "Could not initialize GLFW!");
@@ -135,7 +138,7 @@ namespace Stellara {
 
 	void WindowsWindow::OnUpdate() {
 		glfwPollEvents();
-		glfwSwapBuffers(m_Window);
+		m_context->SwapBuffers();
 	}
 
 	void WindowsWindow::SetVSync(bool enabled) {
