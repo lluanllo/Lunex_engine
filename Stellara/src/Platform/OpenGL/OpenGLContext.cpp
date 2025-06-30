@@ -6,7 +6,7 @@
 #include <glad/glad.h>
 #include <GL/GL.h>
 
-namespace stellara {
+namespace Stellara {
 
 	OpenGLContext::OpenGLContext(GLFWwindow* windowHandle)
 		: m_WindowHandle(windowHandle)
