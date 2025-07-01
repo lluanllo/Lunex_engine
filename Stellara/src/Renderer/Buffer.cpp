@@ -3,4 +3,11 @@
 
 namespace Stellara {
 	
+	VertexBuffer* Create(float* vertices, uint32_t size) {
+		
+	}
+	
+	IndexBuffer* Create(unsigned int* indices, uint32_t size) {
+		
+	}
 }
