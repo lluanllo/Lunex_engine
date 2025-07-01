@@ -7,6 +7,8 @@
 #include "Events/Event.h"
 #include "Events/ApplicationEvent.h"
 
+#include "Renderer/Shader.h"
+
 #include "ImGui/ImGuiLayer.h"
 
 namespace Stellara {
@@ -34,6 +36,9 @@ namespace Stellara {
 
 			bool m_Running = true;
 			LayerStack m_LayerStack;
+
+			unsigned int m_vertexArray, m_vertexBuffer,	m_indexBuffer;
+			std::unique_ptr<Shader> m_Shader;
 
 		private:
 			static Application* s_Instance;

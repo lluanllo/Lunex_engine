@@ -2,7 +2,7 @@
 //---Stellara Core----------
 #include "Application.h"
 #include "Layer.h"
-//#include "Log/Log.h"
+//#include "../Log/Log.h"
 //--------------------------
 
 //---Stellara Codes---------
