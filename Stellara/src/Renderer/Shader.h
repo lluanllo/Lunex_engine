@@ -6,7 +6,7 @@ namespace Stellara {
 
 	class Shader {
 		public:
-			Shader(const std::string& vertexSource, const std::string& fragmentSource);
+			Shader(const std::string& vertexSrc, const std::string& fragmentSrc);
 			~Shader();
 
 			void Bind() const;
