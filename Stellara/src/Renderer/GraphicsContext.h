@@ -1,6 +1,6 @@
 #pragma once
 
-namespace stellara {
+namespace Stellara {
 
 	class GraphicsContext{
 		public:

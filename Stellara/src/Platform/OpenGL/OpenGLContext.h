@@ -2,7 +2,7 @@
 
 struct GLFWwindow;
 
-namespace stellara {
+namespace Stellara {
 
 	class OpenGLContext : public GraphicsContext{
 		public:

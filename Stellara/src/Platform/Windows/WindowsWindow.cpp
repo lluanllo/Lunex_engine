@@ -45,7 +45,7 @@ namespace Stellara {
 		m_Window = glfwCreateWindow((int)m_Data.Width, (int)m_Data.Height, m_Data.Title.c_str(), nullptr, nullptr);
 		ST_CORE_ASSERT(m_Window, "Could not create GLFW window!");
 
-		m_Context = new stellara::OpenGLContext(m_Window);
+		m_Context = new OpenGLContext(m_Window);
 		m_Context->Init();
 
 		glfwSetWindowUserPointer(m_Window, &m_Data);

@@ -28,7 +28,7 @@ namespace Stellara {
 			virtual void Shutdown();
 		private:
 			GLFWwindow* m_Window;
-			stellara::GraphicsContext* m_Context;
+			GraphicsContext* m_Context;
 
 			struct WindowData {
 
