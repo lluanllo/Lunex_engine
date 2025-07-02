@@ -4,7 +4,7 @@
 
 namespace Stellara {
 
-	class OpenGLVertexBuffer : public VertexBuffer {
+	class STELLARA_API OpenGLVertexBuffer : public VertexBuffer {
 		
 		public:
 			OpenGLVertexBuffer(float* vertices, uint32_t size);
@@ -17,7 +17,7 @@ namespace Stellara {
 			uint32_t m_RendererID;
 	};
 
-	class OpenGLIndexBuffer : public IndexBuffer {
+	class STELLARA_API OpenGLIndexBuffer : public IndexBuffer {
 		
 		public:
 			OpenGLIndexBuffer(unsigned int* indices, uint32_t count);

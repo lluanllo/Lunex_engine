@@ -2,7 +2,7 @@
 
 namespace Stellara {
 	
-	class VertexBuffer {
+	class STELLARA_API VertexBuffer {
 		public:
 			virtual ~VertexBuffer() {}
 			
@@ -12,7 +12,7 @@ namespace Stellara {
 			static VertexBuffer* Create(float* vertices, uint32_t size);
 	};
 	
-	class IndexBuffer {
+	class STELLARA_API IndexBuffer {
 		public:
 			virtual ~IndexBuffer() {}
 			
