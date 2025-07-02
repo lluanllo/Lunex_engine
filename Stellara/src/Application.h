@@ -38,9 +38,10 @@ namespace Stellara {
 			bool m_Running = true;
 			LayerStack m_LayerStack;
 
-			unsigned int m_vertexArray,	m_indexBuffer;
+			unsigned int m_vertexArray;
 			std::unique_ptr<Shader> m_Shader;
 			std::unique_ptr<VertexBuffer> m_VertexBuffer;
+			std::unique_ptr<IndexBuffer> m_IndexBuffer;
 
 		private:
 			static Application* s_Instance;
