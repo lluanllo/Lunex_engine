@@ -4,7 +4,7 @@ struct GLFWwindow;
 
 namespace Stellara {
 
-	class OpenGLContext : public GraphicsContext{
+	class STELLARA_API OpenGLContext : public GraphicsContext{
 		public:
 			OpenGLContext(GLFWwindow* windowHandle);
 
