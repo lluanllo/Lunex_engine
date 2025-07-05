@@ -4,7 +4,7 @@
 
 namespace Stellara {
 
-	class Shader {
+	class STELLARA_API Shader {
 		public:
 			Shader(const std::string& vertexSrc, const std::string& fragmentSrc);
 			~Shader();
