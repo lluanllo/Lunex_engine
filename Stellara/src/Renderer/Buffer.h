@@ -29,23 +29,44 @@ namespace Stellara {
 		return 0; // Should never reach here
 	}
 
-	struct BufferElements {
+	struct BufferElement {
 		std::string Name;
 		ShaderDataType Type;
 		uint32_t Size;
 		uint32_t Offset;
 
-		BufferElements(const std::string& name, ShaderDataType type)
-			: Name(name), Type(type), Size(0), Offset(0) {
+		BufferElement(ShaderDataType type, const std::string& name)
+			: Name(name), Type(type), Size(ShaderDataTypeSize(type)), Offset(0) {
 
 		}
 	};
 
 	class STELLARA_API BufferLayout {
 		public:
-				inline const std::vector<BufferElements>& GetElements() const { return m_Elements; }
+			BufferLayout(const std::initializer_list<BufferElement> element)
+				: m_Elements(element) {
+				CalculateOffsetAndStride();
+			}
+			inline const std::vector<BufferElement>& GetElements() const { return m_Elements; }
+	
 		private:
-			std::vector<BufferElements> m_Elements;
+			void CalculateOffsetAndStride(){
+				
+				m_Stride = 0;
+				m_Offset = 0;
+				
+				for (auto& element : m_Elements) {
+					element.Offset = m_Offset;
+					m_Offset += element.Size;
+					m_Stride += element.Size;
+				}
+				
+			}
+
+		private:
+			std::vector<BufferElement> m_Elements;
+			uint32_t m_Stride;
+			uint32_t m_Offset;
 	};
 	
 	class STELLARA_API VertexBuffer {
@@ -54,6 +75,9 @@ namespace Stellara {
 			
 			virtual void Bind() const = 0;
 			virtual void Unbind() const = 0;
+			
+			virtual void GetLayout() const = 0;
+			virtual void SetLayout(const BufferLayout& layout) = 0;
 			
 			static VertexBuffer* Create(float* vertices, uint32_t size);
 	};
