@@ -2,6 +2,7 @@
 
 #include "Renderer/VertexArray.h"
 
+
 namespace Stellara {
 	
 	VertexArray* VertexArray::Create(){
