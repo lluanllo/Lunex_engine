@@ -5,10 +5,8 @@
 
 namespace Stellara {
 
-	static GLenum ShaderDataTypeToOpenGLBaseType(ShaderDataType type)
-	{
-		switch (type)
-		{
+	static GLenum ShaderDataTypeToOpenGLBaseType(ShaderDataType type) {
+		switch (type) {
 			case Stellara::ShaderDataType::Float:    return GL_FLOAT;
 			case Stellara::ShaderDataType::Float2:   return GL_FLOAT;
 			case Stellara::ShaderDataType::Float3:   return GL_FLOAT;
@@ -26,24 +24,48 @@ namespace Stellara {
 		return 0;
 	}
 
-    OpenGLVertexArray::OpenGLVertexArray() {
-    }
-
-    void OpenGLVertexArray::Bind() const {
-        // OpenGL binding code would go here
+	OpenGLVertexArray::OpenGLVertexArray() {
+		glCreateVertexArrays(1, &m_RendererID);
 	}
 
-    void OpenGLVertexArray::Unbind() const {
-        // OpenGL unbinding code would go here
-    }
-
-    void OpenGLVertexArray::AddVertexBuffer(const std::shared_ptr<VertexBuffer>& vertexBuffer) {
-        m_VertexBuffers.push_back(vertexBuffer);
-        // OpenGL code to bind the vertex buffer would go here
-    }
-
-    void OpenGLVertexArray::SetIndexBuffer(const std::shared_ptr<IndexBuffer>& indexBuffer) {
-        m_IndexBuffer = indexBuffer;
-        // OpenGL code to bind the index buffer would go here
+	OpenGLVertexArray::~OpenGLVertexArray() {
+		glDeleteVertexArrays(1, &m_RendererID);
 	}
+
+	void OpenGLVertexArray::Bind() const {
+		glBindVertexArray(m_RendererID);
+	}
+
+	void OpenGLVertexArray::Unbind() const {
+		glBindVertexArray(0);
+	}
+
+	void OpenGLVertexArray::AddVertexBuffer(const std::shared_ptr<VertexBuffer>& vertexBuffer) {
+		ST_CORE_ASSERT(vertexBuffer->GetLayout().GetElements().size(), "Vertex Buffer has no layout!");
+
+		glBindVertexArray(m_RendererID);
+		vertexBuffer->Bind();
+
+		uint32_t index = 0;
+		const auto& layout = vertexBuffer->GetLayout();
+		for (const auto& element : layout) {
+			glEnableVertexAttribArray(index);
+			glVertexAttribPointer(index,
+				element.GetComponentCount(),
+				ShaderDataTypeToOpenGLBaseType(element.Type),
+				element.Normalized ? GL_TRUE : GL_FALSE,
+				layout.GetStride(),
+				(const void*)element.Offset);
+			index++;
+		}
+		m_VertexBuffers.push_back(vertexBuffer);
+	}
+
+	void OpenGLVertexArray::SetIndexBuffer(const std::shared_ptr<IndexBuffer>& indexBuffer) {
+		glBindVertexArray(m_RendererID);
+		indexBuffer->Bind();
+
+		m_IndexBuffer = indexBuffer;
+	}
+
 }
