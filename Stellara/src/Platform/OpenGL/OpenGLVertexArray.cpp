@@ -6,18 +6,20 @@
 namespace Stellara {
 
 	static GLenum ShaderDataTypeToOpenGLBaseType(ShaderDataType type) {
+
 		switch (type) {
-			case Stellara::ShaderDataType::Float:    return GL_FLOAT;
-			case Stellara::ShaderDataType::Float2:   return GL_FLOAT;
-			case Stellara::ShaderDataType::Float3:   return GL_FLOAT;
-			case Stellara::ShaderDataType::Float4:   return GL_FLOAT;
-			case Stellara::ShaderDataType::Mat3:     return GL_FLOAT;
-			case Stellara::ShaderDataType::Mat4:     return GL_FLOAT;
-			case Stellara::ShaderDataType::Int:      return GL_INT;
-			case Stellara::ShaderDataType::Int2:     return GL_INT;
-			case Stellara::ShaderDataType::Int3:     return GL_INT;
-			case Stellara::ShaderDataType::Int4:     return GL_INT;
-			case Stellara::ShaderDataType::Bool:     return GL_BOOL;
+			case Stellara::ShaderDataType::None:   return GL_FLOAT;
+			case Stellara::ShaderDataType::Float:  return GL_FLOAT;
+			case Stellara::ShaderDataType::Float2: return GL_FLOAT;
+			case Stellara::ShaderDataType::Float3: return GL_FLOAT;
+			case Stellara::ShaderDataType::Float4: return GL_FLOAT;
+			case Stellara::ShaderDataType::Int:    return GL_INT;
+			case Stellara::ShaderDataType::Int2:   return GL_INT;
+			case Stellara::ShaderDataType::Int3:   return GL_INT;
+			case Stellara::ShaderDataType::Int4:   return GL_INT;
+			case Stellara::ShaderDataType::Mat3:   return GL_FLOAT;
+			case Stellara::ShaderDataType::Mat4:   return GL_FLOAT;
+			case Stellara::ShaderDataType::Bool:   return GL_BOOL;
 		}
 
 		ST_CORE_ASSERT(false, "Unknown ShaderDataType!");
