@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RenderCommand.h"
+
 namespace Stellara {
 	
 	enum class STELLARA_API RendererAPI {
