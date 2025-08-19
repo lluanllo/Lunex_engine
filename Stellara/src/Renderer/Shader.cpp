@@ -3,7 +3,6 @@
 
 #include <glad/glad.h>
 
-
 namespace Stellara {
 
 	Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc) {
