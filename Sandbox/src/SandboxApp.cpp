@@ -121,11 +121,27 @@ class ExampleLayer : public Stellara::Layer{
 		}
 
 		void OnUpdate() override {
+			
+			if (Stellara::Input::IsKeyPressed(ST_KEY_LEFT))
+				m_CameraPosition.x += m_CameraMoveSpeed;
+			else if (Stellara::Input::IsKeyPressed(ST_KEY_RIGHT))
+				m_CameraPosition.x -= m_CameraMoveSpeed;
+			
+			if (Stellara::Input::IsKeyPressed(ST_KEY_UP))
+				m_CameraPosition.y -= m_CameraMoveSpeed;
+			else if (Stellara::Input::IsKeyPressed(ST_KEY_DOWN))
+				m_CameraPosition.y += m_CameraMoveSpeed;
+
+			if(Stellara::Input::IsKeyPressed(ST_KEY_A))
+				m_CameraRotation -= m_CameraRotationSpeed;
+			else if (Stellara::Input::IsKeyPressed(ST_KEY_D))
+				m_CameraRotation += m_CameraRotationSpeed;
+			
 			Stellara::RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
 			Stellara::RenderCommand::Clear();
 			
 			m_Camera.SetPosition(m_CameraPosition);
-			m_Camera.SetRotation(0.0f);
+			m_Camera.SetRotation(m_CameraRotation);
 			
 			Stellara::Renderer::BeginScene(m_Camera);
 			
@@ -146,18 +162,6 @@ class ExampleLayer : public Stellara::Layer{
 		}
 
 		bool OnKeyPressEvent(Stellara::KeyPressedEvent& event) {
-			if (event.GetKeyCode() == ST_KEY_LEFT)
-				m_CameraPosition.x -= m_CameraSpeed;
-			
-			if (event.GetKeyCode() == ST_KEY_RIGHT)
-				m_CameraPosition.x += m_CameraSpeed;
-			
-			if (event.GetKeyCode() == ST_KEY_UP)
-				m_CameraPosition.y += m_CameraSpeed;
-			
-			if (event.GetKeyCode() == ST_KEY_DOWN)
-				m_CameraPosition.y -= m_CameraSpeed;
-			
 			return false;
 		}
 		
@@ -170,7 +174,10 @@ class ExampleLayer : public Stellara::Layer{
 			
 			Stellara::OrthographicCamera m_Camera;
 			glm::vec3 m_CameraPosition;
-			float m_CameraSpeed = 0.1f;
+
+			float m_CameraRotation = 0.0f;
+			float m_CameraRotationSpeed = 0.1f;
+			float m_CameraMoveSpeed = 0.1f;
 };
 
 class Sandbox : public Stellara::Application{
