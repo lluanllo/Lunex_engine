@@ -11,6 +11,7 @@
 #include "Renderer/Buffer.h"
 #include "Renderer/VertexArray.h"
 
+#include "Renderer/OrthographicCamera.h"
 
 #include "ImGui/ImGuiLayer.h"
 
@@ -39,12 +40,6 @@ namespace Stellara {
 
 			bool m_Running = true;
 			LayerStack m_LayerStack;
-
-			std::shared_ptr<Shader> m_Shader;
-			std::shared_ptr<VertexArray> m_VertexArray;
-
-			std::shared_ptr<Shader> m_BlueShader;
-			std::shared_ptr<VertexArray> m_SquareVA;
 
 		private:
 			static Application* s_Instance;
