@@ -1,21 +1,21 @@
 
-//---Stellara Core----------
+//---Lunex Core----------
 #include "Application.h"
 #include "Layer.h"
 //#include "../Log/Log.h"
 //--------------------------
 
-//---Stellara Codes---------
+//---Lunex Codes---------
 #include "Input.h"
 #include "Codes/KeyCodes.h"
 #include "Codes/MouseButtonCodes.h"
 //--------------------------
 
-//---Stellara ImGui---------
+//---Lunex ImGui---------
 #include "ImGui/ImGuiLayer.h"
 //--------------------------
 
-//---Stellara Renderer------
+//---Lunex Renderer------
 #include "Renderer/Renderer.h"
 #include "Renderer/RenderCommand.h"
 #include "Renderer/Buffer.h"
