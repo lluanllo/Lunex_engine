@@ -1,13 +1,13 @@
-#include <Stellara.h>
+#include <Lunex.h>
 
 #include "imgui.h"
 
-class ExampleLayer : public Stellara::Layer{
+class ExampleLayer : public Lunex::Layer{
 	public:
 		ExampleLayer()
 			: Layer("Example"), m_Camera(-1.6f, 1.6f, -0.9f, 0.9f), m_CameraPosition(0.0f) {
 			
-			m_VertexArray.reset(Stellara::VertexArray::Create());
+			m_VertexArray.reset(Lunex::VertexArray::Create());
 			
 			float vertices[3 * 7] = {
 				-0.5f, -0.5f, 0.0f, 0.8f, 0.2f, 0.8f, 1.0f,
@@ -15,21 +15,21 @@ class ExampleLayer : public Stellara::Layer{
 				 0.0f,  0.5f, 0.0f, 0.8f, 0.8f, 0.2f, 1.0f
 			};
 			
-			std::shared_ptr<Stellara::VertexBuffer> vertexBuffer;
-			vertexBuffer.reset(Stellara::VertexBuffer::Create(vertices, sizeof(vertices)));
-			Stellara::BufferLayout layout = {
-				{ Stellara::ShaderDataType::Float3, "a_Position" },
-				{ Stellara::ShaderDataType::Float4, "a_Color" }
+			std::shared_ptr<Lunex::VertexBuffer> vertexBuffer;
+			vertexBuffer.reset(Lunex::VertexBuffer::Create(vertices, sizeof(vertices)));
+			Lunex::BufferLayout layout = {
+				{ Lunex::ShaderDataType::Float3, "a_Position" },
+				{ Lunex::ShaderDataType::Float4, "a_Color" }
 			};
 			vertexBuffer->SetLayout(layout);
 			m_VertexArray->AddVertexBuffer(vertexBuffer);
 			
 			uint32_t indices[3] = { 0, 1, 2 };
-			std::shared_ptr<Stellara::IndexBuffer> indexBuffer;
-			indexBuffer.reset(Stellara::IndexBuffer::Create(indices, sizeof(indices) / sizeof(uint32_t)));
+			std::shared_ptr<Lunex::IndexBuffer> indexBuffer;
+			indexBuffer.reset(Lunex::IndexBuffer::Create(indices, sizeof(indices) / sizeof(uint32_t)));
 			m_VertexArray->SetIndexBuffer(indexBuffer);
 			
-			m_SquareVA.reset(Stellara::VertexArray::Create());
+			m_SquareVA.reset(Lunex::VertexArray::Create());
 			
 			float squareVertices[3 * 4] = {
 				-0.75f, -0.75f, 0.0f,
@@ -38,18 +38,18 @@ class ExampleLayer : public Stellara::Layer{
 				-0.75f,  0.75f, 0.0f
 			};
 			
-			std::shared_ptr<Stellara::VertexBuffer> squareVB;
-			squareVB.reset(Stellara::VertexBuffer::Create(squareVertices, sizeof(squareVertices)));
+			std::shared_ptr<Lunex::VertexBuffer> squareVB;
+			squareVB.reset(Lunex::VertexBuffer::Create(squareVertices, sizeof(squareVertices)));
 
 			squareVB->SetLayout({
-				{ Stellara::ShaderDataType::Float3, "a_Position" }
+				{ Lunex::ShaderDataType::Float3, "a_Position" }
 				});
 
 			m_SquareVA->AddVertexBuffer(squareVB);
 
 			uint32_t squareIndices[6] = { 0, 1, 2, 2, 3, 0 };
-			std::shared_ptr<Stellara::IndexBuffer> squareIB;
-			squareIB.reset(Stellara::IndexBuffer::Create(squareIndices, sizeof(squareIndices) / sizeof(uint32_t)));
+			std::shared_ptr<Lunex::IndexBuffer> squareIB;
+			squareIB.reset(Lunex::IndexBuffer::Create(squareIndices, sizeof(squareIndices) / sizeof(uint32_t)));
 			m_SquareVA->SetIndexBuffer(squareIB);
 
 			std::string vertexSrc = R"(
@@ -86,7 +86,7 @@ class ExampleLayer : public Stellara::Layer{
 			}
 		)";
 
-			m_Shader.reset(new Stellara::Shader(vertexSrc, fragmentSrc));
+			m_Shader.reset(new Lunex::Shader(vertexSrc, fragmentSrc));
 
 			std::string blueShaderVertexSrc = R"(
 			#version 330 core
@@ -117,38 +117,38 @@ class ExampleLayer : public Stellara::Layer{
 			}
 		)";
 
-			m_BlueShader.reset(new Stellara::Shader(blueShaderVertexSrc, blueShaderFragmentSrc));
+			m_BlueShader.reset(new Lunex::Shader(blueShaderVertexSrc, blueShaderFragmentSrc));
 		}
 
 		void OnUpdate() override {
 			
-			if (Stellara::Input::IsKeyPressed(ST_KEY_LEFT))
+			if (Lunex::Input::IsKeyPressed(LN_KEY_LEFT))
 				m_CameraPosition.x += m_CameraMoveSpeed;
-			else if (Stellara::Input::IsKeyPressed(ST_KEY_RIGHT))
+			else if (Lunex::Input::IsKeyPressed(LN_KEY_RIGHT))
 				m_CameraPosition.x -= m_CameraMoveSpeed;
 			
-			if (Stellara::Input::IsKeyPressed(ST_KEY_UP))
+			if (Lunex::Input::IsKeyPressed(LN_KEY_UP))
 				m_CameraPosition.y -= m_CameraMoveSpeed;
-			else if (Stellara::Input::IsKeyPressed(ST_KEY_DOWN))
+			else if (Lunex::Input::IsKeyPressed(LN_KEY_DOWN))
 				m_CameraPosition.y += m_CameraMoveSpeed;
 
-			if(Stellara::Input::IsKeyPressed(ST_KEY_A))
+			if(Lunex::Input::IsKeyPressed(LN_KEY_A))
 				m_CameraRotation -= m_CameraRotationSpeed;
-			else if (Stellara::Input::IsKeyPressed(ST_KEY_D))
+			else if (Lunex::Input::IsKeyPressed(LN_KEY_D))
 				m_CameraRotation += m_CameraRotationSpeed;
 			
-			Stellara::RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
-			Stellara::RenderCommand::Clear();
+			Lunex::RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+			Lunex::RenderCommand::Clear();
 			
 			m_Camera.SetPosition(m_CameraPosition);
 			m_Camera.SetRotation(m_CameraRotation);
 			
-			Stellara::Renderer::BeginScene(m_Camera);
+			Lunex::Renderer::BeginScene(m_Camera);
 			
-			Stellara::Renderer::Submit(m_BlueShader, m_SquareVA);
-			Stellara::Renderer::Submit(m_Shader, m_VertexArray);
+			Lunex::Renderer::Submit(m_BlueShader, m_SquareVA);
+			Lunex::Renderer::Submit(m_Shader, m_VertexArray);
 			
-			Stellara::Renderer::EndScene();
+			Lunex::Renderer::EndScene();
 		}
 
 		
@@ -156,23 +156,23 @@ class ExampleLayer : public Stellara::Layer{
 			
 		}
 
-		void OnEvent(Stellara::Event& event) override {
-			Stellara::EventDispatcher dispatcher(event);
-			dispatcher.Dispatch<Stellara::KeyPressedEvent>(STLR_BIND_EVENT_FN(ExampleLayer::OnKeyPressEvent));
+		void OnEvent(Lunex::Event& event) override {
+			Lunex::EventDispatcher dispatcher(event);
+			dispatcher.Dispatch<Lunex::KeyPressedEvent>(LNX_BIND_EVENT_FN(ExampleLayer::OnKeyPressEvent));
 		}
 
-		bool OnKeyPressEvent(Stellara::KeyPressedEvent& event) {
+		bool OnKeyPressEvent(Lunex::KeyPressedEvent& event) {
 			return false;
 		}
 		
 		private:
-			std::shared_ptr<Stellara::Shader> m_Shader;
-			std::shared_ptr<Stellara::VertexArray> m_VertexArray;
+			std::shared_ptr<Lunex::Shader> m_Shader;
+			std::shared_ptr<Lunex::VertexArray> m_VertexArray;
 			
-			std::shared_ptr<Stellara::Shader> m_BlueShader;
-			std::shared_ptr<Stellara::VertexArray> m_SquareVA;
+			std::shared_ptr<Lunex::Shader> m_BlueShader;
+			std::shared_ptr<Lunex::VertexArray> m_SquareVA;
 			
-			Stellara::OrthographicCamera m_Camera;
+			Lunex::OrthographicCamera m_Camera;
 			glm::vec3 m_CameraPosition;
 
 			float m_CameraRotation = 0.0f;
@@ -180,7 +180,7 @@ class ExampleLayer : public Stellara::Layer{
 			float m_CameraMoveSpeed = 0.1f;
 };
 
-class Sandbox : public Stellara::Application{
+class Sandbox : public Lunex::Application{
 	public:
 		Sandbox() {
 			PushLayer(new ExampleLayer());
@@ -190,6 +190,6 @@ class Sandbox : public Stellara::Application{
 		}
 };
 
-Stellara::Application* Stellara::CreateApplication() {
+Lunex::Application* Lunex::CreateApplication() {
 	return new Sandbox();
 }
