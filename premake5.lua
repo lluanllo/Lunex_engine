@@ -1,4 +1,4 @@
-workspace "Stellara"
+workspace "Lunex-Engine"
     architecture "x64"
     startproject "Sandbox"
 
@@ -16,14 +16,14 @@ IncludeDir["GLFW"]     = "vendor/glfw/include"
 IncludeDir["Glad"]     = "vendor/Glad/include"
 IncludeDir["ImGui"]    = "vendor/ImGuiLib"
 IncludeDir["glm"]      = "vendor/glm"
-IncludeDir["Stellara"] = "Stellara/src"
+IncludeDir["Lunex"] = "Lunex/src"
 
 include "vendor/GLFW"
 include "vendor/Glad"
 include "vendor/ImGuiLib"
 
-project "Stellara"
-    location "Stellara"
+project "Lunex"
+    location "Lunex"
     kind "StaticLib"
     language "C++"
     cppdialect "C++20"
@@ -33,7 +33,7 @@ project "Stellara"
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
 
     pchheader "stpch.h"
-    pchsource "Stellara/src/stpch.cpp"
+    pchsource "Lunex/src/stpch.cpp"
 
     files
     {
@@ -64,8 +64,8 @@ project "Stellara"
         systemversion "latest"
 
         defines{
-            "ST_PLATFORM_WINDOWS",
-            "ST_BUILD_DLL",
+            "LN_PLATFORM_WINDOWS",
+            "LN_BUILD_DLL",
             "GLFW_INCLUDE_NONE"
         }
 
@@ -73,17 +73,17 @@ project "Stellara"
         buildoptions { "/utf-8" }
 
     filter "configurations:Debug"
-        defines { "ST_DEBUG" }
+        defines { "LN_DEBUG" }
         buildoptions { "/MDd"}
         symbols "on"
 
     filter "configurations:Release"
-        defines { "ST_RELEASE" }
+        defines { "LN_RELEASE" }
         buildoptions { "/MD"}
         optimize "on"
 
     filter "configurations:Dist"
-        defines { "ST_DIST" }
+        defines { "LN_DIST" }
         buildoptions { "/MD"}
         optimize "on"
 
@@ -106,15 +106,15 @@ project "Sandbox"
     includedirs
     {
         "vendor/spdlog/include",
-        "Stellara/src",
-        "Stellara/src/Core",
+        "Lunex/src",
+        "Lunex/src/Core",
         "vendor/ImGuiLib",
         "%{IncludeDir.glm}"
     }
 
     links
     {
-        "Stellara"
+        "Lunex"
     }
 
     filter "system:windows"
@@ -124,22 +124,22 @@ project "Sandbox"
 
         defines
         {
-            "ST_PLATFORM_WINDOWS"
+            "LN_PLATFORM_WINDOWS"
         }
 
     buildoptions { "/utf-8" }
 
     filter "configurations:Debug"
-        defines "ST_DEBUG"
+        defines "LN_DEBUG"
         buildoptions "/MDd"
         symbols "on"
 
     filter "configurations:Release"
-        defines "ST_RELEASE"
+        defines "LN_RELEASE"
         buildoptions "/MD"
         optimize "on"
 
     filter "configurations:Dist"
-        defines "ST_DIST"
+        defines "LN_DIST"
         buildoptions "/MD"
         optimize "on"
