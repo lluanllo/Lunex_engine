@@ -12,9 +12,9 @@ namespace Lunex {
 		unsigned int Width;
 		unsigned int Height;
 
-		WindowProps(const std::string& title = "Stellara Engine",
-			unsigned int width = 1280,
-			unsigned int height = 720)
+		WindowProps(const std::string& title = "Lunex Engine",
+			unsigned int width = 1920,
+			unsigned int height = 1080)
 			: Title(title), Width(width), Height(height) {
 		}
 	};
