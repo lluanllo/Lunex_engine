@@ -2,16 +2,16 @@
 
 #include "Core/Core.h"
 
+#include <GLFW/glfw3.h>
+
 #include "Window.h"
 #include "LayerStack.h"
 #include "Events/Event.h"
 #include "Events/ApplicationEvent.h"
 
-#include "Core/TimeStep.h"
+#include "Core/Timestep.h"
 
 #include "ImGui/ImGuiLayer.h"
-
-#include <GLFW/glfw3.h>
 
 namespace Lunex {
 	

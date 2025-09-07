@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Core.h"
-#include "Core/TimeStep.h"
+#include "Core/Timestep.h"
 #include "Events/Event.h"
 
 namespace Lunex {
