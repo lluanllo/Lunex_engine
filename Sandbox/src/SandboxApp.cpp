@@ -116,26 +116,26 @@ class ExampleLayer : public Lunex::Layer{
 				color = vec4(0.2, 0.3, 0.8, 1.0);
 			}
 		)";
-
+			
 			m_BlueShader.reset(new Lunex::Shader(blueShaderVertexSrc, blueShaderFragmentSrc));
 		}
 
-		void OnUpdate() override {
+		void OnUpdate(Lunex::Timestep ts) override {
 			
 			if (Lunex::Input::IsKeyPressed(LN_KEY_LEFT))
-				m_CameraPosition.x += m_CameraMoveSpeed;
+				m_CameraPosition.x += m_CameraMoveSpeed * ts;
 			else if (Lunex::Input::IsKeyPressed(LN_KEY_RIGHT))
 				m_CameraPosition.x -= m_CameraMoveSpeed;
 			
 			if (Lunex::Input::IsKeyPressed(LN_KEY_UP))
-				m_CameraPosition.y -= m_CameraMoveSpeed;
+				m_CameraPosition.y -= m_CameraMoveSpeed * ts;
 			else if (Lunex::Input::IsKeyPressed(LN_KEY_DOWN))
-				m_CameraPosition.y += m_CameraMoveSpeed;
-
+				m_CameraPosition.y += m_CameraMoveSpeed * ts;
+			
 			if(Lunex::Input::IsKeyPressed(LN_KEY_A))
-				m_CameraRotation -= m_CameraRotationSpeed;
+				m_CameraRotation -= m_CameraRotationSpeed * ts;
 			else if (Lunex::Input::IsKeyPressed(LN_KEY_D))
-				m_CameraRotation += m_CameraRotationSpeed;
+				m_CameraRotation += m_CameraRotationSpeed * ts;
 			
 			Lunex::RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
 			Lunex::RenderCommand::Clear();
@@ -176,8 +176,8 @@ class ExampleLayer : public Lunex::Layer{
 			glm::vec3 m_CameraPosition;
 
 			float m_CameraRotation = 0.0f;
-			float m_CameraRotationSpeed = 0.1f;
-			float m_CameraMoveSpeed = 0.1f;
+			float m_CameraRotationSpeed = 180.0f;
+			float m_CameraMoveSpeed = 5.0f;
 };
 
 class Sandbox : public Lunex::Application{
