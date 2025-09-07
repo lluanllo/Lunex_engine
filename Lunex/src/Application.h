@@ -2,8 +2,6 @@
 
 #include "Core/Core.h"
 
-#include <GLFW/glfw3.h>
-
 #include "Window.h"
 #include "LayerStack.h"
 #include "Events/Event.h"
@@ -12,6 +10,8 @@
 #include "Core/Timestep.h"
 
 #include "ImGui/ImGuiLayer.h"
+
+#include "../../vendor/GLFW/include/GLFW/glfw3.h"
 
 namespace Lunex {
 	

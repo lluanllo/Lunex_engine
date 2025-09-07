@@ -176,8 +176,8 @@ class ExampleLayer : public Lunex::Layer{
 			glm::vec3 m_CameraPosition;
 
 			float m_CameraRotation = 0.0f;
-			float m_CameraRotationSpeed = 0.1f;
-			float m_CameraMoveSpeed = 0.1f;
+			float m_CameraRotationSpeed = 180.0f;
+			float m_CameraMoveSpeed = 5.0f;
 };
 
 class Sandbox : public Lunex::Application{
