@@ -51,9 +51,14 @@ namespace Lunex{
 	}
 	
 	void Application::Run() {
-		while (m_Running) {			
+		while (m_Running) {	
+			
+			float time = (float)glfwGetTime(); // Platform::GetTime()
+			Timestep timstep = time - m_LastFrameTime;
+			m_LastFrameTime = time;
+			
 			for (Layer* layer : m_LayerStack) {
-				layer->OnUpdate();
+				layer->OnUpdate(timstep);
 			}
 			
 			m_ImGuiLayer->Begin();

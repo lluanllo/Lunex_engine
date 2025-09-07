@@ -120,8 +120,10 @@ class ExampleLayer : public Lunex::Layer{
 			m_BlueShader.reset(new Lunex::Shader(blueShaderVertexSrc, blueShaderFragmentSrc));
 		}
 
-		void OnUpdate() override {
+		void OnUpdate(Lunex::Timestep ts) override {
 			
+			LNX_LOG_TRACE("ExampleLayer::Update: {0} ({1} ms)", ts.GetSeconds(), ts.GetMilliseconds());
+
 			if (Lunex::Input::IsKeyPressed(LN_KEY_LEFT))
 				m_CameraPosition.x += m_CameraMoveSpeed;
 			else if (Lunex::Input::IsKeyPressed(LN_KEY_RIGHT))
