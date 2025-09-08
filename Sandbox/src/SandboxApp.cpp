@@ -90,7 +90,7 @@ class ExampleLayer : public Lunex::Layer{
 			
 			m_Shader.reset(new Lunex::Shader(vertexSrc, fragmentSrc));
 			
-			std::string blueShaderVertexSrc = R"(
+			std::string flatColorShaderVertexSrc = R"(
 			#version 330 core
 			
 			layout(location = 0) in vec3 a_Position;
@@ -100,40 +100,40 @@ class ExampleLayer : public Lunex::Layer{
 			
 			out vec3 v_Position;
 			
-			void main()
-			{
+			void main() {
 				v_Position = a_Position;
 				gl_Position = u_ViewProjection * u_Transform * vec4(a_Position, 1.0);	
 			}
 		)";
 			
-			std::string blueShaderFragmentSrc = R"(
+			std::string flatColorShaderFragmentSrc = R"(
 			#version 330 core
 			
 			layout(location = 0) out vec4 color;
 			
 			in vec3 v_Position;
 			
-			void main()
-			{
-				color = vec4(0.2, 0.3, 0.8, 1.0);
+			uniform vec4 u_Color;
+			
+			void main() {
+				color = u_Color;
 			}
 		)";
 			
-			m_BlueShader.reset(new Lunex::Shader(blueShaderVertexSrc, blueShaderFragmentSrc));
+			m_FlatColorShader.reset(new Lunex::Shader(flatColorShaderVertexSrc, flatColorShaderFragmentSrc));
 		}
 		
 		void OnUpdate(Lunex::Timestep ts) override {
 			
 			if (Lunex::Input::IsKeyPressed(LN_KEY_LEFT))
-				m_CameraPosition.x += m_CameraMoveSpeed * ts;
+				m_CameraPosition.x -= m_CameraMoveSpeed * ts;
 			else if (Lunex::Input::IsKeyPressed(LN_KEY_RIGHT))
-				m_CameraPosition.x -= m_CameraMoveSpeed;
+				m_CameraPosition.x += m_CameraMoveSpeed * ts;
 			
 			if (Lunex::Input::IsKeyPressed(LN_KEY_UP))
-				m_CameraPosition.y -= m_CameraMoveSpeed * ts;
-			else if (Lunex::Input::IsKeyPressed(LN_KEY_DOWN))
 				m_CameraPosition.y += m_CameraMoveSpeed * ts;
+			else if (Lunex::Input::IsKeyPressed(LN_KEY_DOWN))
+				m_CameraPosition.y -= m_CameraMoveSpeed * ts;
 			
 			if(Lunex::Input::IsKeyPressed(LN_KEY_A))
 				m_CameraRotation -= m_CameraRotationSpeed * ts;
@@ -150,11 +150,18 @@ class ExampleLayer : public Lunex::Layer{
 			
 			static glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.1f));
 			
+			glm::vec4 redColor(0.8f, 0.2f, 0.3f, 1.0f);
+			glm::vec4 blueColor(0.2f, 0.3f, 0.8f, 1.0f);
+			
 			for (int y = 0; y < 20; y++) {
 				for (int x = 0; x < 20; x++) {
 					glm::vec3 pos(x * 0.11f, y * 0.11f, 0.0f);
 					glm::mat4 transform = glm::translate(glm::mat4(1.0f), pos) * scale;
-					Lunex::Renderer::Submit(m_BlueShader, m_SquareVA, transform);
+					if(x % 2 == 0)
+						m_FlatColorShader->UploadUniformFloat4("u_Color", redColor);
+					else
+						m_FlatColorShader->UploadUniformFloat4("u_Color", blueColor);
+					Lunex::Renderer::Submit(m_FlatColorShader, m_SquareVA, transform);
 				}
 			}
 			
@@ -181,12 +188,12 @@ class ExampleLayer : public Lunex::Layer{
 			std::shared_ptr<Lunex::Shader> m_Shader;
 			std::shared_ptr<Lunex::VertexArray> m_VertexArray;
 			
-			std::shared_ptr<Lunex::Shader> m_BlueShader;
+			std::shared_ptr<Lunex::Shader> m_FlatColorShader;
 			std::shared_ptr<Lunex::VertexArray> m_SquareVA;
 			
 			Lunex::OrthographicCamera m_Camera;
 			glm::vec3 m_CameraPosition;
-
+			
 			float m_CameraRotation = 0.0f;
 			float m_CameraRotationSpeed = 180.0f;
 			float m_CameraMoveSpeed = 5.0f;
