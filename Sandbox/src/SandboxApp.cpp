@@ -1,6 +1,7 @@
 #include <Lunex.h>
 
 #include "imgui.h"
+#include <glm/ext/matrix_transform.hpp>
 
 class ExampleLayer : public Lunex::Layer{
 	public:
@@ -32,26 +33,26 @@ class ExampleLayer : public Lunex::Layer{
 			m_SquareVA.reset(Lunex::VertexArray::Create());
 			
 			float squareVertices[3 * 4] = {
-				-0.75f, -0.75f, 0.0f,
-				 0.75f, -0.75f, 0.0f,
-				 0.75f,  0.75f, 0.0f,
-				-0.75f,  0.75f, 0.0f
+				-0.5f, -0.5f, 0.0f,
+				 0.5f, -0.5f, 0.0f,
+				 0.5f,  0.5f, 0.0f,
+				-0.5f,  0.5f, 0.0f
 			};
 			
 			std::shared_ptr<Lunex::VertexBuffer> squareVB;
 			squareVB.reset(Lunex::VertexBuffer::Create(squareVertices, sizeof(squareVertices)));
-
+			
 			squareVB->SetLayout({
 				{ Lunex::ShaderDataType::Float3, "a_Position" }
 				});
-
+			
 			m_SquareVA->AddVertexBuffer(squareVB);
-
+			
 			uint32_t squareIndices[6] = { 0, 1, 2, 2, 3, 0 };
 			std::shared_ptr<Lunex::IndexBuffer> squareIB;
 			squareIB.reset(Lunex::IndexBuffer::Create(squareIndices, sizeof(squareIndices) / sizeof(uint32_t)));
 			m_SquareVA->SetIndexBuffer(squareIB);
-
+				
 			std::string vertexSrc = R"(
 			#version 330 core
 			
@@ -59,6 +60,7 @@ class ExampleLayer : public Lunex::Layer{
 			layout(location = 1) in vec4 a_Color;
 			
 			uniform mat4 u_ViewProjection;
+			uniform mat4 u_Transform;
 			
 			out vec3 v_Position;
 			out vec4 v_Color;
@@ -67,10 +69,10 @@ class ExampleLayer : public Lunex::Layer{
 			{
 				v_Position = a_Position;
 				v_Color = a_Color;
-				gl_Position = u_ViewProjection * vec4(a_Position, 1.0);	
+				gl_Position = u_ViewProjection * u_Transform * vec4(a_Position, 1.0);	
 			}
 		)";
-
+			
 			std::string fragmentSrc = R"(
 			#version 330 core
 			
@@ -85,25 +87,26 @@ class ExampleLayer : public Lunex::Layer{
 				color = v_Color;
 			}
 		)";
-
+			
 			m_Shader.reset(new Lunex::Shader(vertexSrc, fragmentSrc));
-
+			
 			std::string blueShaderVertexSrc = R"(
 			#version 330 core
 			
 			layout(location = 0) in vec3 a_Position;
 			
 			uniform mat4 u_ViewProjection;
+			uniform mat4 u_Transform;
 			
 			out vec3 v_Position;
 			
 			void main()
 			{
 				v_Position = a_Position;
-				gl_Position = u_ViewProjection * vec4(a_Position, 1.0);	
+				gl_Position = u_ViewProjection * u_Transform * vec4(a_Position, 1.0);	
 			}
 		)";
-
+			
 			std::string blueShaderFragmentSrc = R"(
 			#version 330 core
 			
@@ -119,7 +122,7 @@ class ExampleLayer : public Lunex::Layer{
 			
 			m_BlueShader.reset(new Lunex::Shader(blueShaderVertexSrc, blueShaderFragmentSrc));
 		}
-
+		
 		void OnUpdate(Lunex::Timestep ts) override {
 			
 			if (Lunex::Input::IsKeyPressed(LN_KEY_LEFT))
@@ -145,22 +148,31 @@ class ExampleLayer : public Lunex::Layer{
 			
 			Lunex::Renderer::BeginScene(m_Camera);
 			
-			Lunex::Renderer::Submit(m_BlueShader, m_SquareVA);
+			static glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.1f));
+			
+			for (int y = 0; y < 20; y++) {
+				for (int x = 0; x < 20; x++) {
+					glm::vec3 pos(x * 0.11f, y * 0.11f, 0.0f);
+					glm::mat4 transform = glm::translate(glm::mat4(1.0f), pos) * scale;
+					Lunex::Renderer::Submit(m_BlueShader, m_SquareVA, transform);
+				}
+			}
+			
 			Lunex::Renderer::Submit(m_Shader, m_VertexArray);
 			
 			Lunex::Renderer::EndScene();
 		}
-
+		
 		
 		virtual void OnImGuiRender() override {
 			
 		}
-
+		
 		void OnEvent(Lunex::Event& event) override {
 			Lunex::EventDispatcher dispatcher(event);
 			dispatcher.Dispatch<Lunex::KeyPressedEvent>(LNX_BIND_EVENT_FN(ExampleLayer::OnKeyPressEvent));
 		}
-
+		
 		bool OnKeyPressEvent(Lunex::KeyPressedEvent& event) {
 			return false;
 		}
