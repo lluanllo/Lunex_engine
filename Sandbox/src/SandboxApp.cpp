@@ -4,7 +4,7 @@
 
 #include "imgui.h"
 
-#include <glm/ext/matrix_transform.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 class ExampleLayer : public Lunex::Layer{
@@ -120,7 +120,7 @@ class ExampleLayer : public Lunex::Layer{
 			uniform vec3 u_Color;
 			
 			void main() {
-				color = vec3(u_Color, 1.0);
+				color = vec4(u_Color, 1.0);
 			}
 		)";
 			
@@ -200,7 +200,7 @@ class ExampleLayer : public Lunex::Layer{
 			float m_CameraRotationSpeed = 180.0f;
 			float m_CameraMoveSpeed = 5.0f;
 			
-			glm::vec3 m_SquareColor = {0.2f, 0.3f, 0.8f};
+			glm::vec3 m_SquareColor = { 0.2f, 0.3f, 0.8f };
 };
 
 class Sandbox : public Lunex::Application{
