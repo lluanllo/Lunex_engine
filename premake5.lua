@@ -12,11 +12,11 @@ outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
 -- Include directories relative to the solution directory
 IncludeDir = {}
-IncludeDir["GLFW"]     = "vendor/glfw/include"
+IncludeDir["GLFW"]     = "vendor/GLFW/include"
 IncludeDir["Glad"]     = "vendor/Glad/include"
 IncludeDir["ImGui"]    = "vendor/ImGuiLib"
 IncludeDir["glm"]      = "vendor/glm"
-IncludeDir["Lunex"] = "Lunex/src"
+IncludeDir["Lunex"]    = "Lunex/src"
 
 include "vendor/GLFW"
 include "vendor/Glad"

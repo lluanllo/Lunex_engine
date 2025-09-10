@@ -5,6 +5,10 @@
 //#include "../Log/Log.h"
 //--------------------------
 
+//---Lunex Timestep--------
+#include "Timestep.h"
+//--------------------------
+
 //---Lunex Codes---------
 #include "Input.h"
 #include "Codes/KeyCodes.h"
