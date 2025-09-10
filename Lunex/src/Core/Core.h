@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #ifdef LN_PLATFORM_WINDOWS
 	#if LN_DYNAMIC_LINK
 		#ifdef LN_BUILD_DLL
@@ -29,9 +31,9 @@
 namespace Lunex {
 	
 	template<typename T>
-	using Scope = std::unique_ptr;
+	using Scope = std::unique_ptr<T>;
 	
 	template<typename T>
-	using Ref = std::shared_ptr;
+	using Ref = std::shared_ptr<T>;
 	
 }

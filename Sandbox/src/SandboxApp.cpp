@@ -20,7 +20,7 @@ class ExampleLayer : public Lunex::Layer{
 				 0.0f,  0.5f, 0.0f, 0.8f, 0.8f, 0.2f, 1.0f
 			};
 			
-			std::shared_ptr<Lunex::VertexBuffer> vertexBuffer;
+			Lunex::Ref<Lunex::VertexBuffer> vertexBuffer;
 			vertexBuffer.reset(Lunex::VertexBuffer::Create(vertices, sizeof(vertices)));
 			Lunex::BufferLayout layout = {
 				{ Lunex::ShaderDataType::Float3, "a_Position" },
@@ -30,7 +30,7 @@ class ExampleLayer : public Lunex::Layer{
 			m_VertexArray->AddVertexBuffer(vertexBuffer);
 			
 			uint32_t indices[3] = { 0, 1, 2 };
-			std::shared_ptr<Lunex::IndexBuffer> indexBuffer;
+			Lunex::Ref<Lunex::IndexBuffer> indexBuffer;
 			indexBuffer.reset(Lunex::IndexBuffer::Create(indices, sizeof(indices) / sizeof(uint32_t)));
 			m_VertexArray->SetIndexBuffer(indexBuffer);
 			
@@ -43,7 +43,7 @@ class ExampleLayer : public Lunex::Layer{
 				-0.5f,  0.5f, 0.0f
 			};
 			
-			std::shared_ptr<Lunex::VertexBuffer> squareVB;
+			Lunex::Ref<Lunex::VertexBuffer> squareVB;
 			squareVB.reset(Lunex::VertexBuffer::Create(squareVertices, sizeof(squareVertices)));
 			
 			squareVB->SetLayout({
@@ -53,7 +53,7 @@ class ExampleLayer : public Lunex::Layer{
 			m_SquareVA->AddVertexBuffer(squareVB);
 			
 			uint32_t squareIndices[6] = { 0, 1, 2, 2, 3, 0 };
-			std::shared_ptr<Lunex::IndexBuffer> squareIB;
+			Lunex::Ref<Lunex::IndexBuffer> squareIB;
 			squareIB.reset(Lunex::IndexBuffer::Create(squareIndices, sizeof(squareIndices) / sizeof(uint32_t)));
 			m_SquareVA->SetIndexBuffer(squareIB);
 				
@@ -187,11 +187,11 @@ class ExampleLayer : public Lunex::Layer{
 		}
 		
 		private:
-			std::unique_ptr<Lunex::Shader> m_Shader;
-			std::shared_ptr<Lunex::VertexArray> m_VertexArray;
+			Lunex::Ref<Lunex::Shader> m_Shader;
+			Lunex::Ref<Lunex::VertexArray> m_VertexArray;
 			
-			std::shared_ptr<Lunex::Shader> m_FlatColorShader;
-			std::shared_ptr<Lunex::VertexArray> m_SquareVA;
+			Lunex::Ref<Lunex::Shader> m_FlatColorShader;
+			Lunex::Ref<Lunex::VertexArray> m_SquareVA;
 			
 			Lunex::OrthographicCamera m_Camera;
 			glm::vec3 m_CameraPosition;
