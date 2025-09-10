@@ -1,7 +1,11 @@
 #include <Lunex.h>
 
+#include "Platform/OpenGL/OpenGLShader.h"
+
 #include "imgui.h"
-#include <glm/ext/matrix_transform.hpp>
+
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 class ExampleLayer : public Lunex::Layer{
 	public:
@@ -88,7 +92,7 @@ class ExampleLayer : public Lunex::Layer{
 			}
 		)";
 			
-			m_Shader.reset(new Lunex::Shader(vertexSrc, fragmentSrc));
+			m_Shader.reset(Lunex::Shader::Create(vertexSrc, fragmentSrc));
 			
 			std::string flatColorShaderVertexSrc = R"(
 			#version 330 core
@@ -113,14 +117,14 @@ class ExampleLayer : public Lunex::Layer{
 			
 			in vec3 v_Position;
 			
-			uniform vec4 u_Color;
+			uniform vec3 u_Color;
 			
 			void main() {
-				color = u_Color;
+				color = vec4(u_Color, 1.0);
 			}
 		)";
 			
-			m_FlatColorShader.reset(new Lunex::Shader(flatColorShaderVertexSrc, flatColorShaderFragmentSrc));
+			m_FlatColorShader.reset(Lunex::Shader::Create(flatColorShaderVertexSrc, flatColorShaderFragmentSrc));
 		}
 		
 		void OnUpdate(Lunex::Timestep ts) override {
@@ -150,17 +154,13 @@ class ExampleLayer : public Lunex::Layer{
 			
 			static glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.1f));
 			
-			glm::vec4 redColor(0.8f, 0.2f, 0.3f, 1.0f);
-			glm::vec4 blueColor(0.2f, 0.3f, 0.8f, 1.0f);
+			std::dynamic_pointer_cast<Lunex::OpenGLShader>(m_FlatColorShader)->Bind();
+			std::dynamic_pointer_cast<Lunex::OpenGLShader>(m_FlatColorShader)->UploadUniformFloat3("u_Color",m_SquareColor);
 			
 			for (int y = 0; y < 20; y++) {
 				for (int x = 0; x < 20; x++) {
 					glm::vec3 pos(x * 0.11f, y * 0.11f, 0.0f);
 					glm::mat4 transform = glm::translate(glm::mat4(1.0f), pos) * scale;
-					if(x % 2 == 0)
-						m_FlatColorShader->UploadUniformFloat4("u_Color", redColor);
-					else
-						m_FlatColorShader->UploadUniformFloat4("u_Color", blueColor);
 					Lunex::Renderer::Submit(m_FlatColorShader, m_SquareVA, transform);
 				}
 			}
@@ -172,7 +172,9 @@ class ExampleLayer : public Lunex::Layer{
 		
 		
 		virtual void OnImGuiRender() override {
-			
+			ImGui::Begin("Settings");
+			ImGui::ColorEdit3("Square Color", glm::value_ptr(m_SquareColor));
+			ImGui::End();
 		}
 		
 		void OnEvent(Lunex::Event& event) override {
@@ -197,6 +199,8 @@ class ExampleLayer : public Lunex::Layer{
 			float m_CameraRotation = 0.0f;
 			float m_CameraRotationSpeed = 180.0f;
 			float m_CameraMoveSpeed = 5.0f;
+			
+			glm::vec3 m_SquareColor = { 0.2f, 0.3f, 0.8f };
 };
 
 class Sandbox : public Lunex::Application{
