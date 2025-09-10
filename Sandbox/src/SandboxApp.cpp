@@ -36,18 +36,19 @@ class ExampleLayer : public Lunex::Layer{
 			
 			m_SquareVA.reset(Lunex::VertexArray::Create());
 			
-			float squareVertices[3 * 4] = {
-				-0.5f, -0.5f, 0.0f,
-				 0.5f, -0.5f, 0.0f,
-				 0.5f,  0.5f, 0.0f,
-				-0.5f,  0.5f, 0.0f
+			float squareVertices[5 * 4] = {
+				-0.5f, -0.5f, 0.0f, 0.0f, 0.0f,
+				 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+				 0.5f,  0.5f, 0.0f, 1.0f, 1.0f,
+				-0.5f,  0.5f, 0.0f, 0.0f, 1.0f
 			};
 			
 			Lunex::Ref<Lunex::VertexBuffer> squareVB;
 			squareVB.reset(Lunex::VertexBuffer::Create(squareVertices, sizeof(squareVertices)));
 			
 			squareVB->SetLayout({
-				{ Lunex::ShaderDataType::Float3, "a_Position" }
+				{ Lunex::ShaderDataType::Float3, "a_Position" },
+				{ Lunex::ShaderDataType::Float2, "a_TexCoord" }
 				});
 			
 			m_SquareVA->AddVertexBuffer(squareVB);
@@ -165,7 +166,9 @@ class ExampleLayer : public Lunex::Layer{
 				}
 			}
 			
-			Lunex::Renderer::Submit(m_Shader, m_VertexArray);
+			Lunex::Renderer::Submit(m_FlatColorShader, m_SquareVA, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
+
+			//Lunex::Renderer::Submit(m_Shader, m_VertexArray);
 			
 			Lunex::Renderer::EndScene();
 		}
