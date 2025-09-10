@@ -12,11 +12,12 @@ outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
 -- Include directories relative to the solution directory
 IncludeDir = {}
-IncludeDir["GLFW"]     = "vendor/GLFW/include"
-IncludeDir["Glad"]     = "vendor/Glad/include"
-IncludeDir["ImGui"]    = "vendor/ImGuiLib"
-IncludeDir["glm"]      = "vendor/glm"
-IncludeDir["Lunex"]    = "Lunex/src"
+IncludeDir["GLFW"]      = "vendor/GLFW/include"
+IncludeDir["Glad"]      = "vendor/Glad/include"
+IncludeDir["ImGui"]     = "vendor/ImGuiLib"
+IncludeDir["glm"]       = "vendor/glm"
+IncludeDir["stb_image"] = "vendor/stb_image"
+IncludeDir["Lunex"]     = "Lunex/src"
 
 include "vendor/GLFW"
 include "vendor/Glad"
@@ -39,8 +40,10 @@ project "Lunex"
     {
         "%{prj.name}/src/**.h",
         "%{prj.name}/src/**.cpp",
+        "%{prj.name}/vendor/stb_image/**.cpp",
+        "%{prj.name}/vendor/stb_image/**.h",
         "%{prj.name}/src/**.hpp",
-        "%{prj.name}/src/**.c",
+        "%{prj.name}/src/**.c"
     }
 
     includedirs
@@ -50,7 +53,8 @@ project "Lunex"
         "%{IncludeDir.GLFW}",
         "%{IncludeDir.Glad}",
         "%{IncludeDir.ImGui}",
-        "%{IncludeDir.glm}"
+        "%{IncludeDir.glm}",
+        "%{IncludeDir.stb_image}"
     }
 
     links{

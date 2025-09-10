@@ -1,6 +1,7 @@
 #include "stpch.h"
-
 #include "OpenGLTexture.h"
+
+#include "stb_image.h"
 
 #include <glad/glad.h>
 
