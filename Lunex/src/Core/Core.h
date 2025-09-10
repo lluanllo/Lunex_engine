@@ -25,3 +25,13 @@
 #define BIT(x) (1 << x)
 
 #define LNX_BIND_EVENT_FN(fn) std::bind(&fn, this, std::placeholders::_1)
+
+namespace Lunex {
+	
+	template<typename T>
+	using Scope = std::unique_ptr;
+	
+	template<typename T>
+	using Ref = std::shared_ptr;
+	
+}

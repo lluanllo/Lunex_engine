@@ -187,7 +187,7 @@ class ExampleLayer : public Lunex::Layer{
 		}
 		
 		private:
-			std::shared_ptr<Lunex::Shader> m_Shader;
+			std::unique_ptr<Lunex::Shader> m_Shader;
 			std::shared_ptr<Lunex::VertexArray> m_VertexArray;
 			
 			std::shared_ptr<Lunex::Shader> m_FlatColorShader;
