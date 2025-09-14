@@ -162,7 +162,7 @@ class ExampleLayer : public Lunex::Layer{
 
 			m_TextureShader.reset(Lunex::Shader::Create(textureShaderVertexSrc, textureShaderFragmentSrc));
 			
-			m_Texture = Lunex::Texture2D::Create("Sandbox/assets/textures/Checkerboard.png");
+			m_Texture = Lunex::Texture2D::Create("assets/textures/Checkerboard.png");
 			std::dynamic_pointer_cast<Lunex::OpenGLShader>(m_TextureShader)->Bind();
 			std::dynamic_pointer_cast<Lunex::OpenGLShader>(m_TextureShader)->UploadUniformInt("u_Texture", 0);
 		}
