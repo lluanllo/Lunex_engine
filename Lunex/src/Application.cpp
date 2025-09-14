@@ -20,6 +20,8 @@ namespace Lunex{
 		m_Window = std::unique_ptr<Window>(Window::Create());
 		m_Window->SetEventCallback(BIND_EVENT_FN(OnEvent));
 		
+		Renderer::Init();
+		
 		m_ImGuiLayer = new ImGuiLayer;
 		PushOverlay(m_ImGuiLayer);
 	}
@@ -53,7 +55,7 @@ namespace Lunex{
 	void Application::Run() {
 		while (m_Running) {	
 			
-			float time = (float)glfwGetTime(); // Platform::GetTime()
+			float time = (float)glfwGetTime();
 			Timestep timstep = time - m_LastFrameTime;
 			m_LastFrameTime = time;
 			
