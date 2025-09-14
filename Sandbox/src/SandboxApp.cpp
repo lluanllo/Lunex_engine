@@ -36,18 +36,19 @@ class ExampleLayer : public Lunex::Layer{
 			
 			m_SquareVA.reset(Lunex::VertexArray::Create());
 			
-			float squareVertices[3 * 4] = {
-				-0.5f, -0.5f, 0.0f,
-				 0.5f, -0.5f, 0.0f,
-				 0.5f,  0.5f, 0.0f,
-				-0.5f,  0.5f, 0.0f
+			float squareVertices[5 * 4] = {
+				-0.5f, -0.5f, 0.0f, 0.0f, 0.0f,
+				 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+				 0.5f,  0.5f, 0.0f, 1.0f, 1.0f,
+				-0.5f,  0.5f, 0.0f, 0.0f, 1.0f
 			};
 			
 			Lunex::Ref<Lunex::VertexBuffer> squareVB;
 			squareVB.reset(Lunex::VertexBuffer::Create(squareVertices, sizeof(squareVertices)));
 			
 			squareVB->SetLayout({
-				{ Lunex::ShaderDataType::Float3, "a_Position" }
+				{ Lunex::ShaderDataType::Float3, "a_Position" },
+				{ Lunex::ShaderDataType::Float2, "a_TexCoord" }
 				});
 			
 			m_SquareVA->AddVertexBuffer(squareVB);
@@ -58,73 +59,112 @@ class ExampleLayer : public Lunex::Layer{
 			m_SquareVA->SetIndexBuffer(squareIB);
 				
 			std::string vertexSrc = R"(
-			#version 330 core
+				#version 330 core
 			
-			layout(location = 0) in vec3 a_Position;
-			layout(location = 1) in vec4 a_Color;
+				layout(location = 0) in vec3 a_Position;
+				layout(location = 1) in vec4 a_Color;
 			
-			uniform mat4 u_ViewProjection;
-			uniform mat4 u_Transform;
+				uniform mat4 u_ViewProjection;
+				uniform mat4 u_Transform;
 			
-			out vec3 v_Position;
-			out vec4 v_Color;
+				out vec3 v_Position;
+				out vec4 v_Color;
 			
-			void main()
-			{
-				v_Position = a_Position;
-				v_Color = a_Color;
-				gl_Position = u_ViewProjection * u_Transform * vec4(a_Position, 1.0);	
-			}
-		)";
+				void main()
+				{
+					v_Position = a_Position;
+					v_Color = a_Color;
+					gl_Position = u_ViewProjection * u_Transform * vec4(a_Position, 1.0);	
+				}
+			)";
 			
 			std::string fragmentSrc = R"(
-			#version 330 core
+				#version 330 core
 			
-			layout(location = 0) out vec4 color;
+				layout(location = 0) out vec4 color;
 			
-			in vec3 v_Position;
-			in vec4 v_Color;
+				in vec3 v_Position;
+				in vec4 v_Color;
 			
-			void main()
-			{
-				color = vec4(v_Position * 0.5 + 0.5, 1.0);
-				color = v_Color;
-			}
-		)";
+				void main()
+				{
+					color = vec4(v_Position * 0.5 + 0.5, 1.0);
+					color = v_Color;
+				}
+			)";
 			
 			m_Shader.reset(Lunex::Shader::Create(vertexSrc, fragmentSrc));
 			
 			std::string flatColorShaderVertexSrc = R"(
+				#version 330 core
+			
+				layout(location = 0) in vec3 a_Position;
+			
+				uniform mat4 u_ViewProjection;
+				uniform mat4 u_Transform;
+			
+				out vec3 v_Position;
+			
+				void main() {
+					v_Position = a_Position;
+					gl_Position = u_ViewProjection * u_Transform * vec4(a_Position, 1.0);	
+				}
+			)";
+			
+			std::string flatColorShaderFragmentSrc = R"(
+				#version 330 core
+			
+				layout(location = 0) out vec4 color;
+			
+				in vec3 v_Position;
+			
+				uniform vec3 u_Color;
+			
+				void main() {
+					color = vec4(u_Color, 1.0);
+				}
+			)";
+			
+			m_FlatColorShader.reset(Lunex::Shader::Create(flatColorShaderVertexSrc, flatColorShaderFragmentSrc));
+			
+			std::string textureShaderVertexSrc = R"(
 			#version 330 core
 			
 			layout(location = 0) in vec3 a_Position;
-			
+			layout(location = 1) in vec2 a_TexCoord;
+
 			uniform mat4 u_ViewProjection;
 			uniform mat4 u_Transform;
-			
-			out vec3 v_Position;
-			
-			void main() {
-				v_Position = a_Position;
+
+			out vec2 v_TexCoord;
+
+			void main()
+			{
+				v_TexCoord = a_TexCoord;
 				gl_Position = u_ViewProjection * u_Transform * vec4(a_Position, 1.0);	
 			}
 		)";
-			
-			std::string flatColorShaderFragmentSrc = R"(
+
+			std::string textureShaderFragmentSrc = R"(
 			#version 330 core
 			
 			layout(location = 0) out vec4 color;
+
+			in vec2 v_TexCoord;
 			
-			in vec3 v_Position;
-			
-			uniform vec3 u_Color;
-			
-			void main() {
-				color = vec4(u_Color, 1.0);
+			uniform sampler2D u_Texture;
+
+			void main()
+			{
+				color = texture(u_Texture, v_TexCoord);
 			}
 		)";
+
+			m_TextureShader.reset(Lunex::Shader::Create(textureShaderVertexSrc, textureShaderFragmentSrc));
 			
-			m_FlatColorShader.reset(Lunex::Shader::Create(flatColorShaderVertexSrc, flatColorShaderFragmentSrc));
+			m_Texture = Lunex::Texture2D::Create("assets/textures/Checkerboard.png");
+			std::dynamic_pointer_cast<Lunex::OpenGLShader>(m_TextureShader)->Bind();
+			std::dynamic_pointer_cast<Lunex::OpenGLShader>(m_TextureShader)->UploadUniformInt("u_Texture", 0);
 		}
 		
 		void OnUpdate(Lunex::Timestep ts) override {
@@ -165,7 +205,10 @@ class ExampleLayer : public Lunex::Layer{
 				}
 			}
 			
-			Lunex::Renderer::Submit(m_Shader, m_VertexArray);
+			m_Texture->Bind();
+			Lunex::Renderer::Submit(m_TextureShader, m_SquareVA, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
+			
+			//Lunex::Renderer::Submit(m_Shader, m_VertexArray);
 			
 			Lunex::Renderer::EndScene();
 		}
@@ -190,8 +233,10 @@ class ExampleLayer : public Lunex::Layer{
 			Lunex::Ref<Lunex::Shader> m_Shader;
 			Lunex::Ref<Lunex::VertexArray> m_VertexArray;
 			
-			Lunex::Ref<Lunex::Shader> m_FlatColorShader;
+			Lunex::Ref<Lunex::Shader> m_FlatColorShader, m_TextureShader;
 			Lunex::Ref<Lunex::VertexArray> m_SquareVA;
+			
+			Lunex::Ref<Lunex::Texture2D> m_Texture;
 			
 			Lunex::OrthographicCamera m_Camera;
 			glm::vec3 m_CameraPosition;
