@@ -7,6 +7,7 @@ namespace Lunex {
 
 	class LUNEX_API OpenGLShader : public Shader {
 		public:
+			OpenGLShader(const std::string& filepath);
 			OpenGLShader(const std::string& vertexSrc, const std::string& fragmentSrc);
 			virtual ~OpenGLShader();
 			
@@ -23,6 +24,8 @@ namespace Lunex {
 			void UploadUniformMat3(const std::string& name, const glm::mat3& matrix);
 			void UploadUniformMat4(const std::string& name, const glm::mat4& matrix);
 			
+		private:
+			void Compile(const std::string& vertexSrc, const std::string& fragmentSrc);
 		private:
 			uint32_t m_RendererID;
 	};
