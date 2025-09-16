@@ -25,6 +25,8 @@ namespace Lunex {
 			void UploadUniformMat4(const std::string& name, const glm::mat4& matrix);
 			
 		private:
+			std::string ReadFile(const std::string& filepath);
+			void PreProcess(const std::string& source);
 			void Compile(const std::string& vertexSrc, const std::string& fragmentSrc);
 		private:
 			uint32_t m_RendererID;

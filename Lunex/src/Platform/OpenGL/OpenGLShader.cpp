@@ -10,14 +10,7 @@
 namespace Lunex {
 	
 	OpenGLShader::OpenGLShader(const std::string& filepath) {
-		std::ifstream in(filepath, std::ios::in, std::ios::binary);
-		
-		if (in) {
-			in.seekg(0, std::ios::end);
-		}
-		else {
-			LN_CORE_ASSERT(false, "Could not open file '{0}'", filepath);
-		}
+		std::string shaderSource = ReadFile(filepath);
 	}
 	
 	OpenGLShader::OpenGLShader(const std::string& vertexSrc, const std::string& fragmentSrc) {
@@ -122,6 +115,24 @@ namespace Lunex {
 	
 	OpenGLShader::~OpenGLShader() {
 		glDeleteProgram(m_RendererID);
+	}
+
+	std::string OpenGLShader::ReadFile(const std::string& filepath) {
+		std::string result;
+		std::ifstream in(filepath, std::ios::in, std::ios::binary);
+		
+		if (in) {
+			in.seekg(0, std::ios::end);
+			result.resize(in.tellg());
+			in.seekg(0, std::ios::beg);
+			in.read(&result[0], result.size());
+			in.close();
+		}
+		else {
+			LN_CORE_ASSERT(false, "Could not open file '{0}'", filepath);
+		}
+		
+		return result;
 	}
 	
 	void OpenGLShader::Bind() const {
