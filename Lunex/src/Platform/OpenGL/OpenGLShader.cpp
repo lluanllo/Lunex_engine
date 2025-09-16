@@ -146,7 +146,56 @@ namespace Lunex {
 	}
 	
 	std::unordered_map<GLenum, std::string> OpenGLShader::PreProcess(const std::string& source) {
-		
+		// Formato esperado:
+		//   #type vertex
+		//   ...código...
+		//   #type fragment
+		//   ...código...
+		std::unordered_map<GLenum, std::string> shaderSources;
+
+		const std::string typeToken = "#type";
+		size_t pos = source.find(typeToken, 0);
+		if (pos == std::string::npos) {
+			// No hay marcadores #type
+			return {};
+		}
+
+		while (pos != std::string::npos) {
+			size_t eol = source.find_first_of("\r\n", pos);
+			LN_CORE_ASSERT(eol != std::string::npos, "Syntax error: no EOL after #type");
+
+			size_t begin = pos + typeToken.size() + 1; // espacio tras "#type "
+			std::string type = source.substr(begin, eol - begin);
+			GLenum glType = ShaderTypeFromString(type);
+
+			size_t nextLinePos = source.find_first_not_of("\r\n", eol);
+			LN_CORE_ASSERT(nextLinePos != std::string::npos, "Syntax error: no code after #type line");
+
+			pos = source.find(typeToken, nextLinePos);
+			shaderSources[glType] = (pos == std::string::npos)
+				? source.substr(nextLinePos)
+				: source.substr(nextLinePos, pos - nextLinePos);
+		}
+
+		return shaderSources;
+	}
+
+	std::string OpenGLShader::InsertDefineAfterVersion(const std::string& source, const std::string& defineLine) {
+		// Si la primera línea es #version, insertamos el define justo después
+		std::istringstream iss(source);
+		std::string firstLine;
+		std::getline(iss, firstLine);
+
+		std::ostringstream oss;
+		if (firstLine.rfind("#version", 0) == 0) {
+			oss << firstLine << "\n" << defineLine;
+			oss << iss.rdbuf();
+		}
+		else {
+			// Si no hay #version al inicio, simplemente lo anteponemos
+			oss << defineLine << source;
+		}
+		return oss.str();
 	}
 	
 	void OpenGLShader::Bind() const {
