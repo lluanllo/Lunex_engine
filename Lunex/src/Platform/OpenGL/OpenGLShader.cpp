@@ -9,6 +9,16 @@
 
 namespace Lunex {
 	
+	static GLenum ShaderTypeFromString(const std::string& type) {
+		if (type == "vertex")
+			return GL_VERTEX_SHADER;
+		if (type == "fragment" || type == "pixel")
+			return GL_FRAGMENT_SHADER;
+		
+		LN_CORE_ASSERT(false, "Unknown shader type!");
+		return 0;
+	}
+	
 	OpenGLShader::OpenGLShader(const std::string& filepath) {
 		std::string shaderSource = ReadFile(filepath);
 	}
@@ -116,7 +126,7 @@ namespace Lunex {
 	OpenGLShader::~OpenGLShader() {
 		glDeleteProgram(m_RendererID);
 	}
-
+	
 	std::string OpenGLShader::ReadFile(const std::string& filepath) {
 		std::string result;
 		std::ifstream in(filepath, std::ios::in, std::ios::binary);
@@ -133,6 +143,10 @@ namespace Lunex {
 		}
 		
 		return result;
+	}
+	
+	std::unordered_map<GLenum, std::string> OpenGLShader::PreProcess(const std::string& source) {
+		
 	}
 	
 	void OpenGLShader::Bind() const {

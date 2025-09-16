@@ -26,8 +26,11 @@ namespace Lunex {
 			
 		private:
 			std::string ReadFile(const std::string& filepath);
-			void PreProcess(const std::string& source);
+			std::unordered_map<GLenum, std::string> PreProcess(const std::string& source);
 			void Compile(const std::string& vertexSrc, const std::string& fragmentSrc);
+			
+			// Utilidad para inyectar defines tras la línea #version
+			static std::string InsertDefineAfterVersion(const std::string& source, const std::string& defineLine);
 		private:
 			uint32_t m_RendererID;
 	};
