@@ -3,8 +3,11 @@
 #include "Renderer/Shader.h"
 #include <glm/glm.hpp>
 
-namespace Lunex {
+// TODO: Remove!!!!!!!
+typedef unsigned int GLenum;
 
+namespace Lunex {
+	
 	class LUNEX_API OpenGLShader : public Shader {
 		public:
 			OpenGLShader(const std::string& filepath);
@@ -26,11 +29,9 @@ namespace Lunex {
 			
 		private:
 			std::string ReadFile(const std::string& filepath);
-			std::unordered_map<GLenum, std::string> PreProcess(const std::string& source);
-			void Compile(const std::string& vertexSrc, const std::string& fragmentSrc);
-			
-			// Utilidad para inyectar defines tras la línea #version
+			void Compile(const std::unordered_map<GLenum, std::string>& shaderSources);
 			static std::string InsertDefineAfterVersion(const std::string& source, const std::string& defineLine);
+			
 		private:
 			uint32_t m_RendererID;
 	};

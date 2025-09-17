@@ -127,7 +127,7 @@ class ExampleLayer : public Lunex::Layer{
 			
 			m_FlatColorShader.reset(Lunex::Shader::Create(flatColorShaderVertexSrc, flatColorShaderFragmentSrc));
 			
-			m_TextureShader.reset(Lunex::Shader::Create(textureShaderVertexSrc, textureShaderFragmentSrc));
+			m_TextureShader.reset(Lunex::Shader::Create("assets/shaders/texture.glsl"));
 			
 			m_Texture = Lunex::Texture2D::Create("assets/textures/Checkerboard.png");
 			m_ChernoLogoTexture = Lunex::Texture2D::Create("assets/textures/ChernoLogo.png");
