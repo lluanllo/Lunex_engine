@@ -27,4 +27,20 @@ namespace Lunex {
 		LN_CORE_ASSERT(false, "Unknown RendererAPI!");
 		return nullptr;
 	}
+	
+	void SahderLibrary::Add(const Ref<Shader>& shader) {
+		
+	}
+	
+	Ref<Shader> SahderLibrary::Load(const std::string& filepath) {
+		return Ref<Shader>();
+	}
+	
+	Ref<Shader> SahderLibrary::Load(const std::string& name, const std::string& filepath) {
+		return Ref<Shader>();
+	}
+	
+	Ref<Shader> SahderLibrary::Get(const std::string& name) {
+		return Ref<Shader>();
+	}
 }

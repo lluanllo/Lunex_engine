@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <unordered_map>
 
 namespace Lunex {
 
@@ -13,5 +14,13 @@ namespace Lunex {
 			
 			static Shader* Create(const std::string& filepath);
 			static Shader* Create(const std::string& vertexSrc, const std::string& fragmentSrc);
+	};
+	
+	class LUNEX_API SahderLibrary {
+		public:
+			
+			
+		private:
+			std::unordered_map<std::string, Shader*> m_Shaders;
 	};
 }
