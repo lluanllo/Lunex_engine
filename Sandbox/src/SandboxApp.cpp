@@ -93,7 +93,7 @@ class ExampleLayer : public Lunex::Layer{
 				}
 			)";
 			
-			m_Shader.reset(Lunex::Shader::Create(vertexSrc, fragmentSrc));
+			m_Shader = Lunex::Shader::Create("vertexColorTriangle", vertexSrc, fragmentSrc);
 			
 			std::string flatColorShaderVertexSrc = R"(
 				#version 330 core
@@ -125,9 +125,9 @@ class ExampleLayer : public Lunex::Layer{
 				}
 			)";
 			
-			m_FlatColorShader.reset(Lunex::Shader::Create(flatColorShaderVertexSrc, flatColorShaderFragmentSrc));
+			m_FlatColorShader = Lunex::Shader::Create("flatColorShader", flatColorShaderVertexSrc, flatColorShaderFragmentSrc);
 			
-			m_TextureShader.reset(Lunex::Shader::Create("assets/shaders/texture.glsl"));
+			m_TextureShader = Lunex::Shader::Create("assets/shaders/texture.glsl");
 			
 			m_Texture = Lunex::Texture2D::Create("assets/textures/Checkerboard.png");
 			m_ChernoLogoTexture = Lunex::Texture2D::Create("assets/textures/ChernoLogo.png");
