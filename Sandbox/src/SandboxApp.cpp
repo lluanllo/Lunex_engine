@@ -95,7 +95,7 @@ class ExampleLayer : public Lunex::Layer{
 				}
 			)";
 			
-			m_Shader = Lunex::Shader::Create("vertexColorTriangle", vertexSrc, fragmentSrc);
+			m_Shader = Lunex::Shader::Create("vertexPosColor", vertexSrc, fragmentSrc);
 			
 			std::string flatColorShaderVertexSrc = R"(
 				#version 330 core
@@ -176,8 +176,8 @@ class ExampleLayer : public Lunex::Layer{
 				}
 			}
 			
-			auto textureShader = m_ShaderLibrary.Get("Texture");
-
+			auto textureShader = m_ShaderLibrary.Get("texture");
+			
 			m_Texture->Bind();
 			Lunex::Renderer::Submit(textureShader, m_SquareVA, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
 			
