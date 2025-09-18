@@ -18,7 +18,7 @@ namespace Lunex {
 			static Ref<Shader> Create(const std::string& names, const std::string& vertexSrc, const std::string& fragmentSrc);
 	};
 	
-	class LUNEX_API SahderLibrary {
+	class LUNEX_API ShaderLibrary {
 		public:
 			void Add(const Ref<Shader>& shader);
 			void Add(const std::string& name, const Ref<Shader>& shader);

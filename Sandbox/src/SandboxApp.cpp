@@ -7,6 +7,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "Renderer/Shader.h"
+
 class ExampleLayer : public Lunex::Layer{
 	public:
 		ExampleLayer()
@@ -127,13 +129,13 @@ class ExampleLayer : public Lunex::Layer{
 			
 			m_FlatColorShader = Lunex::Shader::Create("flatColorShader", flatColorShaderVertexSrc, flatColorShaderFragmentSrc);
 			
-			m_TextureShader = Lunex::Shader::Create("assets/shaders/texture.glsl");
+			auto textureShader = m_ShaderLibrary.Load("assets/shaders/texture.glsl");
 			
 			m_Texture = Lunex::Texture2D::Create("assets/textures/Checkerboard.png");
 			m_ChernoLogoTexture = Lunex::Texture2D::Create("assets/textures/ChernoLogo.png");
 			
-			std::dynamic_pointer_cast<Lunex::OpenGLShader>(m_TextureShader)->Bind();
-			std::dynamic_pointer_cast<Lunex::OpenGLShader>(m_TextureShader)->UploadUniformInt("u_Texture", 0);
+			std::dynamic_pointer_cast<Lunex::OpenGLShader>(textureShader)->Bind();
+			std::dynamic_pointer_cast<Lunex::OpenGLShader>(textureShader)->UploadUniformInt("u_Texture", 0);
 		}
 		
 		void OnUpdate(Lunex::Timestep ts) override {
@@ -174,11 +176,13 @@ class ExampleLayer : public Lunex::Layer{
 				}
 			}
 			
+			auto textureShader = m_ShaderLibrary.Get("Texture");
+
 			m_Texture->Bind();
-			Lunex::Renderer::Submit(m_TextureShader, m_SquareVA, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
+			Lunex::Renderer::Submit(textureShader, m_SquareVA, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
 			
 			m_ChernoLogoTexture->Bind();
-			Lunex::Renderer::Submit(m_TextureShader, m_SquareVA, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
+			Lunex::Renderer::Submit(textureShader, m_SquareVA, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
 			
 			//Lunex::Renderer::Submit(m_Shader, m_VertexArray);
 			
@@ -202,10 +206,11 @@ class ExampleLayer : public Lunex::Layer{
 		}
 		
 		private:
+			Lunex::ShaderLibrary m_ShaderLibrary;
 			Lunex::Ref<Lunex::Shader> m_Shader;
 			Lunex::Ref<Lunex::VertexArray> m_VertexArray;
 			
-			Lunex::Ref<Lunex::Shader> m_FlatColorShader, m_TextureShader;
+			Lunex::Ref<Lunex::Shader> m_FlatColorShader;
 			Lunex::Ref<Lunex::VertexArray> m_SquareVA;
 			
 			Lunex::Ref<Lunex::Texture2D> m_Texture, m_ChernoLogoTexture;
