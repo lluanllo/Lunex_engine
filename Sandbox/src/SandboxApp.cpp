@@ -183,6 +183,13 @@ class ExampleLayer : public Lunex::Layer{
 		
 		void OnEvent(Lunex::Event& event) override {
 			m_CameraController.OnEvent(event);
+			
+			if (event.GetEventType() == Lunex::EventType::WindowResize) {
+				auto& re = (Lunex::WindowResizeEvent&)event;
+				//float zoom = (float)re.GetWidth() / 1280.0f;
+				
+				//m_CameraController.SetZoomLevel(zoom);
+			}
 		}
 		
 		bool OnKeyPressEvent(Lunex::KeyPressedEvent& event) {
