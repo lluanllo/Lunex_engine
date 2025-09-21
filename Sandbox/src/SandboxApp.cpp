@@ -140,21 +140,6 @@ class ExampleLayer : public Lunex::Layer{
 		
 		void OnUpdate(Lunex::Timestep ts) override {
 			
-			if (Lunex::Input::IsKeyPressed(LN_KEY_LEFT))
-				m_CameraPosition.x -= m_CameraMoveSpeed * ts;
-			else if (Lunex::Input::IsKeyPressed(LN_KEY_RIGHT))
-				m_CameraPosition.x += m_CameraMoveSpeed * ts;
-			
-			if (Lunex::Input::IsKeyPressed(LN_KEY_UP))
-				m_CameraPosition.y += m_CameraMoveSpeed * ts;
-			else if (Lunex::Input::IsKeyPressed(LN_KEY_DOWN))
-				m_CameraPosition.y -= m_CameraMoveSpeed * ts;
-			
-			if(Lunex::Input::IsKeyPressed(LN_KEY_A))
-				m_CameraRotation -= m_CameraRotationSpeed * ts;
-			else if (Lunex::Input::IsKeyPressed(LN_KEY_D))
-				m_CameraRotation += m_CameraRotationSpeed * ts;
-			
 			Lunex::RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
 			Lunex::RenderCommand::Clear();
 			
