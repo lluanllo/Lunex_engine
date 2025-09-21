@@ -7,10 +7,12 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "Renderer/Shader.h"
+
 class ExampleLayer : public Lunex::Layer{
 	public:
 		ExampleLayer()
-			: Layer("Example"), m_Camera(-1.6f, 1.6f, -0.9f, 0.9f), m_CameraPosition(0.0f) {
+			: Layer("Example"), m_CameraController(1280.f / 720.0f, true){
 			
 			m_VertexArray.reset(Lunex::VertexArray::Create());
 			
@@ -93,7 +95,7 @@ class ExampleLayer : public Lunex::Layer{
 				}
 			)";
 			
-			m_Shader.reset(Lunex::Shader::Create(vertexSrc, fragmentSrc));
+			m_Shader = Lunex::Shader::Create("vertexPosColor", vertexSrc, fragmentSrc);
 			
 			std::string flatColorShaderVertexSrc = R"(
 				#version 330 core
@@ -125,41 +127,26 @@ class ExampleLayer : public Lunex::Layer{
 				}
 			)";
 			
-			m_FlatColorShader.reset(Lunex::Shader::Create(flatColorShaderVertexSrc, flatColorShaderFragmentSrc));
+			m_FlatColorShader = Lunex::Shader::Create("flatColorShader", flatColorShaderVertexSrc, flatColorShaderFragmentSrc);
 			
-			m_TextureShader.reset(Lunex::Shader::Create("assets/shaders/texture.glsl"));
+			auto textureShader = m_ShaderLibrary.Load("assets/shaders/texture.glsl");
 			
 			m_Texture = Lunex::Texture2D::Create("assets/textures/Checkerboard.png");
 			m_ChernoLogoTexture = Lunex::Texture2D::Create("assets/textures/ChernoLogo.png");
 			
-			std::dynamic_pointer_cast<Lunex::OpenGLShader>(m_TextureShader)->Bind();
-			std::dynamic_pointer_cast<Lunex::OpenGLShader>(m_TextureShader)->UploadUniformInt("u_Texture", 0);
+			std::dynamic_pointer_cast<Lunex::OpenGLShader>(textureShader)->Bind();
+			std::dynamic_pointer_cast<Lunex::OpenGLShader>(textureShader)->UploadUniformInt("u_Texture", 0);
 		}
 		
 		void OnUpdate(Lunex::Timestep ts) override {
+			// Update
+			m_CameraController.OnUpdate(ts);
 			
-			if (Lunex::Input::IsKeyPressed(LN_KEY_LEFT))
-				m_CameraPosition.x -= m_CameraMoveSpeed * ts;
-			else if (Lunex::Input::IsKeyPressed(LN_KEY_RIGHT))
-				m_CameraPosition.x += m_CameraMoveSpeed * ts;
-			
-			if (Lunex::Input::IsKeyPressed(LN_KEY_UP))
-				m_CameraPosition.y += m_CameraMoveSpeed * ts;
-			else if (Lunex::Input::IsKeyPressed(LN_KEY_DOWN))
-				m_CameraPosition.y -= m_CameraMoveSpeed * ts;
-			
-			if(Lunex::Input::IsKeyPressed(LN_KEY_A))
-				m_CameraRotation -= m_CameraRotationSpeed * ts;
-			else if (Lunex::Input::IsKeyPressed(LN_KEY_D))
-				m_CameraRotation += m_CameraRotationSpeed * ts;
-			
+			// Render
 			Lunex::RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
 			Lunex::RenderCommand::Clear();
 			
-			m_Camera.SetPosition(m_CameraPosition);
-			m_Camera.SetRotation(m_CameraRotation);
-			
-			Lunex::Renderer::BeginScene(m_Camera);
+			Lunex::Renderer::BeginScene(m_CameraController.GetCamera());
 			
 			static glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.1f));
 			
@@ -174,11 +161,13 @@ class ExampleLayer : public Lunex::Layer{
 				}
 			}
 			
+			auto textureShader = m_ShaderLibrary.Get("texture");
+			
 			m_Texture->Bind();
-			Lunex::Renderer::Submit(m_TextureShader, m_SquareVA, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
+			Lunex::Renderer::Submit(textureShader, m_SquareVA, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
 			
 			m_ChernoLogoTexture->Bind();
-			Lunex::Renderer::Submit(m_TextureShader, m_SquareVA, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
+			Lunex::Renderer::Submit(textureShader, m_SquareVA, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
 			
 			//Lunex::Renderer::Submit(m_Shader, m_VertexArray);
 			
@@ -193,8 +182,7 @@ class ExampleLayer : public Lunex::Layer{
 		}
 		
 		void OnEvent(Lunex::Event& event) override {
-			Lunex::EventDispatcher dispatcher(event);
-			dispatcher.Dispatch<Lunex::KeyPressedEvent>(LNX_BIND_EVENT_FN(ExampleLayer::OnKeyPressEvent));
+			m_CameraController.OnEvent(event);
 		}
 		
 		bool OnKeyPressEvent(Lunex::KeyPressedEvent& event) {
@@ -202,21 +190,16 @@ class ExampleLayer : public Lunex::Layer{
 		}
 		
 		private:
+			Lunex::ShaderLibrary m_ShaderLibrary;
 			Lunex::Ref<Lunex::Shader> m_Shader;
 			Lunex::Ref<Lunex::VertexArray> m_VertexArray;
 			
-			Lunex::Ref<Lunex::Shader> m_FlatColorShader, m_TextureShader;
+			Lunex::Ref<Lunex::Shader> m_FlatColorShader;
 			Lunex::Ref<Lunex::VertexArray> m_SquareVA;
 			
 			Lunex::Ref<Lunex::Texture2D> m_Texture, m_ChernoLogoTexture;
 			
-			Lunex::OrthographicCamera m_Camera;
-			glm::vec3 m_CameraPosition;
-			
-			float m_CameraRotation = 0.0f;
-			float m_CameraRotationSpeed = 180.0f;
-			float m_CameraMoveSpeed = 5.0f;
-			
+			Lunex::OrthographicCameraController m_CameraController;			
 			glm::vec3 m_SquareColor = { 0.2f, 0.3f, 0.8f };
 };
 

@@ -27,6 +27,7 @@
 #include "Renderer/Texture.h"
 #include "Renderer/VertexArray.h"
 #include "Renderer/OrthographicCamera.h"
+#include "Camera_System/OrthographicCameraController.h"
 //--------------------------
 
 //---Entry Point------------
