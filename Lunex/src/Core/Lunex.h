@@ -31,5 +31,5 @@
 //--------------------------
 
 //---Entry Point------------
-#include "../EntryPoint.h"
+#include "EntryPoint.h"
 //--------------------------
