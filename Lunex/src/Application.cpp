@@ -89,6 +89,6 @@ namespace Lunex{
 		m_Minimized = false;
 		Renderer::onWindowResize(e.GetWidth(), e.GetHeight());
 		
-		return true;
+		return false;
 	}
 }
