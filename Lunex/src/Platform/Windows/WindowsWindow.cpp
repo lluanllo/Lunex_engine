@@ -60,7 +60,7 @@ namespace Lunex {
 
 			WindowResizeEvent event(width, height);
 			data.EventCallback(event);
-			LNX_LOG_INFO("Window resized: {0}, {1}", width, height);
+			LNX_LOG_WARN("Window resized: {0}, {1}", width, height);
 		});
 
 		glfwSetWindowCloseCallback(m_Window, [](GLFWwindow* window) {
