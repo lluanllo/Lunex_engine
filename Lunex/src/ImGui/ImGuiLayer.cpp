@@ -6,7 +6,7 @@
 #include "backends/imgui_impl_opengl3.h"
 #include "backends/imgui_impl_opengl3_loader.h"
 
-#include "Application.h"
+#include "Core/Application.h"
 
 // TEMPORARY
 #include <GLFW/glfw3.h>
