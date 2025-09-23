@@ -43,7 +43,10 @@ project "Lunex"
         "%{prj.name}/vendor/stb_image/**.h",
         "%{prj.name}/vendor/stb_image/**.cpp",
         "%{prj.name}/src/**.hpp",
-        "%{prj.name}/src/**.c"
+        "%{prj.name}/src/**.c",
+        "%{prj.name}/assets/**.glsl",
+        "%{prj.name}/assets/**.png",
+
     }
 
     includedirs
@@ -68,7 +71,6 @@ project "Lunex"
         systemversion "latest"
 
         defines{
-            "LN_PLATFORM_WINDOWS",
             "LN_BUILD_DLL",
             "GLFW_INCLUDE_NONE"
         }
@@ -125,11 +127,6 @@ project "Sandbox"
         cppdialect "C++20"
         staticruntime "On"
         systemversion "latest"
-
-        defines
-        {
-            "LN_PLATFORM_WINDOWS"
-        }
 
     buildoptions { "/utf-8" }
 
