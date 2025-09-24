@@ -7,7 +7,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "Renderer/Shader.h"
+#include "Sandbox2D.h"
 
 class ExampleLayer : public Lunex::Layer{
 	public:
@@ -214,7 +214,8 @@ class ExampleLayer : public Lunex::Layer{
 class Sandbox : public Lunex::Application{
 	public:
 		Sandbox() {
-			PushLayer(new ExampleLayer());
+			//PushLayer(new ExampleLayer());
+			PushLayer(new Sandbox2D());
 		}
 		
 		~Sandbox() {
