@@ -29,7 +29,3 @@
 #include "Renderer/OrthographicCamera.h"
 #include "Renderer/OrthographicCameraController.h"
 //--------------------------
-
-//---Entry Point------------
-#include "EntryPoint.h"
-//--------------------------
