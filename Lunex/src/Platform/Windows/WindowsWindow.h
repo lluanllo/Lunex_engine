@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Window.h"
+#include "Core/Window.h"
 #include "Renderer/GraphicsContext.h"
 
 #include <GLFW/glfw3.h>
@@ -12,9 +12,9 @@ namespace Lunex {
 		public:
 			WindowsWindow(const WindowProps& props);
 			~WindowsWindow();
-
+			
 			void OnUpdate() override;
-
+			
 			unsigned int GetWidth() const override { return m_Data.Width; }
 			unsigned int GetHeight() const override { return m_Data.Height; }
 			
@@ -28,17 +28,17 @@ namespace Lunex {
 			virtual void Shutdown();
 		private:
 			GLFWwindow* m_Window;
-			GraphicsContext* m_Context;
-
+			Scope<GraphicsContext> m_Context;
+			
 			struct WindowData {
-
+				
 				std::string Title;
 				unsigned int Width, Height;
 				bool VSync;
-
+				
 				EventCallbackFn EventCallback;
 			};
-
+			
 			WindowData m_Data;
 	};
 }
