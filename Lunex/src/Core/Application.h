@@ -52,5 +52,5 @@ namespace Lunex {
 	};
 
 	// To be defined in CLIENT
-	Application* CreateApplication();
+	Ref<Application> CreateApplication();
 }
