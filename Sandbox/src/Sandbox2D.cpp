@@ -32,8 +32,8 @@ void Sandbox2D::OnUpdate(Lunex::Timestep ts)
 	Lunex::Renderer2D::EndScene();
 	
 	// TODO: Add these functions - Shader::SetMat4, Shader::SetFloat4
-	// std::dynamic_pointer_cast<Hazel::OpenGLShader>(m_FlatColorShader)->Bind();
-	// std::dynamic_pointer_cast<Hazel::OpenGLShader>(m_FlatColorShader)->UploadUniformFloat4("u_Color", m_SquareColor);
+	// std::dynamic_pointer_cast<Lunex::OpenGLShader>(m_FlatColorShader)->Bind();
+	// std::dynamic_pointer_cast<Lunex::OpenGLShader>(m_FlatColorShader)->UploadUniformFloat4("u_Color", m_SquareColor);
 }
 
 void Sandbox2D::OnImGuiRender()
