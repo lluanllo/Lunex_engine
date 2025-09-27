@@ -2,6 +2,8 @@
 
 #include "Renderer/Texture.h"
 
+#include <glad/glad.h>
+
 namespace Lunex {
 	
 	class LUNEX_API OpenGLTexture2D : public Texture2D {
