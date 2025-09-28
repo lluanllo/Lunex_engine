@@ -9,10 +9,15 @@ namespace Lunex {
 	Scope<Renderer::SceneData> Renderer::m_SceneData = CreateScope<Renderer::SceneData>();
 	
 	void Renderer::Init() {
+		LNX_PROFILE_FUNCTION();
 		RenderCommand::Init();
 		Renderer2D::Init();
 	}
-
+	
+	void Renderer::Shutdown() {
+		Renderer2D::Shutdown();
+	}
+	
 	void Renderer::onWindowResize(uint32_t width, uint32_t height) {
 		RenderCommand::SetViewport(0, 0, width, height);
 	}

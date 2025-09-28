@@ -17,7 +17,5 @@
 		LNX_PROFILE_BEGIN_SESSION("Runtime", "LunexProfile-Runtime.json");
 		app->Run();
 		LNX_PROFILE_END_SESSION();
-		LNX_PROFILE_BEGIN_SESSION("Startup", "LunexProfile-Shutdown.json");
-		LNX_PROFILE_END_SESSION();
 	}
 #endif

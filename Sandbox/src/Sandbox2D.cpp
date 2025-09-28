@@ -10,20 +10,20 @@ Sandbox2D::Sandbox2D()
 }
 
 void Sandbox2D::OnAttach() {
+	LNX_PROFILE_FUNCTION();
 	m_CheckerboardTexture = Lunex::Texture2D::Create("assets/textures/Checkerboard.png");
 }
 
 void Sandbox2D::OnDetach() {
+	LNX_PROFILE_FUNCTION();
 }
 
 void Sandbox2D::OnUpdate(Lunex::Timestep ts) {
 	// Update
 	LNX_PROFILE_FUNCTION();
 	
-	{
-		LNX_PROFILE_SCOPE("CameraController::OnUpdate");
-		m_CameraController.OnUpdate(ts);
-	}
+	m_CameraController.OnUpdate(ts);
+	
 	
 	{
 		LNX_PROFILE_SCOPE("Renderer Prep");

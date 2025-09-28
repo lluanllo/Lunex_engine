@@ -14,6 +14,9 @@ namespace Lunex{
 	Application* Application::s_Instance = nullptr;
 	
 	Application::Application() {
+		
+		LNX_PROFILE_FUNCTION();
+		
 		LN_CORE_ASSERT(s_Instance == nullptr, "Application already exists!");
 		s_Instance = this;
 		
@@ -27,20 +30,25 @@ namespace Lunex{
 	}
 	
 	Application::~Application() {
+		LNX_PROFILE_FUNCTION();
+		Renderer::Shutdown();
 	}
 	
 	void Application::PushLayer(Layer* layer) {
+		LNX_PROFILE_FUNCTION();
 		m_LayerStack.PushLayer(layer);
 		layer->OnAttach();
 	}
 	
 	void Application::PushOverlay(Layer* overlay) {
+		LNX_PROFILE_FUNCTION();
 		m_LayerStack.PushOverlay(overlay);
 		overlay->OnAttach();
 	}
 	
 	void Application::OnEvent(Event& e) {
 		
+		LNX_PROFILE_FUNCTION();
 		EventDispatcher dispatcher(e);
 		dispatcher.Dispatch<WindowCloseEvent>(BIND_EVENT_FN(OnWindowClose));
 		dispatcher.Dispatch<WindowResizeEvent>(BIND_EVENT_FN(OnWindowResize));
@@ -54,21 +62,28 @@ namespace Lunex{
 	}
 	
 	void Application::Run() {
+		LNX_PROFILE_FUNCTION();
 		while (m_Running) {	
+			
+			LNX_PROFILE_SCOPE("RunLoop");
 			
 			float time = (float)glfwGetTime();
 			Timestep timstep = time - m_LastFrameTime;
 			m_LastFrameTime = time;
 			
 			if (!m_Minimized) {
-				for (Layer* layer : m_LayerStack) {
-					layer->OnUpdate(timstep);
+				{
+					LNX_PROFILE_SCOPE("LayerStack OnUpdate");
+					for (Layer* layer : m_LayerStack)
+						layer->OnUpdate(timstep);
 				}
 			}
 			
 			m_ImGuiLayer->Begin();
-			for (Layer* layer : m_LayerStack) {
-				layer->OnImGuiRender();
+			{
+				LNX_PROFILE_SCOPE("LayerStack OnImGuiRender");
+				for (Layer* layer : m_LayerStack)
+					layer->OnImGuiRender();				
 			}
 			m_ImGuiLayer->End();
 			
@@ -82,6 +97,7 @@ namespace Lunex{
 	}
 	
 	bool Application::OnWindowResize(WindowResizeEvent& e) {
+		LNX_PROFILE_FUNCTION();
 		if (e.GetWidth() == 0 || e.GetHeight() == 0) {
 			m_Minimized = true;
 			return false;
