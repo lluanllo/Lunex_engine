@@ -113,13 +113,13 @@ namespace Lunex {
 
 #define LNX_PROFILE 1
 #if LNX_PROFILE
-#define LNX_PROFILE_BEGIN_SESSION(name, filepath) ::Lunex::Instrumentor::Get().BeginSession(name, filepath)
-#define LNX_PROFILE_END_SESSION() ::Lunex::Instrumentor::Get().EndSession()
-#define LNX_PROFILE_SCOPE(name) ::Lunex::InstrumentationTimer timer##__LINE__(name);
-#define LNX_PROFILE_FUNCTION() LNX_PROFILE_SCOPE(__FUNCSIG__)
+	#define LNX_PROFILE_BEGIN_SESSION(name, filepath) ::Lunex::Instrumentor::Get().BeginSession(name, filepath)
+	#define LNX_PROFILE_END_SESSION() ::Lunex::Instrumentor::Get().EndSession()
+	#define LNX_PROFILE_SCOPE(name) ::Lunex::InstrumentationTimer timer##__LINE__(name);
+	#define LNX_PROFILE_FUNCTION() LNX_PROFILE_SCOPE(__FUNCSIG__)
 #else	LNX
-#define LNX_PROFILE_BEGIN_SESSION(name, filepath)
-#define LNX_PROFILE_END_SESSION()
-#define LNX_PROFILE_SCOPE(name)
-#define LNX_PROFILE_FUNCTION()
+	#define LNX_PROFILE_BEGIN_SESSION(name, filepath)
+	#define LNX_PROFILE_END_SESSION()
+	#define LNX_PROFILE_SCOPE(name)
+	#define LNX_PROFILE_FUNCTION()
 #endif
