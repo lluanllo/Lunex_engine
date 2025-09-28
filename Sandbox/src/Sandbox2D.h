@@ -22,5 +22,14 @@ class Sandbox2D : public Lunex::Layer {
 		Lunex::Ref<Lunex::VertexArray> m_SquareVA;
 		Lunex::Ref<Lunex::Shader> m_FlatColorShader;
 		
+		Lunex::Ref<Lunex::Texture2D> m_CheckerboardTexture;
+		
+		struct ProfileResult {
+			const char* Name;
+			float Time;
+		};
+		
+		std::vector<ProfileResult> m_ProfileResults;
+		
 		glm::vec4 m_SquareColor = { 0.2f, 0.3f, 0.8f, 1.0f };
 };
