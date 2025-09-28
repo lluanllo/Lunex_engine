@@ -1,6 +1,6 @@
 #include "stpch.h"
 #include "WindowsWindow.h"
-#include "Platform/OpenGL/OpenGLContext.h"  // Añadir esta inclusión
+#include "Platform/OpenGL/OpenGLContext.h"
 
 #include "Events/ApplicationEvent.h"
 #include "Events/KeyEvent.h"
@@ -10,7 +10,7 @@
 
 namespace Lunex {
 
-	static bool s_GLFWInitialized = false;
+	static uint8_t s_GLFWInitialized = 0;
 	
 	static void GLFWErrorCallback(int error, const char* description) {
 		LNX_LOG_ERROR("GLFW Error ({0}): {1}", error, description);
@@ -21,29 +21,36 @@ namespace Lunex {
 	}
 	
 	WindowsWindow::WindowsWindow(const WindowProps& props) {
+		LNX_PROFILE_FUNCTION();
 		Init(props);
 	}
 	
 	WindowsWindow::~WindowsWindow() {
+		LNX_PROFILE_FUNCTION();
 		Shutdown();
 	}
 	
 	void WindowsWindow::Init(const WindowProps& props) {
+		LNX_PROFILE_FUNCTION();
 		m_Data.Title = props.Title;
 		m_Data.Width = props.Width;
 		m_Data.Height = props.Height;
 		
 		LNX_LOG_INFO("Creating window: {0} ({1}, {2})", m_Data.Title, m_Data.Width, m_Data.Height);
 		
-		if (!s_GLFWInitialized) {
+		if (s_GLFWInitialized == 0) {
+			LNX_PROFILE_SCOPE("glfwInit");
 			int success = glfwInit();
 			LN_CORE_ASSERT(success, "Could not initialize GLFW!");
 			glfwSetErrorCallback(GLFWErrorCallback);
 			s_GLFWInitialized = true;
 		}
-		
-		m_Window = glfwCreateWindow((int)m_Data.Width, (int)m_Data.Height, m_Data.Title.c_str(), nullptr, nullptr);
-		LN_CORE_ASSERT(m_Window, "Could not create GLFW window!");
+		{
+			LNX_PROFILE_SCOPE("glfwCreateWindow");
+			m_Window = glfwCreateWindow((int)m_Data.Width, (int)m_Data.Height, m_Data.Title.c_str(), nullptr, nullptr);
+			++s_GLFWInitialized;
+			LN_CORE_ASSERT(m_Window, "Could not create GLFW window!");
+		}
 		
 		m_Context = CreateScope<OpenGLContext>(m_Window);
 		m_Context->Init();
@@ -129,15 +136,18 @@ namespace Lunex {
 	}
 	
 	void WindowsWindow::Shutdown() {
+		LNX_PROFILE_FUNCTION();
 		glfwDestroyWindow(m_Window);
 	}
 	
 	void WindowsWindow::OnUpdate() {
+		LNX_PROFILE_FUNCTION();
 		glfwPollEvents();
 		m_Context->SwapBuffers();
 	}
 	
 	void WindowsWindow::SetVSync(bool enabled) {
+		LNX_PROFILE_FUNCTION();
 		
 		if (enabled) {
 			glfwSwapInterval(1);

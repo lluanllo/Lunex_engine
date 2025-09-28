@@ -12,16 +12,17 @@
 #include <GLFW/glfw3.h>
 
 namespace Lunex {
-
+	
 	ImGuiLayer::ImGuiLayer() : Layer("ImGuiLayer") {
 		
 	}
-
+	
 	ImGuiLayer::~ImGuiLayer() {
 		
 	}
-
+	
 	void ImGuiLayer::OnAttach() {
+		LNX_PROFILE_FUNCTION();
 		// Setup Dear ImGui context
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
@@ -52,22 +53,25 @@ namespace Lunex {
 		ImGui_ImplGlfw_InitForOpenGL(window, true);
 		ImGui_ImplOpenGL3_Init("#version 410");
 	}
-
+	
 	void ImGuiLayer::OnDetach() {
+		LNX_PROFILE_FUNCTION();
 		ImGui_ImplOpenGL3_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
 		ImGui::DestroyContext();
 	}
-
+	
 	void ImGuiLayer::Begin()
 	{
+		LNX_PROFILE_FUNCTION();
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 	}
-
+	
 	void ImGuiLayer::End()
 	{
+		LNX_PROFILE_FUNCTION();
 		ImGuiIO& io = ImGui::GetIO();
 		Application& app = Application::Get();
 		io.DisplaySize = ImVec2(app.GetWindow().GetWidth(), app.GetWindow().GetHeight());
