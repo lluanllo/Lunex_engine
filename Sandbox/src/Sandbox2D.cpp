@@ -24,7 +24,6 @@ void Sandbox2D::OnUpdate(Lunex::Timestep ts) {
 	
 	m_CameraController.OnUpdate(ts);
 	
-	
 	{
 		LNX_PROFILE_SCOPE("Renderer Prep");
 		Lunex::RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });

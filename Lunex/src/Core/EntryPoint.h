@@ -1,6 +1,5 @@
 #pragma once
 
-#include "stpch.h"
 #include "Application.h"
 
 #ifdef LN_PLATFORM_WINDOWS
