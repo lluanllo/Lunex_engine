@@ -23,8 +23,7 @@ class ExampleLayer : public Lunex::Layer{
 				 0.0f,  0.5f, 0.0f, 0.8f, 0.8f, 0.2f, 1.0f
 			};
 			
-			Lunex::Ref<Lunex::VertexBuffer> vertexBuffer;
-			vertexBuffer.reset(Lunex::VertexBuffer::Create(vertices, sizeof(vertices)));
+			Lunex::Ref<Lunex::VertexBuffer> vertexBuffer (Lunex::VertexBuffer::Create(vertices, sizeof(vertices)));
 			Lunex::BufferLayout layout = {
 				{ Lunex::ShaderDataType::Float3, "a_Position" },
 				{ Lunex::ShaderDataType::Float4, "a_Color" }
@@ -33,8 +32,7 @@ class ExampleLayer : public Lunex::Layer{
 			m_VertexArray->AddVertexBuffer(vertexBuffer);
 			
 			uint32_t indices[3] = { 0, 1, 2 };
-			Lunex::Ref<Lunex::IndexBuffer> indexBuffer;
-			indexBuffer.reset(Lunex::IndexBuffer::Create(indices, sizeof(indices) / sizeof(uint32_t)));
+			Lunex::Ref<Lunex::IndexBuffer> indexBuffer (Lunex::IndexBuffer::Create(indices, sizeof(indices) / sizeof(uint32_t)));
 			m_VertexArray->SetIndexBuffer(indexBuffer);
 			
 			m_SquareVA = Lunex::VertexArray::Create();
@@ -46,8 +44,7 @@ class ExampleLayer : public Lunex::Layer{
 				-0.5f,  0.5f, 0.0f, 0.0f, 1.0f
 			};
 			
-			Lunex::Ref<Lunex::VertexBuffer> squareVB;
-			squareVB.reset(Lunex::VertexBuffer::Create(squareVertices, sizeof(squareVertices)));
+			Lunex::Ref<Lunex::VertexBuffer> squareVB (Lunex::VertexBuffer::Create(squareVertices, sizeof(squareVertices)));
 			squareVB->SetLayout({
 				{ Lunex::ShaderDataType::Float3, "a_Position" },
 				{ Lunex::ShaderDataType::Float2, "a_TexCoord" }
@@ -55,8 +52,7 @@ class ExampleLayer : public Lunex::Layer{
 			m_SquareVA->AddVertexBuffer(squareVB);
 			
 			uint32_t squareIndices[6] = { 0, 1, 2, 2, 3, 0 };
-			Lunex::Ref<Lunex::IndexBuffer> squareIB;
-			squareIB.reset(Lunex::IndexBuffer::Create(squareIndices, sizeof(squareIndices) / sizeof(uint32_t)));
+			Lunex::Ref<Lunex::IndexBuffer> squareIB (Lunex::IndexBuffer::Create(squareIndices, sizeof(squareIndices) / sizeof(uint32_t)));
 			m_SquareVA->SetIndexBuffer(squareIB);
 			
 			std::string vertexSrc = R"(

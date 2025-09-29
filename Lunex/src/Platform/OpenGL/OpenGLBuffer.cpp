@@ -4,13 +4,21 @@
 #include <glad/glad.h>
 
 namespace Lunex {
-	
 	/////////////////////////////////////////////////////
 	///////VERTEX BUFFER/////////////////////////////////
 	/////////////////////////////////////////////////////
-
+	
+	OpenGLVertexBuffer::OpenGLVertexBuffer(uint32_t size) : m_Layout({}) {
+		LNX_PROFILE_FUNCTION();
+		
+		glCreateBuffers(1, &m_RendererID);
+		glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
+		glBufferData(GL_ARRAY_BUFFER, size, nullptr, GL_DYNAMIC_DRAW);
+	}
+	
 	OpenGLVertexBuffer::OpenGLVertexBuffer(float* vertices, uint32_t size) : m_Layout({}) {
 		LNX_PROFILE_FUNCTION();
+		
 		glCreateBuffers(1, &m_RendererID);
 		glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
 		glBufferData(GL_ARRAY_BUFFER, size, vertices, GL_STATIC_DRAW);
@@ -31,10 +39,15 @@ namespace Lunex {
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 	
+	void OpenGLVertexBuffer::SetData(const void* data, uint32_t size) {
+		glBindBuffer(GL_ARRAY_BUFFER, m_RendererID);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, size, data);
+	}
+	
 	/////////////////////////////////////////////////////
 	///////INDEX BUFFER//////////////////////////////////
 	/////////////////////////////////////////////////////
-
+	
 	OpenGLIndexBuffer::OpenGLIndexBuffer(unsigned int* indices, uint32_t count) : m_Count(count) {
 		LNX_PROFILE_FUNCTION();
 		glCreateBuffers(1, &m_RendererID);

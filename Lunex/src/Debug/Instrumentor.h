@@ -111,7 +111,7 @@ namespace Lunex {
 	};
 }
 
-#define LNX_PROFILE 1
+#define LNX_PROFILE 0
 #if LNX_PROFILE
 	#define LNX_PROFILE_BEGIN_SESSION(name, filepath) ::Lunex::Instrumentor::Get().BeginSession(name, filepath)
 	#define LNX_PROFILE_END_SESSION() ::Lunex::Instrumentor::Get().EndSession()
