@@ -47,24 +47,24 @@ namespace Lunex {
 		
 		s_Data.QuadVertexBufferBase = new QuadVertex[s_Data.MaxVertices];
 		
-		uint32_t* quadIndice = new uint32_t[s_Data.MaxIndices];
+		uint32_t* quadIndices = new uint32_t[s_Data.MaxIndices];
 		
 		uint32_t offset = 0;
-		for (uint32_t i = 0 < s_Data.MaxIndices; i += 6;) {
-			quadIndice[i + 0] = offset + 0;
-			quadIndice[i + 1] = offset + 1;
-			quadIndice[i + 2] = offset + 2;
+		for (uint32_t i = 0; i < s_Data.MaxIndices; i += 6) {
+			quadIndices[i + 0] = offset + 0;
+			quadIndices[i + 1] = offset + 1;
+			quadIndices[i + 2] = offset + 2;
 			
-			quadIndice[i + 3] = offset + 2;
-			quadIndice[i + 4] = offset + 3;
-			quadIndice[i + 5] = offset + 0;
+			quadIndices[i + 3] = offset + 2;
+			quadIndices[i + 4] = offset + 3;
+			quadIndices[i + 5] = offset + 0;
 			
 			offset += 4;
 		}
 		
-		Ref<IndexBuffer> squareIB = IndexBuffer::Create(quadIndice, s_Data.MaxIndices * sizeof(uint32_t));
-		s_Data.QuadVertexArray->SetIndexBuffer(squareIB);
-		delete[] quadIndice;
+		Ref<IndexBuffer> quadIB = IndexBuffer::Create(quadIndices, s_Data.MaxIndices);
+		s_Data.QuadVertexArray->SetIndexBuffer(quadIB);
+		delete[] quadIndices;
 		
 		s_Data.WhiteTexture = Texture2D::Create(1, 1);
 		uint32_t whiteTextureData = 0xffffffff;
@@ -85,13 +85,13 @@ namespace Lunex {
 		s_Data.TextureShader->SetMat4("u_ViewProjection", camera.GetViewProjectionMatrix());
 		
 		s_Data.QuadIndexCount = 0;
-		s_Data.QuadVertexBufferBase = s_Data.QuadVertexBufferPtr;
+		s_Data.QuadVertexBufferPtr = s_Data.QuadVertexBufferBase;
 	}
 	
 	void Renderer2D::EndScene() {
 		LNX_PROFILE_FUNCTION();
 		
-		uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.QuadVertexBufferPtr - (uint8_t*)s_Data.QuadVertexBufferBase);
+		uint32_t dataSize = (uint8_t*)s_Data.QuadVertexBufferPtr - (uint8_t*)s_Data.QuadVertexBufferBase;
 		s_Data.QuadVertexBuffer->SetData(s_Data.QuadVertexBufferBase, dataSize);
 		
 		Flush();

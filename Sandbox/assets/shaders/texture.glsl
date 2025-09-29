@@ -15,7 +15,7 @@ out vec2 v_TexCoord;
 void main() {
     v_Color = a_Color;
     v_TexCoord = a_TexCoord;
-    gl_Position = u_ViewProjection * u_Transform * vec4(a_Position, 1.0);
+    gl_Position = u_ViewProjection * vec4(a_Position, 1.0);
 }
 
 #elif defined(FRAGMENT)
@@ -30,7 +30,8 @@ uniform sampler2D u_Texture;
 out vec4 FragColor;
 
 void main() {
-    FragColor = texture(u_Texture, v_TexCoord * u_TilingFactor) * u_Color;
+    //FragColor = texture(u_Texture, v_TexCoord * u_TilingFactor) * u_Color;
+    FragColor = v_Color;
 }
 
 #endif

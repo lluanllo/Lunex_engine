@@ -6,8 +6,8 @@ namespace Lunex {
 	class LUNEX_API OpenGLVertexBuffer : public VertexBuffer {
 		
 		public:
-			OpenGLVertexBuffer(float* vertices, uint32_t size);
 			OpenGLVertexBuffer(uint32_t size);
+			OpenGLVertexBuffer(float* vertices, uint32_t size);
 			virtual ~OpenGLVertexBuffer();
 			
 			virtual void Bind() const override;
