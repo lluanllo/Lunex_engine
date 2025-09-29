@@ -15,6 +15,7 @@ namespace Lunex {
 	}
 	
 	void OpenGLContext::Init() {
+		LNX_PROFILE_FUNCTION();
 		glfwMakeContextCurrent(m_WindowHandle);
 		int status = gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 		LN_CORE_ASSERT(status, "Failed to initialize Glad!");
@@ -36,6 +37,7 @@ namespace Lunex {
 	}
 	
 	void OpenGLContext::SwapBuffers(){
+		LNX_PROFILE_FUNCTION();
 		glfwSwapBuffers(m_WindowHandle);
 	}
 }
