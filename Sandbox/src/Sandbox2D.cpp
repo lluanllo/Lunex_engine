@@ -12,6 +12,11 @@ Sandbox2D::Sandbox2D()
 void Sandbox2D::OnAttach() {
 	LNX_PROFILE_FUNCTION();
 	m_CheckerboardTexture = Lunex::Texture2D::Create("assets/textures/Checkerboard.png");
+	
+	Lunex::FramebufferSpecification fbSpec;
+	fbSpec.Width = 1280;
+	fbSpec.Height = 720;
+	m_Framebuffer = Lunex::Framebuffer::Create(fbSpec);
 }
 
 void Sandbox2D::OnDetach() {
@@ -26,6 +31,7 @@ void Sandbox2D::OnUpdate(Lunex::Timestep ts) {
 	
 	{
 		LNX_PROFILE_SCOPE("Renderer Prep");
+		m_Framebuffer->Bind();
 		Lunex::RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
 		Lunex::RenderCommand::Clear();
 	}
@@ -50,7 +56,8 @@ void Sandbox2D::OnUpdate(Lunex::Timestep ts) {
 				Lunex::Renderer2D::DrawQuad({ x, y }, { 0.45f, 0.45f }, color);
 			}
 		}
-		Lunex::Renderer2D::EndScene();
+		Lunex::Renderer2D::EndScene();	
+		m_Framebuffer->Unbind();
 	}
 }
 
@@ -58,7 +65,7 @@ void Sandbox2D::OnImGuiRender() {
 	LNX_PROFILE_FUNCTION();
 	
 	// Note: Switch this to true to enable dockspace
-	static bool dockingEnabled = false;
+	static bool dockingEnabled = true;
 	if (dockingEnabled) {
 		static bool dockspaceOpen = true;
 		static bool opt_fullscreen_persistant = true;
@@ -124,8 +131,8 @@ void Sandbox2D::OnImGuiRender() {
 		ImGui::Text("Vertices: %d", stats.GetTotalVertexCount());
 		ImGui::Text("Indices: %d", stats.GetTotalIndexCount());
 		
-		uint32_t textureID = m_CheckerboardTexture->GetRendererID();
-		ImGui::Image((void*)textureID, ImVec2{ 256.0f, 256.0f });
+		uint32_t textureID = m_Framebuffer->GetColorAttachmentRendererID();
+		ImGui::Image((void*)textureID, ImVec2{ 1280, 720 });
 		ImGui::End();
 		
 		ImGui::End();
@@ -144,8 +151,8 @@ void Sandbox2D::OnImGuiRender() {
 		
 		ImGui::ColorEdit4("Square Color", glm::value_ptr(m_SquareColor));
 		
-		uint32_t textureID = m_CheckerboardTexture->GetRendererID();
-		ImGui::Image((void*)textureID, ImVec2{ 256.0f, 256.0f });
+		uint32_t textureID = m_Framebuffer->GetColorAttachmentRendererID();
+		ImGui::Image((void*)textureID, ImVec2{ 1280, 720 });
 		ImGui::End();
 	}
 }

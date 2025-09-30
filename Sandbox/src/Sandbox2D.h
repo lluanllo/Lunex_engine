@@ -21,6 +21,7 @@ class Sandbox2D : public Lunex::Layer {
 		// Temp
 		Lunex::Ref<Lunex::VertexArray> m_SquareVA;
 		Lunex::Ref<Lunex::Shader> m_FlatColorShader;
+		Lunex::Ref<Lunex::Framebuffer> m_Framebuffer;
 		
 		Lunex::Ref<Lunex::Texture2D> m_CheckerboardTexture;
 		
