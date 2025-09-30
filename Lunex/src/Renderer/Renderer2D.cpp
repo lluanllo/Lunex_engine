@@ -204,17 +204,14 @@ namespace Lunex {
 		constexpr glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
 		
 		float textureIndex = 0.0f;
-		for (uint32_t i = 1; i < s_Data.TextureSlotIndex; i++)
-		{
-			if (*s_Data.TextureSlots[i].get() == *texture.get())
-			{
+		for (uint32_t i = 1; i < s_Data.TextureSlotIndex; i++) {
+			if (*s_Data.TextureSlots[i].get() == *texture.get()) {
 				textureIndex = (float)i;
 				break;
 			}
 		}
 		
-		if (textureIndex == 0.0f)
-		{
+		if (textureIndex == 0.0f) {
 			textureIndex = (float)s_Data.TextureSlotIndex;
 			s_Data.TextureSlots[s_Data.TextureSlotIndex] = texture;
 			s_Data.TextureSlotIndex++;
