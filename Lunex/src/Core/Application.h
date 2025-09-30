@@ -30,6 +30,11 @@ namespace Lunex {
 			inline static Application& Get() { return *s_Instance; }
 			inline Window& GetWindow() { return *m_Window; }
 			
+			void Close();
+			
+			static Application& GetApplication() { return *s_Instance; }
+			
+			
 		private:
 			bool OnWindowClose(WindowCloseEvent& e);
 			bool OnWindowResize(WindowResizeEvent& e);
