@@ -6,7 +6,8 @@
 namespace Lunex {
 	class LunexEditor : public Application{
 		public:
-			LunexEditor() {
+			LunexEditor()
+				: Application("Lunex Editor") {
 				PushLayer(new EditorLayer());
 			}
 			
