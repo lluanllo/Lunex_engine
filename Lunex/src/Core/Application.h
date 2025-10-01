@@ -14,10 +14,9 @@
 #include "../../vendor/GLFW/include/GLFW/glfw3.h"
 
 namespace Lunex {
-	
 	class LUNEX_API Application {
 		public:
-			Application();
+			Application(const std::string& name = "Lunex App");
 			virtual ~Application();
 			
 			void Run();
