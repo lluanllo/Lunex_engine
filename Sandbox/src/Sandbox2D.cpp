@@ -50,19 +50,22 @@ void Sandbox2D::OnUpdate(Lunex::Timestep ts) {
 				Lunex::Renderer2D::DrawQuad({ x, y }, { 0.45f, 0.45f }, color);
 			}
 		}
-		Lunex::Renderer2D::EndScene();
+		Lunex::Renderer2D::EndScene();	
 	}
 }
 
 void Sandbox2D::OnImGuiRender() {
 	LNX_PROFILE_FUNCTION();
+	
 	ImGui::Begin("Settings");
+	
 	auto stats = Lunex::Renderer2D::GetStats();
 	ImGui::Text("Renderer2D Stats:");
 	ImGui::Text("Draw Calls: %d", stats.DrawCalls);
 	ImGui::Text("Quads: %d", stats.QuadCount);
 	ImGui::Text("Vertices: %d", stats.GetTotalVertexCount());
 	ImGui::Text("Indices: %d", stats.GetTotalIndexCount());
+	
 	ImGui::ColorEdit4("Square Color", glm::value_ptr(m_SquareColor));
 	ImGui::End();
 }

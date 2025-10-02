@@ -14,10 +14,9 @@
 #include "../../vendor/GLFW/include/GLFW/glfw3.h"
 
 namespace Lunex {
-	
 	class LUNEX_API Application {
 		public:
-			Application();
+			Application(const std::string& name = "Lunex App");
 			virtual ~Application();
 			
 			void Run();
@@ -29,6 +28,11 @@ namespace Lunex {
 			
 			inline static Application& Get() { return *s_Instance; }
 			inline Window& GetWindow() { return *m_Window; }
+			
+			void Close();
+			
+			static Application& GetApplication() { return *s_Instance; }
+			
 			
 		private:
 			bool OnWindowClose(WindowCloseEvent& e);

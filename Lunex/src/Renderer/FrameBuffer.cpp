@@ -1,15 +1,15 @@
-#include "Stpch.h"
+#include "stpch.h"
+#include "FrameBuffer.h"
 
-#include "Renderer/VertexArray.h"
 #include "Renderer.h"
-#include "Platform/OpenGL/OpenGLVertexArray.h"
 
+#include "Platform/OpenGL/OpenGLFramebuffer.h"
 
 namespace Lunex {
-	Ref<VertexArray> VertexArray::Create() {
+	Ref<Framebuffer> Framebuffer::Create(const FramebufferSpecification& spec) {
 		switch (Renderer::GetAPI()) {
 			case RendererAPI::API::None:    LN_CORE_ASSERT(false, "RendererAPI::None is currently not supported!"); return nullptr;
-			case RendererAPI::API::OpenGL:  return CreateScope <OpenGLVertexArray>();
+			case RendererAPI::API::OpenGL:  return CreateRef<OpenGLFramebuffer>(spec);
 		}
 		
 		LN_CORE_ASSERT(false, "Unknown RendererAPI!");
