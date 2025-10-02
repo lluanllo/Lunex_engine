@@ -6,7 +6,6 @@
 #include "glm/glm.hpp"
 
 namespace Lunex {
-
 	class LUNEX_API RendererAPI {
 		public:
 			enum class API {

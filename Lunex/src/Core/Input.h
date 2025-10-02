@@ -3,7 +3,6 @@
 #include "Core/Core.h"
 
 namespace Lunex {
-
 	class LUNEX_API Input {
 		protected:
 			Input() = default;
