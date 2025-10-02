@@ -132,10 +132,15 @@ namespace Lunex {
 			ImGui::Text("Vertices: %d", stats.GetTotalVertexCount());
 			ImGui::Text("Indices: %d", stats.GetTotalIndexCount());
 			
-			uint32_t textureID = m_Framebuffer->GetColorAttachmentRendererID();
-			ImGui::Image((void*)textureID, ImVec2{ 1280, 720 });
 			ImGui::End();
 			
+			ImGui::Begin("Viewport");
+			ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
+			LNX_LOG_WARN("ViewPort Size: {0}, {1}", viewportPanelSize.x, viewportPanelSize.y);
+			uint32_t textureID = m_Framebuffer->GetColorAttachmentRendererID();
+			ImGui::Image((void*)textureID, ImVec2{ 1280, 720 });
+			
+			ImGui::End();
 			ImGui::End();
 		}
 		
