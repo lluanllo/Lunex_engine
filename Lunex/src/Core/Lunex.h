@@ -2,7 +2,6 @@
 //---Lunex Core----------
 #include "Application.h"
 #include "Layer.h"
-//#include "../Log/Log.h"
 //--------------------------
 
 //---Lunex Timestep--------
