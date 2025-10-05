@@ -31,6 +31,8 @@ namespace Lunex {
 			
 			void Close();
 			
+			ImGuiLayer* GetImGuiLayer() { return m_ImGuiLayer; }
+			
 			static Application& GetApplication() { return *s_Instance; }
 			
 			

@@ -3,8 +3,8 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-namespace Lunex {
 
+namespace Lunex {
 	EditorLayer::EditorLayer()
 		: Layer("EditorLayer"), m_CameraController(1280.0f / 720.0f)
 	{
@@ -136,6 +136,11 @@ namespace Lunex {
 			
 			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
 			ImGui::Begin("Viewport");
+			
+			ImGui::IsWindowFocused();
+			ImGui::IsWindowHovered();
+			Application::Get().GetImGuiLayer()->BlockEvents(!m_ViewportFocused || !m_ViewportHovered);
+			
 			ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 			if (m_ViewportSize != *((glm::vec2*)&viewportPanelSize)) {
 				m_Framebuffer->Resize((uint32_t)viewportPanelSize.x, (uint32_t)viewportPanelSize.y);
@@ -143,30 +148,12 @@ namespace Lunex {
 				
 				m_CameraController.OnResize(viewportPanelSize.x, viewportPanelSize.y);
 			}
-			LNX_LOG_WARN("ViewPort Size: {0}, {1}", viewportPanelSize.x, viewportPanelSize.y);
+			//LNX_LOG_WARN("ViewPort Size: {0}, {1}", viewportPanelSize.x, viewportPanelSize.y);
 			uint32_t textureID = m_Framebuffer->GetColorAttachmentRendererID();
 			ImGui::Image((void*)textureID, ImVec2{ m_ViewportSize.x, m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
 			ImGui::End();
 			ImGui::PopStyleVar();
 			
-			ImGui::End();
-		}
-		
-		else {
-			
-			ImGui::Begin("Settings");
-			
-			auto stats = Lunex::Renderer2D::GetStats();
-			ImGui::Text("Renderer2D Stats:");
-			ImGui::Text("Draw Calls: %d", stats.DrawCalls);
-			ImGui::Text("Quads: %d", stats.QuadCount);
-			ImGui::Text("Vertices: %d", stats.GetTotalVertexCount());
-			ImGui::Text("Indices: %d", stats.GetTotalIndexCount());
-			
-			ImGui::ColorEdit4("Square Color", glm::value_ptr(m_SquareColor));
-			
-			uint32_t textureID = m_Framebuffer->GetColorAttachmentRendererID();
-			ImGui::Image((void*)textureID, ImVec2{ 1280, 720 });
 			ImGui::End();
 		}
 	}

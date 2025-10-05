@@ -11,8 +11,8 @@
 
 //---Lunex Codes---------
 #include "Input.h"
-#include "Codes/KeyCodes.h"
-#include "Codes/MouseButtonCodes.h"
+#include "Core/KeyCodes.h"
+#include "Core/MouseButtonCodes.h"
 //--------------------------
 
 //---Lunex ImGui---------
