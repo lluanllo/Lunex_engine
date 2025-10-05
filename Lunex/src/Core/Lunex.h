@@ -18,6 +18,11 @@
 #include "ImGui/ImGuiLayer.h"
 //--------------------------
 
+//---Lunex Scene---------
+#include "Scene/Scene.h"
+#include "Scene/Components.h"
+//-----------------------
+
 //---Lunex Renderer------
 #include "Renderer/Renderer.h"
 #include "Renderer/Renderer2D.h"
