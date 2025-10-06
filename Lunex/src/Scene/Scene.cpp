@@ -49,8 +49,10 @@ namespace Lunex {
 	void Scene::OnUpdate(Timestep ts) {
 		auto group = m_Registry.group<TransformComponent>(entt::get<SpriteRendererComponent>);
 		for (auto entity : group) {
-			auto& [transform, sprite] = group.get<TransformComponent, SpriteRendererComponent>(entity);
-				
+			// Modificado para obtener referencias individuales en lugar de usar structured binding
+			TransformComponent& transform = group.get<TransformComponent>(entity);
+			SpriteRendererComponent& sprite = group.get<SpriteRendererComponent>(entity);
+			
 			Renderer2D::DrawQuad(transform, sprite.Color);
 		}
 	}
