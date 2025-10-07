@@ -1,12 +1,10 @@
 #pragma once
-
-#include "Core/Core.h"
 #include "stpch.h"
 
+#include "Core/Core.h"
 #include "Events/Event.h"
 
 namespace Lunex {
-	
 	struct WindowProps {
 		std::string Title;
 		uint32_t Width;
@@ -18,7 +16,7 @@ namespace Lunex {
 			: Title(title), Width(width), Height(height) {
 		}
 	};
-
+	
 	class LUNEX_API Window {
 		
 		public:
@@ -37,6 +35,6 @@ namespace Lunex {
 			
 			virtual void* GetNativeWindow() const = 0;
 			
-			static Window* Create(const WindowProps& props = WindowProps());
+			static Scope<Window> Create(const WindowProps& props = WindowProps());
 	};
 }

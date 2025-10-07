@@ -43,6 +43,20 @@
     #error "Unknown platform!"
 #endif // End of platform detection
 
+#ifdef LN_DEBUG
+    #if defined(LN_PLATFORM_WINDOWS)
+        #define LN_DEBUGBREAK() __debugbreak()
+    #elif defined(LN_PLATFORM_LINUX)
+        #include <signal.h>
+        #define LN_DEBUGBREAK() raise(SIGTRAP)
+    #else
+        #error "Platform doesn't support debugbreak yet!"
+    #endif
+    #define LN_ENABLE_ASSERTS
+#else
+    #define LN_DEBUGBREAK()
+#endif
+
 // DLL support
 #ifdef LN_PLATFORM_WINDOWS
     #if LN_DYNAMIC_LINK
@@ -58,13 +72,9 @@
     #error Lunex only supports Windows!
 #endif // End of DLL support
 
-#ifdef LN_DEBUG
-    #define LN_ENABLE_ASSERTS
-#endif
-
 #ifdef LN_ENABLE_ASSERTS
-    #define LN_ASSERT(x, ...)       { if(!(x)) { LN_ERROR("Assertion Failed: {0}", __VA_ARGS__); __debugbreak(); } }
-    #define LN_CORE_ASSERT(x, ...)  { if(!(x)) { LN_CORE_ERROR("Assertion Failed: {0}", __VA_ARGS__); __debugbreak(); } }
+    #define LN_ASSERT(x, ...)       { if(!(x)) { LN_ERROR("Assertion Failed: {0}", __VA_ARGS__); LN_DEBUGBREAK; } }
+    #define LN_CORE_ASSERT(x, ...)  { if(!(x)) { LN_CORE_ERROR("Assertion Failed: {0}", __VA_ARGS__); LN_DEBUGBREAK(); } }
 #else
     #define LN_ASSERT(x, ...)
     #define LN_CORE_ASSERT(x, ...)

@@ -16,10 +16,6 @@ namespace Lunex {
 		LNX_LOG_ERROR("GLFW Error ({0}): {1}", error, description);
 	}
 	
-	Window* Window::Create(const WindowProps& props) {
-		return new WindowsWindow(props);
-	}
-	
 	WindowsWindow::WindowsWindow(const WindowProps& props) {
 		LNX_PROFILE_FUNCTION();
 		Init(props);
@@ -81,17 +77,17 @@ namespace Lunex {
 			WindowData& data = *(WindowData*)glfwGetWindowUserPointer(window);
 			switch (action) {
 				case GLFW_PRESS: {
-					KeyPressedEvent event(key, 0);
+					KeyPressedEvent event(static_cast<KeyCode>(key), 0);
 					data.EventCallback(event);
 					break;
 				}
 				case GLFW_RELEASE: {
-					KeyReleasedEvent event(key);
+					KeyReleasedEvent event(static_cast<KeyCode>(key));
 					data.EventCallback(event);
 					break;
 				}
 				case GLFW_REPEAT: {
-					KeyPressedEvent event(key, 1);
+					KeyPressedEvent event(static_cast<KeyCode>(key), 1);
 					data.EventCallback(event);
 					break;
 				}
@@ -102,7 +98,7 @@ namespace Lunex {
 			
 			WindowData& data = *(WindowData*)glfwGetWindowUserPointer(window);
 			
-			KeyTypedEvent event(keycode);
+			KeyTypedEvent event(static_cast<KeyCode>(keycode));
 			data.EventCallback(event);
 		});
 		
@@ -110,12 +106,12 @@ namespace Lunex {
 			WindowData& data = *(WindowData*)glfwGetWindowUserPointer(window);
 			switch (action) {
 				case GLFW_PRESS: {
-					MouseButtonPressedEvent event(button);
+					MouseButtonPressedEvent event(static_cast<MouseCode>(button));
 					data.EventCallback(event);
 					break;
 				}
 				case GLFW_RELEASE: {
-					MouseButtonReleasedEvent event(button);
+					MouseButtonReleasedEvent event(static_cast<MouseCode>(button));
 					data.EventCallback(event);
 					break;
 				}

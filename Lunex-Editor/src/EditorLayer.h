@@ -18,9 +18,12 @@ namespace Lunex {
 		private:
 			Lunex::OrthographicCameraController m_CameraController;
 			
-			Ref<Lunex::VertexArray> m_SquareVA;
-			Ref<Lunex::Shader> m_FlatColorShader;
-			Ref<Lunex::Framebuffer> m_Framebuffer;
+			Ref<VertexArray> m_SquareVA;
+			Ref<Shader> m_FlatColorShader;
+			Ref<Framebuffer> m_Framebuffer;
+			
+			Ref<Scene> m_ActiveScene;
+			entt::entity m_SquareEntity;
 			
 			Ref<Texture2D> m_CheckerboardTexture;
 			
