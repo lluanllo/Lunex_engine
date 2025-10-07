@@ -1,13 +1,11 @@
 #pragma once
 
 namespace Lunex {
-	
-	class Timestep {
+	class LUNEX_API Timestep {
 		
 		public:
 			Timestep(float time = 0.0f) 
 				: m_Time(time) {
-			
 			}
 			
 			operator float() const { return m_Time; }

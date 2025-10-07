@@ -3,15 +3,14 @@
 #include "../Core/core.h"
 
 namespace Lunex {
-     
-	enum class LUNEX_API EventType {
+    enum class LUNEX_API EventType {
 		None = 0,
 		WindowClose, WindowResize, WindowFocus, WindowLostFocus, WindowMoved,
 		AppTick, AppUpdate, AppRender,
 		KeyPressed, KeyReleased, KeyTyped,
 		MouseButtonPressed, MouseButtonReleased, MouseMoved, MouseScrolled
 	};
-
+	
 	enum EventCategory {
 		None = 0,
 		EventCategoryApplication  = BIT(0),
@@ -52,10 +51,10 @@ namespace Lunex {
 				: m_Event(event) {
 			}
 			
-			template<typename T>
-			bool Dispatch(EventFn<T> func) {
+			template<typename T, typename F>
+			bool Dispatch(const F& func) {
 				if (m_Event.GetEventType() == T::GetStaticType()) {
-					m_Event.m_Handled = func(*(T*)&m_Event);
+					m_Event.m_Handled = func(static_cast<T&>(m_Event));
 					return true;
 				}
 				return false;
