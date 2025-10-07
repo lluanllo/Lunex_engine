@@ -5,19 +5,20 @@
 #include "Core/Timestep.h"
 
 namespace Lunex {
-	class Scene {
+	class LUNEX_API Entity;
+	
+	class LUNEX_API Scene {
 		public:
 			Scene();
 			~Scene();
 			
-			entt::entity CreateEntity();
-			
-			// TEMP
-			entt::registry& Reg() { return m_Registry; }
+			Entity CreateEntity(const std::string& name = std::string());
 			
 			void OnUpdate(Timestep ts);
 			
 		private:
 			entt::registry m_Registry;
+			
+			friend class Entity;
 	};
 }
