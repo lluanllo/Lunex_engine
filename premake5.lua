@@ -21,6 +21,7 @@ IncludeDir["Glad"]      = "vendor/Glad/include"
 IncludeDir["ImGui"]     = "vendor/ImGuiLib"
 IncludeDir["glm"]       = "vendor/glm"
 IncludeDir["stb_image"] = "vendor/stb_image"
+IncludeDir["entt"]      = "vendor/entt/include"
 IncludeDir["Lunex"]     = "Lunex/src"
 
 group "Dependencies"
@@ -69,7 +70,8 @@ project "Lunex"
         "%{IncludeDir.Glad}",
         "%{IncludeDir.ImGui}",
         "%{IncludeDir.glm}",
-        "%{IncludeDir.stb_image}"
+        "%{IncludeDir.stb_image}",
+        "%{IncludeDir.entt}"
     }
 
     links{
@@ -124,7 +126,8 @@ project "Sandbox"
         "Lunex/src",
         "Lunex/src/Core",
         "vendor/ImGuiLib",
-        "%{IncludeDir.glm}"
+        "%{IncludeDir.glm}",
+        "%{IncludeDir.entt}"
     }
 
     links
@@ -166,8 +169,15 @@ project "Lunex-Editor"
 
 	files
 	{
-		"%{prj.name}/src/**.h",
-		"%{prj.name}/src/**.cpp"
+        "%{prj.name}/src/**.h",
+        "%{prj.name}/src/**.cpp",
+        "%{prj.name}/vendor/stb_image/**.h",
+        "%{prj.name}/vendor/stb_image/**.cpp",
+        "%{prj.name}/src/**.hpp",
+        "%{prj.name}/src/**.c",
+        "%{prj.name}/src/**.inl",
+        "%{prj.name}/assets/**.glsl",
+        "%{prj.name}/assets/**.png",
 	}
     
     includedirs
@@ -176,7 +186,8 @@ project "Lunex-Editor"
         "Lunex/src",
         "Lunex/src/Core",
         "vendor/ImGuiLib",
-        "%{IncludeDir.glm}"
+        "%{IncludeDir.glm}",
+        "%{IncludeDir.entt}"
     }
 
 	links

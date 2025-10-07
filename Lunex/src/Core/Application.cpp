@@ -7,10 +7,9 @@
 
 #include "Input.h"
 
-namespace Lunex{
-	
-	#define BIND_EVENT_FN(fn) std::bind(&Application::fn, this, std::placeholders::_1)
-	
+#include <GLFW/glfw3.h>
+
+namespace Lunex{	
 	Application* Application::s_Instance = nullptr;
 	
 	Application::Application(const std::string& name) {
@@ -20,8 +19,8 @@ namespace Lunex{
 		LN_CORE_ASSERT(s_Instance == nullptr, "Application already exists!");
 		s_Instance = this;
 		
-		m_Window.reset(Window::Create(WindowProps(name)));
-		m_Window->SetEventCallback(BIND_EVENT_FN(OnEvent));
+		m_Window = Window::Create(WindowProps(name));
+		m_Window->SetEventCallback(LNX_BIND_EVENT_FN(Application::OnEvent));
 		
 		Renderer::Init();
 		
@@ -54,14 +53,14 @@ namespace Lunex{
 		
 		LNX_PROFILE_FUNCTION();
 		EventDispatcher dispatcher(e);
-		dispatcher.Dispatch<WindowCloseEvent>(BIND_EVENT_FN(OnWindowClose));
-		dispatcher.Dispatch<WindowResizeEvent>(BIND_EVENT_FN(OnWindowResize));
+		dispatcher.Dispatch<WindowCloseEvent>(LNX_BIND_EVENT_FN(Application::OnWindowClose));
+		dispatcher.Dispatch<WindowResizeEvent>(LNX_BIND_EVENT_FN(Application::OnWindowResize));
 		
 		for (auto it = m_LayerStack.end(); it != m_LayerStack.begin();) {
-			(*--it)->OnEvent(e);
-			if (e.m_Handled) {
+			--it;
+			if (e.m_Handled)
 				break;
-			}
+			(*it)->OnEvent(e);
 		}
 	}
 	
@@ -72,24 +71,26 @@ namespace Lunex{
 			LNX_PROFILE_SCOPE("RunLoop");
 			
 			float time = (float)glfwGetTime();
-			Timestep timstep = time - m_LastFrameTime;
+			Timestep timestep = time - m_LastFrameTime;
 			m_LastFrameTime = time;
 			
 			if (!m_Minimized) {
 				{
 					LNX_PROFILE_SCOPE("LayerStack OnUpdate");
+					
 					for (Layer* layer : m_LayerStack)
-						layer->OnUpdate(timstep);
+						layer->OnUpdate(timestep);
 				}
+				
+				m_ImGuiLayer->Begin();
+				{
+					LNX_PROFILE_SCOPE("LayerStack OnImGuiRender");
+					
+					for (Layer* layer : m_LayerStack)
+						layer->OnImGuiRender();
+				}
+				m_ImGuiLayer->End();
 			}
-			
-			m_ImGuiLayer->Begin();
-			{
-				LNX_PROFILE_SCOPE("LayerStack OnImGuiRender");
-				for (Layer* layer : m_LayerStack)
-					layer->OnImGuiRender();				
-			}
-			m_ImGuiLayer->End();
 			
 			m_Window->OnUpdate();
 		}

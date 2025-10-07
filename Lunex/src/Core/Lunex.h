@@ -2,7 +2,6 @@
 //---Lunex Core----------
 #include "Application.h"
 #include "Layer.h"
-//#include "../Log/Log.h"
 //--------------------------
 
 //---Lunex Timestep--------
@@ -11,13 +10,19 @@
 
 //---Lunex Codes---------
 #include "Input.h"
-#include "Codes/KeyCodes.h"
-#include "Codes/MouseButtonCodes.h"
+#include "Core/KeyCodes.h"
+#include "Core/MouseButtonCodes.h"
 //--------------------------
 
 //---Lunex ImGui---------
 #include "ImGui/ImGuiLayer.h"
 //--------------------------
+
+//---Lunex Scene---------
+#include "Scene/Scene.h"
+#include "Scene/Entity.h"
+#include "Scene/Components.h"
+//-----------------------
 
 //---Lunex Renderer------
 #include "Renderer/Renderer.h"
