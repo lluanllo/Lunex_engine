@@ -3,7 +3,6 @@
 #include <glm/glm.hpp>
 
 namespace Lunex {
-	
 	struct TransformComponent {
 		glm::mat4 Transform{ 1.0f };
 		
@@ -24,6 +23,16 @@ namespace Lunex {
 		SpriteRendererComponent(const SpriteRendererComponent&) = default;
 		SpriteRendererComponent(const glm::vec4& color)
 			: Color(color) {
+		}
+	};
+	
+	struct TagComponent {
+		std::string Tag;
+		
+		TagComponent() = default;
+		TagComponent(const TagComponent&) = default;
+		TagComponent(const std::string& tag)
+			: Tag(tag) {
 		}
 	};
 }
