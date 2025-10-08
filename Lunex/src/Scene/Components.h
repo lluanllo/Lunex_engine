@@ -2,6 +2,8 @@
 
 #include <glm/glm.hpp>
 
+#include "Renderer/OrthographicCamera.h"
+
 namespace Lunex {
 	struct TransformComponent {
 		glm::mat4 Transform{ 1.0f };
@@ -34,5 +36,14 @@ namespace Lunex {
 		TagComponent(const std::string& tag)
 			: Tag(tag) {
 		}
+	};
+	
+	struct CameraComponent {
+		OrthographicCamera Camera;
+		bool Primary = true; // TODO: think about it
+		bool FixedAspectRatio = false;
+		
+		CameraComponent() = default;
+		CameraComponent(const CameraComponent&) = default;
 	};
 }
