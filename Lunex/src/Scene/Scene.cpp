@@ -25,7 +25,7 @@ namespace Lunex {
 				m_Registry.on_construct<TransformComponent>().connect<&OnTransformConstruct>();
 				
 				
-				if (m_Registry.has<TransformComponent>(entity))
+				if (m_Registry.all_of<TransformComponent>(entity))
 					TransformComponent& transform = m_Registry.get<TransformComponent>(entity);
 				
 				
@@ -54,13 +54,49 @@ namespace Lunex {
 	}
 	
 	void Scene::OnUpdate(Timestep ts) {
-		auto group = m_Registry.group<TransformComponent>(entt::get<SpriteRendererComponent>);
-		for (auto entity : group) {
-			// Modificado para obtener referencias individuales en lugar de usar structured binding
-			TransformComponent& transform = group.get<TransformComponent>(entity);
-			SpriteRendererComponent& sprite = group.get<SpriteRendererComponent>(entity);
-			
-			Renderer2D::DrawQuad(transform, sprite.Color);
+		// Render 2D
+		Camera* mainCamera = nullptr;
+		glm::mat4 cameraTransform{1.0f};
+		{
+			auto view = m_Registry.view<TransformComponent, CameraComponent>();
+			for (auto entity : view) {
+				auto& transform = view.get<TransformComponent>(entity);
+				auto& camera = view.get<CameraComponent>(entity);
+				
+				if (camera.Primary) {
+					mainCamera = &camera.Camera;
+					cameraTransform = transform.Transform;
+					break;
+				}
+			}
 		}
+		
+		if (mainCamera) {
+			Renderer2D::BeginScene(mainCamera->GetProjection(), cameraTransform);
+			
+			auto group = m_Registry.group<TransformComponent>(entt::get<SpriteRendererComponent>);
+			for (auto entity : group) {
+				auto& transform = group.get<TransformComponent>(entity);
+				auto& sprite = group.get<SpriteRendererComponent>(entity);
+				
+				Renderer2D::DrawQuad(transform.Transform, sprite.Color);
+			}
+			
+			Renderer2D::EndScene();
+		}
+	}
+	
+	void Scene::OnViewportResize(uint32_t width, uint32_t height) {
+		m_ViewportWidth = width;
+		m_ViewportHeight = height;
+		
+		// Resize our non-FixedAspectRatio cameras
+		auto view = m_Registry.view<CameraComponent>();
+		for (auto entity : view) {
+			auto& cameraComponent = view.get<CameraComponent>(entity);
+			if (!cameraComponent.FixedAspectRatio)
+				cameraComponent.Camera.SetViewportSize(width, height);
+		}
+		
 	}
 }

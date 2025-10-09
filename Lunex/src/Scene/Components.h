@@ -2,6 +2,8 @@
 
 #include <glm/glm.hpp>
 
+#include "SceneCamera.h"
+
 namespace Lunex {
 	struct TransformComponent {
 		glm::mat4 Transform{ 1.0f };
@@ -34,5 +36,14 @@ namespace Lunex {
 		TagComponent(const std::string& tag)
 			: Tag(tag) {
 		}
+	};
+	
+	struct CameraComponent {
+		SceneCamera Camera;
+		bool Primary = true;
+		bool FixedAspectRatio = false;
+		
+		CameraComponent() = default;
+		CameraComponent(const CameraComponent&) = default;
 	};
 }
