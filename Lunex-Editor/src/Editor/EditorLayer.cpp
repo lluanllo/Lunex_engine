@@ -36,14 +36,14 @@ namespace Lunex {
 		
 		class CameraController : public ScriptableEntity {
 		public:
-			void OnCreate() {
+			virtual void OnCreate() override {
 				auto& transform = GetComponent<TransformComponent>().Transform;
 				transform[3][0] = rand() % 10 - 5.0f;
 			}
 			
-			void OnDestroy() {}
+			virtual void OnDestroy() override {}
 			
-			void OnUpdate(Timestep ts) {
+			virtual void OnUpdate(Timestep ts) override {
 				auto& transform = GetComponent<TransformComponent>().Transform;
 				float speed = 5.0f;
 				
@@ -60,6 +60,8 @@ namespace Lunex {
 		
 		m_CameraEntity.AddComponent<NativeScriptComponent>().Bind<CameraController>();
 		m_SecondCamera.AddComponent<NativeScriptComponent>().Bind<CameraController>();
+		
+		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
 	}
 	
 	void EditorLayer::OnDetach() {
@@ -152,6 +154,8 @@ namespace Lunex {
 			
 			ImGui::EndMenuBar();
 		}
+		
+		m_SceneHierarchyPanel.OnImGuiRender();
 		
 		ImGui::Begin("Settings");
 		
