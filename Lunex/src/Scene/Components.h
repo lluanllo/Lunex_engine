@@ -2,7 +2,7 @@
 
 #include <glm/glm.hpp>
 
-#include "Renderer/OrthographicCamera.h"
+#include "Renderer/Camera.h"
 
 namespace Lunex {
 	struct TransformComponent {
@@ -39,11 +39,13 @@ namespace Lunex {
 	};
 	
 	struct CameraComponent {
-		OrthographicCamera Camera;
-		bool Primary = true; // TODO: think about it
-		bool FixedAspectRatio = false;
+		Lunex::Camera Camera;
+		bool Primary = true;
 		
 		CameraComponent() = default;
 		CameraComponent(const CameraComponent&) = default;
+		CameraComponent(const glm::mat4& projection)
+			: Camera(projection) {
+		}
 	};
 }
