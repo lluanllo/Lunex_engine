@@ -21,6 +21,7 @@
 //---Lunex Scene---------
 #include "Scene/Scene.h"
 #include "Scene/Entity.h"
+#include "Scene/ScriptableEntity.h"
 #include "Scene/Components.h"
 //-----------------------
 
