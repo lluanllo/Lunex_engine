@@ -73,8 +73,8 @@
 #endif // End of DLL support
 
 #ifdef LN_ENABLE_ASSERTS
-    #define LN_ASSERT(x, ...)       { if(!(x)) { LN_ERROR("Assertion Failed: {0}", __VA_ARGS__); LN_DEBUGBREAK; } }
-    #define LN_CORE_ASSERT(x, ...)  { if(!(x)) { LN_CORE_ERROR("Assertion Failed: {0}", __VA_ARGS__); LN_DEBUGBREAK(); } }
+    #define LN_ASSERT(x, ...)       { if(!(x)) { LNX_LOG_ERROR("Assertion Failed: {0}", __VA_ARGS__); LN_DEBUGBREAK; } }
+    #define LN_CORE_ASSERT(x, ...)  { if(!(x)) { LNX_LOG_ERROR("Assertion Failed: {0}", __VA_ARGS__); LN_DEBUGBREAK(); } }
 #else
     #define LN_ASSERT(x, ...)
     #define LN_CORE_ASSERT(x, ...)
