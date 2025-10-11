@@ -8,7 +8,6 @@
 #include "Events/KeyEvent.h"
 
 namespace Lunex {
-
 	class LUNEX_API ImGuiLayer : public Layer {
 		public:
 			ImGuiLayer();
@@ -23,9 +22,10 @@ namespace Lunex {
 			
 			void BlockEvents(bool block) { m_BlockEvents = block; }
 			
+			void SetDarkThemeColor();
+			
 		private:		
 			bool m_BlockEvents = true;
 			float m_Time = 0.0f;
 	};
-
 }
