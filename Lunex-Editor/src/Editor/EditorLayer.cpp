@@ -21,7 +21,6 @@ namespace Lunex {
 		m_Framebuffer = Lunex::Framebuffer::Create(fbSpec);
 		
 		m_ActiveScene = CreateRef<Scene>();
-		
 #if 0
 		auto square = m_ActiveScene->CreateEntity("square");
 		square.AddComponent<SpriteRendererComponent>(glm::vec4{ 0.0f, 1.0f, 0.0f, 1.0f });
@@ -65,10 +64,8 @@ namespace Lunex {
 		m_CameraEntity.AddComponent<NativeScriptComponent>().Bind<CameraController>();
 		m_SecondCamera.AddComponent<NativeScriptComponent>().Bind<CameraController>();
 		
-#endif
+		#endif
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
-		SceneSerializer serializer(m_ActiveScene);
-		serializer.Serialize("assets/scenes/Example.lunex");
 	}
 	
 	void EditorLayer::OnDetach() {
