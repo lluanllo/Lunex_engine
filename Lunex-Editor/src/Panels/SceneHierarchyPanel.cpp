@@ -14,12 +14,12 @@ namespace Lunex {
 	
 	void SceneHierarchyPanel::SetContext(const Ref<Scene>& context) {
 		m_Context = context;
+		m_SelectionContext = {};
 	}
 	
 	void SceneHierarchyPanel::OnImGuiRender() {
 		ImGui::Begin("Scene Hierarchy");
 		
-		// ===== COLORES PERSONALIZADOS PARA HIERARCHY (NARANJA UNREAL) =====
 		ImGui::PushStyleColor(ImGuiCol_Header, ImVec4{ 1.0f, 0.55f, 0.0f, 0.4f });           // Seleccionado - Naranja
 		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4{ 1.0f, 0.55f, 0.0f, 0.6f });    // Hover - Naranja más brillante
 		ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.8f });     // Activo - Naranja intenso
@@ -33,7 +33,6 @@ namespace Lunex {
 		if (ImGui::IsMouseDown(0) && ImGui::IsWindowHovered())
 			m_SelectionContext = {};
 		
-		// Right-click on blank space
 		if (ImGui::BeginPopupContextWindow(nullptr, ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
 			if (ImGui::MenuItem("Create Empty Entity"))
 				m_Context->CreateEntity("Empty Entity");
@@ -41,7 +40,7 @@ namespace Lunex {
 			ImGui::EndPopup();
 		}
 		
-		ImGui::PopStyleColor(3);  // Restaurar colores originales
+		ImGui::PopStyleColor(3);
 		
 		ImGui::End();
 		
@@ -103,7 +102,6 @@ namespace Lunex {
 		float lineHeight = ImGui::GetTextLineHeight() + ImGui::GetStyle().FramePadding.y * 2.0f;
 		ImVec2 buttonSize = { lineHeight + 3.0f, lineHeight };
 		
-		// ===== BOTÓN X (ROJO) =====
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{ 0.8f, 0.1f, 0.15f, 1.0f });
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{ 0.9f, 0.2f, 0.2f, 1.0f });
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{ 0.8f, 0.1f, 0.15f, 1.0f });
@@ -114,14 +112,12 @@ namespace Lunex {
 		ImGui::PopStyleColor(3);
 		
 		ImGui::SameLine();
-		// ===== DRAGFLOAT X CON NARANJA AL ARRASTRAR =====
-		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });   // Naranja mientras arrastras
+		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });   
 		ImGui::DragFloat("##X", &values.x, 0.1f, 0.0f, 0.0f, "%.2f");
 		ImGui::PopStyleColor();
 		ImGui::PopItemWidth();
 		ImGui::SameLine();
 		
-		// ===== BOTÓN Y (VERDE) =====
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{ 0.2f, 0.7f, 0.2f, 1.0f });
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{ 0.3f, 0.8f, 0.3f, 1.0f });
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{ 0.2f, 0.7f, 0.2f, 1.0f });
@@ -132,14 +128,12 @@ namespace Lunex {
 		ImGui::PopStyleColor(3);
 		
 		ImGui::SameLine();
-		// ===== DRAGFLOAT Y CON NARANJA AL ARRASTRAR =====
-		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });   // Naranja mientras arrastras
+		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
 		ImGui::DragFloat("##Y", &values.y, 0.1f, 0.0f, 0.0f, "%.2f");
 		ImGui::PopStyleColor();
 		ImGui::PopItemWidth();
 		ImGui::SameLine();
 		
-		// ===== BOTÓN Z (AZUL) =====
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{ 0.1f, 0.25f, 0.8f, 1.0f });
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{ 0.2f, 0.35f, 0.9f, 1.0f });
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{ 0.1f, 0.25f, 0.8f, 1.0f });
@@ -150,8 +144,7 @@ namespace Lunex {
 		ImGui::PopStyleColor(3);
 		
 		ImGui::SameLine();
-		// ===== DRAGFLOAT Z CON NARANJA AL ARRASTRAR =====
-		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });   // Naranja mientras arrastras
+		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
 		ImGui::DragFloat("##Z", &values.z, 0.1f, 0.0f, 0.0f, "%.2f");
 		ImGui::PopStyleColor();
 		ImGui::PopItemWidth();
@@ -264,7 +257,6 @@ namespace Lunex {
 				ImGui::EndCombo();
 			}
 			
-			// ===== DRAGFLOATS DE CÁMARA CON NARANJA AL ARRASTRAR =====
 			if (camera.GetProjectionType() == SceneCamera::ProjectionType::Perspective) {
 				float perspectiveVerticalFov = glm::degrees(camera.GetPerspectiveVerticalFOV());
 				ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
@@ -309,8 +301,7 @@ namespace Lunex {
 		});
 		
 		DrawComponent<SpriteRendererComponent>("Sprite Renderer", entity, [](auto& component) {
-			// ===== COLOREDIT CON NARANJA AL ARRASTRAR =====
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });   // Naranja mientras arrastras
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
 			ImGui::ColorEdit4("Color", glm::value_ptr(component.Color));
 			ImGui::PopStyleColor();
 		});

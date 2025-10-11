@@ -8,9 +8,9 @@ workspace "Lunex-Engine"
         "Dist"
     }
 
-	flags {
-		"MultiProcessorCompile"
-	}
+    flags {
+        "MultiProcessorCompile"
+    }
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
@@ -22,12 +22,14 @@ IncludeDir["ImGui"]     = "vendor/ImGuiLib"
 IncludeDir["glm"]       = "vendor/glm"
 IncludeDir["stb_image"] = "vendor/stb_image"
 IncludeDir["entt"]      = "vendor/entt/include"
+IncludeDir["yaml_cpp"]  = "vendor/yaml-cpp/include"
 IncludeDir["Lunex"]     = "Lunex/src"
 
 group "Dependencies"
     include "vendor/GLFW"
     include "vendor/Glad"
     include "vendor/ImGuiLib"
+    include "vendor/yaml-cpp"
 group ""
 
 project "Lunex"
@@ -57,10 +59,11 @@ project "Lunex"
     }
 
     defines
-	{
-		"_CRT_SECURE_NO_WARNINGS",
-		"GLFW_INCLUDE_NONE"
-	}
+    {
+        "_CRT_SECURE_NO_WARNINGS",
+        "GLFW_INCLUDE_NONE",
+        "YAML_CPP_STATIC_DEFINE"
+    }
 
     includedirs
     {
@@ -71,37 +74,35 @@ project "Lunex"
         "%{IncludeDir.ImGui}",
         "%{IncludeDir.glm}",
         "%{IncludeDir.stb_image}",
-        "%{IncludeDir.entt}"
+        "%{IncludeDir.entt}",
+        "%{IncludeDir.yaml_cpp}"
     }
 
     links{
         "GLFW",
         "Glad",
         "ImGui",
+        "yaml-cpp",
         "opengl32.lib"
     }
 
     filter "system:windows"
         systemversion "latest"
-
-        defines{
-        }
-
         buildoptions { "/utf-8" }
 
     filter "configurations:Debug"
         defines { "LN_DEBUG" }
-        buildoptions { "/MDd"}
+        runtime "Debug"
         symbols "on"
 
     filter "configurations:Release"
         defines { "LN_RELEASE" }
-        buildoptions { "/MD"}
+        runtime "Release"
         optimize "on"
 
     filter "configurations:Dist"
         defines { "LN_DIST" }
-        buildoptions { "/MD"}
+        runtime "Release"
         optimize "on"
 
 project "Sandbox"
@@ -127,7 +128,13 @@ project "Sandbox"
         "Lunex/src/Core",
         "vendor/ImGuiLib",
         "%{IncludeDir.glm}",
-        "%{IncludeDir.entt}"
+        "%{IncludeDir.entt}",
+        "%{IncludeDir.yaml_cpp}"
+    }
+
+    defines
+    {
+        "YAML_CPP_STATIC_DEFINE"
     }
 
     links
@@ -144,31 +151,31 @@ project "Sandbox"
 
     filter "configurations:Debug"
         defines { "LN_DEBUG" }
-        buildoptions { "/MDd"}
+        runtime "Debug"
         symbols "on"
 
     filter "configurations:Release"
         defines { "LN_RELEASE" }
-        buildoptions { "/MD"}
+        runtime "Release"
         optimize "on"
 
     filter "configurations:Dist"
         defines { "LN_DIST" }
-        buildoptions { "/MD"}
+        runtime "Release"
         optimize "on"
 
 project "Lunex-Editor"
-	location "Lunex-Editor"
-	kind "ConsoleApp"
-	language "C++"
-	cppdialect "C++20"
-	staticruntime "on"
+    location "Lunex-Editor"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++20"
+    staticruntime "on"
 
-	targetdir ("bin/" .. outputdir .. "/%{prj.name}")
-	objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
+    targetdir ("bin/" .. outputdir .. "/%{prj.name}")
+    objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
 
-	files
-	{
+    files
+    {
         "%{prj.name}/src/**.h",
         "%{prj.name}/src/**.cpp",
         "%{prj.name}/vendor/stb_image/**.h",
@@ -178,8 +185,8 @@ project "Lunex-Editor"
         "%{prj.name}/src/**.inl",
         "%{prj.name}/assets/**.glsl",
         "%{prj.name}/assets/**.png",
-	}
-    
+    }
+
     includedirs
     {
         "vendor/spdlog/include",
@@ -187,30 +194,36 @@ project "Lunex-Editor"
         "Lunex/src/Core",
         "vendor/ImGuiLib",
         "%{IncludeDir.glm}",
-        "%{IncludeDir.entt}"
+        "%{IncludeDir.entt}",
+        "%{IncludeDir.yaml_cpp}"
     }
 
-	links
-	{
-		"Lunex"
-	}
+    defines
+    {
+        "YAML_CPP_STATIC_DEFINE"
+    }
+
+    links
+    {
+        "Lunex"
+    }
 
     buildoptions { "/utf-8" }
 
     filter "system:windows"
-		systemversion "latest"
-		
+        systemversion "latest"
+
     filter "configurations:Debug"
         defines { "LN_DEBUG" }
-        buildoptions { "/MDd"}
+        runtime "Debug"
         symbols "on"
 
     filter "configurations:Release"
         defines { "LN_RELEASE" }
-        buildoptions { "/MD"}
+        runtime "Release"
         optimize "on"
 
     filter "configurations:Dist"
         defines { "LN_DIST" }
-        buildoptions { "/MD"}
+        runtime "Release"
         optimize "on"

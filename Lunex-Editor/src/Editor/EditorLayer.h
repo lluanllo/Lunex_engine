@@ -17,6 +17,13 @@ namespace Lunex {
 			void OnEvent(Event& e) override;
 			
 		private:
+			bool OnKeyPressed(KeyPressedEvent& e);
+			
+			void NewScene();
+			void OpenScene();
+			void SaveSceneAs();
+			
+		private:
 			Lunex::OrthographicCameraController m_CameraController;
 			
 			Ref<VertexArray> m_SquareVA;
