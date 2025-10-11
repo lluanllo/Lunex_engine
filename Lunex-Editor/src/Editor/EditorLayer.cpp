@@ -4,6 +4,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "Scene/SceneSerializer.h"
+
 namespace Lunex {
 	EditorLayer::EditorLayer()
 		: Layer("EditorLayer"), m_CameraController(1280.0f / 720.0f)
@@ -19,7 +21,7 @@ namespace Lunex {
 		m_Framebuffer = Lunex::Framebuffer::Create(fbSpec);
 		
 		m_ActiveScene = CreateRef<Scene>();
-		
+#if 0
 		auto square = m_ActiveScene->CreateEntity("square");
 		square.AddComponent<SpriteRendererComponent>(glm::vec4{ 0.0f, 1.0f, 0.0f, 1.0f });
 		
@@ -62,6 +64,7 @@ namespace Lunex {
 		m_CameraEntity.AddComponent<NativeScriptComponent>().Bind<CameraController>();
 		m_SecondCamera.AddComponent<NativeScriptComponent>().Bind<CameraController>();
 		
+		#endif
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
 	}
 	
@@ -153,6 +156,17 @@ namespace Lunex {
 				// Disabling fullscreen would allow the window to be moved to the front of other windows, 
 				// which we can't undo at the moment without finer window depth/z control.
 				//ImGui::MenuItem("Fullscreen", NULL, &opt_fullscreen_persistant);
+				
+				
+				if (ImGui::MenuItem("Serialize")) {
+					SceneSerializer serializer(m_ActiveScene);
+					serializer.Serialize("assets/scenes/Example.lunex");
+				}
+				
+				if (ImGui::MenuItem("Deserialize")) {
+					SceneSerializer serializer(m_ActiveScene);
+					serializer.Deserialize("assets/scenes/Example.lunex");
+				}
 				
 				if (ImGui::MenuItem("Exit")) Application::Get().Close();
 				ImGui::EndMenu();
