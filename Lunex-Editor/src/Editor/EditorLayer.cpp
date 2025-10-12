@@ -206,7 +206,8 @@ namespace Lunex {
 		ImGui::Image((void*)textureID, ImVec2{ m_ViewportSize.x, m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
 		
 		// Gizmos
-		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity(); {
+		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
+		if (selectedEntity) {  // <-- Añade esta validación
 			ImGuizmo::SetOrthographic(false);
 			ImGuizmo::SetDrawlist();
 			
@@ -246,8 +247,7 @@ namespace Lunex {
 				tc.Rotation += deltaRotation;
 				tc.Scale = scale;
 			}
-		}
-		
+		}	
 		
 		ImGui::End();
 		ImGui::PopStyleVar();
@@ -302,6 +302,7 @@ namespace Lunex {
 				m_GizmoType = ImGuizmo::OPERATION::SCALE;
 				break;
 		}
+		return false;
 	}
 	
 	void EditorLayer::NewScene() {

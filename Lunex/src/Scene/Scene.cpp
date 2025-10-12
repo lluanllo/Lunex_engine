@@ -101,11 +101,9 @@ namespace Lunex {
 		component.Camera.SetViewportSize(m_ViewportWidth, m_ViewportHeight);
 	}
 	
-	Entity Scene::GetPrimaryCameraEntity()
-	{
+	Entity Scene::GetPrimaryCameraEntity() {
 		auto view = m_Registry.view<CameraComponent>();
-		for (auto entity : view)
-		{
+		for (auto entity : view) {
 			const auto& camera = view.get<CameraComponent>(entity);
 			if (camera.Primary)
 				return Entity{ entity, this };
