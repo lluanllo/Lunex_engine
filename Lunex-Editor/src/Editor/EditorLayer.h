@@ -3,6 +3,8 @@
 #include <Lunex.h>
 #include "../Panels/SceneHierarchyPanel.h"
 
+#include "Renderer/EditorCamera.h"
+
 namespace Lunex {
 	class EditorLayer : public Layer {
 		public:
@@ -36,6 +38,8 @@ namespace Lunex {
 			Entity m_SecondCamera;
 			
 			bool m_PrimaryCamera = true;
+			
+			EditorCamera m_EditorCamera;
 			
 			Ref<Texture2D> m_CheckerboardTexture;
 			
