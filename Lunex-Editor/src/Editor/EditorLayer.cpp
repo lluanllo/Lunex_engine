@@ -22,6 +22,7 @@ namespace Lunex {
 		LNX_PROFILE_FUNCTION();
 		
 		Lunex::FramebufferSpecification fbSpec;
+		fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::Depth };
 		fbSpec.Width = 1280;
 		fbSpec.Height = 720;
 		m_Framebuffer = Lunex::Framebuffer::Create(fbSpec);
@@ -284,19 +285,16 @@ namespace Lunex {
 			case Key::N: {
 				if (control)
 					NewScene();
-			
 				break;
 			}
 			case Key::O: {
 				if (control)
 					OpenScene();
-			
 				break;
 			}
 			case Key::S: {
 				if (control && shift)
 					SaveSceneAs();
-			
 				break;
 			}
 			
@@ -337,8 +335,7 @@ namespace Lunex {
 	
 	void EditorLayer::SaveSceneAs() {
 		std::string filepath = FileDialogs::SaveFile("Luenx Scene (*.lunex)\0*.lunex\0");
-		if (!filepath.empty())
-		{
+		if (!filepath.empty()) {
 			SceneSerializer serializer(m_ActiveScene);
 			serializer.Serialize(filepath);
 		}
