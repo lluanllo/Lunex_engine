@@ -3,11 +3,10 @@
 struct GLFWwindow;
 
 namespace Lunex {
-
 	class LUNEX_API OpenGLContext : public GraphicsContext{
 		public:
 			OpenGLContext(GLFWwindow* windowHandle);
-
+			
 			virtual void Init() override;
 			virtual void SwapBuffers() override;
 		private:

@@ -9,7 +9,6 @@
 #include <yaml-cpp/yaml.h>
 
 namespace YAML {
-
 	template<>
 	struct convert<glm::vec3> {
 		static Node encode(const glm::vec3& rhs) {

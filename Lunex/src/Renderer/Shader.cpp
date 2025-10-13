@@ -32,7 +32,7 @@ namespace Lunex {
 		auto& name = shader->GetName();
 		Add(name, shader);
 	}
-
+	
 	void ShaderLibrary::Add(const std::string& name, const Ref<Shader>& shader) {
 		LN_CORE_ASSERT(!Exists(name), "Shader already exists!");
 		m_Shaders[name] = shader;
