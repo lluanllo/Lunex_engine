@@ -3,7 +3,6 @@
 #include "Renderer/Framebuffer.h"
 
 namespace Lunex {
-	
 	class LUNEX_API OpenGLFramebuffer : public Framebuffer {
 		public:
 			OpenGLFramebuffer(const FramebufferSpecification& spec);
@@ -24,7 +23,6 @@ namespace Lunex {
 			virtual const FramebufferSpecification& GetSpecification() const override { return m_Specification; }
 		private:
 			uint32_t m_RendererID = 0;
-			
 			FramebufferSpecification m_Specification;
 			
 			std::vector<FramebufferTextureSpecification> m_ColorAttachmentSpecifications;

@@ -3,8 +3,7 @@
 
 #include <glad/glad.h>
 
-namespace Lunex {
-	
+namespace Lunex {	
 	static GLenum ShaderDataTypeToOpenGLBaseType(ShaderDataType type) {
 		
 		switch (type) {

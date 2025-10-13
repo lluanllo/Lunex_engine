@@ -100,6 +100,16 @@ namespace Lunex {
 		}
 	}
 	
+	Entity Scene::GetPrimaryCameraEntity() {
+		auto view = m_Registry.view<CameraComponent>();
+		for (auto entity : view) {
+			const auto& camera = view.get<CameraComponent>(entity);
+			if (camera.Primary)
+				return Entity{ entity, this };
+		}
+		return {};
+	}
+	
 	template<typename T>
 	void Scene::OnComponentAdded(Entity entity, T& component) {
 		static_assert(false);
@@ -112,16 +122,6 @@ namespace Lunex {
 	template<>
 	void Scene::OnComponentAdded<CameraComponent>(Entity entity, CameraComponent& component) {
 		component.Camera.SetViewportSize(m_ViewportWidth, m_ViewportHeight);
-	}
-	
-	Entity Scene::GetPrimaryCameraEntity() {
-		auto view = m_Registry.view<CameraComponent>();
-		for (auto entity : view) {
-			const auto& camera = view.get<CameraComponent>(entity);
-			if (camera.Primary)
-				return Entity{ entity, this };
-		}
-		return {};
 	}
 	
 	template<>
