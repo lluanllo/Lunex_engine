@@ -23,6 +23,7 @@ IncludeDir["glm"]       = "vendor/glm"
 IncludeDir["stb_image"] = "vendor/stb_image"
 IncludeDir["entt"]      = "vendor/entt/include"
 IncludeDir["yaml_cpp"]  = "vendor/yaml-cpp/include"
+IncludeDir["ImGuizmo"]  = "vendor/ImGuizmo"
 IncludeDir["Lunex"]     = "Lunex/src"
 
 group "Dependencies"
@@ -54,8 +55,11 @@ project "Lunex"
         "%{prj.name}/src/**.hpp",
         "%{prj.name}/src/**.c",
         "%{prj.name}/src/**.inl",
+        "vendor/ImGuizmo/ImGuizmo.h",
+        "vendor/ImGuizmo/ImGuizmo.cpp",
         "%{prj.name}/assets/**.glsl",
-        "%{prj.name}/assets/**.png",
+        "%{prj.name}/assets/**.lunex",
+        "%{prj.name}/assets/**.png"
     }
 
     defines
@@ -75,7 +79,8 @@ project "Lunex"
         "%{IncludeDir.glm}",
         "%{IncludeDir.stb_image}",
         "%{IncludeDir.entt}",
-        "%{IncludeDir.yaml_cpp}"
+        "%{IncludeDir.yaml_cpp}",
+        "%{IncludeDir.ImGuizmo}"
     }
 
     links{
@@ -85,6 +90,9 @@ project "Lunex"
         "yaml-cpp",
         "opengl32.lib"
     }
+
+    filter "files:vendor/ImGuizmo/**.cpp"
+        flags { "NoPCH" }
 
     filter "system:windows"
         systemversion "latest"
@@ -129,7 +137,8 @@ project "Sandbox"
         "vendor/ImGuiLib",
         "%{IncludeDir.glm}",
         "%{IncludeDir.entt}",
-        "%{IncludeDir.yaml_cpp}"
+        "%{IncludeDir.yaml_cpp}",
+        "%{IncludeDir.ImGuizmo}"
     }
 
     defines
@@ -183,7 +192,10 @@ project "Lunex-Editor"
         "%{prj.name}/src/**.hpp",
         "%{prj.name}/src/**.c",
         "%{prj.name}/src/**.inl",
+        "vendor/ImGuizmo/ImGuizmo.h",
+        "vendor/ImGuizmo/ImGuizmo.cpp",
         "%{prj.name}/assets/**.glsl",
+        "%{prj.name}/assets/**.lunex",
         "%{prj.name}/assets/**.png",
     }
 
@@ -195,7 +207,8 @@ project "Lunex-Editor"
         "vendor/ImGuiLib",
         "%{IncludeDir.glm}",
         "%{IncludeDir.entt}",
-        "%{IncludeDir.yaml_cpp}"
+        "%{IncludeDir.yaml_cpp}",
+        "%{IncludeDir.ImGuizmo}"
     }
 
     defines

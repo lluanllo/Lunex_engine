@@ -5,7 +5,6 @@
 #include <glm/glm.hpp>
 
 namespace Lunex {
-
 	class LUNEX_API Shader {
 		public:
 			virtual ~Shader() = default;

@@ -1,8 +1,10 @@
 #pragma once
 
-#include "entt.hpp"
-
 #include "Core/Timestep.h"
+
+#include "Renderer/EditorCamera.h"
+
+#include "entt.hpp"
 
 namespace Lunex {
 	class LUNEX_API Entity;
@@ -15,8 +17,11 @@ namespace Lunex {
 			Entity CreateEntity(const std::string& name = std::string());
 			void DestroyEntity(Entity entity);
 			
-			void OnUpdate(Timestep ts);
+			void OnUpdateRuntime(Timestep ts);
+			void OnUpdateEditor(Timestep ts, EditorCamera& camera);
 			void OnViewportResize(uint32_t width, uint32_t height);
+			
+			Entity GetPrimaryCameraEntity();
 			
 		private:
 			template<typename T>

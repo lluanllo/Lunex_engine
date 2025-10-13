@@ -6,9 +6,7 @@
 #include "Shader.h"
 
 namespace Lunex {
-	 
-	class LUNEX_API Renderer {
-		
+	class LUNEX_API Renderer {	
 		public:
 			static void Init();
 			static void Shutdown();
@@ -27,6 +25,6 @@ namespace Lunex {
 				glm::mat4 ViewProjectionMatrix;
 			};
 			
-			static Scope<SceneData> m_SceneData;
+			static Scope<SceneData> s_SceneData;
 	};
 }
