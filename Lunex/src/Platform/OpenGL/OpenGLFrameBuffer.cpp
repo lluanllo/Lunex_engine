@@ -62,7 +62,7 @@ namespace Lunex {
 			return false;
 		}
 		
-		static GLenum HazelFBTextureFormatToGL(FramebufferTextureFormat format) {
+		static GLenum LunexFBTextureFormatToGL(FramebufferTextureFormat format) {
 			switch (format)	{
 				case FramebufferTextureFormat::RGBA8:       return GL_RGBA8;
 				case FramebufferTextureFormat::RED_INTEGER: return GL_RED_INTEGER;
@@ -184,6 +184,6 @@ namespace Lunex {
 		
 		auto& spec = m_ColorAttachmentSpecifications[attachmentIndex];
 		glClearTexImage(m_ColorAttachments[attachmentIndex], 0,
-			Utils::HazelFBTextureFormatToGL(spec.TextureFormat), GL_INT, &value);
+			Utils::LunexFBTextureFormatToGL(spec.TextureFormat), GL_INT, &value);
 	}
 }
