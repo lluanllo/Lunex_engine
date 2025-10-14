@@ -103,7 +103,7 @@ if vulkanInstalled:
 
 print("\n[4/4] Generando archivos de proyecto con Premake...")
 if os.name == 'nt':  # Windows
-    premake_path = "vendor/bin/premake/premake5.exe"
+    premake_path = "vendor/bin/premake5.exe"
     if not os.path.exists(premake_path):
         print(f"ERROR: Premake no encontrado en {premake_path}")
         input("Presiona Enter para salir...")
@@ -115,7 +115,7 @@ if os.name == 'nt':  # Windows
         input("Presiona Enter para salir...")
         sys.exit(1)
 else:
-    subprocess.call(["vendor/bin/premake/premake5", "gmake2"])
+    subprocess.call(["vendor/bin/premake5", "gmake2"])
 
 print("\n" + "="*60)
 print("✓ Setup completado correctamente!")
