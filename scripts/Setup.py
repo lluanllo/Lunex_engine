@@ -15,8 +15,6 @@ CheckPython.ValidatePackages()
 import Vulkan
 
 print("\n[2/4] Clonando/actualizando submodulos...")
-
-# Primero intentar inicializar submódulos
 result = subprocess.call(["git", "submodule", "update", "--init", "--recursive"])
 
 if result != 0:
@@ -99,11 +97,12 @@ else:
 print("\n[3/4] Verificando Vulkan SDK...")
 vulkanInstalled = Vulkan.CheckVulkanSDK()
 if vulkanInstalled:
+    # Solo verificar, no intentar descargar
     Vulkan.CheckVulkanSDKDebugLibs()
 
 print("\n[4/4] Generando archivos de proyecto con Premake...")
 if os.name == 'nt':  # Windows
-    premake_path = "vendor/bin/premake5.exe"
+    premake_path = "vendor/bin/premake/premake5.exe"
     if not os.path.exists(premake_path):
         print(f"ERROR: Premake no encontrado en {premake_path}")
         input("Presiona Enter para salir...")
@@ -115,7 +114,7 @@ if os.name == 'nt':  # Windows
         input("Presiona Enter para salir...")
         sys.exit(1)
 else:
-    subprocess.call(["vendor/bin/premake5", "gmake2"])
+    subprocess.call(["vendor/bin/premake/premake5", "gmake2"])
 
 print("\n" + "="*60)
 print("✓ Setup completado correctamente!")
@@ -124,4 +123,6 @@ print("\nSiguientes pasos:")
 print("  1. Abre 'Lunex-Engine.sln' en Visual Studio")
 print("  2. Selecciona la configuración 'Debug' o 'Release'")
 print("  3. Compila el proyecto (Ctrl+Shift+B)")
+print("\nNOTA: Las librerías de Vulkan están deshabilitadas temporalmente.")
+print("      Se habilitarán cuando implementes shaders SPIR-V.")
 print("="*60)

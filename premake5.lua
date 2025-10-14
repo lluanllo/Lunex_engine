@@ -29,22 +29,17 @@ IncludeDir["ImGuizmo"]  = "vendor/ImGuizmo"
 IncludeDir["Lunex"]     = "Lunex/src"
 IncludeDir["VulkanSDK"] = "%{VULKAN_SDK}/Include"
 
+-- ✅ Librerías de Vulkan habilitadas
 LibraryDir = {}
 LibraryDir["VulkanSDK"] = "%{VULKAN_SDK}/Lib"
-LibraryDir["VulkanSDK_Debug"] = "%{wks.location}/Lunex/vendor/VulkanSDK/Lib"
 
 Library = {}
 Library["Vulkan"] = "%{LibraryDir.VulkanSDK}/vulkan-1.lib"
-Library["VulkanUtils"] = "%{LibraryDir.VulkanSDK}/VkLayer_utils.lib"
 
-Library["ShaderC_Debug"] = "%{LibraryDir.VulkanSDK_Debug}/shaderc_sharedd.lib"
-Library["SPIRV_Cross_Debug"] = "%{LibraryDir.VulkanSDK_Debug}/spirv-cross-cored.lib"
-Library["SPIRV_Cross_GLSL_Debug"] = "%{LibraryDir.VulkanSDK_Debug}/spirv-cross-glsld.lib"
-Library["SPIRV_Tools_Debug"] = "%{LibraryDir.VulkanSDK_Debug}/SPIRV-Toolsd.lib"
-
-Library["ShaderC_Release"] = "%{LibraryDir.VulkanSDK}/shaderc_shared.lib"
-Library["SPIRV_Cross_Release"] = "%{LibraryDir.VulkanSDK}/spirv-cross-core.lib"
-Library["SPIRV_Cross_GLSL_Release"] = "%{LibraryDir.VulkanSDK}/spirv-cross-glsl.lib"
+-- Usar shaderc_combined para evitar múltiples dependencias
+Library["ShaderC"] = "%{LibraryDir.VulkanSDK}/shaderc_combined.lib"
+Library["SPIRV_Cross"] = "%{LibraryDir.VulkanSDK}/spirv-cross-core.lib"
+Library["SPIRV_Cross_GLSL"] = "%{LibraryDir.VulkanSDK}/spirv-cross-glsl.lib"
 
 -- ============================================================================
 -- DEPENDENCIES
@@ -55,7 +50,7 @@ group "Dependencies"
 project "GLFW"
     kind "StaticLib"
     language "C"
-    staticruntime "on"
+    staticruntime "off"  -- ✅ Cambio a dinámico
     warnings "off"
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
@@ -118,7 +113,7 @@ project "GLFW"
 project "Glad"
     kind "StaticLib"
     language "C"
-    staticruntime "on"
+    staticruntime "off"  -- ✅ Cambio a dinámico
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
@@ -137,7 +132,6 @@ project "Glad"
 
     filter "system:windows"
         systemversion "latest"
-        staticruntime "On"
 
     filter "configurations:Debug"
         runtime "Debug"
@@ -156,7 +150,7 @@ project "ImGui"
     kind "StaticLib"
     language "C++"
     cppdialect "C++20"
-    staticruntime "on"
+    staticruntime "off"  -- ✅ Cambio a dinámico
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
@@ -196,7 +190,7 @@ project "yaml-cpp"
     kind "StaticLib"
     language "C++"
     cppdialect "C++20"
-    staticruntime "on"
+    staticruntime "off"  -- ✅ Cambio a dinámico
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
@@ -248,7 +242,7 @@ project "Lunex"
     kind "StaticLib"
     language "C++"
     cppdialect "C++20"
-    staticruntime "on"  -- ✅ Cambiar de "off" a "on"
+    staticruntime "off"  -- ✅ Cambio a dinámico
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
@@ -300,8 +294,7 @@ project "Lunex"
         "Glad",
         "ImGui",
         "yaml-cpp",
-        "opengl32.lib",
-        "%{Library.Vulkan}"
+        "opengl32.lib"
     }
 
     filter "files:vendor/ImGuizmo/**.cpp"
@@ -318,9 +311,9 @@ project "Lunex"
         
         links
         {
-            "%{Library.ShaderC_Debug}",
-            "%{Library.SPIRV_Cross_Debug}",
-            "%{Library.SPIRV_Cross_GLSL_Debug}"
+            "%{Library.ShaderC}",
+            "%{Library.SPIRV_Cross}",
+            "%{Library.SPIRV_Cross_GLSL}"
         }
 
     filter "configurations:Release"
@@ -330,9 +323,9 @@ project "Lunex"
         
         links
         {
-            "%{Library.ShaderC_Release}",
-            "%{Library.SPIRV_Cross_Release}",
-            "%{Library.SPIRV_Cross_GLSL_Release}"
+            "%{Library.ShaderC}",
+            "%{Library.SPIRV_Cross}",
+            "%{Library.SPIRV_Cross_GLSL}"
         }
 
     filter "configurations:Dist"
@@ -342,9 +335,9 @@ project "Lunex"
         
         links
         {
-            "%{Library.ShaderC_Release}",
-            "%{Library.SPIRV_Cross_Release}",
-            "%{Library.SPIRV_Cross_GLSL_Release}"
+            "%{Library.ShaderC}",
+            "%{Library.SPIRV_Cross}",
+            "%{Library.SPIRV_Cross_GLSL}"
         }
 
 project "Sandbox"
@@ -352,7 +345,7 @@ project "Sandbox"
     kind "ConsoleApp"
     language "C++"
     cppdialect "C++20"
-    staticruntime "on"
+    staticruntime "off"  -- ✅ Cambio a dinámico
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
@@ -386,8 +379,6 @@ project "Sandbox"
     }
 
     filter "system:windows"
-        cppdialect "C++20"
-        staticruntime "On"
         systemversion "latest"
         buildoptions { "/utf-8" }
 
@@ -411,7 +402,7 @@ project "Lunex-Editor"
     kind "ConsoleApp"
     language "C++"
     cppdialect "C++20"
-    staticruntime "on"
+    staticruntime "off"  -- ✅ Cambio a dinámico
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")

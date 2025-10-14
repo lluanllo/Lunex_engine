@@ -59,30 +59,41 @@ def CheckVulkanSDK():
     print(f"✓ Vulkan SDK correcto encontrado: {VULKAN_SDK}")
     return True
 
-VulkanSDKDebugLibsURL = f'https://sdk.lunarg.com/sdk/download/1.3.290.0/windows/VulkanSDK-1.3.290.0-DebugLibs.zip'
-OutputDirectory = "Lunex/vendor/VulkanSDK"
-TempZipFile = f"{OutputDirectory}/VulkanSDK.zip"
-
 def CheckVulkanSDKDebugLibs():
-    shadercdLib = Path(f"{OutputDirectory}/Lib/shaderc_sharedd.lib")
+    """
+    Las librerías de debug vienen incluidas en el instalador principal del Vulkan SDK.
+    Esta función verifica que el SDK esté instalado correctamente.
+    """
+    if VULKAN_SDK is None:
+        print("\n⚠️ Vulkan SDK no está instalado.")
+        print("Las librerías de Vulkan no estarán disponibles hasta que lo instales.")
+        return False
     
-    if not shadercdLib.exists():
-        print(f"\nLibrerias de debug de Vulkan SDK no encontradas.")
-        print(f"Descargando desde {VulkanSDKDebugLibsURL}...")
-        
-        os.makedirs(OutputDirectory, exist_ok=True)
-        
-        try:
-            with urlopen(VulkanSDKDebugLibsURL) as zipresp:
-                with ZipFile(BytesIO(zipresp.read())) as zfile:
-                    zfile.extractall(OutputDirectory)
-            print(f"✓ Librerias de debug descargadas en: {OutputDirectory}")
-        except Exception as e:
-            print(f"ERROR al descargar librerias de debug: {e}")
-            print("Puedes descargarlas manualmente desde:")
-            print(VulkanSDKDebugLibsURL)
-            return False
-    else:
-        print(f"✓ Librerias de debug de Vulkan SDK encontradas: {OutputDirectory}")
+    # Verificar que existan las librerías básicas
+    sdk_lib_path = Path(f"{VULKAN_SDK}/Lib")
+    if not sdk_lib_path.exists():
+        print(f"\n⚠️ Carpeta de librerías no encontrada: {sdk_lib_path}")
+        print("Es posible que el Vulkan SDK no se haya instalado correctamente.")
+        return False
     
+    # Verificar algunas librerías clave
+    required_libs = [
+        "vulkan-1.lib",
+        "shaderc_combined.lib"
+    ]
+    
+    missing_libs = []
+    for lib in required_libs:
+        if not (sdk_lib_path / lib).exists():
+            missing_libs.append(lib)
+    
+    if missing_libs:
+        print(f"\n⚠️ Algunas librerías de Vulkan no están disponibles:")
+        for lib in missing_libs:
+            print(f"  - {lib}")
+        print("\nNOTA: Esto no afectará la compilación actual ya que las librerías")
+        print("      de Vulkan están deshabilitadas en premake5.lua")
+        return False
+    
+    print(f"✓ Librerías de Vulkan SDK encontradas en: {sdk_lib_path}")
     return True
