@@ -8,7 +8,7 @@ typedef unsigned int GLenum;
 
 namespace Lunex {
 	
-	class LUNEX_API OpenGLShader : public Shader {
+	class OpenGLShader : public Shader {
 		public:
 			OpenGLShader(const std::string& filepath);
 			OpenGLShader(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc);

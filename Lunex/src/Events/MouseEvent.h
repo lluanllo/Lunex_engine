@@ -5,7 +5,7 @@
 #include "Event.h"
 
 namespace Lunex {
-	class LUNEX_API MouseMovedEvent : public Event {
+	class   MouseMovedEvent : public Event {
 		public:
 			MouseMovedEvent(float x, float y)
 				: m_MouseX(x), m_MouseY(y) {
@@ -27,7 +27,7 @@ namespace Lunex {
 			float m_MouseX, m_MouseY;
 	};
 	
-	class LUNEX_API MouseScrolledEvent : public Event {
+	class   MouseScrolledEvent : public Event {
 		public:
 			MouseScrolledEvent(float xOffset, float yOffset)
 				: m_XOffset(xOffset), m_YOffset(yOffset) {
@@ -49,7 +49,7 @@ namespace Lunex {
 			float m_XOffset, m_YOffset;
 	};
 	
-	class LUNEX_API MouseButtonEvent : public Event {
+	class   MouseButtonEvent : public Event {
 		public:
 			MouseCode GetMouseButton() const { return m_Button; }
 			EVENT_CLASS_CATEGORY(EventCategoryMouseButton | EventCategoryInput)
@@ -61,7 +61,7 @@ namespace Lunex {
 			MouseCode m_Button;
 	};
 	
-	class LUNEX_API MouseButtonPressedEvent : public MouseButtonEvent {
+	class   MouseButtonPressedEvent : public MouseButtonEvent {
 		public:
 			MouseButtonPressedEvent(MouseCode button)
 				: MouseButtonEvent(button) {
@@ -76,7 +76,7 @@ namespace Lunex {
 			EVENT_CLASS_TYPE(MouseButtonPressed)
 	};
 	
-	class LUNEX_API MouseButtonReleasedEvent : public MouseButtonEvent {
+	class   MouseButtonReleasedEvent : public MouseButtonEvent {
 		public:
 			MouseButtonReleasedEvent(MouseCode button)
 				: MouseButtonEvent(button) {

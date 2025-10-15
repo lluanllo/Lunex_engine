@@ -3,7 +3,7 @@
 struct GLFWwindow;
 
 namespace Lunex {
-	class LUNEX_API OpenGLContext : public GraphicsContext{
+	class   OpenGLContext : public GraphicsContext{
 		public:
 			OpenGLContext(GLFWwindow* windowHandle);
 			

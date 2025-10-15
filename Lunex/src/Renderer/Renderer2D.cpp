@@ -90,8 +90,6 @@ namespace Lunex {
 			samplers[i] = i;
 		
 		s_Data.TextureShader = Shader::Create("assets/shaders/texture.glsl");
-		s_Data.TextureShader->Bind();
-		s_Data.TextureShader->SetIntArray("u_Textures", samplers, s_Data.MaxTextureSlots);
 		
 		// Set all texture slots to 0
 		s_Data.TextureSlots[0] = s_Data.WhiteTexture;

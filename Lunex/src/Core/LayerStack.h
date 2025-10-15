@@ -6,7 +6,7 @@
 #include <vector>
 
 namespace Lunex {
-	class LUNEX_API LayerStack {
+	class   LayerStack {
 		public:
 			
 			LayerStack();

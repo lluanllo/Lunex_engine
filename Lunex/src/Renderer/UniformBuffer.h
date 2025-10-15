@@ -3,7 +3,7 @@
 #include "Core/Core.h"
 
 namespace Lunex {
-	class LUNEX_API UniformBuffer {
+	class   UniformBuffer {
 		public:
 			virtual ~UniformBuffer() {}
 			virtual void SetData(const void* data, uint32_t size, uint32_t offset = 0) = 0;

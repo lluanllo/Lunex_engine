@@ -10,7 +10,7 @@
 #include "Texture.h"
 
 namespace Lunex  {
-	class LUNEX_API Renderer2D {
+	class   Renderer2D {
 		public:
 			static void Init();
 			static void Shutdown();

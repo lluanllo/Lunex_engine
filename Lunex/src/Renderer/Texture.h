@@ -5,7 +5,7 @@
 #include "Core/Core.h"
 
 namespace Lunex {
-	class LUNEX_API Texture {
+	class   Texture {
 		public:
 			virtual ~Texture() = default;
 			

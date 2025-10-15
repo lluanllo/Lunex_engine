@@ -5,7 +5,7 @@
 
 namespace Lunex {
 	
-	class LUNEX_API VertexArray {
+	class   VertexArray {
 		public:
 			virtual ~VertexArray() {}
          

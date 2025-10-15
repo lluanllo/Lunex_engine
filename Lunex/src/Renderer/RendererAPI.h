@@ -6,7 +6,7 @@
 #include "glm/glm.hpp"
 
 namespace Lunex {
-	class LUNEX_API RendererAPI {
+	class   RendererAPI {
 		public:
 			enum class API {
 				None = 0, OpenGL = 1

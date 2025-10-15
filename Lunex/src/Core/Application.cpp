@@ -1,6 +1,4 @@
 #include "stpch.h"
-
-#include "Events/ApplicationEvent.h"
 #include "Application.h"
 
 #include "Renderer/Renderer.h"

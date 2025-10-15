@@ -44,7 +44,7 @@ namespace Lunex {
 		bool SwapChainTarget = false;
 	};
 	
-	class LUNEX_API Framebuffer {
+	class   Framebuffer {
 		public:
 			virtual ~Framebuffer() = default;
 			

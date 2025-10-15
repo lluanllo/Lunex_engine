@@ -24,7 +24,7 @@ namespace Lunex {
 		}
 	};
 	
-	class LUNEX_API Application {
+	class Application {
 		public:
 			Application(const std::string& name = "Lunex App", ApplicationCommandLineArgs args = ApplicationCommandLineArgs());
 			virtual ~Application();
