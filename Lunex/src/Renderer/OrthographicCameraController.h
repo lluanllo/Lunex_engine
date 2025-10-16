@@ -9,7 +9,7 @@
 #include "Events/MouseEvent.h"
 
 namespace Lunex {
-	class LUNEX_API OrthographicCameraController {
+	class   OrthographicCameraController {
 		public:
 			OrthographicCameraController(float aspectRatio, bool rotation = false);
 			

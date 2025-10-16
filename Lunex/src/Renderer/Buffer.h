@@ -3,7 +3,7 @@
 #include "Core/Core.h"
 
 namespace Lunex {
-	enum class LUNEX_API ShaderDataType {
+	enum class   ShaderDataType {
 		None = 0,
 		Float, Float2, Float3, Float4,
 		Int, Int2, Int3, Int4,
@@ -64,7 +64,7 @@ namespace Lunex {
 		}
 	};
 	
-	class LUNEX_API BufferLayout {
+	class   BufferLayout {
 		public:
 			BufferLayout(const std::initializer_list<BufferElement> element)
 				: m_Elements(element) {
@@ -95,7 +95,7 @@ namespace Lunex {
 			uint32_t m_Stride = 0;
 	};
 	
-	class LUNEX_API VertexBuffer {
+	class   VertexBuffer {
 		public:
 			virtual ~VertexBuffer() {}
 			
@@ -111,7 +111,7 @@ namespace Lunex {
 			static Ref<VertexBuffer> Create(float* vertices, uint32_t size);
 	};
 	
-	class LUNEX_API IndexBuffer {
+	class   IndexBuffer {
 		public:
 			virtual ~IndexBuffer() = default;
 			

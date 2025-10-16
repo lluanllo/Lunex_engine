@@ -109,7 +109,7 @@ namespace Lunex {
 		
 		// ===== CONFIGURACIÓN DE BORDES Y ESTILO TIPO UNREAL =====
 		style.WindowPadding = ImVec2(8, 8);
-		style.WindowRounding = 0.0f;  // Unreal usa esquinas rectas
+		style.WindowRounding = 2.0f;  // Unreal usa esquinas rectas
 		style.FramePadding = ImVec2(5, 3);
 		style.FrameRounding = 2.0f;  // Bordes muy sutiles
 		style.ItemSpacing = ImVec2(8, 4);
@@ -125,7 +125,7 @@ namespace Lunex {
 		
 		// Bordes
 		style.WindowBorderSize = 1.0f;
-		style.FrameBorderSize = 0.0f;
+		style.FrameBorderSize = 1.0f;
 		style.PopupBorderSize = 1.0f;
 		
 		// ===== PALETA DE COLORES ESTILO UNREAL ENGINE =====

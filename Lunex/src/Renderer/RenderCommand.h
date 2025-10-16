@@ -3,7 +3,7 @@
 #include "RendererAPI.h"
 
 namespace Lunex {
-	class LUNEX_API RenderCommand {
+	class   RenderCommand {
 		public:
 			inline static void Init() {
 				s_RendererAPI->Init();

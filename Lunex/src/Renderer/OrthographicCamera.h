@@ -4,7 +4,7 @@
 
 namespace Lunex {
 
-	class LUNEX_API OrthographicCamera {
+	class   OrthographicCamera {
 		public:
 			OrthographicCamera(float left, float right, float bottom, float top);
 			

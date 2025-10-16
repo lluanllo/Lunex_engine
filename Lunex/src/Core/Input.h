@@ -5,7 +5,7 @@
 #include "MouseButtonCodes.h"
 
 namespace Lunex {
-	class LUNEX_API Input {		
+	class   Input {		
 		public:
 			static bool IsKeyPressed(KeyCode key);
 			

@@ -3,7 +3,7 @@
 #include "Core/Core.h"
 
 namespace Lunex {
-	class LUNEX_API Timestep {
+	class   Timestep {
 		
 		public:
 			Timestep(float time = 0.0f) 
