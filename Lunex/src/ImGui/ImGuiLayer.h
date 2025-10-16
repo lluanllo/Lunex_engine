@@ -2,13 +2,12 @@
 
 #include "Core/layer.h"
 
-#include "Events/Event.h"
 #include "Events/ApplicationEvent.h"
 #include "Events/MouseEvent.h"
 #include "Events/KeyEvent.h"
 
 namespace Lunex {
-	class   ImGuiLayer : public Layer {
+	class ImGuiLayer : public Layer {
 		public:
 			ImGuiLayer();
 			~ImGuiLayer();

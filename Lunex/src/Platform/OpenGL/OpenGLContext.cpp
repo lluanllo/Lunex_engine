@@ -4,10 +4,8 @@
 
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
-#include <GL/GL.h>
 
 namespace Lunex {
-
 	OpenGLContext::OpenGLContext(GLFWwindow* windowHandle)
 		: m_WindowHandle(windowHandle)
 	{
@@ -26,7 +24,7 @@ namespace Lunex {
 		LNX_LOG_INFO("OpenGL Renderer: {}", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
 		LNX_LOG_INFO("OpenGL Version: {}", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
 		
-		LN_CORE_ASSERT(versionMajor > 4 || (versionMajor == 4 && versionMinor >= 5), "Lunex requires at least OpenGL version 4.5!");
+		LN_CORE_ASSERT(GLVersion.major > 4 || (GLVersion.major == 4 && GLVersion.minor >= 5), "Lunex requires at least OpenGL version 4.5!");
 		
 	}
 	

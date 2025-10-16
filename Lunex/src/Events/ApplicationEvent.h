@@ -4,7 +4,7 @@
 #include "Event.h"
 
 namespace Lunex {
-	class   WindowResizeEvent : public Event {
+	class WindowResizeEvent : public Event {
 		public:
 			WindowResizeEvent(unsigned int width, unsigned int height)
 				: m_Width(width), m_Height(height) {
@@ -25,7 +25,7 @@ namespace Lunex {
 			unsigned int m_Width, m_Height;
 	};
 	
-	class   WindowCloseEvent : public Event {
+	class WindowCloseEvent : public Event {
 		public:
 			WindowCloseEvent() {}
 			
@@ -33,7 +33,7 @@ namespace Lunex {
 			EVENT_CLASS_CATEGORY(EventCategoryApplication)
 	};
 	
-	class   AppTickEvent : public Event {
+	class AppTickEvent : public Event {
 		public:
 			AppTickEvent() {}
 			
@@ -41,7 +41,7 @@ namespace Lunex {
 			EVENT_CLASS_CATEGORY(EventCategoryApplication)
 	};
 	
-	class   AppUpdateEvent : public Event {
+	class AppUpdateEvent : public Event {
 		public:
 			AppUpdateEvent() {}
 			
@@ -49,7 +49,7 @@ namespace Lunex {
 			EVENT_CLASS_CATEGORY(EventCategoryApplication)
 	};
 	
-	class   AppRenderEvent : public Event {
+	class AppRenderEvent : public Event {
 		public:
 			AppRenderEvent() {}
 			EVENT_CLASS_TYPE(AppRender)

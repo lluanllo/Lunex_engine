@@ -16,8 +16,8 @@ namespace Lunex {
 			void OnUpdate(Timestep ts);
 			void OnEvent(Event& e);
 			
-			inline float GetDistance() const { return m_Distance; }
-			inline void SetDistance(float distance) { m_Distance = distance; }
+			float GetDistance() const { return m_Distance; }
+			void SetDistance(float distance) { m_Distance = distance; }
 			
 			inline void SetViewportSize(float width, float height) { m_ViewportWidth = width; m_ViewportHeight = height; UpdateProjection(); }
 			

@@ -66,7 +66,7 @@ namespace Lunex {
 		glDeleteTextures(1, &m_RendererID);
 	}
 	
-	void OpenGLTexture2D::setData(void* data, uint32_t size) {
+	void OpenGLTexture2D::SetData(void* data, uint32_t size) {
 		LNX_PROFILE_FUNCTION();
 		uint32_t bpp = m_DataFormat == GL_RGBA ? 4 : 3;
 		LN_CORE_ASSERT(size == m_Width * m_Height * bpp, "Data must be entire texture!");

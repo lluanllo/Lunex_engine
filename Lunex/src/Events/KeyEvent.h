@@ -5,19 +5,19 @@
 #include "Event.h"
 
 namespace Lunex {
-		class   KeyEvent : public Event {
-			public:
-				KeyCode GetKeyCode() const { return m_KeyCode; }
-				
-				EVENT_CLASS_CATEGORY(EventCategoryKeyboard | EventCategoryInput)
-			protected:
-				KeyEvent(KeyCode keyCode)
-					: m_KeyCode(keyCode) {
-				}
-				KeyCode m_KeyCode;
+	class KeyEvent : public Event {
+		public:
+			KeyCode GetKeyCode() const { return m_KeyCode; }
+			
+			EVENT_CLASS_CATEGORY(EventCategoryKeyboard | EventCategoryInput)
+		protected:
+			KeyEvent(KeyCode keyCode)
+				: m_KeyCode(keyCode) {
+			}
+			KeyCode m_KeyCode;		
 	};
 	
-	class   KeyPressedEvent : public KeyEvent {
+	class KeyPressedEvent : public KeyEvent {
 		public:
 			KeyPressedEvent(KeyCode keyCode, int repeatCount)
 				: KeyEvent(keyCode), m_RepeatCount(repeatCount) {
@@ -36,7 +36,7 @@ namespace Lunex {
 			int m_RepeatCount;
 	};
 	
-	class   KeyReleasedEvent : public KeyEvent {
+	class KeyReleasedEvent : public KeyEvent {
 		public:
 			KeyReleasedEvent(KeyCode keyCode)
 				: KeyEvent(keyCode) {
@@ -49,7 +49,7 @@ namespace Lunex {
 			EVENT_CLASS_TYPE(KeyReleased)
 	};
 	
-	class   KeyTypedEvent : public KeyEvent {
+	class KeyTypedEvent : public KeyEvent {
 		public:
 			KeyTypedEvent(KeyCode keycode)
 				: KeyEvent(keycode) {

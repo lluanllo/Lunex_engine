@@ -14,13 +14,7 @@
 namespace Lunex {
 	EditorCamera::EditorCamera(float fov, float aspectRatio, float nearClip, float farClip)
 		: m_FOV(fov), m_AspectRatio(aspectRatio), m_NearClip(nearClip), m_FarClip(farClip), Camera(glm::perspective(glm::radians(fov), aspectRatio, nearClip, farClip))
-	{
-		// Inicializar con una posición por defecto que mire hacia el origen
-		m_FocalPoint = glm::vec3(0.0f, 0.0f, 0.0f);
-		m_Distance = 10.0f;
-		m_Pitch = 0.0f;  // Sin rotación vertical
-		m_Yaw = 0.0f;    // Sin rotación horizontal
-		
+	{		
 		UpdateView();
 	}
 	
