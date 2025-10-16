@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../Core/core.h"
+#include "Core/core.h"
 
 namespace Lunex {
-    enum class LUNEX_API EventType {
+    enum class EventType {
 		None = 0,
 		WindowClose, WindowResize, WindowFocus, WindowLostFocus, WindowMoved,
 		AppTick, AppUpdate, AppRender,
@@ -25,8 +25,7 @@ namespace Lunex {
 									virtual const char* GetName() const override { return #type; }
 	#define EVENT_CLASS_CATEGORY(category) virtual int GetCategoryFlags() const override { return category; }
 	
-	class LUNEX_API Event {
-		friend class EventDispatcher;
+	class Event {
 	    public:
 			virtual ~Event() = default;
 			
@@ -37,15 +36,12 @@ namespace Lunex {
 			virtual int GetCategoryFlags() const = 0;
 			virtual std::string ToString() const { return GetName(); }
 			
-			inline bool IsInCategory(EventCategory category) {
+			bool IsInCategory(EventCategory category) {
 				return GetCategoryFlags() & category;
 			}		
 	};
 	
-	class LUNEX_API EventDispatcher {
-		template<typename T>
-		using EventFn = std::function<bool(T&)>;
-		
+	class EventDispatcher {		
 	    public:
 			EventDispatcher(Event& event)
 				: m_Event(event) {

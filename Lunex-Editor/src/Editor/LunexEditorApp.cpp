@@ -6,8 +6,8 @@
 namespace Lunex {
 	class LunexEditor : public Application{
 		public:
-			LunexEditor()
-				: Application("Lunex Editor") {
+			LunexEditor(ApplicationCommandLineArgs args)
+				: Application("Lunex Editor", args) {
 				PushLayer(new EditorLayer());
 			}
 			
@@ -15,7 +15,7 @@ namespace Lunex {
 			}
 	};
 	
-	Lunex::Ref <Lunex::Application> Lunex::CreateApplication() {
-		return Lunex::CreateScope<LunexEditor>();
+	Lunex::Ref <Lunex::Application> Lunex::CreateApplication(ApplicationCommandLineArgs args) {
+		return Lunex::CreateScope<LunexEditor>(args);
 	}
 }

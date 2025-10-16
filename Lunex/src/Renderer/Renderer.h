@@ -6,7 +6,7 @@
 #include "Shader.h"
 
 namespace Lunex {
-	class LUNEX_API Renderer {	
+	class   Renderer {	
 		public:
 			static void Init();
 			static void Shutdown();

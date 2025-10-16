@@ -14,9 +14,19 @@
 int main(int argc, char** argv);
 
 namespace Lunex {
-	class LUNEX_API Application {
+	struct ApplicationCommandLineArgs {
+		int Count = 0;
+		char** Args = nullptr;
+		
+		const char* operator[](int index) const	{
+			LN_CORE_ASSERT(index < Count);
+			return Args[index];
+		}
+	};
+	
+	class Application {
 		public:
-			Application(const std::string& name = "Lunex App");
+			Application(const std::string& name = "Lunex App", ApplicationCommandLineArgs args = ApplicationCommandLineArgs());
 			virtual ~Application();
 			
 			void OnEvent(Event& e);
@@ -32,12 +42,15 @@ namespace Lunex {
 			
 			static Application& Get() { return *s_Instance; }
 			
+			ApplicationCommandLineArgs GetCommandLineArgs() const { return m_CommandLineArgs; }
+			
 		private:
 			void Run();
 			bool OnWindowClose(WindowCloseEvent& e);
 			bool OnWindowResize(WindowResizeEvent& e);
 			
 		private:
+			ApplicationCommandLineArgs m_CommandLineArgs;
 			std::unique_ptr<Window> m_Window;
 			ImGuiLayer* m_ImGuiLayer;
 			
@@ -55,5 +68,5 @@ namespace Lunex {
 	};
 	
 	// To be defined in CLIENT
-	Ref<Application> CreateApplication();
+	Ref<Application> CreateApplication(ApplicationCommandLineArgs args);
 }

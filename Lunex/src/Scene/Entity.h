@@ -6,7 +6,7 @@
 #include "entt.hpp"
 
 namespace Lunex {
-	class LUNEX_API Entity {
+	class   Entity {
 		public:
 			Entity() = default;
 			Entity(entt::entity handle, Scene* scene);

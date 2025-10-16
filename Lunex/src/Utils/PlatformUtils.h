@@ -5,9 +5,9 @@
 #include <string>
 
 namespace Lunex{
-	class LUNEX_API FileDialogs {
+	class   FileDialogs {
 		public:
-			static std::string OpenFile(const char* filter = "All Files (*.*){*.*}");
-			static std::string SaveFile(const char* filter = "All Files (*.*){*.*}");
+			static std::string OpenFile(const char* filter);
+			static std::string SaveFile(const char* filter);
 	};
 }

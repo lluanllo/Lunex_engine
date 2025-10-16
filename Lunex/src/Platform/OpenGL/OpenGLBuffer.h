@@ -3,8 +3,7 @@
 #include "Renderer/Buffer.h"
 
 namespace Lunex {
-	class LUNEX_API OpenGLVertexBuffer : public VertexBuffer {
-		
+	class OpenGLVertexBuffer : public VertexBuffer {
 		public:
 			OpenGLVertexBuffer(uint32_t size);
 			OpenGLVertexBuffer(float* vertices, uint32_t size);
@@ -23,8 +22,7 @@ namespace Lunex {
 			BufferLayout m_Layout;
 	};
 	
-	class LUNEX_API OpenGLIndexBuffer : public IndexBuffer {
-		
+	class OpenGLIndexBuffer : public IndexBuffer {
 		public:
 			OpenGLIndexBuffer(unsigned int* indices, uint32_t count);
 			virtual ~OpenGLIndexBuffer();

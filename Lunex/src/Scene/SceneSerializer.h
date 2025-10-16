@@ -4,7 +4,7 @@
 #include "Scene.h"
 
 namespace Lunex {
-	class LUNEX_API SceneSerializer {
+	class   SceneSerializer {
 		public:
 			SceneSerializer(const Ref<Scene>& scene);
 			

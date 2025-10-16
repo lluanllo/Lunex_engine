@@ -7,9 +7,9 @@
 #include "entt.hpp"
 
 namespace Lunex {
-	class LUNEX_API Entity;
+	class   Entity;
 	
-	class LUNEX_API Scene {
+	class   Scene {
 		public:
 			Scene();
 			~Scene();

@@ -1,6 +1,4 @@
 #include "stpch.h"
-
-#include "Events/ApplicationEvent.h"
 #include "Application.h"
 
 #include "Renderer/Renderer.h"
@@ -12,7 +10,9 @@
 namespace Lunex{	
 	Application* Application::s_Instance = nullptr;
 	
-	Application::Application(const std::string& name) {
+	Application::Application(const std::string& name, ApplicationCommandLineArgs args)
+		: m_CommandLineArgs(args)
+	{
 		
 		LNX_PROFILE_FUNCTION();
 		

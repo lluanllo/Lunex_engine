@@ -3,7 +3,7 @@
 #include "Renderer/Framebuffer.h"
 
 namespace Lunex {
-	class LUNEX_API OpenGLFramebuffer : public Framebuffer {
+	class OpenGLFramebuffer : public Framebuffer {
 		public:
 			OpenGLFramebuffer(const FramebufferSpecification& spec);
 			virtual ~OpenGLFramebuffer();
