@@ -203,7 +203,7 @@ namespace Lunex {
 	template<typename T, typename UIFunction>
 	static void DrawComponent(const std::string& name, Entity entity, UIFunction uifunction) {
 		
-		const ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_FramePadding;
+		const ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_FramePadding;
 		
 		if (entity.HasComponent<T>()) {
 			auto& component = entity.GetComponent<T>();

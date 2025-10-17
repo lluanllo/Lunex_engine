@@ -21,7 +21,7 @@ namespace Lunex {
 			if (type == "fragment" || type == "pixel")
 				return GL_FRAGMENT_SHADER;
 			
-			LN_CORE_ASSERT(false, "Unknown shader type!");
+			LNX_CORE_ASSERT(false, "Unknown shader type!");
 			return 0;
 		}
 		
@@ -30,7 +30,7 @@ namespace Lunex {
 				case GL_VERTEX_SHADER:   return shaderc_glsl_vertex_shader;
 				case GL_FRAGMENT_SHADER: return shaderc_glsl_fragment_shader;
 			}
-			LN_CORE_ASSERT(false);
+			LNX_CORE_ASSERT(false);
 			return (shaderc_shader_kind)0;
 		}
 		
@@ -39,7 +39,7 @@ namespace Lunex {
 				case GL_VERTEX_SHADER:   return "GL_VERTEX_SHADER";
 				case GL_FRAGMENT_SHADER: return "GL_FRAGMENT_SHADER";
 			}
-			LN_CORE_ASSERT(false);
+			LNX_CORE_ASSERT(false);
 			return nullptr;
 		}
 		
@@ -59,7 +59,7 @@ namespace Lunex {
 				case GL_VERTEX_SHADER:    return ".cached_opengl.vert";
 				case GL_FRAGMENT_SHADER:  return ".cached_opengl.frag";
 			}
-			LN_CORE_ASSERT(false);
+			LNX_CORE_ASSERT(false);
 			return "";
 		}
 		
@@ -68,7 +68,7 @@ namespace Lunex {
 				case GL_VERTEX_SHADER:    return ".cached_vulkan.vert";
 				case GL_FRAGMENT_SHADER:  return ".cached_vulkan.frag";
 			}
-			LN_CORE_ASSERT(false);
+			LNX_CORE_ASSERT(false);
 			return "";
 		}
 	}
@@ -133,7 +133,7 @@ namespace Lunex {
 			}
 		}
 		else {
-			LN_CORE_ASSERT(false, "Could not open file '{0}'", filepath);
+			LNX_CORE_ASSERT(false, "Could not open file '{0}'", filepath);
 		}
 		
 		return result;
@@ -149,13 +149,13 @@ namespace Lunex {
 		size_t pos = source.find(typeToken, 0); //Start of shader type declaration line
 		while (pos != std::string::npos) {
 			size_t eol = source.find_first_of("\r\n", pos); //End of shader type declaration line
-			LN_CORE_ASSERT(eol != std::string::npos, "Syntax error");
+			LNX_CORE_ASSERT(eol != std::string::npos, "Syntax error");
 			size_t begin = pos + typeTokenLength + 1; //Start of shader type name (after "#type " keyword)
 			std::string type = source.substr(begin, eol - begin);
-			LN_CORE_ASSERT(Utils::ShaderTypeFromString(type), "Invalid shader type specified");
+			LNX_CORE_ASSERT(Utils::ShaderTypeFromString(type), "Invalid shader type specified");
 			
 			size_t nextLinePos = source.find_first_not_of("\r\n", eol); //Start of shader code after shader type declaration line
-			LN_CORE_ASSERT(nextLinePos != std::string::npos, "Syntax error");
+			LNX_CORE_ASSERT(nextLinePos != std::string::npos, "Syntax error");
 			pos = source.find(typeToken, nextLinePos); //Start of next shader type declaration line
 			
 			shaderSources[Utils::ShaderTypeFromString(type)] = (pos == std::string::npos) ? source.substr(nextLinePos) : source.substr(nextLinePos, pos - nextLinePos);
@@ -196,7 +196,7 @@ namespace Lunex {
 				shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(source, Utils::GLShaderStageToShaderC(stage), m_FilePath.c_str(), options);
 				if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
 					LNX_LOG_ERROR(module.GetErrorMessage());
-					LN_CORE_ASSERT(false);
+					LNX_CORE_ASSERT(false);
 				}
 				
 				shaderData[stage] = std::vector<uint32_t>(module.cbegin(), module.cend());
@@ -251,7 +251,7 @@ namespace Lunex {
 				shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(source, Utils::GLShaderStageToShaderC(stage), m_FilePath.c_str());
 				if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
 					LNX_LOG_ERROR(module.GetErrorMessage());
-					LN_CORE_ASSERT(false);
+					LNX_CORE_ASSERT(false);
 				}
 				
 				shaderData[stage] = std::vector<uint32_t>(module.cbegin(), module.cend());

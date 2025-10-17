@@ -19,11 +19,11 @@ namespace Lunex {
 			case GL_DEBUG_SEVERITY_NOTIFICATION: LNX_LOG_TRACE(message); return;
 		}
 		
-		LN_CORE_ASSERT(false, "Unknown severity level!");
+		LNX_CORE_ASSERT(false, "Unknown severity level!");
 	}
 	
 	void OpenGLRendererAPI::Init() {
-		#ifdef LN_DEBUG
+		#ifdef LNX_DEBUG
 			glEnable(GL_DEBUG_OUTPUT);
 			glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 			glDebugMessageCallback(OpenGLMessageCallback, nullptr);
