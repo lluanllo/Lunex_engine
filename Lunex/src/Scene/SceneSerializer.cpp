@@ -16,6 +16,7 @@ namespace YAML {
 			node.push_back(rhs.x);
 			node.push_back(rhs.y);
 			node.push_back(rhs.z);
+			node.SetStyle(EmitterStyle::Flow);
 			return node;
 		}
 		
@@ -38,6 +39,7 @@ namespace YAML {
 			node.push_back(rhs.y);
 			node.push_back(rhs.z);
 			node.push_back(rhs.w);
+			node.SetStyle(EmitterStyle::Flow);
 			return node;
 		}
 		
@@ -131,6 +133,7 @@ namespace Lunex {
 			
 			out << YAML::EndMap; // SpriteRendererComponent
 		}
+		
 		out << YAML::EndMap; // Entity
 	}
 	
@@ -139,27 +142,18 @@ namespace Lunex {
 		out << YAML::BeginMap;
 		out << YAML::Key << "Scene" << YAML::Value << "Untitled";
 		out << YAML::Key << "Entities" << YAML::Value << YAML::BeginSeq;
-		
-		auto view = m_Scene->m_Registry.view<entt::entity>();
-		for (auto entityID : view) {
-			Entity entity = { entityID, m_Scene.get() };
-			if (!entity)
-				return;
-			
-			SerializeEntity(out, entity);
-		}
-		
+		m_Scene->m_Registry.view<entt::entity>().each([&](auto entityID) {
+				Entity entity = { entityID, m_Scene.get() };
+				if (!entity)
+					return;
+				
+				SerializeEntity(out, entity);
+			});
 		out << YAML::EndSeq;
 		out << YAML::EndMap;
 		
 		std::ofstream fout(filepath);
-		if (!fout.is_open()) {
-			LNX_LOG_ERROR("Failed to open file for writing: {0}", filepath);
-			return;
-		}
-		
 		fout << out.c_str();
-		fout.close();
 	}
 	
 	void SceneSerializer::SerializeRuntime(const std::string& filepath) {
@@ -168,11 +162,14 @@ namespace Lunex {
 	}
 	
 	bool SceneSerializer::Deserialize(const std::string& filepath) {
-		std::ifstream stream(filepath);
-		std::stringstream strStream;
-		strStream << stream.rdbuf();
+		YAML::Node data;
+		try {
+			data = YAML::LoadFile(filepath);
+		}
+		catch (YAML::ParserException e) {
+			return false;
+		}
 		
-		YAML::Node data = YAML::Load(strStream.str());
 		if (!data["Scene"])
 			return false;
 		
@@ -194,7 +191,8 @@ namespace Lunex {
 				Entity deserializedEntity = m_Scene->CreateEntity(name);
 				
 				auto transformComponent = entity["TransformComponent"];
-				if (transformComponent) {
+				if (transformComponent)
+				{
 					// Entities always have transforms
 					auto& tc = deserializedEntity.GetComponent<TransformComponent>();
 					tc.Translation = transformComponent["Translation"].as<glm::vec3>();
@@ -206,7 +204,7 @@ namespace Lunex {
 				if (cameraComponent) {
 					auto& cc = deserializedEntity.AddComponent<CameraComponent>();
 					
-					const auto cameraProps = cameraComponent["Camera"];
+					auto cameraProps = cameraComponent["Camera"];
 					cc.Camera.SetProjectionType((SceneCamera::ProjectionType)cameraProps["ProjectionType"].as<int>());
 					
 					cc.Camera.SetPerspectiveVerticalFOV(cameraProps["PerspectiveFOV"].as<float>());
@@ -228,7 +226,8 @@ namespace Lunex {
 				}
 			}
 		}
-		return false;
+		
+		return true;
 	}
 	
 	bool SceneSerializer::DeserializeRuntime(const std::string& filepath) {
