@@ -16,7 +16,7 @@ namespace Lunex{
 		
 		LNX_PROFILE_FUNCTION();
 		
-		LN_CORE_ASSERT(s_Instance == nullptr, "Application already exists!");
+		LNX_CORE_ASSERT(s_Instance == nullptr, "Application already exists!");
 		s_Instance = this;
 		
 		m_Window = Window::Create(WindowProps(name));

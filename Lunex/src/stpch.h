@@ -17,6 +17,6 @@
 
 #include "Debug/Instrumentor.h"
 
-#ifdef LN_PLATFORM_WINDOWS
+#ifdef LNX_PLATFORM_WINDOWS
 	#include <Windows.h>
 #endif

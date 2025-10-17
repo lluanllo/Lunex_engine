@@ -26,7 +26,7 @@ namespace Lunex {
 	}
 	
 	void SceneCamera::SetViewportSize(uint32_t width, uint32_t height) {
-		LN_CORE_ASSERT(width > 0 && height > 0);
+		LNX_CORE_ASSERT(width > 0 && height > 0);
 		m_AspectRatio = (float)width / (float)height;
 		RecalculateProjection();
 	}

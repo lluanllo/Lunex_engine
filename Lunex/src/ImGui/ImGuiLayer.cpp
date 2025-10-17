@@ -35,7 +35,7 @@ namespace Lunex {
 		//io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoTaskBarIcons;
 		//io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoMerge;
 		
-		float m_FontSize = 15.0f;
+		float m_FontSize = 16.0f;
 		
 		io.Fonts->AddFontFromFileTTF("assets/Fonts/JetBrainsMono/JetBrainsMono-Bold.ttf", m_FontSize);
 		
@@ -107,149 +107,148 @@ namespace Lunex {
 		auto& colors = ImGui::GetStyle().Colors;
 		auto& style = ImGui::GetStyle();
 		
-		// ===== CONFIGURACIÓN DE BORDES Y ESTILO TIPO UNREAL =====
-		style.WindowPadding = ImVec2(8, 8);
-		style.WindowRounding = 2.0f;  // Unreal usa esquinas rectas
-		style.FramePadding = ImVec2(5, 3);
-		style.FrameRounding = 2.0f;  // Bordes muy sutiles
-		style.ItemSpacing = ImVec2(8, 4);
-		style.ItemInnerSpacing = ImVec2(6, 4);
-		style.IndentSpacing = 21.0f;
-		style.ScrollbarSize = 14.0f;
-		style.ScrollbarRounding = 0.0f;
-		style.GrabMinSize = 10.0f;
-		style.GrabRounding = 2.0f;
-		style.TabRounding = 0.0f;
-		style.ChildRounding = 0.0f;
-		style.PopupRounding = 0.0f;
+		// ===== CONFIGURACIÓN DE ESTILO MEJORADO =====
+		style.WindowPadding = ImVec2(10, 10);
+		style.WindowRounding = 4.0f;
+		style.WindowTitleAlign = ImVec2(0.5f, 0.5f);  // Título centrado
+		style.FramePadding = ImVec2(6, 4);
+		style.FrameRounding = 3.0f;
+		style.ItemSpacing = ImVec2(10, 6);
+		style.ItemInnerSpacing = ImVec2(6, 5);
+		style.IndentSpacing = 22.0f;
+		style.ScrollbarSize = 16.0f;
+		style.ScrollbarRounding = 4.0f;
+		style.GrabMinSize = 12.0f;
+		style.GrabRounding = 3.0f;
+		style.TabRounding = 3.0f;
+		style.ChildRounding = 3.0f;
+		style.PopupRounding = 3.0f;
 		
-		// Bordes
+		// Bordes más definidos
 		style.WindowBorderSize = 1.0f;
 		style.FrameBorderSize = 1.0f;
 		style.PopupBorderSize = 1.0f;
+		style.ChildBorderSize = 1.0f;
 		
-		// ===== PALETA DE COLORES ESTILO UNREAL ENGINE =====
-		// Grises oscuros con acentos naranjas/amarillos
+		// ===== PALETA DE COLORES MEJORADA =====
+		// Fondo principal más oscuro y limpio
+		const ImVec4 bgDarkest = ImVec4{ 0.08f, 0.08f, 0.09f, 1.0f };
+		const ImVec4 bgDark = ImVec4{ 0.11f, 0.11f, 0.12f, 1.0f };
+		const ImVec4 bgMedium = ImVec4{ 0.14f, 0.14f, 0.15f, 1.0f };
+		const ImVec4 bgLight = ImVec4{ 0.18f, 0.18f, 0.19f, 1.0f };
+		const ImVec4 bgLighter = ImVec4{ 0.22f, 0.22f, 0.23f, 1.0f };
 		
-		// Colores base - Grises muy oscuros
-		const ImVec4 unrealDarkest = ImVec4{ 0.04f, 0.04f, 0.04f, 1.0f };        // Negro casi puro
-		const ImVec4 unrealDarkBg = ImVec4{ 0.06f, 0.06f, 0.06f, 1.0f };         // Fondo principal
-		const ImVec4 unrealMediumBg = ImVec4{ 0.09f, 0.09f, 0.09f, 1.0f };       // Fondo medio
-		const ImVec4 unrealLightBg = ImVec4{ 0.12f, 0.12f, 0.12f, 1.0f };        // Fondo claro
-		const ImVec4 unrealLightest = ImVec4{ 0.18f, 0.18f, 0.18f, 1.0f };       // Gris más claro
+		// Acento naranja más vibrante
+		const ImVec4 accent = ImVec4{ 1.0f, 0.60f, 0.0f, 1.0f };
+		const ImVec4 accentHover = ImVec4{ 1.0f, 0.70f, 0.20f, 1.0f };
+		const ImVec4 accentActive = ImVec4{ 1.0f, 0.55f, 0.0f, 1.0f };
+		const ImVec4 accentDim = ImVec4{ 0.7f, 0.42f, 0.0f, 1.0f };
 		
-		// Acentos - Naranja/Amarillo característico de Unreal
-		const ImVec4 unrealAccent = ImVec4{ 1.0f, 0.55f, 0.0f, 1.0f };           // Naranja brillante
-		const ImVec4 unrealAccentHover = ImVec4{ 1.0f, 0.65f, 0.2f, 1.0f };      // Naranja hover
-		const ImVec4 unrealAccentActive = ImVec4{ 0.9f, 0.45f, 0.0f, 1.0f };     // Naranja activo
-		const ImVec4 unrealAccentDim = ImVec4{ 0.6f, 0.35f, 0.0f, 1.0f };        // Naranja oscuro
+		// Selección y hover mejorados
+		const ImVec4 selection = ImVec4{ 0.26f, 0.26f, 0.27f, 1.0f };
+		const ImVec4 selectionHover = ImVec4{ 0.32f, 0.32f, 0.33f, 1.0f };
+		const ImVec4 selectionActive = ImVec4{ 0.38f, 0.38f, 0.39f, 1.0f };
 		
-		// Selección - Gris claro brillante para selecciones
-		const ImVec4 unrealSelection = ImVec4{ 0.28f, 0.28f, 0.28f, 1.0f };      // Gris selección
-		const ImVec4 unrealSelectionHover = ImVec4{ 0.35f, 0.35f, 0.35f, 1.0f }; // Gris hover
-		const ImVec4 unrealSelectionActive = ImVec4{ 0.42f, 0.42f, 0.42f, 1.0f };// Gris activo
+		// Texto con mejor contraste
+		const ImVec4 text = ImVec4{ 0.95f, 0.95f, 0.95f, 1.0f };
+		const ImVec4 textDisabled = ImVec4{ 0.50f, 0.50f, 0.50f, 1.0f };
+		const ImVec4 textBright = ImVec4{ 1.0f, 1.0f, 1.0f, 1.0f };
 		
-		// Texto
-		const ImVec4 unrealText = ImVec4{ 0.90f, 0.90f, 0.90f, 1.0f };           // Texto principal
-		const ImVec4 unrealTextDisabled = ImVec4{ 0.45f, 0.45f, 0.45f, 1.0f };   // Texto deshabilitado
-		const ImVec4 unrealTextBright = ImVec4{ 1.0f, 1.0f, 1.0f, 1.0f };        // Texto brillante
-		
-		// Bordes
-		const ImVec4 unrealBorder = ImVec4{ 0.15f, 0.15f, 0.15f, 1.0f };         // Borde sutil
-		const ImVec4 unrealBorderLight = ImVec4{ 0.20f, 0.20f, 0.20f, 1.0f };    // Borde claro
+		// Bordes con contraste sutil
+		const ImVec4 border = ImVec4{ 0.20f, 0.20f, 0.21f, 1.0f };
+		const ImVec4 borderLight = ImVec4{ 0.28f, 0.28f, 0.29f, 1.0f };
+		const ImVec4 borderAccent = ImVec4{ 0.40f, 0.28f, 0.10f, 1.0f };
 		
 		// ===== APLICACIÓN DE COLORES =====
 		
-		// Windows
-		colors[ImGuiCol_WindowBg] = unrealDarkBg;
-		colors[ImGuiCol_ChildBg] = unrealMediumBg;
-		colors[ImGuiCol_PopupBg] = ImVec4{ 0.08f, 0.08f, 0.08f, 0.98f };
+		// Windows con gradiente sutil
+		colors[ImGuiCol_WindowBg] = bgDark;
+		colors[ImGuiCol_ChildBg] = bgMedium;
+		colors[ImGuiCol_PopupBg] = ImVec4{ 0.10f, 0.10f, 0.11f, 0.98f };
 		
-		// Headers (TreeNodes, Collapsibles) - HOVER BRILLANTE PARA HIERARCHY
-		colors[ImGuiCol_Header] = unrealSelection;                               // Seleccionado
-		colors[ImGuiCol_HeaderHovered] = unrealSelectionHover;                   // Hover MÁS BRILLANTE
-		colors[ImGuiCol_HeaderActive] = unrealSelectionActive;                   // Activo
+		// Headers mejorados con acento naranja
+		colors[ImGuiCol_Header] = ImVec4{ accent.x, accent.y, accent.z, 0.35f };
+		colors[ImGuiCol_HeaderHovered] = ImVec4{ accent.x, accent.y, accent.z, 0.50f };
+		colors[ImGuiCol_HeaderActive] = ImVec4{ accent.x, accent.y, accent.z, 0.65f };
 		
-		// Buttons
-		colors[ImGuiCol_Button] = unrealLightBg;
-		colors[ImGuiCol_ButtonHovered] = unrealLightest;
-		colors[ImGuiCol_ButtonActive] = unrealSelection;
+		// Buttons con mejor feedback visual
+		colors[ImGuiCol_Button] = bgLight;
+		colors[ImGuiCol_ButtonHovered] = bgLighter;
+		colors[ImGuiCol_ButtonActive] = selection;
 		
-		// Frame BG (inputs, checkboxes, etc.)
-		colors[ImGuiCol_FrameBg] = unrealDarkest;
-		colors[ImGuiCol_FrameBgHovered] = unrealMediumBg;
-		colors[ImGuiCol_FrameBgActive] = unrealLightBg;
+		// Frame BG con más profundidad
+		colors[ImGuiCol_FrameBg] = bgDarkest;
+		colors[ImGuiCol_FrameBgHovered] = bgMedium;
+		colors[ImGuiCol_FrameBgActive] = bgLight;
 		
-		// Tabs
-		colors[ImGuiCol_Tab] = unrealDarkBg;
-		colors[ImGuiCol_TabHovered] = unrealLightBg;
-		colors[ImGuiCol_TabActive] = unrealMediumBg;
-		colors[ImGuiCol_TabUnfocused] = unrealDarkBg;
-		colors[ImGuiCol_TabUnfocusedActive] = unrealDarkBg;
+		// Tabs con mejor separación visual
+		colors[ImGuiCol_Tab] = bgDark;
+		colors[ImGuiCol_TabHovered] = bgLighter;
+		colors[ImGuiCol_TabActive] = bgMedium;
+		colors[ImGuiCol_TabUnfocused] = bgDarkest;
+		colors[ImGuiCol_TabUnfocusedActive] = bgDark;
 		
-		// Title Bar
-		colors[ImGuiCol_TitleBg] = unrealDarkest;
-		colors[ImGuiCol_TitleBgActive] = unrealDarkBg;
-		colors[ImGuiCol_TitleBgCollapsed] = unrealDarkest;
+		// Title Bar con acento
+		colors[ImGuiCol_TitleBg] = bgDarkest;
+		colors[ImGuiCol_TitleBgActive] = ImVec4{ 0.12f, 0.12f, 0.13f, 1.0f };
+		colors[ImGuiCol_TitleBgCollapsed] = bgDarkest;
 		
-		// Scrollbar
-		colors[ImGuiCol_ScrollbarBg] = unrealDarkBg;
-		colors[ImGuiCol_ScrollbarGrab] = unrealLightBg;
-		colors[ImGuiCol_ScrollbarGrabHovered] = unrealLightest;
-		colors[ImGuiCol_ScrollbarGrabActive] = unrealSelection;
+		// Scrollbar elegante
+		colors[ImGuiCol_ScrollbarBg] = bgDark;
+		colors[ImGuiCol_ScrollbarGrab] = bgLight;
+		colors[ImGuiCol_ScrollbarGrabHovered] = bgLighter;
+		colors[ImGuiCol_ScrollbarGrabActive] = selection;
 		
-		// Check Mark & Radio Button - Acento naranja
-		colors[ImGuiCol_CheckMark] = unrealAccent;
+		// Check Mark y Slider con acento naranja brillante
+		colors[ImGuiCol_CheckMark] = accent;
+		colors[ImGuiCol_SliderGrab] = accent;
+		colors[ImGuiCol_SliderGrabActive] = accentHover;
 		
-		// Slider - Acento naranja
-		colors[ImGuiCol_SliderGrab] = unrealAccent;
-		colors[ImGuiCol_SliderGrabActive] = unrealAccentHover;
+		// Resize Grip más visible
+		colors[ImGuiCol_ResizeGrip] = ImVec4{ 0.26f, 0.26f, 0.27f, 0.60f };
+		colors[ImGuiCol_ResizeGripHovered] = ImVec4{ 0.32f, 0.32f, 0.33f, 0.80f };
+		colors[ImGuiCol_ResizeGripActive] = ImVec4{ accent.x, accent.y, accent.z, 0.95f };
 		
-		// Resize Grip
-		colors[ImGuiCol_ResizeGrip] = ImVec4{ 0.20f, 0.20f, 0.20f, 0.5f };
-		colors[ImGuiCol_ResizeGripHovered] = ImVec4{ 0.28f, 0.28f, 0.28f, 0.67f };
-		colors[ImGuiCol_ResizeGripActive] = ImVec4{ 0.35f, 0.35f, 0.35f, 0.95f };
-		
-		// Plot (gráficos)
-		colors[ImGuiCol_PlotLines] = unrealAccent;
-		colors[ImGuiCol_PlotLinesHovered] = unrealAccentHover;
-		colors[ImGuiCol_PlotHistogram] = unrealAccentDim;
-		colors[ImGuiCol_PlotHistogramHovered] = unrealAccent;
+		// Plot con colores vibrantes
+		colors[ImGuiCol_PlotLines] = accent;
+		colors[ImGuiCol_PlotLinesHovered] = accentHover;
+		colors[ImGuiCol_PlotHistogram] = accentDim;
+		colors[ImGuiCol_PlotHistogramHovered] = accent;
 		
 		// Text
-		colors[ImGuiCol_Text] = unrealText;
-		colors[ImGuiCol_TextDisabled] = unrealTextDisabled;
-		colors[ImGuiCol_TextSelectedBg] = ImVec4{ 1.0f, 0.55f, 0.0f, 0.35f };    // Selección con acento naranja
+		colors[ImGuiCol_Text] = text;
+		colors[ImGuiCol_TextDisabled] = textDisabled;
+		colors[ImGuiCol_TextSelectedBg] = ImVec4{ accent.x, accent.y, accent.z, 0.40f };
 		
-		// Border
-		colors[ImGuiCol_Border] = unrealBorder;
-		colors[ImGuiCol_BorderShadow] = ImVec4{ 0.0f, 0.0f, 0.0f, 0.0f };
+		// Border con mejor contraste
+		colors[ImGuiCol_Border] = border;
+		colors[ImGuiCol_BorderShadow] = ImVec4{ 0.0f, 0.0f, 0.0f, 0.3f };
 		
-		// Separator (líneas divisorias)
-		colors[ImGuiCol_Separator] = unrealBorder;
-		colors[ImGuiCol_SeparatorHovered] = unrealBorderLight;
-		colors[ImGuiCol_SeparatorActive] = unrealLightest;
+		// Separator más visible
+		colors[ImGuiCol_Separator] = borderLight;
+		colors[ImGuiCol_SeparatorHovered] = ImVec4{ accent.x, accent.y, accent.z, 0.60f };
+		colors[ImGuiCol_SeparatorActive] = accent;
 		
-		// Docking
-		colors[ImGuiCol_DockingPreview] = ImVec4{ 1.0f, 0.55f, 0.0f, 0.3f };
-		colors[ImGuiCol_DockingEmptyBg] = unrealDarkBg;
+		// Docking con acento
+		colors[ImGuiCol_DockingPreview] = ImVec4{ accent.x, accent.y, accent.z, 0.40f };
+		colors[ImGuiCol_DockingEmptyBg] = bgDark;
 		
-		// Table
-		colors[ImGuiCol_TableHeaderBg] = unrealMediumBg;
-		colors[ImGuiCol_TableBorderStrong] = unrealBorder;
-		colors[ImGuiCol_TableBorderLight] = ImVec4{ 0.12f, 0.12f, 0.12f, 1.0f };
+		// Table mejorada
+		colors[ImGuiCol_TableHeaderBg] = bgMedium;
+		colors[ImGuiCol_TableBorderStrong] = border;
+		colors[ImGuiCol_TableBorderLight] = ImVec4{ 0.16f, 0.16f, 0.17f, 1.0f };
 		colors[ImGuiCol_TableRowBg] = ImVec4{ 0.0f, 0.0f, 0.0f, 0.0f };
-		colors[ImGuiCol_TableRowBgAlt] = ImVec4{ 1.0f, 1.0f, 1.0f, 0.02f };
+		colors[ImGuiCol_TableRowBgAlt] = ImVec4{ 1.0f, 1.0f, 1.0f, 0.03f };
 		
-		// Drag and Drop
-		colors[ImGuiCol_DragDropTarget] = unrealAccentHover;
+		// Drag and Drop más evidente
+		colors[ImGuiCol_DragDropTarget] = ImVec4{ accent.x, accent.y, accent.z, 0.90f };
 		
-		// Nav (navegación con teclado/gamepad)
-		colors[ImGuiCol_NavHighlight] = unrealAccent;
+		// Nav con acento
+		colors[ImGuiCol_NavHighlight] = accent;
 		colors[ImGuiCol_NavWindowingHighlight] = ImVec4{ 1.0f, 1.0f, 1.0f, 0.70f };
-		colors[ImGuiCol_NavWindowingDimBg] = ImVec4{ 0.0f, 0.0f, 0.0f, 0.60f };
+		colors[ImGuiCol_NavWindowingDimBg] = ImVec4{ 0.0f, 0.0f, 0.0f, 0.65f };
 		
 		// Modal window dimming
-		colors[ImGuiCol_ModalWindowDimBg] = ImVec4{ 0.0f, 0.0f, 0.0f, 0.70f };
+		colors[ImGuiCol_ModalWindowDimBg] = ImVec4{ 0.0f, 0.0f, 0.0f, 0.75f };
 	}
 }

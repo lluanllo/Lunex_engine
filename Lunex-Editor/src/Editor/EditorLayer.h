@@ -2,6 +2,7 @@
 
 #include <Lunex.h>
 #include "../Panels/SceneHierarchyPanel.h"
+#include "../Panels/ContentBrowserPanel.h"
 
 #include "Renderer/EditorCamera.h"
 
@@ -24,6 +25,7 @@ namespace Lunex {
 			
 			void NewScene();
 			void OpenScene();
+			void OpenScene(const std::filesystem::path& path);
 			void SaveSceneAs();
 			
 		private:
@@ -56,5 +58,6 @@ namespace Lunex {
 			
 			// Panels
 			SceneHierarchyPanel m_SceneHierarchyPanel;
+			ContentBrowserPanel m_ContentBrowserPanel;
 	};
 }

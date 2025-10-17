@@ -36,10 +36,15 @@ LibraryDir["VulkanSDK"] = "%{VULKAN_SDK}/Lib"
 Library = {}
 Library["Vulkan"] = "%{LibraryDir.VulkanSDK}/vulkan-1.lib"
 
--- Usar shaderc_combined para evitar múltiples dependencias
-Library["ShaderC"] = "%{LibraryDir.VulkanSDK}/shaderc_combined.lib"
-Library["SPIRV_Cross"] = "%{LibraryDir.VulkanSDK}/spirv-cross-core.lib"
-Library["SPIRV_Cross_GLSL"] = "%{LibraryDir.VulkanSDK}/spirv-cross-glsl.lib"
+-- ✅ Usar versiones específicas para Debug y Release
+Library["ShaderC_Debug"] = "%{LibraryDir.VulkanSDK}/shaderc_combinedd.lib"
+Library["ShaderC_Release"] = "%{LibraryDir.VulkanSDK}/shaderc_combined.lib"
+
+Library["SPIRV_Cross_Debug"] = "%{LibraryDir.VulkanSDK}/spirv-cross-cored.lib"
+Library["SPIRV_Cross_Release"] = "%{LibraryDir.VulkanSDK}/spirv-cross-core.lib"
+
+Library["SPIRV_Cross_GLSL_Debug"] = "%{LibraryDir.VulkanSDK}/spirv-cross-glsld.lib"
+Library["SPIRV_Cross_GLSL_Release"] = "%{LibraryDir.VulkanSDK}/spirv-cross-glsl.lib"
 
 -- ============================================================================
 -- DEPENDENCIES
@@ -242,7 +247,7 @@ project "Lunex"
     kind "StaticLib"
     language "C++"
     cppdialect "C++20"
-    staticruntime "off"  -- ✅ Cambio a dinámico
+    staticruntime "off"
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
@@ -311,9 +316,9 @@ project "Lunex"
         
         links
         {
-            "%{Library.ShaderC}",
-            "%{Library.SPIRV_Cross}",
-            "%{Library.SPIRV_Cross_GLSL}"
+            "%{Library.ShaderC_Debug}",
+            "%{Library.SPIRV_Cross_Debug}",
+            "%{Library.SPIRV_Cross_GLSL_Debug}"
         }
 
     filter "configurations:Release"
@@ -323,9 +328,9 @@ project "Lunex"
         
         links
         {
-            "%{Library.ShaderC}",
-            "%{Library.SPIRV_Cross}",
-            "%{Library.SPIRV_Cross_GLSL}"
+            "%{Library.ShaderC_Release}",
+            "%{Library.SPIRV_Cross_Release}",
+            "%{Library.SPIRV_Cross_GLSL_Release}"
         }
 
     filter "configurations:Dist"
@@ -335,9 +340,9 @@ project "Lunex"
         
         links
         {
-            "%{Library.ShaderC}",
-            "%{Library.SPIRV_Cross}",
-            "%{Library.SPIRV_Cross_GLSL}"
+            "%{Library.ShaderC_Release}",
+            "%{Library.SPIRV_Cross_Release}",
+            "%{Library.SPIRV_Cross_GLSL_Release}"
         }
 
 project "Sandbox"

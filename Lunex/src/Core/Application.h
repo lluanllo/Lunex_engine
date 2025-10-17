@@ -19,7 +19,7 @@ namespace Lunex {
 		char** Args = nullptr;
 		
 		const char* operator[](int index) const	{
-			LN_CORE_ASSERT(index < Count);
+			LNX_CORE_ASSERT(index < Count);
 			return Args[index];
 		}
 	};

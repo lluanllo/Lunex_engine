@@ -26,7 +26,7 @@ namespace Lunex {
 			case ShaderDataType::Mat4:   return 4 * 4 * 4;
 			case ShaderDataType::Bool:   return 1;
 		}
-		LN_CORE_ASSERT(false, "Unknown ShaderDataType!");
+		LNX_CORE_ASSERT(false, "Unknown ShaderDataType!");
 		return 0; // Should never reach here
 	}
 	
@@ -59,7 +59,7 @@ namespace Lunex {
 				case ShaderDataType::Bool:    return 1;
 			}
 			
-			LN_CORE_ASSERT(false, "Unknown ShaderDataType!");
+			LNX_CORE_ASSERT(false, "Unknown ShaderDataType!");
 			return 0;
 		}
 	};

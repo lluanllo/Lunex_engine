@@ -4,6 +4,7 @@
 #include "Log/Log.h"
 #include "Scene/Scene.h"
 #include "Scene/Entity.h"
+#include "Renderer/Texture.h"
 
 namespace Lunex {
 	class SceneHierarchyPanel {
@@ -25,5 +26,9 @@ namespace Lunex {
 		private:
 			Ref<Scene> m_Context;
 			Entity m_SelectionContext;
+			
+			// Iconos para la jerarquía
+			Ref<Texture2D> m_CameraIcon;
+			Ref<Texture2D> m_EntityIcon;
 	};
 }
