@@ -14,6 +14,16 @@ namespace Lunex {
 	
 	SceneHierarchyPanel::SceneHierarchyPanel(const Ref<Scene>& context) {
 		SetContext(context);
+		
+		// Cargar iconos para la jerarquía (usar rutas absolutas o relativas al working directory)
+		m_CameraIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/CameraIcon.png");
+		m_EntityIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/EntityIcon.png");
+		
+		// Debug: verificar si los iconos se cargaron correctamente
+		if (!m_CameraIcon)
+			LNX_LOG_ERROR("Failed to load Camera Icon!");
+		if (!m_EntityIcon)
+			LNX_LOG_ERROR("Failed to load Entity Icon!");
 	}
 	
 	void SceneHierarchyPanel::SetContext(const Ref<Scene>& context) {
@@ -24,9 +34,9 @@ namespace Lunex {
 	void SceneHierarchyPanel::OnImGuiRender() {
 		ImGui::Begin("Scene Hierarchy");
 		
-		ImGui::PushStyleColor(ImGuiCol_Header, ImVec4{ 1.0f, 0.55f, 0.0f, 0.4f });           // Seleccionado - Naranja
-		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4{ 1.0f, 0.55f, 0.0f, 0.6f });    // Hover - Naranja más brillante
-		ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.8f });     // Activo - Naranja intenso
+		ImGui::PushStyleColor(ImGuiCol_Header, ImVec4{ 1.0f, 0.55f, 0.0f, 0.4f });
+		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4{ 1.0f, 0.55f, 0.0f, 0.6f });
+		ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.8f });
 		
 		auto view = m_Context->m_Registry.view<TagComponent>();
 		for (auto entityID : view) {
@@ -65,7 +75,33 @@ namespace Lunex {
 		
 		ImGuiTreeNodeFlags flags = ((m_SelectionContext == entity) ? ImGuiTreeNodeFlags_Selected : 0) | ImGuiTreeNodeFlags_OpenOnArrow;
 		flags |= ImGuiTreeNodeFlags_SpanAvailWidth;
+		
+		// Determinar qué icono usar
+		Ref<Texture2D> icon = entity.HasComponent<CameraComponent>() ? m_CameraIcon : m_EntityIcon;
+		
+		// Guardar el cursor actual
+		ImVec2 cursorPos = ImGui::GetCursorPos();
+		
+		// Si hay icono, dibujarlo
+		if (icon) {
+			float iconSize = ImGui::GetFrameHeight();
+			
+			// Dibujar el icono
+			ImGui::Image(
+				(void*)(intptr_t)icon->GetRendererID(),
+				ImVec2(iconSize, iconSize),
+				ImVec2(0, 1),
+				ImVec2(1, 0)
+			);
+			
+			// Mover cursor al lado del icono
+			ImGui::SameLine();
+			ImGui::SetCursorPosY(cursorPos.y);
+		}
+		
+		// Dibujar el TreeNode
 		bool opened = ImGui::TreeNodeEx((void*)(uint64_t)(uint32_t)entity, flags, tag.c_str());
+		
 		if (ImGui::IsItemClicked()) {
 			m_SelectionContext = entity;
 		}
@@ -79,9 +115,9 @@ namespace Lunex {
 		}
 		
 		if (opened) {
-			ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
-			bool opened = ImGui::TreeNodeEx((void*)9817239, flags, tag.c_str());
-			if (opened)
+			ImGuiTreeNodeFlags childFlags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+			bool childOpened = ImGui::TreeNodeEx((void*)9817239, childFlags, tag.c_str());
+			if (childOpened)
 				ImGui::TreePop();
 			ImGui::TreePop();
 		}
@@ -323,7 +359,7 @@ namespace Lunex {
 			
 			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
 			ImGui::DragFloat("Tiling Factor", &component.TilingFactor, 0.1f, 0.0f, 100.0f);
-			ImGui::PopStyleColor();  // AÑADIR ESTA LÍNEA
-			});
+			ImGui::PopStyleColor();
+		});
 	}
 }
