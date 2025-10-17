@@ -3,7 +3,7 @@
 #include "Core/Core.h"
 #include "Application.h"
 
-#ifdef LN_PLATFORM_WINDOWS
+#ifdef LNX_PLATFORM_WINDOWS
 	
 	extern Lunex::Ref<Lunex::Application> Lunex::CreateApplication(ApplicationCommandLineArgs args);
 	

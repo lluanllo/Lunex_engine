@@ -21,7 +21,7 @@ namespace Lunex {
 			case Lunex::ShaderDataType::Bool:   return GL_BOOL;
 		}
 		
-		LN_CORE_ASSERT(false, "Unknown ShaderDataType!");
+		LNX_CORE_ASSERT(false, "Unknown ShaderDataType!");
 		return 0;
 	}
 	
@@ -47,7 +47,7 @@ namespace Lunex {
 	
 	void OpenGLVertexArray::AddVertexBuffer(const Ref<VertexBuffer>& vertexBuffer) {
 		LNX_PROFILE_FUNCTION();
-		LN_CORE_ASSERT(vertexBuffer->GetLayout().GetElements().size(), "Vertex Buffer has no layout!");
+		LNX_CORE_ASSERT(vertexBuffer->GetLayout().GetElements().size(), "Vertex Buffer has no layout!");
 		
 		glBindVertexArray(m_RendererID);
 		vertexBuffer->Bind();
@@ -100,7 +100,7 @@ namespace Lunex {
 					break;
 				}
 				default:
-					LN_CORE_ASSERT(false, "Unknown ShaderDataType!");
+					LNX_CORE_ASSERT(false, "Unknown ShaderDataType!");
 				}
 		}
 		

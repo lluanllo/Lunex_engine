@@ -37,7 +37,7 @@ namespace Lunex {
 		if (s_GLFWInitialized == 0) {
 			LNX_PROFILE_SCOPE("glfwInit");
 			int success = glfwInit();
-			LN_CORE_ASSERT(success, "Could not initialize GLFW!");
+			LNX_CORE_ASSERT(success, "Could not initialize GLFW!");
 			glfwSetErrorCallback(GLFWErrorCallback);
 			s_GLFWInitialized = true;
 		}
@@ -45,7 +45,7 @@ namespace Lunex {
 			LNX_PROFILE_SCOPE("glfwCreateWindow");
 			m_Window = glfwCreateWindow((int)m_Data.Width, (int)m_Data.Height, m_Data.Title.c_str(), nullptr, nullptr);
 			++s_GLFWInitialized;
-			LN_CORE_ASSERT(m_Window, "Could not create GLFW window!");
+			LNX_CORE_ASSERT(m_Window, "Could not create GLFW window!");
 		}
 		
 		m_Context = CreateScope<OpenGLContext>(m_Window);

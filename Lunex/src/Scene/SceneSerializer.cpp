@@ -164,7 +164,7 @@ namespace Lunex {
 	
 	void SceneSerializer::SerializeRuntime(const std::string& filepath) {
 		// Not implemented
-		LN_CORE_ASSERT(false);
+		LNX_CORE_ASSERT(false);
 	}
 	
 	bool SceneSerializer::Deserialize(const std::string& filepath) {
@@ -233,7 +233,7 @@ namespace Lunex {
 	
 	bool SceneSerializer::DeserializeRuntime(const std::string& filepath) {
 		// Not implemented
-		LN_CORE_ASSERT(false);
+		LNX_CORE_ASSERT(false);
 		return false;
 	}
 }

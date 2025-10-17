@@ -3,26 +3,26 @@
 #include <memory>
 #include "PlatformDetection.h"
 
-#ifdef LN_DEBUG
-    #if defined(LN_PLATFORM_WINDOWS)
-        #define LN_DEBUGBREAK() __debugbreak()
-    #elif defined(LN_PLATFORM_LINUX)
+#ifdef LNX_DEBUG
+    #if defined(LNX_PLATFORM_WINDOWS)
+        #define LNX_DEBUGBREAK() __debugbreak()
+    #elif defined(LNX_PLATFORM_LINUX)
         #include <signal.h>
-        #define LN_DEBUGBREAK() raise(SIGTRAP)
+        #define LNX_DEBUGBREAK() raise(SIGTRAP)
     #else
         #error "Platform doesn't support debugbreak yet!"
     #endif
-    #define LN_ENABLE_ASSERTS
+    #define LNX_ENABLE_ASSERTS
 #else
-    #define LN_DEBUGBREAK()
+    #define LNX_DEBUGBREAK()
 #endif
 
-#ifdef LN_ENABLE_ASSERTS
-    #define LN_ASSERT(x, ...)       { if(!(x)) { LNX_LOG_ERROR("Assertion Failed: {0}", __VA_ARGS__); LN_DEBUGBREAK; } }
-    #define LN_CORE_ASSERT(x, ...)  { if(!(x)) { LNX_LOG_ERROR("Assertion Failed: {0}", __VA_ARGS__); LN_DEBUGBREAK(); } }
+#ifdef LNX_ENABLE_ASSERTS
+    #define LNX_ASSERT(x, ...)       { if(!(x)) { LNX_LOG_ERROR("Assertion Failed: {0}", __VA_ARGS__); LNX_DEBUGBREAK; } }
+    #define LNX_CORE_ASSERT(x, ...)  { if(!(x)) { LNX_LOG_ERROR("Assertion Failed: {0}", __VA_ARGS__); LNX_DEBUGBREAK(); } }
 #else
-    #define LN_ASSERT(x, ...)
-    #define LN_CORE_ASSERT(x, ...)
+    #define LNX_ASSERT(x, ...)
+    #define LNX_CORE_ASSERT(x, ...)
 #endif
 
 #define BIT(x) (1 << x)

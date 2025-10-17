@@ -1,6 +1,11 @@
 ﻿import subprocess
 import sys
-import pkg_resources
+
+try:
+    from importlib.metadata import distributions
+except ImportError:
+    # Fallback for Python < 3.8
+    from importlib_metadata import distributions
 
 def install(package):
     print(f"  Instalando {package}...")
@@ -8,14 +13,11 @@ def install(package):
     print(f"  ✓ {package} instalado")
 
 def ValidatePackage(package):
-    required = {package}
-    installed = {pkg.key for pkg in pkg_resources.working_set}
-    missing = required - installed
-
-    if missing:
-        install(package)
-    else:
+    try:
+        __import__(package.replace('-', '_'))
         print(f"  ✓ {package} ya instalado")
+    except ImportError:
+        install(package)
 
 def ValidatePackages():
     ValidatePackage('requests')
