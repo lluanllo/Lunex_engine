@@ -6,7 +6,7 @@
 
 #include "entt.hpp"
 
-#include "box2d/box2d.h"
+#include "../Box2D/include/box2d/box2d.h"
 
 namespace Lunex {
 	class Entity;
