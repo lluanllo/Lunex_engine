@@ -25,6 +25,7 @@ IncludeDir["glm"]       = "vendor/glm"
 IncludeDir["stb_image"] = "vendor/stb_image"
 IncludeDir["entt"]      = "vendor/entt/include"
 IncludeDir["yaml_cpp"]  = "vendor/yaml-cpp/include"
+IncludeDir["Box2D"]     = "vendor/Box2D/include"
 IncludeDir["ImGuizmo"]  = "vendor/ImGuizmo"
 IncludeDir["Lunex"]     = "Lunex/src"
 IncludeDir["VulkanSDK"] = "%{VULKAN_SDK}/Include"
@@ -236,6 +237,44 @@ project "yaml-cpp"
         runtime "Release"
         optimize "on"
 
+--- Box2D Project
+project "Box2D"
+	kind "StaticLib"
+	language "C++"
+	cppdialect "C++20" 
+	staticruntime "off"
+
+	targetdir ("bin/" .. outputdir .. "/%{prj.name}")
+	objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
+
+	files
+	{
+		"vendor/Box2D/src/**.h",
+		"vendor/Box2D/src/**.cpp",
+		"vendor/Box2D/include/**.h"
+	}
+
+	includedirs
+	{
+		"vendor/Box2D/include",
+		"vendor/Box2D/src"
+	}
+
+	filter "system:windows"
+		systemversion "latest"
+
+	filter "configurations:Debug"
+		runtime "Debug"
+		symbols "on"
+
+	filter "configurations:Release"
+		runtime "Release"
+		optimize "on"
+
+	filter "configurations:Dist"
+		runtime "Release"
+		optimize "on"
+
 group ""
 
 -- ============================================================================
@@ -282,6 +321,7 @@ project "Lunex"
     {
         "%{prj.name}/src",
         "vendor/spdlog/include",
+        "%{IncludeDir.Box2D}",
         "%{IncludeDir.GLFW}",
         "%{IncludeDir.Glad}",
         "%{IncludeDir.ImGui}",
@@ -295,6 +335,7 @@ project "Lunex"
 
     links
     {
+        "Box2D",
         "GLFW",
         "Glad",
         "ImGui",

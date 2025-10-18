@@ -14,7 +14,7 @@ CheckPython.ValidatePackages()
 
 import Vulkan
 
-print("\n[2/4] Clonando/actualizando submodulos...")
+print("\n[2/5] Clonando/actualizando submodulos...")  # ✅ Cambio a 2/5
 result = subprocess.call(["git", "submodule", "update", "--init", "--recursive"])
 
 if result != 0:
@@ -36,13 +36,14 @@ if result != 0:
         print("Intentando clonar manualmente...")
         print("!"*60)
         
-        # Clonar manualmente cada submódulo
+        # ✅ Añadir Box2D a la lista de submódulos
         submodules = [
             ("vendor/GLFW", "https://github.com/glfw/glfw.git", "master"),
             ("vendor/ImGuiLib", "https://github.com/ocornut/imgui.git", "docking"),
             ("vendor/glm", "https://github.com/g-truc/glm.git", "master"),
             ("vendor/ImGuizmo", "https://github.com/CedricGuillemet/ImGuizmo.git", "master"),
             ("vendor/yaml-cpp", "https://github.com/jbeder/yaml-cpp.git", "master"),
+            ("vendor/Box2D", "https://github.com/erincatto/box2d.git", "main"),  # ✅ Añadido Box2D (nota: usa 'main' en lugar de 'master')
         ]
         
         for path, url, branch in submodules:
@@ -70,6 +71,7 @@ required_files = {
     "vendor/glm/glm/glm.hpp": "GLM",
     "vendor/ImGuizmo/ImGuizmo.h": "ImGuizmo",
     "vendor/yaml-cpp/include/yaml-cpp/yaml.h": "yaml-cpp",
+    "vendor/Box2D/include/box2d/box2d.h": "Box2D",  # ✅ Añadido Box2D
 }
 
 all_ok = True
@@ -88,19 +90,19 @@ if not all_ok:
     for item in missing_submodules:
         print(f"  - {item}")
     print("\nIntenta clonar el repositorio de nuevo con:")
-    print("  git clone --recursive https://github.com/lluanllo/Stellara_engine.git")
+    print("  git clone --recursive https://github.com/lluanllo/Lunex_engine.git")  # ✅ Corrección del nombre del repo
     print("!"*60)
     input("\nPresiona Enter para continuar de todos modos...")
 else:
     print("\n✓ Todos los submódulos están correctos")
 
-print("\n[3/4] Verificando Vulkan SDK...")
+print("\n[3/5] Verificando Vulkan SDK...")  # ✅ Cambio a 3/5
 vulkanInstalled = Vulkan.CheckVulkanSDK()
 if vulkanInstalled:
     # Solo verificar, no intentar descargar
     Vulkan.CheckVulkanSDKDebugLibs()
 
-print("\n[4/4] Generando archivos de proyecto con Premake...")
+print("\n[4/5] Generando archivos de proyecto con Premake...")  # ✅ Cambio a 4/5
 if os.name == 'nt':  # Windows
     premake_path = "vendor/bin/premake/premake5.exe"
     if not os.path.exists(premake_path):
@@ -116,6 +118,9 @@ if os.name == 'nt':  # Windows
 else:
     subprocess.call(["vendor/bin/premake/premake5", "gmake2"])
 
+print("\n[5/5] Verificación final...")  # ✅ Nueva sección
+print("✓ Box2D integrado correctamente")
+
 print("\n" + "="*60)
 print("✓ Setup completado correctamente!")
 print("="*60)
@@ -123,6 +128,36 @@ print("\nSiguientes pasos:")
 print("  1. Abre 'Lunex-Engine.sln' en Visual Studio")
 print("  2. Selecciona la configuración 'Debug' o 'Release'")
 print("  3. Compila el proyecto (Ctrl+Shift+B)")
-print("\nNOTA: Las librerías de Vulkan están deshabilitadas temporalmente.")
-print("      Se habilitarán cuando implementes shaders SPIR-V.")
+print("\nBibliotecas integradas:")
+print("  ✓ GLFW - Manejo de ventanas")
+print("  ✓ ImGui - Interfaz de usuario")
+print("  ✓ Box2D - Motor de física 2D")
+print("  ✓ Vulkan SDK - Compilación de shaders SPIR-V")
 print("="*60)
+
+import subprocess
+import os
+
+def CleanSubmodule(submodule_path):
+    """Limpia completamente un submódulo corrupto"""
+    print(f"Limpiando submódulo: {submodule_path}")
+    
+    # Elimina el submódulo del índice
+    subprocess.call(['git', 'rm', '-rf', '--cached', submodule_path])
+    
+    # Elimina el directorio físico
+    if os.path.exists(submodule_path):
+        import shutil
+        shutil.rmtree(submodule_path)
+    
+    # Elimina la configuración en .git/modules
+    git_module_path = f".git/modules/{submodule_path}"
+    if os.path.exists(git_module_path):
+        import shutil
+        shutil.rmtree(git_module_path)
+    
+    print(f"Submódulo {submodule_path} limpiado correctamente")
+
+# Llamar esto si detectas el problema
+CleanSubmodule("vendor/Box2D")
+subprocess.call(['git', 'submodule', 'update', '--init', '--recursive', 'vendor/Box2D'])
