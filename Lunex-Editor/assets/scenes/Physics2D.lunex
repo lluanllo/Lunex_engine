@@ -1,5 +1,24 @@
 Scene: Untitled
 Entities:
+  - Entity: 2473530251302376865
+    TagComponent:
+      Tag: pyshics entioty
+    TransformComponent:
+      Translation: [0.27739, 1.3459028, 0]
+      Rotation: [0, 0, -1.5707965]
+      Scale: [0.49999052, 0.49999052, 0.5]
+    SpriteRendererComponent:
+      Color: [1, 1, 1, 1]
+    Rigidbody2DComponent:
+      BodyType: Dynamic
+      FixedRotation: false
+    BoxCollider2DComponent:
+      Offset: [0, 0]
+      Size: [0.5, 0.5]
+      Density: 0.88
+      Friction: 0.1
+      Restitution: 0.82
+      RestitutionThreshold: 0.5
   - Entity: 12837192831273
     TagComponent:
       Tag: Camera
@@ -22,9 +41,9 @@ Entities:
     TagComponent:
       Tag: Sprite
     TransformComponent:
-      Translation: [0.626168, 2.146712, 0.02251478]
+      Translation: [-0.18140054, 2.095702, 0.02251478]
       Rotation: [0, 0, -1.5707958]
-      Scale: [0.36113912, 0.37555146, 0.84813577]
+      Scale: [0.36113706, 0.3755494, 0.84813577]
     SpriteRendererComponent:
       Color: [1, 1, 1, 1]
     Rigidbody2DComponent:
@@ -58,11 +77,11 @@ Entities:
       RestitutionThreshold: 0.5
   - Entity: 7014609919916056858
     TagComponent:
-      Tag: Empty Entity
+      Tag: rotated quad
     TransformComponent:
-      Translation: [0.28591204, 1.345918, 0]
-      Rotation: [0, 0, -1.5707965]
-      Scale: [0.4999908, 0.4999908, 0.5]
+      Translation: [-0.9153857, 0.28093255, 0]
+      Rotation: [0, 0, -2.6425793]
+      Scale: [0.49998695, 0.49998695, 0.5]
     SpriteRendererComponent:
       Color: [1, 1, 1, 1]
     Rigidbody2DComponent:
