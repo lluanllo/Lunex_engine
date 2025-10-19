@@ -280,6 +280,13 @@ namespace Lunex {
 				}
 			}
 			
+			if (!m_SelectionContext.HasComponent<CircleRendererComponent>()) {
+				if (ImGui::MenuItem("Circle Renderer"))	{
+					m_SelectionContext.AddComponent<CircleRendererComponent>();
+					ImGui::CloseCurrentPopup();
+				}
+			}
+			
 			ImGui::EndPopup();
 		}
 		
@@ -378,6 +385,12 @@ namespace Lunex {
 			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
 			ImGui::DragFloat("Tiling Factor", &component.TilingFactor, 0.1f, 0.0f, 100.0f);
 			ImGui::PopStyleColor();
+		});
+		
+		DrawComponent<CircleRendererComponent>("Circle Renderer", entity, [](auto& component) {
+			ImGui::ColorEdit4("Color", glm::value_ptr(component.Color));
+			ImGui::DragFloat("Thickness", &component.Thickness, 0.025f, 0.0f, 1.0f);
+			ImGui::DragFloat("Fade", &component.Fade, 0.00025f, 0.0f, 1.0f);
 		});
 		
 		DrawComponent<Rigidbody2DComponent>("Rigidbody 2D", entity, [](auto& component) {
