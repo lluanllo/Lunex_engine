@@ -25,6 +25,7 @@ IncludeDir["glm"]       = "vendor/glm"
 IncludeDir["stb_image"] = "vendor/stb_image"
 IncludeDir["entt"]      = "vendor/entt/include"
 IncludeDir["yaml_cpp"]  = "vendor/yaml-cpp/include"
+IncludeDir["Box2D"]     = "vendor/Box2D/include" 
 IncludeDir["ImGuizmo"]  = "vendor/ImGuizmo"
 IncludeDir["Lunex"]     = "Lunex/src"
 IncludeDir["VulkanSDK"] = "%{VULKAN_SDK}/Include"
@@ -55,7 +56,7 @@ group "Dependencies"
 project "GLFW"
     kind "StaticLib"
     language "C"
-    staticruntime "off"  -- ✅ Cambio a dinámico
+    staticruntime "off"
     warnings "off"
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
@@ -118,7 +119,7 @@ project "GLFW"
 project "Glad"
     kind "StaticLib"
     language "C"
-    staticruntime "off"  -- ✅ Cambio a dinámico
+    staticruntime "off"
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
@@ -155,7 +156,7 @@ project "ImGui"
     kind "StaticLib"
     language "C++"
     cppdialect "C++20"
-    staticruntime "off"  -- ✅ Cambio a dinámico
+    staticruntime "off"
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
@@ -195,7 +196,7 @@ project "yaml-cpp"
     kind "StaticLib"
     language "C++"
     cppdialect "C++20"
-    staticruntime "off"  -- ✅ Cambio a dinámico
+    staticruntime "off"
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
@@ -222,6 +223,44 @@ project "yaml-cpp"
 
     filter "system:linux"
         pic "On"
+        systemversion "latest"
+
+    filter "configurations:Debug"
+        runtime "Debug"
+        symbols "on"
+
+    filter "configurations:Release"
+        runtime "Release"
+        optimize "on"
+
+    filter "configurations:Dist"
+        runtime "Release"
+        optimize "on"
+
+-- Box2D Project
+project "Box2D"
+    kind "StaticLib"
+    language "C"
+    cdialect "C11"
+    staticruntime "off"
+
+    targetdir ("bin/" .. outputdir .. "/%{prj.name}")
+    objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
+
+    files
+    {
+        "vendor/Box2D/src/**.h",
+        "vendor/Box2D/src/**.c",
+        "vendor/Box2D/include/**.h"
+    }
+
+    includedirs
+    {
+        "vendor/Box2D/include",
+        "vendor/Box2D/src"
+    }
+
+    filter "system:windows"
         systemversion "latest"
 
     filter "configurations:Debug"
@@ -282,6 +321,7 @@ project "Lunex"
     {
         "%{prj.name}/src",
         "vendor/spdlog/include",
+        "%{IncludeDir.Box2D}",
         "%{IncludeDir.GLFW}",
         "%{IncludeDir.Glad}",
         "%{IncludeDir.ImGui}",
@@ -295,6 +335,7 @@ project "Lunex"
 
     links
     {
+        "Box2D",
         "GLFW",
         "Glad",
         "ImGui",
@@ -350,7 +391,7 @@ project "Sandbox"
     kind "ConsoleApp"
     language "C++"
     cppdialect "C++20"
-    staticruntime "off"  -- ✅ Cambio a dinámico
+    staticruntime "off"
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
@@ -370,7 +411,8 @@ project "Sandbox"
         "%{IncludeDir.glm}",
         "%{IncludeDir.entt}",
         "%{IncludeDir.yaml_cpp}",
-        "%{IncludeDir.ImGuizmo}"
+        "%{IncludeDir.ImGuizmo}",
+        "%{IncludeDir.Box2D}"  -- ✅ AÑADIDO
     }
 
     defines

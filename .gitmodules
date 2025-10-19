@@ -23,3 +23,13 @@
 	url = https://github.com/CedricGuillemet/ImGuizmo.git
 	branch = master
 	ignore = dirty
+[submodule "vendor/Box2D"]
+	path = vendor/Box2D
+	url = https://github.com/erincatto/box2d.git
+	branch = master
+	ignore = dirty
+[submodule "vendor/Box2D"]
+	path = vendor/Box2D
+	url = https://github.com/erincatto/box2d.git
+	branch = main
+	ignore = dirty
