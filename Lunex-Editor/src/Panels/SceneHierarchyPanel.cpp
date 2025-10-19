@@ -34,28 +34,24 @@ namespace Lunex {
 	void SceneHierarchyPanel::OnImGuiRender() {
 		ImGui::Begin("Scene Hierarchy");
 		
-		ImGui::PushStyleColor(ImGuiCol_Header, ImVec4{ 1.0f, 0.55f, 0.0f, 0.4f });
-		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4{ 1.0f, 0.55f, 0.0f, 0.6f });
-		ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.8f });
-		
-		auto view = m_Context->m_Registry.view<TagComponent>();
-		for (auto entityID : view) {
-			Entity entity{ entityID, m_Context.get() };
-			DrawEntityNode(entity);
-		}
-		
-		if (ImGui::IsMouseDown(0) && ImGui::IsWindowHovered())
-			m_SelectionContext = {};
-		
-		if (ImGui::BeginPopupContextWindow(nullptr, ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
-			if (ImGui::MenuItem("Create Empty Entity"))
-				m_Context->CreateEntity("Empty Entity");
+		if (m_Context) {
+			// entt::registry::each ya no existe en versiones recientes -> usar view<entt::entity>().each
+			m_Context->m_Registry.view<entt::entity>().each([&](auto entityID) {
+				Entity entity{ entityID , m_Context.get() };
+				DrawEntityNode(entity);
+			});
 			
-			ImGui::EndPopup();
+			if (ImGui::IsMouseDown(0) && ImGui::IsWindowHovered())
+				m_SelectionContext = {};
+			
+			// Click derecho en espacio en blanco
+			// API moderna de ImGui: usar flags en lugar de (mouse_button, also_over_items)
+			if (ImGui::BeginPopupContextWindow(nullptr, ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
+				if (ImGui::MenuItem("Create Empty Entity"))
+					m_Context->CreateEntity("Empty Entity");
+				ImGui::EndPopup();
+			}
 		}
-		
-		ImGui::PopStyleColor(3);
-		
 		ImGui::End();
 		
 		ImGui::Begin("Properties");
@@ -251,19 +247,44 @@ namespace Lunex {
 		
 		ImGui::SameLine();
 		ImGui::PushItemWidth(-1);
-		if (ImGui::Button("Add Component")) {
-			ImGui::OpenPopup("AddComponent");
-		}
 		
+		if (ImGui::Button("Add Component"))
+			ImGui::OpenPopup("AddComponent");
+			
 		if (ImGui::BeginPopup("AddComponent")) {
-			if (ImGui::MenuItem("Camera")) {
-				m_SelectionContext.AddComponent<CameraComponent>();
-				ImGui::CloseCurrentPopup();
+			if (!m_SelectionContext.HasComponent<CameraComponent>()) {
+				if (ImGui::MenuItem("Camera")) {
+					m_SelectionContext.AddComponent<CameraComponent>();
+					ImGui::CloseCurrentPopup();
+				}
 			}
 			
-			if (ImGui::MenuItem("Sprite Renderer")) {
-				m_SelectionContext.AddComponent<SpriteRendererComponent>();
-				ImGui::CloseCurrentPopup();
+			if (!m_SelectionContext.HasComponent<SpriteRendererComponent>()) {
+				if (ImGui::MenuItem("Sprite Renderer")) {
+					m_SelectionContext.AddComponent<SpriteRendererComponent>();
+					ImGui::CloseCurrentPopup();
+				}
+			}
+			
+			if (!m_SelectionContext.HasComponent<Rigidbody2DComponent>()) {
+				if (ImGui::MenuItem("Rigidbody 2D")) {
+					m_SelectionContext.AddComponent<Rigidbody2DComponent>();
+					ImGui::CloseCurrentPopup();
+				}
+			}
+			
+			if (!m_SelectionContext.HasComponent<BoxCollider2DComponent>()) {
+				if (ImGui::MenuItem("Box Collider 2D")) {
+					m_SelectionContext.AddComponent<BoxCollider2DComponent>();
+					ImGui::CloseCurrentPopup();
+				}
+			}
+			
+			if (!m_SelectionContext.HasComponent<CircleRendererComponent>()) {
+				if (ImGui::MenuItem("Circle Renderer"))	{
+					m_SelectionContext.AddComponent<CircleRendererComponent>();
+					ImGui::CloseCurrentPopup();
+				}
 			}
 			
 			ImGui::EndPopup();
@@ -352,7 +373,11 @@ namespace Lunex {
 				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
 					const wchar_t* path = (const wchar_t*)payload->Data;
 					std::filesystem::path texturePath = std::filesystem::path(g_AssetPath) / path;
-					component.Texture = Texture2D::Create(texturePath.string());
+					Ref<Texture2D> texture = Texture2D::Create(texturePath.string());
+					if (texture->IsLoaded())
+						component.Texture = texture;
+					else
+						LNX_LOG_WARN("Could not load texture {0}", texturePath.filename().string());
 				}
 				ImGui::EndDragDropTarget();
 			}
@@ -360,6 +385,41 @@ namespace Lunex {
 			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
 			ImGui::DragFloat("Tiling Factor", &component.TilingFactor, 0.1f, 0.0f, 100.0f);
 			ImGui::PopStyleColor();
+		});
+		
+		DrawComponent<CircleRendererComponent>("Circle Renderer", entity, [](auto& component) {
+			ImGui::ColorEdit4("Color", glm::value_ptr(component.Color));
+			ImGui::DragFloat("Thickness", &component.Thickness, 0.025f, 0.0f, 1.0f);
+			ImGui::DragFloat("Fade", &component.Fade, 0.00025f, 0.0f, 1.0f);
+		});
+		
+		DrawComponent<Rigidbody2DComponent>("Rigidbody 2D", entity, [](auto& component) {
+			const char* bodyTypeStrings[] = { "Static", "Dynamic", "Kinematic" };
+			const char* currentBodyTypeString = bodyTypeStrings[(int)component.Type];
+			if (ImGui::BeginCombo("Body Type", currentBodyTypeString)) {
+				for (int i = 0; i < 2; i++) {
+					bool isSelected = currentBodyTypeString == bodyTypeStrings[i];
+					if (ImGui::Selectable(bodyTypeStrings[i], isSelected)) {
+						currentBodyTypeString = bodyTypeStrings[i];
+						component.Type = (Rigidbody2DComponent::BodyType)i;
+					}
+					
+					if (isSelected)
+						ImGui::SetItemDefaultFocus();
+				}
+				ImGui::EndCombo();
+			}
+			
+			ImGui::Checkbox("Fixed Rotation", &component.FixedRotation);
+		});
+		
+		DrawComponent<BoxCollider2DComponent>("Box Collider 2D", entity, [](auto& component) {
+			ImGui::DragFloat2("Offset", glm::value_ptr(component.Offset));
+			ImGui::DragFloat2("Size", glm::value_ptr(component.Size));
+			ImGui::DragFloat("Density", &component.Density, 0.01f, 0.0f, 1.0f);
+			ImGui::DragFloat("Friction", &component.Friction, 0.01f, 0.0f, 1.0f);
+			ImGui::DragFloat("Restitution", &component.Restitution, 0.01f, 0.0f, 1.0f);
+			ImGui::DragFloat("Restitution Threshold", &component.RestitutionThreshold, 0.01f, 0.0f);
 		});
 	}
 }

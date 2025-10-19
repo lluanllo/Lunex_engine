@@ -5,10 +5,30 @@
 #include "Components.h"
 
 #include <fstream>
-
+#include <unordered_map>
 #include <yaml-cpp/yaml.h>
 
 namespace YAML {
+	template<>
+	struct convert<glm::vec2> {
+		static Node encode(const glm::vec2& rhs) {
+			Node node;
+			node.push_back(rhs.x);
+			node.push_back(rhs.y);
+			node.SetStyle(EmitterStyle::Flow);
+			return node;
+		}
+		
+		static bool decode(const Node& node, glm::vec2& rhs) {
+			if (!node.IsSequence() || node.size() != 2)
+				return false;
+			
+			rhs.x = node[0].as<float>();
+			rhs.y = node[1].as<float>();
+			return true;
+		}
+	};
+	
 	template<>
 	struct convert<glm::vec3> {
 		static Node encode(const glm::vec3& rhs) {
@@ -16,6 +36,7 @@ namespace YAML {
 			node.push_back(rhs.x);
 			node.push_back(rhs.y);
 			node.push_back(rhs.z);
+			node.SetStyle(EmitterStyle::Flow);
 			return node;
 		}
 		
@@ -38,6 +59,7 @@ namespace YAML {
 			node.push_back(rhs.y);
 			node.push_back(rhs.z);
 			node.push_back(rhs.w);
+			node.SetStyle(EmitterStyle::Flow);
 			return node;
 		}
 		
@@ -55,6 +77,12 @@ namespace YAML {
 }
 
 namespace Lunex {
+	YAML::Emitter& operator<<(YAML::Emitter& out, const glm::vec2& v) {
+		out << YAML::Flow;
+		out << YAML::BeginSeq << v.x << v.y << YAML::EndSeq;
+		return out;
+	}
+	
 	YAML::Emitter& operator<<(YAML::Emitter& out, const glm::vec3& v) {
 		out << YAML::Flow;
 		out << YAML::BeginSeq << v.x << v.y << v.z << YAML::EndSeq;
@@ -67,14 +95,35 @@ namespace Lunex {
 		return out;
 	}
 	
+	static std::string RigidBody2DBodyTypeToString(Rigidbody2DComponent::BodyType bodyType) {
+		switch (bodyType) {
+			case Rigidbody2DComponent::BodyType::Static:    return "Static";
+			case Rigidbody2DComponent::BodyType::Dynamic:   return "Dynamic";
+			case Rigidbody2DComponent::BodyType::Kinematic: return "Kinematic";
+		}
+		
+		LNX_CORE_ASSERT(false, "Unknown body type");
+		return {};
+	}
+	
+	static Rigidbody2DComponent::BodyType RigidBody2DBodyTypeFromString(const std::string& bodyTypeString) {
+		if (bodyTypeString == "Static")    return Rigidbody2DComponent::BodyType::Static;
+		if (bodyTypeString == "Dynamic")   return Rigidbody2DComponent::BodyType::Dynamic;
+		if (bodyTypeString == "Kinematic") return Rigidbody2DComponent::BodyType::Kinematic;
+		
+		LNX_CORE_ASSERT(false, "Unknown body type");
+		return Rigidbody2DComponent::BodyType::Static;
+	}
+	
 	SceneSerializer::SceneSerializer(const Ref<Scene>& scene)
 		: m_Scene(scene)
 	{
 	}
 	
 	static void SerializeEntity(YAML::Emitter& out, Entity entity) {
+		LNX_ASSERT(entity.HasComponent<IDComponent>());
 		out << YAML::BeginMap; // Entity
-		out << YAML::Key << "Entity" << YAML::Value << "12837192831273"; // TODO: Entity ID goes here
+		out << YAML::Key << "Entity" << YAML::Value << entity.GetUUID(); // TODO: Entity ID goes here
 		
 		if (entity.HasComponent<TagComponent>()) {
 			out << YAML::Key << "TagComponent";
@@ -131,6 +180,45 @@ namespace Lunex {
 			
 			out << YAML::EndMap; // SpriteRendererComponent
 		}
+		
+		if (entity.HasComponent<CircleRendererComponent>()) {
+			out << YAML::Key << "CircleRendererComponent";
+			out << YAML::BeginMap; // CircleRendererComponent
+			
+			auto& circleRendererComponent = entity.GetComponent<CircleRendererComponent>();
+			out << YAML::Key << "Color" << YAML::Value << circleRendererComponent.Color;
+			out << YAML::Key << "Thickness" << YAML::Value << circleRendererComponent.Thickness;
+			out << YAML::Key << "Fade" << YAML::Value << circleRendererComponent.Fade;
+			
+			out << YAML::EndMap; // CircleRendererComponent
+		}
+		
+		if (entity.HasComponent<Rigidbody2DComponent>()) {
+			out << YAML::Key << "Rigidbody2DComponent";
+			out << YAML::BeginMap; // Rigidbody2DComponent
+			
+			auto& rb2dComponent = entity.GetComponent<Rigidbody2DComponent>();
+			out << YAML::Key << "BodyType" << YAML::Value << RigidBody2DBodyTypeToString(rb2dComponent.Type);
+			out << YAML::Key << "FixedRotation" << YAML::Value << rb2dComponent.FixedRotation;
+			
+			out << YAML::EndMap; // Rigidbody2DComponent
+		}
+		
+		if (entity.HasComponent<BoxCollider2DComponent>()) {
+			out << YAML::Key << "BoxCollider2DComponent";
+			out << YAML::BeginMap; // BoxCollider2DComponent
+			
+			auto& bc2dComponent = entity.GetComponent<BoxCollider2DComponent>();
+			out << YAML::Key << "Offset" << YAML::Value << bc2dComponent.Offset;
+			out << YAML::Key << "Size" << YAML::Value << bc2dComponent.Size;
+			out << YAML::Key << "Density" << YAML::Value << bc2dComponent.Density;
+			out << YAML::Key << "Friction" << YAML::Value << bc2dComponent.Friction;
+			out << YAML::Key << "Restitution" << YAML::Value << bc2dComponent.Restitution;
+			out << YAML::Key << "RestitutionThreshold" << YAML::Value << bc2dComponent.RestitutionThreshold;
+			
+			out << YAML::EndMap; // BoxCollider2DComponent
+		}
+		
 		out << YAML::EndMap; // Entity
 	}
 	
@@ -139,27 +227,18 @@ namespace Lunex {
 		out << YAML::BeginMap;
 		out << YAML::Key << "Scene" << YAML::Value << "Untitled";
 		out << YAML::Key << "Entities" << YAML::Value << YAML::BeginSeq;
-		
-		auto view = m_Scene->m_Registry.view<entt::entity>();
-		for (auto entityID : view) {
-			Entity entity = { entityID, m_Scene.get() };
-			if (!entity)
-				return;
-			
-			SerializeEntity(out, entity);
-		}
-		
+		m_Scene->m_Registry.view<entt::entity>().each([&](auto entityID) {
+				Entity entity = { entityID, m_Scene.get() };
+				if (!entity)
+					return;
+				
+				SerializeEntity(out, entity);
+			});
 		out << YAML::EndSeq;
 		out << YAML::EndMap;
 		
 		std::ofstream fout(filepath);
-		if (!fout.is_open()) {
-			LNX_LOG_ERROR("Failed to open file for writing: {0}", filepath);
-			return;
-		}
-		
 		fout << out.c_str();
-		fout.close();
 	}
 	
 	void SceneSerializer::SerializeRuntime(const std::string& filepath) {
@@ -168,21 +247,26 @@ namespace Lunex {
 	}
 	
 	bool SceneSerializer::Deserialize(const std::string& filepath) {
-		std::ifstream stream(filepath);
-		std::stringstream strStream;
-		strStream << stream.rdbuf();
+		YAML::Node data;
+		try {
+			data = YAML::LoadFile(filepath);
+		}
+		catch (YAML::ParserException e) {
+			return false;
+		}
 		
-		YAML::Node data = YAML::Load(strStream.str());
 		if (!data["Scene"])
 			return false;
 		
 		std::string sceneName = data["Scene"].as<std::string>();
 		LNX_LOG_TRACE("Deserializing scene '{0}'", sceneName);
 		
+		std::unordered_set<uint64_t> seenIds;
+		
 		auto entities = data["Entities"];
 		if (entities) {
 			for (auto entity : entities) {
-				uint64_t uuid = entity["Entity"].as<uint64_t>(); // TODO
+				uint64_t uuid = entity["Entity"].as<uint64_t>();
 				
 				std::string name;
 				auto tagComponent = entity["TagComponent"];
@@ -191,7 +275,19 @@ namespace Lunex {
 				
 				LNX_LOG_TRACE("Deserialized entity with ID = {0}, name = {1}", uuid, name);
 				
-				Entity deserializedEntity = m_Scene->CreateEntity(name);
+				// Si el ID ya apareció, generar uno nuevo único
+				if (!seenIds.insert(uuid).second) {
+					uint64_t newUuid;
+					do {
+						newUuid = (uint64_t)UUID();
+					} while (!seenIds.insert(newUuid).second);
+					LNX_LOG_WARN("Duplicate Entity ID {0} ('{1}') detected. Generated new ID {2}.", uuid, name, newUuid);
+					uuid = newUuid;
+				}
+				
+				LNX_LOG_TRACE("Deserialized entity with ID = {0}, name = {1}", uuid, name);
+				
+				Entity deserializedEntity = m_Scene->CreateEntityWithUUID(uuid, name);
 				
 				auto transformComponent = entity["TransformComponent"];
 				if (transformComponent) {
@@ -206,7 +302,7 @@ namespace Lunex {
 				if (cameraComponent) {
 					auto& cc = deserializedEntity.AddComponent<CameraComponent>();
 					
-					const auto cameraProps = cameraComponent["Camera"];
+					auto cameraProps = cameraComponent["Camera"];
 					cc.Camera.SetProjectionType((SceneCamera::ProjectionType)cameraProps["ProjectionType"].as<int>());
 					
 					cc.Camera.SetPerspectiveVerticalFOV(cameraProps["PerspectiveFOV"].as<float>());
@@ -226,9 +322,36 @@ namespace Lunex {
 					auto& src = deserializedEntity.AddComponent<SpriteRendererComponent>();
 					src.Color = spriteRendererComponent["Color"].as<glm::vec4>();
 				}
+				
+				auto circleRendererComponent = entity["CircleRendererComponent"];
+				if (circleRendererComponent) {
+					auto& crc = deserializedEntity.AddComponent<CircleRendererComponent>();
+					crc.Color = circleRendererComponent["Color"].as<glm::vec4>();
+					crc.Thickness = circleRendererComponent["Thickness"].as<float>();
+					crc.Fade = circleRendererComponent["Fade"].as<float>();
+				}
+				
+				auto rigidbody2DComponent = entity["Rigidbody2DComponent"];
+				if (rigidbody2DComponent) {
+					auto& rb2d = deserializedEntity.AddComponent<Rigidbody2DComponent>();
+					rb2d.Type = RigidBody2DBodyTypeFromString(rigidbody2DComponent["BodyType"].as<std::string>());
+					rb2d.FixedRotation = rigidbody2DComponent["FixedRotation"].as<bool>();
+				}
+				
+				auto boxCollider2DComponent = entity["BoxCollider2DComponent"];
+				if (boxCollider2DComponent) {
+					auto& bc2d = deserializedEntity.AddComponent<BoxCollider2DComponent>();
+					bc2d.Offset = boxCollider2DComponent["Offset"].as<glm::vec2>();
+					bc2d.Size = boxCollider2DComponent["Size"].as<glm::vec2>();
+					bc2d.Density = boxCollider2DComponent["Density"].as<float>();
+					bc2d.Friction = boxCollider2DComponent["Friction"].as<float>();
+					bc2d.Restitution = boxCollider2DComponent["Restitution"].as<float>();
+					bc2d.RestitutionThreshold = boxCollider2DComponent["RestitutionThreshold"].as<float>();
+				}
 			}
 		}
-		return false;
+		
+		return true;
 	}
 	
 	bool SceneSerializer::DeserializeRuntime(const std::string& filepath) {
