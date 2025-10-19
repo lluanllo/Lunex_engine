@@ -1,30 +1,12 @@
 Scene: Untitled
 Entities:
-  - Entity: 12837192831273
+  - Entity: 7014609919916056858
     TagComponent:
-      Tag: Camera
+      Tag: Empty Entity
     TransformComponent:
-      Translation: [0, 0, 4.997113]
-      Rotation: [0, 0, 0]
-      Scale: [1, 1, 1]
-    CameraComponent:
-      Camera:
-        ProjectionType: 0
-        PerspectiveFOV: 0.7853982
-        PerspectiveNear: 0.01
-        PerspectiveFar: 1000
-        OrthographicSize: 10
-        OrthographicNear: -1
-        OrthographicFar: 1
-      Primary: true
-      FixedAspectRatio: false
-  - Entity: 12837192831273
-    TagComponent:
-      Tag: Sprite
-    TransformComponent:
-      Translation: [-0.044210494, 2.1428823, 0.02251478]
-      Rotation: [0, 0, 2.9613807e-07]
-      Scale: [0.36114386, 0.3755562, 0.84813577]
+      Translation: [-1.4691768, 1.9849104, 0]
+      Rotation: [0, 0, -1.5707965]
+      Scale: [0.49999687, 0.49999687, 0.5]
     SpriteRendererComponent:
       Color: [1, 1, 1, 1]
     Rigidbody2DComponent:
@@ -37,7 +19,7 @@ Entities:
       Friction: 0.1
       Restitution: 0.82
       RestitutionThreshold: 0.5
-  - Entity: 12837192831273
+  - Entity: 14115245962319714999
     TagComponent:
       Tag: Floor
     TransformComponent:
@@ -56,3 +38,40 @@ Entities:
       Friction: 0.5
       Restitution: 0
       RestitutionThreshold: 0.5
+  - Entity: 15260605884837259240
+    TagComponent:
+      Tag: Sprite
+    TransformComponent:
+      Translation: [0.7536781, 2.1552265, 0.02251478]
+      Rotation: [0, 0, -1.5707958]
+      Scale: [0.36114082, 0.37555316, 0.84813577]
+    SpriteRendererComponent:
+      Color: [1, 1, 1, 1]
+    Rigidbody2DComponent:
+      BodyType: Dynamic
+      FixedRotation: false
+    BoxCollider2DComponent:
+      Offset: [0, 0]
+      Size: [0.5, 0.5]
+      Density: 0.88
+      Friction: 0.1
+      Restitution: 0.82
+      RestitutionThreshold: 0.5
+  - Entity: 12837192831273
+    TagComponent:
+      Tag: Camera
+    TransformComponent:
+      Translation: [0, 0, 4.997113]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    CameraComponent:
+      Camera:
+        ProjectionType: 0
+        PerspectiveFOV: 0.7853982
+        PerspectiveNear: 0.01
+        PerspectiveFar: 1000
+        OrthographicSize: 10
+        OrthographicNear: -1
+        OrthographicFar: 1
+      Primary: true
+      FixedAspectRatio: false

@@ -121,8 +121,9 @@ namespace Lunex {
 	}
 	
 	static void SerializeEntity(YAML::Emitter& out, Entity entity) {
+		LNX_ASSERT(entity.HasComponent<IDComponent>());
 		out << YAML::BeginMap; // Entity
-		out << YAML::Key << "Entity" << YAML::Value << "12837192831273"; // TODO: Entity ID goes here
+		out << YAML::Key << "Entity" << YAML::Value << entity.GetUUID(); // TODO: Entity ID goes here
 		
 		if (entity.HasComponent<TagComponent>()) {
 			out << YAML::Key << "TagComponent";
@@ -248,10 +249,12 @@ namespace Lunex {
 		std::string sceneName = data["Scene"].as<std::string>();
 		LNX_LOG_TRACE("Deserializing scene '{0}'", sceneName);
 		
+		std::unordered_set<uint64_t> seenIds;
+		
 		auto entities = data["Entities"];
 		if (entities) {
 			for (auto entity : entities) {
-				uint64_t uuid = entity["Entity"].as<uint64_t>(); // TODO
+				uint64_t uuid = entity["Entity"].as<uint64_t>();
 				
 				std::string name;
 				auto tagComponent = entity["TagComponent"];
@@ -260,7 +263,19 @@ namespace Lunex {
 				
 				LNX_LOG_TRACE("Deserialized entity with ID = {0}, name = {1}", uuid, name);
 				
-				Entity deserializedEntity = m_Scene->CreateEntity(name);
+				// Si el ID ya apareció, generar uno nuevo único
+				if (!seenIds.insert(uuid).second) {
+					uint64_t newUuid;
+					do {
+						newUuid = (uint64_t)UUID();
+					} while (!seenIds.insert(newUuid).second);
+					LNX_LOG_WARN("Duplicate Entity ID {0} ('{1}') detected. Generated new ID {2}.", uuid, name, newUuid);
+					uuid = newUuid;
+				}
+				
+				LNX_LOG_TRACE("Deserialized entity with ID = {0}, name = {1}", uuid, name);
+				
+				Entity deserializedEntity = m_Scene->CreateEntityWithUUID(uuid, name);
 				
 				auto transformComponent = entity["TransformComponent"];
 				if (transformComponent) {
