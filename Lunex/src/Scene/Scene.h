@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Timestep.h"
-
+#include "Core/UUID.h"
 #include "Renderer/EditorCamera.h"
 
 #include "entt.hpp"
@@ -17,6 +17,7 @@ namespace Lunex {
 			~Scene();
 			
 			Entity CreateEntity(const std::string& name = std::string());
+			Entity CreateEntityWithUUID(UUID uuid, const std::string& name = std::string());
 			void DestroyEntity(Entity entity);
 			
 			void OnRuntimeStart();
