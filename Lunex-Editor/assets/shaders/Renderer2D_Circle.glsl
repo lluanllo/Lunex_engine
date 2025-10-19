@@ -1,5 +1,6 @@
-#type vertex
 #version 450 core
+
+#ifdef VERTEX
 
 layout(location = 0) in vec3 a_WorldPosition;
 layout(location = 1) in vec3 a_LocalPosition;
@@ -33,8 +34,7 @@ void main() {
 	gl_Position = u_ViewProjection * vec4(a_WorldPosition, 1.0);
 }
 
-#type fragment
-#version 450 core
+#elif defined(FRAGMENT)
 
 layout(location = 0) out vec4 o_Color;
 layout(location = 1) out int o_EntityID;
@@ -64,3 +64,5 @@ void main() {
 	
 	o_EntityID = v_EntityID;
 }
+
+#endif
