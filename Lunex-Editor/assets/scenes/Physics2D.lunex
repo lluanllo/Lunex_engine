@@ -4,13 +4,13 @@ Entities:
     TagComponent:
       Tag: circle
     TransformComponent:
-      Translation: [-0.8860607, 1.3972559, 0]
-      Rotation: [0, 0, 0]
+      Translation: [-0.11924534, -0.7640978, 0]
+      Rotation: [0, 0, -1.5707964]
       Scale: [1, 1, 1]
     CircleRendererComponent:
-      Color: [1, 1, 1, 1]
-      Thickness: 1
-      Fade: 0.005
+      Color: [1, 0, 0, 1]
+      Thickness: 0.05
+      Fade: 0.44
     Rigidbody2DComponent:
       BodyType: Dynamic
       FixedRotation: false
@@ -25,8 +25,8 @@ Entities:
     TagComponent:
       Tag: pyshics entioty
     TransformComponent:
-      Translation: [0.20066494, 1.3459028, 0]
-      Rotation: [0, 0, -1.5707965]
+      Translation: [1.8270335, -1.0141037, 0]
+      Rotation: [0, 0, -3.1415925]
       Scale: [0.4999882, 0.4999882, 0.5]
     SpriteRendererComponent:
       Color: [1, 1, 1, 1]
@@ -62,8 +62,8 @@ Entities:
     TagComponent:
       Tag: Sprite
     TransformComponent:
-      Translation: [-0.18140054, 2.095702, 0.02251478]
-      Rotation: [0, 0, -1.5707958]
+      Translation: [10.932297, -44.913464, 0.02251478]
+      Rotation: [0, 0, -1.0782439]
       Scale: [0.36113706, 0.3755494, 0.84813577]
     SpriteRendererComponent:
       Color: [1, 1, 1, 1]
@@ -100,8 +100,8 @@ Entities:
     TagComponent:
       Tag: rotated quad
     TransformComponent:
-      Translation: [-0.9153857, 0.28093255, 0]
-      Rotation: [0, 0, -2.6425793]
+      Translation: [-1.5396303, -1.0141042, 0]
+      Rotation: [0, 0, -3.1415925]
       Scale: [0.49998695, 0.49998695, 0.5]
     SpriteRendererComponent:
       Color: [1, 1, 1, 1]
