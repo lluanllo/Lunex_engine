@@ -22,6 +22,13 @@ namespace Lunex {
 				return component;
 			}
 			
+			template<typename T, typename... Args>
+			T& AddOrReplaceComponent(Args&&... args) {
+				T& component = m_Scene->m_Registry.emplace_or_replace<T>(m_EntityHandle, std::forward<Args>(args)...);
+				m_Scene->OnComponentAdded<T>(*this, component);
+				return component;
+			}
+			
 			template<typename T>
 			T& GetComponent() {
 				LNX_CORE_ASSERT(HasComponent<T>(), "Entity does not have component!");
@@ -48,6 +55,8 @@ namespace Lunex {
 			bool operator==(const Entity& other) const {
 				return m_EntityHandle == other.m_EntityHandle && m_Scene == other.m_Scene;
 			}
+			
+			const std::string& GetName() { return GetComponent<TagComponent>().Tag; }
 			
 			bool operator!=(const Entity& other) const {
 				return !(*this == other);
