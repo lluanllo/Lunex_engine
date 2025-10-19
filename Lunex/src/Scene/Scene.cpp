@@ -73,6 +73,7 @@ namespace Lunex {
 		CopyComponent<NativeScriptComponent>(dstSceneRegistry, srcSceneRegistry, enttMap);
 		CopyComponent<Rigidbody2DComponent>(dstSceneRegistry, srcSceneRegistry, enttMap);
 		CopyComponent<BoxCollider2DComponent>(dstSceneRegistry, srcSceneRegistry, enttMap);
+		CopyComponent<CircleCollider2DComponent>(dstSceneRegistry, srcSceneRegistry, enttMap);
 		
 		return newScene;
 	}
@@ -96,9 +97,8 @@ namespace Lunex {
 	}
 	
 	void Scene::OnRuntimeStart() {
-		// ✅ Box2D v3.x usa b2WorldDef para configuración
 		b2WorldDef worldDef = b2DefaultWorldDef();
-		worldDef.gravity = { 0.0f, -9.8f };  // ✅ Inicialización de agregado en C++
+		worldDef.gravity = { 0.0f, -9.81f };
 		
 		m_PhysicsWorld = b2CreateWorld(&worldDef);
 		
@@ -108,48 +108,55 @@ namespace Lunex {
 			auto& transform = entity.GetComponent<TransformComponent>();
 			auto& rb2d = entity.GetComponent<Rigidbody2DComponent>();
 			
-			// ✅ Crear definición de cuerpo con valores predeterminados
 			b2BodyDef bodyDef = b2DefaultBodyDef();
 			bodyDef.type = Rigidbody2DTypeToBox2DBody(rb2d.Type);
 			
-			// ✅ Inicialización directa sin cast
 			bodyDef.position = { transform.Translation.x, transform.Translation.y };
 			
-			// ✅ En v3.x se usa 'rotation' (b2Rot) en lugar de 'angle'
 			bodyDef.rotation = b2MakeRot(transform.Rotation.z);
 			bodyDef.enableSleep = !rb2d.FixedRotation;
 			
-			// ✅ CreateBody ahora devuelve b2BodyId, no un puntero
 			b2BodyId bodyId = b2CreateBody(m_PhysicsWorld, &bodyDef);
 			
-			// ✅ SetFixedRotation se configura mediante MotionLocks
 			if (rb2d.FixedRotation) {
 				b2Body_SetAngularVelocity(bodyId, 0.0f);
 			}
 			
-			// ✅ Guardar el ID en lugar del puntero
 			rb2d.RuntimeBody = new b2BodyId(bodyId);
 			
 			if (entity.HasComponent<BoxCollider2DComponent>()) {
 				auto& bc2d = entity.GetComponent<BoxCollider2DComponent>();
 				
-				// ✅ b2MakeBox reemplaza a b2PolygonShape::SetAsBox
 				b2Polygon boxShape = b2MakeBox(
 					bc2d.Size.x * transform.Scale.x, 
 					bc2d.Size.y * transform.Scale.y
 				);
 				
-				// ✅ b2ShapeDef reemplaza a b2FixtureDef
 				b2ShapeDef shapeDef = b2DefaultShapeDef();
 				shapeDef.density = bc2d.Density;
 				
-				// ✅ En v3.x friction y restitution están dentro de material
 				shapeDef.material.friction = bc2d.Friction;
 				shapeDef.material.restitution = bc2d.Restitution;
 				
-				// ✅ CreatePolygonShape devuelve b2ShapeId
 				b2ShapeId shapeId = b2CreatePolygonShape(bodyId, &shapeDef, &boxShape);
 				bc2d.RuntimeFixture = new b2ShapeId(shapeId);
+			}
+			
+			if (entity.HasComponent<CircleCollider2DComponent>()) {
+				auto& cc2d = entity.GetComponent<CircleCollider2DComponent>();
+				
+				b2Circle circleShape;
+				circleShape.center = { cc2d.Offset.x, cc2d.Offset.y };
+				circleShape.radius = cc2d.Radius * transform.Scale.x; // usar escala del transform
+				
+				b2ShapeDef shapeDef = b2DefaultShapeDef();
+				shapeDef.density = cc2d.Density;
+				
+				shapeDef.material.friction = cc2d.Friction;
+				shapeDef.material.restitution = cc2d.Restitution;
+				
+				b2ShapeId shapeId = b2CreateCircleShape(bodyId, &shapeDef, &circleShape);
+				cc2d.RuntimeFixture = new b2ShapeId(shapeId);
 			}
 		}
 	}
@@ -312,6 +319,7 @@ namespace Lunex {
 		CopyComponentIfExists<NativeScriptComponent>(newEntity, entity);
 		CopyComponentIfExists<Rigidbody2DComponent>(newEntity, entity);
 		CopyComponentIfExists<BoxCollider2DComponent>(newEntity, entity);
+		CopyComponentIfExists<CircleCollider2DComponent>(newEntity, entity);
 	}
 	
 	Entity Scene::GetPrimaryCameraEntity() {
@@ -365,5 +373,9 @@ namespace Lunex {
 	
 	template<>
 	void Scene::OnComponentAdded<BoxCollider2DComponent>(Entity entity, BoxCollider2DComponent& component) {
+	}
+	
+	template<>
+	void Scene::OnComponentAdded<CircleCollider2DComponent>(Entity entity, CircleCollider2DComponent& component) {
 	}
 }

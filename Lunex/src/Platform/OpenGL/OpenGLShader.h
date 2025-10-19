@@ -40,7 +40,7 @@ namespace Lunex {
 			
 		private:
 			std::string ReadFile(const std::string& filepath);
-			std::unordered_map<GLenum, std::string> PreProcess(const std::string& source);
+			std::string InsertDefineAfterVersion(const std::string& source, const std::string& defineLine);
 			
 			void CompileOrGetVulkanBinaries(const std::unordered_map<GLenum, std::string>& shaderSources);
 			void CompileOrGetOpenGLBinaries();
