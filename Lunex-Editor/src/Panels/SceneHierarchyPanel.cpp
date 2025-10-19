@@ -34,28 +34,24 @@ namespace Lunex {
 	void SceneHierarchyPanel::OnImGuiRender() {
 		ImGui::Begin("Scene Hierarchy");
 		
-		ImGui::PushStyleColor(ImGuiCol_Header, ImVec4{ 1.0f, 0.55f, 0.0f, 0.4f });
-		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4{ 1.0f, 0.55f, 0.0f, 0.6f });
-		ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.8f });
-		
-		auto view = m_Context->m_Registry.view<TagComponent>();
-		for (auto entityID : view) {
-			Entity entity{ entityID, m_Context.get() };
-			DrawEntityNode(entity);
-		}
-		
-		if (ImGui::IsMouseDown(0) && ImGui::IsWindowHovered())
-			m_SelectionContext = {};
-		
-		if (ImGui::BeginPopupContextWindow(nullptr, ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
-			if (ImGui::MenuItem("Create Empty Entity"))
-				m_Context->CreateEntity("Empty Entity");
+		if (m_Context) {
+			// entt::registry::each ya no existe en versiones recientes -> usar view<entt::entity>().each
+			m_Context->m_Registry.view<entt::entity>().each([&](auto entityID) {
+				Entity entity{ entityID , m_Context.get() };
+				DrawEntityNode(entity);
+			});
 			
-			ImGui::EndPopup();
+			if (ImGui::IsMouseDown(0) && ImGui::IsWindowHovered())
+				m_SelectionContext = {};
+			
+			// Click derecho en espacio en blanco
+			// API moderna de ImGui: usar flags en lugar de (mouse_button, also_over_items)
+			if (ImGui::BeginPopupContextWindow(nullptr, ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
+				if (ImGui::MenuItem("Create Empty Entity"))
+					m_Context->CreateEntity("Empty Entity");
+				ImGui::EndPopup();
+			}
 		}
-		
-		ImGui::PopStyleColor(3);
-		
 		ImGui::End();
 		
 		ImGui::Begin("Properties");
@@ -406,7 +402,7 @@ namespace Lunex {
 		
 		DrawComponent<BoxCollider2DComponent>("Box Collider 2D", entity, [](auto& component) {
 			ImGui::DragFloat2("Offset", glm::value_ptr(component.Offset));
-			ImGui::DragFloat2("Size", glm::value_ptr(component.Offset));
+			ImGui::DragFloat2("Size", glm::value_ptr(component.Size));
 			ImGui::DragFloat("Density", &component.Density, 0.01f, 0.0f, 1.0f);
 			ImGui::DragFloat("Friction", &component.Friction, 0.01f, 0.0f, 1.0f);
 			ImGui::DragFloat("Restitution", &component.Restitution, 0.01f, 0.0f, 1.0f);
