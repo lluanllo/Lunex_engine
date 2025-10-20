@@ -5,7 +5,7 @@
 #include <glm/glm.hpp>
 
 namespace Lunex {
-	class   Shader {
+	class Shader {
 		public:
 			virtual ~Shader() = default;
 			
@@ -30,7 +30,7 @@ namespace Lunex {
 			static Ref<Shader> Create(const std::string& names, const std::string& vertexSrc, const std::string& fragmentSrc);
 	};
 	
-	class   ShaderLibrary {
+	class ShaderLibrary {
 		public:
 			void Add(const Ref<Shader>& shader);
 			void Add(const std::string& name, const Ref<Shader>& shader);
