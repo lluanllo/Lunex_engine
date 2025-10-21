@@ -34,6 +34,7 @@ namespace Lunex {
 			void SerializeScene(Ref<Scene> scene, const std::filesystem::path& path);
 			
 			void OnScenePlay();
+			void OnSceneSimulate();  
 			void OnSceneStop();
 			
 			void OnDuplicateEntity();
@@ -42,8 +43,9 @@ namespace Lunex {
 			void UI_Toolbar();
 			
 		private:
-			Lunex::OrthographicCameraController m_CameraController;
+			OrthographicCameraController m_CameraController;
 			
+			// Temp
 			Ref<VertexArray> m_SquareVA;
 			Ref<Shader> m_FlatColorShader;
 			Ref<Framebuffer> m_Framebuffer;
@@ -54,7 +56,6 @@ namespace Lunex {
 			Entity m_SquareEntity;
 			Entity m_CameraEntity;
 			Entity m_SecondCamera;
-			
 			Entity m_HoveredEntity;
 			
 			bool m_PrimaryCamera = true;
@@ -74,7 +75,7 @@ namespace Lunex {
 			bool m_ShowPhysicsColliders = false;
 			
 			enum class SceneState {
-				Edit = 0, Play = 1
+				Edit = 0, Play = 1, Simulate = 2
 			};
 			SceneState m_SceneState = SceneState::Edit;
 			
@@ -83,6 +84,6 @@ namespace Lunex {
 			ContentBrowserPanel m_ContentBrowserPanel;
 			
 			// Editor resources
-			Ref<Texture2D> m_IconPlay, m_IconStop;
+			Ref<Texture2D> m_IconPlay, m_IconSimulate, m_IconStop;
 	};
 }

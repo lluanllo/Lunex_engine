@@ -1,4 +1,4 @@
-#include "SceneHierarchyPanel.h"
+﻿#include "SceneHierarchyPanel.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -15,7 +15,7 @@ namespace Lunex {
 	SceneHierarchyPanel::SceneHierarchyPanel(const Ref<Scene>& context) {
 		SetContext(context);
 		
-		// Cargar iconos para la jerarqu�a (usar rutas absolutas o relativas al working directory)
+		// Cargar iconos para la jerarquía (usar rutas absolutas o relativas al working directory)
 		m_CameraIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/CameraIcon.png");
 		m_EntityIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/EntityIcon.png");
 		
@@ -72,7 +72,7 @@ namespace Lunex {
 		ImGuiTreeNodeFlags flags = ((m_SelectionContext == entity) ? ImGuiTreeNodeFlags_Selected : 0) | ImGuiTreeNodeFlags_OpenOnArrow;
 		flags |= ImGuiTreeNodeFlags_SpanAvailWidth;
 		
-		// Determinar qu� icono usar
+		// Determinar qué icono usar
 		Ref<Texture2D> icon = entity.HasComponent<CameraComponent>() ? m_CameraIcon : m_EntityIcon;
 		
 		// Guardar el cursor actual
@@ -199,7 +199,7 @@ namespace Lunex {
 	template<typename T, typename UIFunction>
 	static void DrawComponent(const std::string& name, Entity entity, UIFunction uifunction) {
 		
-		const ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_FramePadding;
+		const ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap;
 		
 		if (entity.HasComponent<T>()) {
 			auto& component = entity.GetComponent<T>();
@@ -210,18 +210,26 @@ namespace Lunex {
 			ImGui::Separator();
 			bool open = ImGui::TreeNodeEx((void*)typeid(T).hash_code(), treeNodeFlags, name.c_str());
 			ImGui::PopStyleVar();
+			
 			ImGui::SameLine(contentRegionAvailable.x - lineHeight * 0.5f);
+			
+			// ✅ CORRECCIÓN: Usar PushID antes del botón y mantenerlo hasta después del popup
+			ImGui::PushID((int)(intptr_t)(void*)typeid(T).hash_code());
+			
 			if (ImGui::Button("+", ImVec2{ lineHeight, lineHeight })) {
 				ImGui::OpenPopup("ComponentSettings");
 			}
 			
 			bool removeComponent = false;
+			// ✅ El popup DEBE estar dentro del mismo PushID/PopID que el botón
 			if (ImGui::BeginPopup("ComponentSettings")) {
 				if (ImGui::MenuItem("Remove component"))
 					removeComponent = true;
 				
 				ImGui::EndPopup();
 			}
+			
+			ImGui::PopID();  // ✅ Ahora el PopID está DESPUÉS del popup
 			
 			if (open) {
 				uifunction(component);
