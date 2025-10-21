@@ -85,5 +85,8 @@ namespace Lunex {
 			
 			// Editor resources
 			Ref<Texture2D> m_IconPlay, m_IconSimulate, m_IconStop;
+			
+		private:
+			std::string m_InitialScenePath;
 	};
 }

@@ -3,16 +3,16 @@
 
 #include "Sandbox2D.h"
 
-class Sandbox : public Lunex::Application{
-	public:
-		Sandbox() {
-			PushLayer(new Sandbox2D());
-		}
-		
-		~Sandbox() {
-		}
+class Sandbox : public Lunex::Application {
+public:
+	Sandbox() {
+		PushLayer(new Sandbox2D());
+	}
+	
+	~Sandbox() {
+	}
 };
 
-Lunex::Ref <Lunex::Application> Lunex::CreateApplication() {
+Lunex::Ref <Lunex::Application> CreateApplication() {
 	return Lunex::CreateScope<Sandbox>();
 }
