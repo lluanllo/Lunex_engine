@@ -15,6 +15,8 @@ namespace Lunex {
 			virtual uint32_t GetHeight() const override { return m_Height;  };
 			virtual uint32_t GetRendererID() const override { return m_RendererID; };
 			
+			virtual const std::string& GetPath() const override { return m_Path; }
+			
 			virtual void SetData(void* data, uint32_t size) override;
 			
 			virtual void Bind(uint32_t slot = 0) const override;
@@ -22,7 +24,7 @@ namespace Lunex {
 			virtual bool IsLoaded() const override { return m_IsLoaded; }
 			
 			virtual bool operator==(const Texture& other) const override {
-				return m_RendererID == ((OpenGLTexture2D&)other).m_RendererID;
+				return m_RendererID == other.GetRendererID();
 			}
 		private:
 			std::string m_Path;
