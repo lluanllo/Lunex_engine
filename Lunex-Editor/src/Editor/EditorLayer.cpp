@@ -1,4 +1,4 @@
-#include "EditorLayer.h"
+﻿#include "EditorLayer.h"
 #include "imgui.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -18,6 +18,9 @@ namespace Lunex {
 	EditorLayer::EditorLayer()
 		: Layer("EditorLayer"), m_CameraController(1280.0f / 720.0f), m_SquareColor({ 0.2f, 0.3f, 0.8f, 1.0f })
 	{
+		// Inicializar m_ViewportBounds para evitar C26495
+		m_ViewportBounds[0] = { 0.0f, 0.0f };
+		m_ViewportBounds[1] = { 0.0f, 0.0f };
 	}
 	
 	void EditorLayer::OnAttach() {
@@ -25,6 +28,7 @@ namespace Lunex {
 		
 		m_CheckerboardTexture = Texture2D::Create("assets/textures/Checkerboard.png");
 		m_IconPlay = Texture2D::Create("Resources/Icons/PlayStopButtons/PlayButtonIcon.png");
+		m_IconSimulate = Texture2D::Create("Resources/Icons/PlayStopButtons/SimulateButtonIcon.png");
 		m_IconStop = Texture2D::Create("Resources/Icons/PlayStopButtons/StopButtonIcon.png");
 		
 		Lunex::FramebufferSpecification fbSpec;
@@ -33,61 +37,16 @@ namespace Lunex {
 		fbSpec.Height = 720;
 		m_Framebuffer = Framebuffer::Create(fbSpec);
 		
-		m_ActiveScene = CreateRef<Scene>();
+		m_EditorScene = CreateRef<Scene>();
+		m_ActiveScene = m_EditorScene;
 		
-		auto commandLineArgs = Application::Get().GetCommandLineArgs();
-		if (commandLineArgs.Count > 1) {
-			auto sceneFilePath = commandLineArgs[1];
+		// Cargar escena inicial si se proporcionó en los argumentos
+		if (!m_InitialScenePath.empty()) {
 			SceneSerializer serializer(m_ActiveScene);
-			serializer.Deserialize(sceneFilePath);
+			serializer.Deserialize(m_InitialScenePath);
 		}
 		
-		m_EditorCamera = EditorCamera(30.0f, 1.778f, 0.1f, 1000.0f);
-		
-#if 0
-		auto square = m_ActiveScene->CreateEntity("square");
-		square.AddComponent<SpriteRendererComponent>(glm::vec4{ 0.0f, 1.0f, 0.0f, 1.0f });
-		
-		auto redSquare = m_ActiveScene->CreateEntity("Red Square");
-		redSquare.AddComponent<SpriteRendererComponent>(glm::vec4{ 1.0f, 0.0f, 0.0f, 1.0f });
-		
-		m_SquareEntity = square;
-		
-		m_CameraEntity = m_ActiveScene->CreateEntity("Camera A");
-		m_CameraEntity.AddComponent<CameraComponent>();
-		
-		m_SecondCamera = m_ActiveScene->CreateEntity("Camera B");
-		auto& cc = m_SecondCamera.AddComponent<CameraComponent>();
-		cc.Primary = false;
-		
-		class CameraController : public ScriptableEntity {
-		public:
-			virtual void OnCreate() override {
-				auto& translation = GetComponent<TransformComponent>().Translation;
-				translation.x = rand() % 10 - 5.0f;
-			}
-			
-			virtual void OnDestroy() override {}
-			
-			virtual void OnUpdate(Timestep ts) override {
-				auto& translation = GetComponent<TransformComponent>().Translation;
-				float speed = 5.0f;
-				
-				if (Input::IsKeyPressed(KeyCode::A))
-					translation.x -= speed * ts;
-				if (Input::IsKeyPressed(KeyCode::D))
-					translation.x += speed * ts;
-				if (Input::IsKeyPressed(KeyCode::W))
-					translation.y += speed * ts;
-				if (Input::IsKeyPressed(KeyCode::S))
-					translation.y -= speed * ts;
-			}
-		};
-		
-		m_CameraEntity.AddComponent<NativeScriptComponent>().Bind<CameraController>();
-		m_SecondCamera.AddComponent<NativeScriptComponent>().Bind<CameraController>();
-		
-		#endif
+		Renderer2D::SetLineWidth(4.0f);
 	}
 	
 	void EditorLayer::OnDetach() {
@@ -126,6 +85,12 @@ namespace Lunex {
 				m_EditorCamera.OnUpdate(ts);
 				
 				m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
+				break;
+			}
+			case SceneState::Simulate: {
+				m_EditorCamera.OnUpdate(ts);
+				
+				m_ActiveScene->OnUpdateSimulation(ts, m_EditorCamera);
 				break;
 			}
 			case SceneState::Play: {
@@ -196,9 +161,8 @@ namespace Lunex {
 		
 		if (ImGui::BeginMenuBar()) {
 			if (ImGui::BeginMenu("File")) {
-				// Disabling fullscreen would allow the window to be moved to the front of other windows, 
-				// which we can't undo at the moment without finer window depth/z control.
-				//ImGui::MenuItem("Fullscreen", NULL, &opt_fullscreen_persistant);
+				if (ImGui::MenuItem("Save", "Ctrl+S"))
+					SaveScene();
 				
 				if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S"))
 					SaveSceneAs();
@@ -271,15 +235,7 @@ namespace Lunex {
 			ImGuizmo::SetOrthographic(false);
 			ImGuizmo::SetDrawlist();
 			
-			float windowWidth = (float)ImGui::GetWindowWidth();
-			float windowHeight = (float)ImGui::GetWindowHeight();
 			ImGuizmo::SetRect(m_ViewportBounds[0].x, m_ViewportBounds[0].y, m_ViewportBounds[1].x - m_ViewportBounds[0].x, m_ViewportBounds[1].y - m_ViewportBounds[0].y);
-			
-			// Runtime camera from entity
-			// auto cameraEntity = m_ActiveScene->GetPrimaryCameraEntity();
-			// const auto& camera = cameraEntity.GetComponent<CameraComponent>().Camera;
-			// const glm::mat4& cameraProjection = camera.GetProjection();
-			// glm::mat4 cameraView = glm::inverse(cameraEntity.GetComponent<TransformComponent>().GetTransform());
 			
 			// Editor camera
 			const glm::mat4& cameraProjection = m_EditorCamera.GetProjection();
@@ -291,8 +247,7 @@ namespace Lunex {
 			
 			// Snapping
 			bool snap = Input::IsKeyPressed(Key::LeftControl);
-			float snapValue = 0.5f; // Snap to 0.5m for translation/scale
-			// Snap to 45 degrees for rotation
+			float snapValue = 0.5f;
 			if (m_GizmoType == ImGuizmo::OPERATION::ROTATE)
 				snapValue = 45.0f;
 			
@@ -333,24 +288,53 @@ namespace Lunex {
 		
 		ImGui::Begin("##toolbar", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		
+		bool toolbarEnabled = (bool)m_ActiveScene;
+		
+		ImVec4 tintColor = ImVec4(1, 1, 1, 1);
+		if (!toolbarEnabled)
+			tintColor.w = 0.5f;
+		
 		float size = ImGui::GetWindowHeight() - 4.0f;
-		Ref<Texture2D> icon = m_SceneState == SceneState::Edit ? m_IconPlay : m_IconStop;
-		ImGui::SetCursorPosX((ImGui::GetWindowContentRegionMax().x * 0.5f) - (size * 0.5f));
-		if (ImGui::ImageButton("##PlayStopButton", (ImTextureID)(intptr_t)icon->GetRendererID(), ImVec2(size, size), ImVec2(0, 0), ImVec2(1, 1))) {
-			if (m_SceneState == SceneState::Edit)
-				OnScenePlay();
-			else if (m_SceneState == SceneState::Play)
-				OnSceneStop();
+		
+		// ✅ Botón Play/Stop con fondo transparente
+		{
+			Ref<Texture2D> icon = (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Simulate) ? m_IconPlay : m_IconStop;
+			ImGui::SetCursorPosX((ImGui::GetWindowContentRegionMax().x * 0.5f) - (size * 0.5f));
+			
+			// ✅ Fondo completamente transparente (ImVec4(0, 0, 0, 0))
+			if (ImGui::ImageButton("##PlayButton", (ImTextureID)(intptr_t)icon->GetRendererID(), ImVec2(size, size), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0), tintColor) && toolbarEnabled) {
+				if (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Simulate)
+					OnScenePlay();
+				else if (m_SceneState == SceneState::Play)
+					OnSceneStop();
+			}
 		}
+		
+		ImGui::SameLine();
+		
+		// ✅ Botón Simulate/Stop con fondo transparente
+		{
+			Ref<Texture2D> icon = (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Play) ? m_IconSimulate : m_IconStop;
+			
+			// ✅ Fondo completamente transparente (ImVec4(0, 0, 0, 0))
+			if (ImGui::ImageButton("##SimulateButton", (ImTextureID)(intptr_t)icon->GetRendererID(), ImVec2(size, size), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0), tintColor) && toolbarEnabled) {
+				if (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Play)
+					OnSceneSimulate();
+				else if (m_SceneState == SceneState::Simulate)
+					OnSceneStop();
+			}
+		}
+		
 		ImGui::PopStyleVar(2);
 		ImGui::PopStyleColor(3);
-		
 		ImGui::End();
 	}
 	
 	void EditorLayer::OnEvent(Lunex::Event& e) {
 		m_CameraController.OnEvent(e);
-		m_EditorCamera.OnEvent(e);
+		if (m_SceneState == SceneState::Edit) {
+			m_EditorCamera.OnEvent(e);
+		}
 		
 		EventDispatcher dispatcher(e);
 		dispatcher.Dispatch<KeyPressedEvent>(LNX_BIND_EVENT_FN(EditorLayer::OnKeyPressed));
@@ -358,12 +342,12 @@ namespace Lunex {
 	}
 	
 	bool EditorLayer::OnKeyPressed(KeyPressedEvent& e) {
-		// Shortcuts
 		if (e.GetRepeatCount() > 0)
 			return false;
 		
 		bool control = Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl);
 		bool shift = Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift);
+		
 		switch (e.GetKeyCode()) {
 			case Key::N: {
 				if (control)
@@ -384,14 +368,11 @@ namespace Lunex {
 				}
 				break;
 			}
-			// Scene Commands
 			case Key::D: {
 				if (control)
 					OnDuplicateEntity();
 				break;
 			}
-			
-			// Gizmos
 			case Key::Q: {
 				if (!ImGuizmo::IsUsing())
 					m_GizmoType = -1;
@@ -413,6 +394,8 @@ namespace Lunex {
 				break;
 			}
 		}
+		
+		return false;
 	}
 	
 	bool EditorLayer::OnMouseButtonPressed(MouseButtonPressedEvent& e) {
@@ -426,6 +409,8 @@ namespace Lunex {
 	void EditorLayer::OnOverlayRender() {
 		if (m_SceneState == SceneState::Play) {
 			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
+			if (!camera)
+				return;
 			Renderer2D::BeginScene(camera.GetComponent<CameraComponent>().Camera, camera.GetComponent<TransformComponent>().GetTransform());
 		}
 		else {
@@ -466,6 +451,12 @@ namespace Lunex {
 				}
 			}
 		}
+		
+		// Draw selected entity outline 
+		if (Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity()) {
+			const TransformComponent& transform = selectedEntity.GetComponent<TransformComponent>();
+			Renderer2D::DrawRect(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+		}
 		Renderer2D::EndScene();
 	}
 	
@@ -473,7 +464,6 @@ namespace Lunex {
 		m_ActiveScene = CreateRef<Scene>();
 		m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
-		
 		m_EditorScenePath = std::filesystem::path();
 	}
 	
@@ -498,7 +488,6 @@ namespace Lunex {
 			m_EditorScene = newScene;
 			m_EditorScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 			m_SceneHierarchyPanel.SetContext(m_EditorScene);
-			
 			m_ActiveScene = m_EditorScene;
 			m_EditorScenePath = path;
 		}
@@ -525,19 +514,34 @@ namespace Lunex {
 	}
 	
 	void EditorLayer::OnScenePlay() {
-		m_SceneState = SceneState::Play;
+		if (m_SceneState == SceneState::Simulate)
+			OnSceneStop();
 		
+		m_SceneState = SceneState::Play;
 		m_ActiveScene = Scene::Copy(m_EditorScene);
 		m_ActiveScene->OnRuntimeStart();
+		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
+	}
+	
+	void EditorLayer::OnSceneSimulate() {
+		if (m_SceneState == SceneState::Play)
+			OnSceneStop();
 		
+		m_SceneState = SceneState::Simulate;
+		m_ActiveScene = Scene::Copy(m_EditorScene);
+		m_ActiveScene->OnSimulationStart();
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
 	}
 	
 	void EditorLayer::OnSceneStop() {
+		LNX_CORE_ASSERT(m_SceneState == SceneState::Play || m_SceneState == SceneState::Simulate);
+		
+		if (m_SceneState == SceneState::Play)
+			m_ActiveScene->OnRuntimeStop();
+		else if (m_SceneState == SceneState::Simulate)
+			m_ActiveScene->OnSimulationStop();
+		
 		m_SceneState = SceneState::Edit;
-		
-		m_ActiveScene->OnRuntimeStop();
-		
 		m_ActiveScene = m_EditorScene;
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
 	}

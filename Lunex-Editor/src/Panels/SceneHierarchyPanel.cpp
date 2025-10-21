@@ -1,4 +1,4 @@
-#include "SceneHierarchyPanel.h"
+﻿#include "SceneHierarchyPanel.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -15,7 +15,7 @@ namespace Lunex {
 	SceneHierarchyPanel::SceneHierarchyPanel(const Ref<Scene>& context) {
 		SetContext(context);
 		
-		// Cargar iconos para la jerarqu�a (usar rutas absolutas o relativas al working directory)
+		// Cargar iconos para la jerarquía (usar rutas absolutas o relativas al working directory)
 		m_CameraIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/CameraIcon.png");
 		m_EntityIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/EntityIcon.png");
 		
@@ -72,7 +72,7 @@ namespace Lunex {
 		ImGuiTreeNodeFlags flags = ((m_SelectionContext == entity) ? ImGuiTreeNodeFlags_Selected : 0) | ImGuiTreeNodeFlags_OpenOnArrow;
 		flags |= ImGuiTreeNodeFlags_SpanAvailWidth;
 		
-		// Determinar qu� icono usar
+		// Determinar qué icono usar
 		Ref<Texture2D> icon = entity.HasComponent<CameraComponent>() ? m_CameraIcon : m_EntityIcon;
 		
 		// Guardar el cursor actual
@@ -199,7 +199,7 @@ namespace Lunex {
 	template<typename T, typename UIFunction>
 	static void DrawComponent(const std::string& name, Entity entity, UIFunction uifunction) {
 		
-		const ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_FramePadding;
+		const ImGuiTreeNodeFlags treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_AllowOverlap;
 		
 		if (entity.HasComponent<T>()) {
 			auto& component = entity.GetComponent<T>();
@@ -210,18 +210,26 @@ namespace Lunex {
 			ImGui::Separator();
 			bool open = ImGui::TreeNodeEx((void*)typeid(T).hash_code(), treeNodeFlags, name.c_str());
 			ImGui::PopStyleVar();
+			
 			ImGui::SameLine(contentRegionAvailable.x - lineHeight * 0.5f);
+			
+			// ✅ CORRECCIÓN: Usar PushID antes del botón y mantenerlo hasta después del popup
+			ImGui::PushID((int)(intptr_t)(void*)typeid(T).hash_code());
+			
 			if (ImGui::Button("+", ImVec2{ lineHeight, lineHeight })) {
 				ImGui::OpenPopup("ComponentSettings");
 			}
 			
 			bool removeComponent = false;
+			// ✅ El popup DEBE estar dentro del mismo PushID/PopID que el botón
 			if (ImGui::BeginPopup("ComponentSettings")) {
 				if (ImGui::MenuItem("Remove component"))
 					removeComponent = true;
 				
 				ImGui::EndPopup();
 			}
+			
+			ImGui::PopID();  // ✅ Ahora el PopID está DESPUÉS del popup
 			
 			if (open) {
 				uifunction(component);
@@ -251,47 +259,12 @@ namespace Lunex {
 		if (ImGui::Button("Add Component"))
 			ImGui::OpenPopup("AddComponent");
 		if (ImGui::BeginPopup("AddComponent")) {
-			if (!m_SelectionContext.HasComponent<CameraComponent>()) {
-				if (ImGui::MenuItem("Camera")) {
-					m_SelectionContext.AddComponent<CameraComponent>();
-					ImGui::CloseCurrentPopup();
-				}
-			}
-			
-			if (!m_SelectionContext.HasComponent<SpriteRendererComponent>()) {
-				if (ImGui::MenuItem("Sprite Renderer")) {
-					m_SelectionContext.AddComponent<SpriteRendererComponent>();
-					ImGui::CloseCurrentPopup();
-				}
-			}
-			
-			if (!m_SelectionContext.HasComponent<Rigidbody2DComponent>()) {
-				if (ImGui::MenuItem("Rigidbody 2D")) {
-					m_SelectionContext.AddComponent<Rigidbody2DComponent>();
-					ImGui::CloseCurrentPopup();
-				}
-			}
-			
-			if (!m_SelectionContext.HasComponent<BoxCollider2DComponent>()) {
-				if (ImGui::MenuItem("Box Collider 2D")) {
-					m_SelectionContext.AddComponent<BoxCollider2DComponent>();
-					ImGui::CloseCurrentPopup();
-				}
-			}
-			
-			if (!m_SelectionContext.HasComponent<CircleRendererComponent>()) {
-				if (ImGui::MenuItem("Circle Renderer"))	{
-					m_SelectionContext.AddComponent<CircleRendererComponent>();
-					ImGui::CloseCurrentPopup();
-				}
-			}
-			
-			if (!m_SelectionContext.HasComponent<CircleCollider2DComponent>()) {
-				if (ImGui::MenuItem("Circle Collider 2D")) {
-					m_SelectionContext.AddComponent<CircleCollider2DComponent>();
-					ImGui::CloseCurrentPopup();
-				}
-			}
+			DisplayAddComponentEntry<CameraComponent>("Camera");
+			DisplayAddComponentEntry<SpriteRendererComponent>("Sprite Renderer");
+			DisplayAddComponentEntry<CircleRendererComponent>("Circle Renderer");
+			DisplayAddComponentEntry<Rigidbody2DComponent>("Rigidbody 2D");
+			DisplayAddComponentEntry<BoxCollider2DComponent>("Box Collider 2D");
+			DisplayAddComponentEntry<CircleCollider2DComponent>("Circle Collider 2D");
 			
 			ImGui::EndPopup();
 		}
@@ -436,5 +409,15 @@ namespace Lunex {
 			ImGui::DragFloat("Restitution", &component.Restitution, 0.01f, 0.0f, 1.0f);
 			ImGui::DragFloat("Restitution Threshold", &component.RestitutionThreshold, 0.01f, 0.0f);
 		});
+	}
+	
+	template<typename T>
+	void SceneHierarchyPanel::DisplayAddComponentEntry(const std::string& entryName) {
+		if (!m_SelectionContext.HasComponent<T>()) {
+			if (ImGui::MenuItem(entryName.c_str())) {
+				m_SelectionContext.AddComponent<T>();
+				ImGui::CloseCurrentPopup();
+			}
+		}
 	}
 }
