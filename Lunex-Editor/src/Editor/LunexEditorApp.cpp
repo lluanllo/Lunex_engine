@@ -4,7 +4,7 @@
 #include "EditorLayer.h"
 
 namespace Lunex {
-	class LunexEditor : public Application{
+	class LunexEditor : public Application {
 		public:
 			LunexEditor(ApplicationCommandLineArgs args)
 				: Application("Lunex Editor", args) {
@@ -13,9 +13,9 @@ namespace Lunex {
 			
 			~LunexEditor() {
 			}
-	};
-	
-	Lunex::Ref <Lunex::Application> Lunex::CreateApplication(ApplicationCommandLineArgs args) {
-		return Lunex::CreateScope<LunexEditor>(args);
-	}
+		};
+		
+		Lunex::Ref <Lunex::Application> Lunex::CreateApplication(ApplicationCommandLineArgs args) {
+			return Lunex::CreateScope<LunexEditor>(args);
+		}
 }
