@@ -40,14 +40,13 @@ namespace Lunex {
 		m_EditorScene = CreateRef<Scene>();
 		m_ActiveScene = m_EditorScene;
 		
-		auto commandLineArgs = Application::Get().GetCommandLineArgs();
-		if (commandLineArgs.Count > 1) {
-			auto sceneFilePath = commandLineArgs[1];
+		// Cargar escena inicial si se proporcionó en los argumentos
+		if (!m_InitialScenePath.empty()) {
 			SceneSerializer serializer(m_ActiveScene);
-			serializer.Deserialize(sceneFilePath);
+			serializer.Deserialize(m_InitialScenePath);
 		}
 		
-		m_EditorCamera = EditorCamera(30.0f, 1.778f, 0.1f, 1000.0f);
+		Renderer2D::SetLineWidth(4.0f);
 	}
 	
 	void EditorLayer::OnDetach() {
@@ -162,6 +161,9 @@ namespace Lunex {
 		
 		if (ImGui::BeginMenuBar()) {
 			if (ImGui::BeginMenu("File")) {
+				if (ImGui::MenuItem("Save", "Ctrl+S"))
+					SaveScene();
+				
 				if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S"))
 					SaveSceneAs();
 				
@@ -330,7 +332,9 @@ namespace Lunex {
 	
 	void EditorLayer::OnEvent(Lunex::Event& e) {
 		m_CameraController.OnEvent(e);
-		m_EditorCamera.OnEvent(e);
+		if (m_SceneState == SceneState::Edit) {
+			m_EditorCamera.OnEvent(e);
+		}
 		
 		EventDispatcher dispatcher(e);
 		dispatcher.Dispatch<KeyPressedEvent>(LNX_BIND_EVENT_FN(EditorLayer::OnKeyPressed));
@@ -448,6 +452,11 @@ namespace Lunex {
 			}
 		}
 		
+		// Draw selected entity outline 
+		if (Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity()) {
+			const TransformComponent& transform = selectedEntity.GetComponent<TransformComponent>();
+			Renderer2D::DrawRect(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+		}
 		Renderer2D::EndScene();
 	}
 	

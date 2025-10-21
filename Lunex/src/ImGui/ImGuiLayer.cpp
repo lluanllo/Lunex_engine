@@ -1,4 +1,4 @@
-#include "stpch.h"
+Ôªø#include "stpch.h"
 #include "ImGuiLayer.h"
 
 #include "imgui.h"
@@ -28,22 +28,17 @@ namespace Lunex {
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
-		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls
-		//io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking
-		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows
-		//io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoTaskBarIcons;
-		//io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoMerge;
+		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 		
-		float m_FontSize = 16.0f;
+		float m_FontSize = 15.0f;  // ‚úÖ Ligeramente m√°s peque√±o para look profesional
 		
 		io.Fonts->AddFontFromFileTTF("assets/Fonts/JetBrainsMono/JetBrainsMono-Bold.ttf", m_FontSize);
-		
 		io.FontDefault = io.Fonts->AddFontFromFileTTF("assets/Fonts/JetBrainsMono/JetBrainsMono-Regular.ttf", m_FontSize);
 		
 		// Setup Dear ImGui style
 		ImGui::StyleColorsDark();
-		//ImGui::StyleColorsClassic();
 		
 		// When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
 		ImGuiStyle& style = ImGui::GetStyle();
@@ -107,148 +102,163 @@ namespace Lunex {
 		auto& colors = ImGui::GetStyle().Colors;
 		auto& style = ImGui::GetStyle();
 		
-		// ===== CONFIGURACI”N DE ESTILO MEJORADO =====
-		style.WindowPadding = ImVec2(10, 10);
-		style.WindowRounding = 4.0f;
-		style.WindowTitleAlign = ImVec2(0.5f, 0.5f);  // TÌtulo centrado
-		style.FramePadding = ImVec2(6, 4);
-		style.FrameRounding = 3.0f;
-		style.ItemSpacing = ImVec2(10, 6);
-		style.ItemInnerSpacing = ImVec2(6, 5);
-		style.IndentSpacing = 22.0f;
-		style.ScrollbarSize = 16.0f;
-		style.ScrollbarRounding = 4.0f;
-		style.GrabMinSize = 12.0f;
-		style.GrabRounding = 3.0f;
-		style.TabRounding = 3.0f;
-		style.ChildRounding = 3.0f;
-		style.PopupRounding = 3.0f;
+		// ===== ESTILO PROFESIONAL INSPIRADO EN UNREAL ENGINE =====
 		
-		// Bordes m·s definidos
-		style.WindowBorderSize = 1.0f;
-		style.FrameBorderSize = 1.0f;
+		// Espaciado y padding m√°s refinado
+		style.WindowPadding = ImVec2(8, 8);
+		style.FramePadding = ImVec2(5, 3);
+		style.CellPadding = ImVec2(6, 3);
+		style.ItemSpacing = ImVec2(8, 4);
+		style.ItemInnerSpacing = ImVec2(4, 4);
+		style.TouchExtraPadding = ImVec2(0, 0);
+		style.IndentSpacing = 20.0f;
+		style.ScrollbarSize = 14.0f;
+		style.GrabMinSize = 10.0f;
+		
+		// Bordes sutiles pero presentes
+		style.WindowBorderSize = 0.0f;
+		style.ChildBorderSize = 0.0f;
 		style.PopupBorderSize = 1.0f;
-		style.ChildBorderSize = 1.0f;
+		style.FrameBorderSize = 0.0f;
+		style.TabBorderSize = 0.0f;
 		
-		// ===== PALETA DE COLORES MEJORADA =====
-		// Fondo principal m·s oscuro y limpio
-		const ImVec4 bgDarkest = ImVec4{ 0.08f, 0.08f, 0.09f, 1.0f };
-		const ImVec4 bgDark = ImVec4{ 0.11f, 0.11f, 0.12f, 1.0f };
-		const ImVec4 bgMedium = ImVec4{ 0.14f, 0.14f, 0.15f, 1.0f };
-		const ImVec4 bgLight = ImVec4{ 0.18f, 0.18f, 0.19f, 1.0f };
-		const ImVec4 bgLighter = ImVec4{ 0.22f, 0.22f, 0.23f, 1.0f };
+		// Redondeado sutil y profesional (menos que antes)
+		style.WindowRounding = 0.0f;
+		style.ChildRounding = 0.0f;
+		style.FrameRounding = 2.0f;
+		style.PopupRounding = 2.0f;
+		style.ScrollbarRounding = 3.0f;
+		style.GrabRounding = 2.0f;
+		style.TabRounding = 2.0f;
 		
-		// Acento naranja m·s vibrante
-		const ImVec4 accent = ImVec4{ 1.0f, 0.60f, 0.0f, 1.0f };
-		const ImVec4 accentHover = ImVec4{ 1.0f, 0.70f, 0.20f, 1.0f };
-		const ImVec4 accentActive = ImVec4{ 1.0f, 0.55f, 0.0f, 1.0f };
-		const ImVec4 accentDim = ImVec4{ 0.7f, 0.42f, 0.0f, 1.0f };
+		// Alineaci√≥n profesional
+		style.WindowTitleAlign = ImVec2(0.0f, 0.5f);
+		style.WindowMenuButtonPosition = ImGuiDir_Left;
+		style.ColorButtonPosition = ImGuiDir_Right;
+		style.ButtonTextAlign = ImVec2(0.5f, 0.5f);
+		style.SelectableTextAlign = ImVec2(0.0f, 0.5f);
 		
-		// SelecciÛn y hover mejorados
-		const ImVec4 selection = ImVec4{ 0.26f, 0.26f, 0.27f, 1.0f };
-		const ImVec4 selectionHover = ImVec4{ 0.32f, 0.32f, 0.33f, 1.0f };
-		const ImVec4 selectionActive = ImVec4{ 0.38f, 0.38f, 0.39f, 1.0f };
+		// Otros ajustes
+		style.DisplaySafeAreaPadding = ImVec2(3, 3);
 		
-		// Texto con mejor contraste
-		const ImVec4 text = ImVec4{ 0.95f, 0.95f, 0.95f, 1.0f };
-		const ImVec4 textDisabled = ImVec4{ 0.50f, 0.50f, 0.50f, 1.0f };
-		const ImVec4 textBright = ImVec4{ 1.0f, 1.0f, 1.0f, 1.0f };
+		// ===== PALETA DE COLORES PROFESIONAL (UNREAL-INSPIRED) =====
 		
-		// Bordes con contraste sutil
-		const ImVec4 border = ImVec4{ 0.20f, 0.20f, 0.21f, 1.0f };
-		const ImVec4 borderLight = ImVec4{ 0.28f, 0.28f, 0.29f, 1.0f };
-		const ImVec4 borderAccent = ImVec4{ 0.40f, 0.28f, 0.10f, 1.0f };
+		// Fondos con gradientes sutiles y profundidad
+		const ImVec4 bgVeryDark = ImVec4(0.05f, 0.05f, 0.05f, 1.0f);      // Fondo m√°s oscuro
+		const ImVec4 bgDark = ImVec4(0.09f, 0.09f, 0.09f, 1.0f);          // Fondo principal
+		const ImVec4 bgMedium = ImVec4(0.12f, 0.12f, 0.12f, 1.0f);        // √Åreas elevadas
+		const ImVec4 bgLight = ImVec4(0.16f, 0.16f, 0.16f, 1.0f);         // Controles
+		const ImVec4 bgLighter = ImVec4(0.20f, 0.20f, 0.20f, 1.0f);       // Hover sutil
 		
-		// ===== APLICACI”N DE COLORES =====
+		// Acento naranja refinado (menos saturado, m√°s profesional)
+		const ImVec4 accent = ImVec4(0.90f, 0.50f, 0.10f, 1.0f);          // Naranja principal
+		const ImVec4 accentHover = ImVec4(1.0f, 0.60f, 0.20f, 1.0f);      // Hover m√°s brillante
+		const ImVec4 accentActive = ImVec4(0.80f, 0.45f, 0.08f, 1.0f);    // Active m√°s oscuro
+		const ImVec4 accentDim = ImVec4(0.60f, 0.35f, 0.08f, 1.0f);       // Dim para secundarios
+		const ImVec4 accentSubtle = ImVec4(0.90f, 0.50f, 0.10f, 0.30f);   // Transparente
 		
-		// Windows con gradiente sutil
+		// Texto con mejor jerarqu√≠a
+		const ImVec4 text = ImVec4(0.92f, 0.92f, 0.92f, 1.0f);            // Texto principal
+		const ImVec4 textBright = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);         // Texto destacado
+		const ImVec4 textDisabled = ImVec4(0.45f, 0.45f, 0.45f, 1.0f);    // Texto deshabilitado
+		const ImVec4 textDim = ImVec4(0.65f, 0.65f, 0.65f, 1.0f);         // Texto secundario
+		
+		// Bordes y separadores sutiles
+		const ImVec4 border = ImVec4(0.18f, 0.18f, 0.18f, 1.0f);
+		const ImVec4 borderLight = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
+		const ImVec4 separator = ImVec4(0.22f, 0.22f, 0.22f, 1.0f);
+		
+		// ===== APLICACI√ìN DE COLORES =====
+		
+		// Backgrounds
 		colors[ImGuiCol_WindowBg] = bgDark;
-		colors[ImGuiCol_ChildBg] = bgMedium;
-		colors[ImGuiCol_PopupBg] = ImVec4{ 0.10f, 0.10f, 0.11f, 0.98f };
+		colors[ImGuiCol_ChildBg] = bgVeryDark;
+		colors[ImGuiCol_PopupBg] = ImVec4(0.08f, 0.08f, 0.08f, 0.98f);
+		colors[ImGuiCol_MenuBarBg] = bgMedium;
 		
-		// Headers mejorados con acento naranja
-		colors[ImGuiCol_Header] = ImVec4{ accent.x, accent.y, accent.z, 0.35f };
-		colors[ImGuiCol_HeaderHovered] = ImVec4{ accent.x, accent.y, accent.z, 0.50f };
-		colors[ImGuiCol_HeaderActive] = ImVec4{ accent.x, accent.y, accent.z, 0.65f };
+		// Borders
+		colors[ImGuiCol_Border] = border;
+		colors[ImGuiCol_BorderShadow] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 		
-		// Buttons con mejor feedback visual
+		// Text
+		colors[ImGuiCol_Text] = text;
+		colors[ImGuiCol_TextDisabled] = textDisabled;
+		colors[ImGuiCol_TextSelectedBg] = ImVec4(accent.x, accent.y, accent.z, 0.35f);
+		
+		// Headers (m√°s sutiles, menos saturados)
+		colors[ImGuiCol_Header] = ImVec4(0.20f, 0.20f, 0.20f, 1.0f);
+		colors[ImGuiCol_HeaderHovered] = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
+		colors[ImGuiCol_HeaderActive] = ImVec4(accent.x, accent.y, accent.z, 0.40f);
+		
+		// Buttons (m√°s planos y profesionales)
 		colors[ImGuiCol_Button] = bgLight;
 		colors[ImGuiCol_ButtonHovered] = bgLighter;
-		colors[ImGuiCol_ButtonActive] = selection;
+		colors[ImGuiCol_ButtonActive] = ImVec4(0.24f, 0.24f, 0.24f, 1.0f);
 		
-		// Frame BG con m·s profundidad
-		colors[ImGuiCol_FrameBg] = bgDarkest;
+		// Frame backgrounds (inputs, etc.)
+		colors[ImGuiCol_FrameBg] = bgVeryDark;
 		colors[ImGuiCol_FrameBgHovered] = bgMedium;
 		colors[ImGuiCol_FrameBgActive] = bgLight;
 		
-		// Tabs con mejor separaciÛn visual
-		colors[ImGuiCol_Tab] = bgDark;
-		colors[ImGuiCol_TabHovered] = bgLighter;
-		colors[ImGuiCol_TabActive] = bgMedium;
-		colors[ImGuiCol_TabUnfocused] = bgDarkest;
-		colors[ImGuiCol_TabUnfocusedActive] = bgDark;
+		// Tabs (m√°s refinados)
+		colors[ImGuiCol_Tab] = bgMedium;
+		colors[ImGuiCol_TabHovered] = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
+		colors[ImGuiCol_TabActive] = bgLight;
+		colors[ImGuiCol_TabUnfocused] = bgDark;
+		colors[ImGuiCol_TabUnfocusedActive] = bgMedium;
 		
-		// Title Bar con acento
-		colors[ImGuiCol_TitleBg] = bgDarkest;
-		colors[ImGuiCol_TitleBgActive] = ImVec4{ 0.12f, 0.12f, 0.13f, 1.0f };
-		colors[ImGuiCol_TitleBgCollapsed] = bgDarkest;
+		// Title bar (m√°s sutil)
+		colors[ImGuiCol_TitleBg] = bgVeryDark;
+		colors[ImGuiCol_TitleBgActive] = bgDark;
+		colors[ImGuiCol_TitleBgCollapsed] = bgVeryDark;
 		
-		// Scrollbar elegante
-		colors[ImGuiCol_ScrollbarBg] = bgDark;
+		// Scrollbar (m√°s elegante)
+		colors[ImGuiCol_ScrollbarBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 		colors[ImGuiCol_ScrollbarGrab] = bgLight;
 		colors[ImGuiCol_ScrollbarGrabHovered] = bgLighter;
-		colors[ImGuiCol_ScrollbarGrabActive] = selection;
+		colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.26f, 0.26f, 0.26f, 1.0f);
 		
-		// Check Mark y Slider con acento naranja brillante
+		// Sliders y checks (acento naranja refinado)
 		colors[ImGuiCol_CheckMark] = accent;
 		colors[ImGuiCol_SliderGrab] = accent;
 		colors[ImGuiCol_SliderGrabActive] = accentHover;
 		
-		// Resize Grip m·s visible
-		colors[ImGuiCol_ResizeGrip] = ImVec4{ 0.26f, 0.26f, 0.27f, 0.60f };
-		colors[ImGuiCol_ResizeGripHovered] = ImVec4{ 0.32f, 0.32f, 0.33f, 0.80f };
-		colors[ImGuiCol_ResizeGripActive] = ImVec4{ accent.x, accent.y, accent.z, 0.95f };
+		// Resize grip
+		colors[ImGuiCol_ResizeGrip] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+		colors[ImGuiCol_ResizeGripHovered] = ImVec4(accent.x, accent.y, accent.z, 0.25f);
+		colors[ImGuiCol_ResizeGripActive] = ImVec4(accent.x, accent.y, accent.z, 0.50f);
 		
-		// Plot con colores vibrantes
+		// Separator
+		colors[ImGuiCol_Separator] = separator;
+		colors[ImGuiCol_SeparatorHovered] = ImVec4(accent.x, accent.y, accent.z, 0.50f);
+		colors[ImGuiCol_SeparatorActive] = accent;
+		
+		// Docking
+		colors[ImGuiCol_DockingPreview] = ImVec4(accent.x, accent.y, accent.z, 0.30f);
+		colors[ImGuiCol_DockingEmptyBg] = bgVeryDark;
+		
+		// Tables
+		colors[ImGuiCol_TableHeaderBg] = bgMedium;
+		colors[ImGuiCol_TableBorderStrong] = border;
+		colors[ImGuiCol_TableBorderLight] = ImVec4(0.14f, 0.14f, 0.14f, 1.0f);
+		colors[ImGuiCol_TableRowBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+		colors[ImGuiCol_TableRowBgAlt] = ImVec4(1.0f, 1.0f, 1.0f, 0.02f);
+		
+		// Plots
 		colors[ImGuiCol_PlotLines] = accent;
 		colors[ImGuiCol_PlotLinesHovered] = accentHover;
 		colors[ImGuiCol_PlotHistogram] = accentDim;
 		colors[ImGuiCol_PlotHistogramHovered] = accent;
 		
-		// Text
-		colors[ImGuiCol_Text] = text;
-		colors[ImGuiCol_TextDisabled] = textDisabled;
-		colors[ImGuiCol_TextSelectedBg] = ImVec4{ accent.x, accent.y, accent.z, 0.40f };
+		// Drag and drop
+		colors[ImGuiCol_DragDropTarget] = ImVec4(accent.x, accent.y, accent.z, 0.80f);
 		
-		// Border con mejor contraste
-		colors[ImGuiCol_Border] = border;
-		colors[ImGuiCol_BorderShadow] = ImVec4{ 0.0f, 0.0f, 0.0f, 0.3f };
-		
-		// Separator m·s visible
-		colors[ImGuiCol_Separator] = borderLight;
-		colors[ImGuiCol_SeparatorHovered] = ImVec4{ accent.x, accent.y, accent.z, 0.60f };
-		colors[ImGuiCol_SeparatorActive] = accent;
-		
-		// Docking con acento
-		colors[ImGuiCol_DockingPreview] = ImVec4{ accent.x, accent.y, accent.z, 0.40f };
-		colors[ImGuiCol_DockingEmptyBg] = bgDark;
-		
-		// Table mejorada
-		colors[ImGuiCol_TableHeaderBg] = bgMedium;
-		colors[ImGuiCol_TableBorderStrong] = border;
-		colors[ImGuiCol_TableBorderLight] = ImVec4{ 0.16f, 0.16f, 0.17f, 1.0f };
-		colors[ImGuiCol_TableRowBg] = ImVec4{ 0.0f, 0.0f, 0.0f, 0.0f };
-		colors[ImGuiCol_TableRowBgAlt] = ImVec4{ 1.0f, 1.0f, 1.0f, 0.03f };
-		
-		// Drag and Drop m·s evidente
-		colors[ImGuiCol_DragDropTarget] = ImVec4{ accent.x, accent.y, accent.z, 0.90f };
-		
-		// Nav con acento
+		// Navigation
 		colors[ImGuiCol_NavHighlight] = accent;
-		colors[ImGuiCol_NavWindowingHighlight] = ImVec4{ 1.0f, 1.0f, 1.0f, 0.70f };
-		colors[ImGuiCol_NavWindowingDimBg] = ImVec4{ 0.0f, 0.0f, 0.0f, 0.65f };
+		colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.0f, 1.0f, 1.0f, 0.70f);
+		colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.60f);
 		
-		// Modal window dimming
-		colors[ImGuiCol_ModalWindowDimBg] = ImVec4{ 0.0f, 0.0f, 0.0f, 0.75f };
+		// Modal
+		colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.70f);
 	}
 }
