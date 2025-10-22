@@ -2,6 +2,7 @@
 #include "Application.h"
 
 #include "Renderer/Renderer.h"
+#include "Scripting/ScriptEngine.h"
 
 #include "Input.h"
 
@@ -24,6 +25,7 @@ namespace Lunex{
 		m_Window->SetEventCallback(LNX_BIND_EVENT_FN(Application::OnEvent));
 		
 		Renderer::Init();
+		ScriptEngine::Init();
 		
 		m_ImGuiLayer = new ImGuiLayer;
 		PushOverlay(m_ImGuiLayer);
@@ -31,6 +33,7 @@ namespace Lunex{
 	
 	Application::~Application() {
 		LNX_PROFILE_FUNCTION();
+		ScriptEngine::Shutdown();
 		Renderer::Shutdown();
 	}
 	

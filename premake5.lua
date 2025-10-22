@@ -29,13 +29,16 @@ IncludeDir["Box2D"]     = "vendor/Box2D/include"
 IncludeDir["ImGuizmo"]  = "vendor/ImGuizmo"
 IncludeDir["Lunex"]     = "Lunex/src"
 IncludeDir["VulkanSDK"] = "%{VULKAN_SDK}/Include"
+IncludeDir["mono"]      = "vendor/mono/include"
 
 -- ✅ Librerías de Vulkan habilitadas
 LibraryDir = {}
 LibraryDir["VulkanSDK"] = "%{VULKAN_SDK}/Lib"
+LibraryDir["Mono"]      = "%{wks.location}/vendor/mono/lib/%{cfg.buildcfg}/"
 
 Library = {}
 Library["Vulkan"] = "%{LibraryDir.VulkanSDK}/vulkan-1.lib"
+Library["mono"] = "%{LibraryDir.Mono}/libmono-static-sgen.lib"
 
 -- ✅ Usar versiones específicas para Debug y Release
 Library["ShaderC_Debug"] = "%{LibraryDir.VulkanSDK}/shaderc_combinedd.lib"
@@ -47,6 +50,14 @@ Library["SPIRV_Cross_Release"] = "%{LibraryDir.VulkanSDK}/spirv-cross-core.lib"
 Library["SPIRV_Cross_GLSL_Debug"] = "%{LibraryDir.VulkanSDK}/spirv-cross-glsld.lib"
 Library["SPIRV_Cross_GLSL_Release"] = "%{LibraryDir.VulkanSDK}/spirv-cross-glsl.lib"
 
+Library["monoDebug"]   = "%{LibraryDir.Mono}/libmono-static-sgen.lib"
+Library["monoRelease"] = "%{LibraryDir.Mono}/libmono-static-sgen.lib"
+
+-- Windows
+Library["WinSock"] = "Ws2_32.lib"
+Library["WinMM"] = "Winmm.lib"
+Library["WinVersion"] = "Version.lib"
+Library["BCrypt"] = "Bcrypt.lib"
 -- ============================================================================
 -- DEPENDENCIES
 -- ============================================================================
@@ -328,6 +339,7 @@ project "Lunex"
         "%{IncludeDir.glm}",
         "%{IncludeDir.stb_image}",
         "%{IncludeDir.entt}",
+        "%{IncludeDir.mono}",
         "%{IncludeDir.yaml_cpp}",
         "%{IncludeDir.ImGuizmo}",
         "%{IncludeDir.VulkanSDK}"
@@ -340,8 +352,17 @@ project "Lunex"
         "Glad",
         "ImGui",
         "yaml-cpp",
-        "opengl32.lib"
+        "opengl32.lib",
+        "%{Library.mono}",
     }
+
+    links
+	{
+		"%{Library.WinSock}",
+		"%{Library.WinMM}",
+		"%{Library.WinVersion}",
+		"%{Library.BCrypt}",
+	}
 
     filter "files:vendor/ImGuizmo/**.cpp"
         flags { "NoPCH" }
@@ -355,35 +376,38 @@ project "Lunex"
         runtime "Debug"
         symbols "on"
         
-        links
-        {
-            "%{Library.ShaderC_Debug}",
-            "%{Library.SPIRV_Cross_Debug}",
-            "%{Library.SPIRV_Cross_GLSL_Debug}"
-        }
+    links
+    {
+        "%{Library.ShaderC_Debug}",
+        "%{Library.SPIRV_Cross_Debug}",
+        "%{Library.SPIRV_Cross_GLSL_Debug}",
+        "%{Library.monoDebug}"
+    }
 
     filter "configurations:Release"
-        defines { "LN_RELEASE" }
-        runtime "Release"
-        optimize "on"
+    defines { "LN_RELEASE" }
+    runtime "Release"
+    optimize "on"
         
-        links
-        {
-            "%{Library.ShaderC_Release}",
-            "%{Library.SPIRV_Cross_Release}",
-            "%{Library.SPIRV_Cross_GLSL_Release}"
-        }
+    links
+    {
+        "%{Library.ShaderC_Release}",
+        "%{Library.SPIRV_Cross_Release}",
+        "%{Library.SPIRV_Cross_GLSL_Release}",
+        "%{Library.monoRelease}"
+    }
 
     filter "configurations:Dist"
         defines { "LN_DIST" }
         runtime "Release"
         optimize "on"
-        
+         
         links
         {
             "%{Library.ShaderC_Release}",
             "%{Library.SPIRV_Cross_Release}",
-            "%{Library.SPIRV_Cross_GLSL_Release}"
+            "%{Library.SPIRV_Cross_GLSL_Release}",
+            "%{Library.monoRelease}"
         }
 
 project "Sandbox"
@@ -495,19 +519,50 @@ project "Lunex-Editor"
     buildoptions { "/utf-8" }
 
     filter "system:windows"
-        systemversion "latest"
+    systemversion "latest"
 
     filter "configurations:Debug"
-        defines { "LN_DEBUG" }
-        runtime "Debug"
-        symbols "on"
+      defines { "LN_DEBUG" }
+     runtime "Debug"
+symbols "on"
 
     filter "configurations:Release"
         defines { "LN_RELEASE" }
         runtime "Release"
-        optimize "on"
+    optimize "on"
 
     filter "configurations:Dist"
-        defines { "LN_DIST" }
+   defines { "LN_DIST" }
         runtime "Release"
         optimize "on"
+
+-- ============================================================================
+-- C# SCRIPTING PROJECT
+-- ============================================================================
+
+project "Lunex-ScriptCore"
+  location "Lunex-ScriptCore"
+    kind "SharedLib"
+    language "C#"
+    dotnetframework "4.7.2"
+
+    targetdir ("%{wks.location}/Lunex-Editor/Resources/Scripts")
+    objdir ("%{wks.location}/Lunex-Editor/Resources/Scripts/Intermediates")
+
+    files 
+    {
+        "%{prj.name}/Source/**.cs",
+        "%{prj.name}/Properties/**.cs"
+    }
+    
+ filter "configurations:Debug"
+        optimize "Off"
+        symbols "Default"
+
+    filter "configurations:Release"
+        optimize "On"
+        symbols "Default"
+
+    filter "configurations:Dist"
+        optimize "Full"
+     symbols "Off"
