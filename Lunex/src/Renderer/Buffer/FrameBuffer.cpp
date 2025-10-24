@@ -1,7 +1,7 @@
 #include "stpch.h"
 #include "FrameBuffer.h"
 
-#include "Renderer.h"
+#include "../Renderer.h"
 
 #include "Platform/OpenGL/OpenGLFramebuffer.h"
 

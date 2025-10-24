@@ -3,8 +3,7 @@
 #include <glm/glm.hpp>
 
 namespace Lunex {
-
-	class   OrthographicCamera {
+	class OrthographicCamera {
 		public:
 			OrthographicCamera(float left, float right, float bottom, float top);
 			

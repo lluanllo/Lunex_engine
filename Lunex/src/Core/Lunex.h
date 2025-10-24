@@ -21,7 +21,6 @@
 //---Lunex Scene---------
 #include "Scene/Scene.h"
 #include "Scene/Entity.h"
-#include "Scene/ScriptableEntity.h"
 #include "Scene/Components.h"
 //-----------------------
 
@@ -35,5 +34,4 @@
 #include "Renderer/Texture.h"
 #include "Renderer/VertexArray.h"
 #include "Renderer/OrthographicCamera.h"
-#include "Renderer/OrthographicCameraController.h"
 //--------------------------

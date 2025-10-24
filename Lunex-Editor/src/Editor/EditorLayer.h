@@ -42,9 +42,7 @@ namespace Lunex {
 			// UI Panels
 			void UI_Toolbar();
 			
-		private:
-			OrthographicCameraController m_CameraController;
-			
+		private:			
 			// Temp
 			Ref<VertexArray> m_SquareVA;
 			Ref<Shader> m_FlatColorShader;
