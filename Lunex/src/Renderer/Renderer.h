@@ -2,7 +2,7 @@
 
 #include "RenderCommand.h"
 
-#include "OrthographicCamera.h"
+#include "CameraTypes/OrthographicCamera.h"
 #include "Shader.h"
 
 namespace Lunex {
