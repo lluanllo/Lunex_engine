@@ -4,7 +4,7 @@
 #include "../Panels/SceneHierarchyPanel.h"
 #include "../Panels/ContentBrowserPanel.h"
 
-#include "Renderer/EditorCamera.h"
+#include "Renderer/CameraTypes/EditorCamera.h"
 
 namespace Lunex {
 	class EditorLayer : public Layer {
@@ -43,6 +43,8 @@ namespace Lunex {
 			void UI_Toolbar();
 			
 		private:			
+			OrthographicCameraController m_CameraController;
+			
 			// Temp
 			Ref<VertexArray> m_SquareVA;
 			Ref<Shader> m_FlatColorShader;

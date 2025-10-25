@@ -18,9 +18,30 @@ namespace Lunex {
 		s_Textures[name] = texture;
 	}
 	
-	Ref<Texture2D> ResourceManager::GetTexture(const std::string& name) {
-		auto it = s_Textures.find(name);
-		if (it == s_Textures.end()) return nullptr;
-		return it->second;
-	}
+    Ref<Texture2D> ResourceManager::GetTexture(const std::string& name) {
+        auto it = s_Textures.find(name);
+        if (it != s_Textures.end())
+            return it->second;
+            
+        LNX_LOG_WARN("Texture '{}' not found!", name);
+        return nullptr;
+    }
+        
+    Ref<Texture2D> ResourceManager::LoadTexture(const std::string& path, const std::string& name) {
+        std::string texName = name.empty() ? path : name;
+            
+        auto it = s_Textures.find(texName);
+        if (it != s_Textures.end())
+            return it->second;
+            
+        auto texture = Texture2D::Create(path);
+        if (texture && texture->IsLoaded()) {
+            s_Textures[texName] = texture;
+            LNX_LOG_INFO("Loaded texture '{}'", texName);
+            return texture;
+        }
+            
+        LNX_LOG_ERROR("Failed to load texture: {}", path);
+        return nullptr;
+    }
 }

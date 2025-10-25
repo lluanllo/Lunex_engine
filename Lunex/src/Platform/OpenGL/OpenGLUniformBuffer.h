@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Renderer/UniformBuffer.h"
+#include "Renderer/Buffer/UniformBuffer.h"
 
 namespace Lunex {
 	class OpenGLUniformBuffer : public UniformBuffer {

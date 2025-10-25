@@ -1,36 +1,42 @@
-#include "stpch.h"
+﻿#include "stpch.h"
 #include "Application.h"
 
-#include "Renderer/Renderer.h"
-
+#include "Renderer/RenderCore/ResourceManager.h"
+#include "Renderer/RenderCore/RenderContext.h"
+#include "Renderer/RenderCore/RenderGraph.h"
 #include "Input.h"
 
 #include <GLFW/glfw3.h>
 #include <filesystem>
 
-namespace Lunex{	
+namespace Lunex {
 	Application* Application::s_Instance = nullptr;
 	
 	Application::Application(const std::string& name, ApplicationCommandLineArgs args)
 		: m_CommandLineArgs(args)
 	{
-		
 		LNX_PROFILE_FUNCTION();
 		
 		LNX_CORE_ASSERT(s_Instance == nullptr, "Application already exists!");
 		s_Instance = this;
 		
+		// --- Window & Event setup ---
 		m_Window = Window::Create(WindowProps(name));
 		m_Window->SetEventCallback(LNX_BIND_EVENT_FN(Application::OnEvent));
 		
+		// --- Initialize core systems ---
 		Renderer::Init();
+		ResourceManager::Init();
 		
-		m_ImGuiLayer = new ImGuiLayer;
+		m_ImGuiLayer = new ImGuiLayer();
 		PushOverlay(m_ImGuiLayer);
 	}
 	
 	Application::~Application() {
 		LNX_PROFILE_FUNCTION();
+		
+		// --- Shutdown order is important ---
+		ResourceManager::Shutdown();
 		Renderer::Shutdown();
 	}
 	
@@ -51,8 +57,8 @@ namespace Lunex{
 	}
 	
 	void Application::OnEvent(Event& e) {
-		
 		LNX_PROFILE_FUNCTION();
+		
 		EventDispatcher dispatcher(e);
 		dispatcher.Dispatch<WindowCloseEvent>(LNX_BIND_EVENT_FN(Application::OnWindowClose));
 		dispatcher.Dispatch<WindowResizeEvent>(LNX_BIND_EVENT_FN(Application::OnWindowResize));
@@ -67,8 +73,8 @@ namespace Lunex{
 	
 	void Application::Run() {
 		LNX_PROFILE_FUNCTION();
-		while (m_Running) {	
-			
+		
+		while (m_Running) {
 			LNX_PROFILE_SCOPE("RunLoop");
 			
 			float time = (float)glfwGetTime();
@@ -76,21 +82,27 @@ namespace Lunex{
 			m_LastFrameTime = time;
 			
 			if (!m_Minimized) {
+				// --- Frame begin ---
+				Renderer::BeginFrame();
+				
+				// --- Update layers ---
 				{
 					LNX_PROFILE_SCOPE("LayerStack OnUpdate");
-					
 					for (Layer* layer : m_LayerStack)
 						layer->OnUpdate(timestep);
 				}
 				
+				// --- ImGui ---
 				m_ImGuiLayer->Begin();
 				{
 					LNX_PROFILE_SCOPE("LayerStack OnImGuiRender");
-					
 					for (Layer* layer : m_LayerStack)
 						layer->OnImGuiRender();
 				}
 				m_ImGuiLayer->End();
+				
+				// --- Frame end ---
+				Renderer::EndFrame();
 			}
 			
 			m_Window->OnUpdate();
@@ -104,13 +116,14 @@ namespace Lunex{
 	
 	bool Application::OnWindowResize(WindowResizeEvent& e) {
 		LNX_PROFILE_FUNCTION();
+		
 		if (e.GetWidth() == 0 || e.GetHeight() == 0) {
 			m_Minimized = true;
 			return false;
 		}
-		m_Minimized = false;
-		Renderer::onWindowResize(e.GetWidth(), e.GetHeight());
 		
+		m_Minimized = false;
+		Renderer::OnWindowResize(e.GetWidth(), e.GetHeight());
 		return false;
 	}
 }

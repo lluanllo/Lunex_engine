@@ -1,10 +1,10 @@
 #include "stpch.h"
 #include "Renderer2D.h"
 
-#include "VertexArray.h"
-#include "Shader.h"
-#include "UniformBuffer.h"
-#include "RenderCommand.h"
+#include "Renderer/Buffer/VertexArray.h"
+#include "Renderer/Shader.h"
+#include "Renderer/Buffer/UniformBuffer.h"
+#include "Renderer/RenderCore/RenderCommand.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>

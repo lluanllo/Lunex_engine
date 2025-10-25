@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Renderer/VertexArray.h"
+#include "Renderer/Buffer/VertexArray.h"
 
 namespace Lunex {
 	class   OpenGLVertexArray : public VertexArray {

@@ -1,6 +1,6 @@
 #include "stpch.h"
 
-#include "Renderer/RenderCommand.h"
+#include "RenderCommand.h"
 
 #include "Platform/OpenGL/OpenGLRendererAPI.h"
 

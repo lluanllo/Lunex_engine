@@ -1,13 +1,13 @@
 #pragma once
 #include "Core/Core.h"
 
-#include "OrthographicCamera.h"
-#include "Camera.h"
-#include "EditorCamera.h"
+#include "Renderer/CameraTypes/OrthographicCamera.h"
+#include "Renderer/Camera.h"
+#include "Renderer/CameraTypes/EditorCamera.h"
 
 #include "Scene/Components.h"
 
-#include "Texture.h"
+#include "Renderer/Texture.h"
 
 namespace Lunex  {
 	class Renderer2D {

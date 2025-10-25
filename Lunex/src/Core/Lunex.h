@@ -26,12 +26,13 @@
 
 //---Lunex Renderer------
 #include "Renderer/Renderer.h"
-#include "Renderer/Renderer2D.h"
-#include "Renderer/RenderCommand.h"
-#include "Renderer/Buffer.h"
+#include "Renderer/Renderer2D/Renderer2D.h"
+#include "Renderer/RenderCore/RenderCommand.h"
+#include "Renderer/Buffer/Buffer.h"
 #include "Renderer/Shader.h"
-#include "Renderer/Framebuffer.h"
+#include "Renderer/Buffer/Framebuffer.h"
 #include "Renderer/Texture.h"
-#include "Renderer/VertexArray.h"
-#include "Renderer/OrthographicCamera.h"
+#include "Renderer/Buffer/VertexArray.h"
+#include "Renderer/CameraTypes/OrthographicCamera.h"
+#include "Renderer/CameraTypes/OrthographicCameraController.h"
 //--------------------------
