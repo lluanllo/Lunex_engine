@@ -2,7 +2,6 @@
 #include "RenderDevice.h"
 
 namespace Lunex {
-	
 	DeviceCapabilities RenderDevice::s_Capabilities;
 	
 	void RenderDevice::Init() {

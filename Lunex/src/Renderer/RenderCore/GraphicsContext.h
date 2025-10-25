@@ -3,7 +3,7 @@
 #include "Core/Core.h"
 
 namespace Lunex {
-	class   GraphicsContext {
+	class GraphicsContext {
 		public:
 			virtual ~GraphicsContext() = default;
 			

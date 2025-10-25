@@ -6,11 +6,12 @@ namespace Lunex {
 	std::unordered_map<std::string, Ref<Texture2D>> ResourceManager::s_Textures;
 	
 	void ResourceManager::Init() {
-		// nothing for now
+		LNX_LOG_INFO("ResourceManager initialized");
 	}
 	
 	void ResourceManager::Shutdown() {
 		s_Textures.clear();
+		LNX_LOG_INFO("ResourceManager shut down");
 	}
 	
 	void ResourceManager::RegisterTexture(const std::string& name, const Ref<Texture2D>& texture) {

@@ -6,6 +6,43 @@
 #include <glad/glad.h>
 
 namespace Lunex {
+	OpenGLTexture2D::OpenGLTexture2D(const TextureSpecification& spec)
+		: m_Specification(spec), m_Width(spec.Width), m_Height(spec.Height)
+	{
+		LNX_PROFILE_FUNCTION();
+		
+		switch (spec.Format) {
+			case TextureFormat::RGBA8:
+				m_InternalFormat = GL_RGBA8;
+				m_DataFormat = GL_RGBA;
+				break;
+			case TextureFormat::RGB8:
+				m_InternalFormat = GL_RGB8;
+				m_DataFormat = GL_RGB;
+				break;
+			case TextureFormat::DEPTH24STENCIL8:
+				m_InternalFormat = GL_DEPTH24_STENCIL8;
+				m_DataFormat = GL_DEPTH_STENCIL;
+				break;
+			default:
+				LNX_CORE_ASSERT(false, "Unknown texture format!");
+				break;
+		}
+		
+		glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
+		glTextureStorage2D(m_RendererID, 1, m_InternalFormat, m_Width, m_Height);
+		
+		glTextureParameteri(m_RendererID, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTextureParameteri(m_RendererID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		
+		if (spec.GenerateMipmaps)
+			glGenerateTextureMipmap(m_RendererID);
+		
+		m_IsLoaded = true;
+	}
+	
 	OpenGLTexture2D::OpenGLTexture2D(uint32_t width, uint32_t height) : m_Width(width), m_Height(height) {
 		LNX_PROFILE_FUNCTION();
 		m_InternalFormat = GL_RGBA8;

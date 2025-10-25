@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Renderer/Framebuffer.h"
+#include "Renderer/Buffer/Framebuffer.h"
 
 namespace Lunex {
 	class OpenGLFramebuffer : public Framebuffer {

@@ -1,4 +1,4 @@
-#include "Renderer/GraphicsContext.h"
+#include "Renderer/RenderCore/GraphicsContext.h"
 
 struct GLFWwindow;
 

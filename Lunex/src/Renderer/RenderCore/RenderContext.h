@@ -1,21 +1,16 @@
 #pragma once
-
 #include "Core/Core.h"
-#include "Renderer/GraphicsContext.h"
+#include "Renderer/Camera.h"
+#include "Renderer/Buffer/FrameBuffer.h"
 
 namespace Lunex {
-	class RenderContext {
-		public:
-			// Initialize with a GraphicsContext instance (created by platform layer)
-			static void Init(Scope<GraphicsContext> context);
-			static void Shutdown();
-			
-			static void BeginFrame();
-			static void EndFrame();
-			
-			static void SwapBuffers();
-			
-		private:
-			static Scope<GraphicsContext> s_Context;
-	};
+    struct RenderContext {
+        Ref<Framebuffer> TargetFramebuffer;
+        Ref<Camera> ActiveCamera;
+        glm::mat4 ViewProjectionMatrix{};
+        glm::vec3 CameraPosition{};
+            
+        void BeginFrame();
+        void EndFrame();
+    };
 }

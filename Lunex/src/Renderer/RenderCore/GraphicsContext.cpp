@@ -2,7 +2,7 @@
 
 #include "GraphicsContext.h"
 
-#include "Renderer.h"
+#include "Renderer/Renderer.h"
 #include "Platform/OpenGL/OpenGLContext.h"
 
 namespace Lunex {
