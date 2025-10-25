@@ -11,6 +11,8 @@
 
 #include "ImGui/ImGuiLayer.h"
 
+#include "Renderer/Renderer.h"
+
 int main(int argc, char** argv);
 
 namespace Lunex {
@@ -18,7 +20,7 @@ namespace Lunex {
 		int Count = 0;
 		char** Args = nullptr;
 		
-		const char* operator[](int index) const	{
+		const char* operator[](int index) const {
 			LNX_CORE_ASSERT(index < Count);
 			return Args[index];
 		}
@@ -52,19 +54,17 @@ namespace Lunex {
 		private:
 			ApplicationCommandLineArgs m_CommandLineArgs;
 			std::unique_ptr<Window> m_Window;
-			ImGuiLayer* m_ImGuiLayer;
+			ImGuiLayer* m_ImGuiLayer = nullptr;
 			
 			bool m_Running = true;
 			bool m_Minimized = false;
 			
 			LayerStack m_LayerStack;
-			
 			float m_LastFrameTime = 0.0f;
 			
 		private:
 			static Application* s_Instance;
 			friend int ::main(int argc, char** argv);
-			
 	};
 	
 	// To be defined in CLIENT

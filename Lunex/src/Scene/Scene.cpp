@@ -2,8 +2,8 @@
 #include "Scene.h"
 
 #include "Components.h"
-#include "ScriptableEntity.h"
-#include "Renderer/Renderer2D.h"
+#include "ScripteableEntity.h"
+#include "Renderer/Renderer2D/Renderer2D.h"
 
 #include <glm/glm.hpp>
 
