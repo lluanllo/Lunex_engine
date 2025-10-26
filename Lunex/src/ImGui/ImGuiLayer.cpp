@@ -98,77 +98,73 @@ namespace Lunex {
 		}
 	}
 	
+	// Add this to your ImGuiLayer.cpp SetDarkThemeColor() method
+	// These are ADDITIONAL refinements to make it even more UE5-like
+	
 	void ImGuiLayer::SetDarkThemeColor() {
 		auto& colors = ImGui::GetStyle().Colors;
 		auto& style = ImGui::GetStyle();
 		
-		// ===== ESTILO PROFESIONAL INSPIRADO EN UNREAL ENGINE =====
-		
-		// Espaciado y padding más refinado
+		// ===== SPACING REFINEMENTS FOR UE5 LOOK =====
 		style.WindowPadding = ImVec2(8, 8);
-		style.FramePadding = ImVec2(5, 3);
-		style.CellPadding = ImVec2(6, 3);
+		style.FramePadding = ImVec2(6, 4);      // Slightly more padding for buttons
+		style.CellPadding = ImVec2(8, 4);       // Better table spacing
 		style.ItemSpacing = ImVec2(8, 4);
-		style.ItemInnerSpacing = ImVec2(4, 4);
+		style.ItemInnerSpacing = ImVec2(6, 4);
 		style.TouchExtraPadding = ImVec2(0, 0);
 		style.IndentSpacing = 20.0f;
 		style.ScrollbarSize = 14.0f;
 		style.GrabMinSize = 10.0f;
 		
-		// Bordes sutiles pero presentes
-		style.WindowBorderSize = 0.0f;
-		style.ChildBorderSize = 0.0f;
+		// Borders
+		style.WindowBorderSize = 1.0f;          // Thin border for windows
+		style.ChildBorderSize = 1.0f;
 		style.PopupBorderSize = 1.0f;
 		style.FrameBorderSize = 0.0f;
 		style.TabBorderSize = 0.0f;
 		
-		// Redondeado sutil y profesional (menos que antes)
+		// Rounding (very subtle, UE5 style)
 		style.WindowRounding = 0.0f;
 		style.ChildRounding = 0.0f;
-		style.FrameRounding = 2.0f;
-		style.PopupRounding = 2.0f;
-		style.ScrollbarRounding = 3.0f;
-		style.GrabRounding = 2.0f;
-		style.TabRounding = 2.0f;
+		style.FrameRounding = 3.0f;             // Slightly more rounded
+		style.PopupRounding = 3.0f;
+		style.ScrollbarRounding = 4.0f;
+		style.GrabRounding = 3.0f;
+		style.TabRounding = 3.0f;
 		
-		// Alineación profesional
+		// Alignment
 		style.WindowTitleAlign = ImVec2(0.0f, 0.5f);
 		style.WindowMenuButtonPosition = ImGuiDir_Left;
 		style.ColorButtonPosition = ImGuiDir_Right;
 		style.ButtonTextAlign = ImVec2(0.5f, 0.5f);
 		style.SelectableTextAlign = ImVec2(0.0f, 0.5f);
 		
-		// Otros ajustes
-		style.DisplaySafeAreaPadding = ImVec2(3, 3);
+		// ===== UE5-INSPIRED COLOR PALETTE =====
 		
-		// ===== PALETA DE COLORES PROFESIONAL (UNREAL-INSPIRED) =====
+		// Ultra-dark backgrounds (like UE5)
+		const ImVec4 bgVeryDark = ImVec4(0.07f, 0.07f, 0.07f, 1.0f);
+		const ImVec4 bgDark = ImVec4(0.09f, 0.09f, 0.09f, 1.0f);
+		const ImVec4 bgMedium = ImVec4(0.12f, 0.12f, 0.12f, 1.0f);
+		const ImVec4 bgLight = ImVec4(0.15f, 0.15f, 0.15f, 1.0f);
+		const ImVec4 bgLighter = ImVec4(0.18f, 0.18f, 0.18f, 1.0f);
 		
-		// Fondos con gradientes sutiles y profundidad
-		const ImVec4 bgVeryDark = ImVec4(0.05f, 0.05f, 0.05f, 1.0f);      // Fondo más oscuro
-		const ImVec4 bgDark = ImVec4(0.09f, 0.09f, 0.09f, 1.0f);          // Fondo principal
-		const ImVec4 bgMedium = ImVec4(0.12f, 0.12f, 0.12f, 1.0f);        // Áreas elevadas
-		const ImVec4 bgLight = ImVec4(0.16f, 0.16f, 0.16f, 1.0f);         // Controles
-		const ImVec4 bgLighter = ImVec4(0.20f, 0.20f, 0.20f, 1.0f);       // Hover sutil
+		// Orange accent (UE5 style - less saturated)
+		const ImVec4 accent = ImVec4(0.90f, 0.50f, 0.10f, 1.0f);
+		const ImVec4 accentHover = ImVec4(1.0f, 0.60f, 0.20f, 1.0f);
+		const ImVec4 accentActive = ImVec4(0.80f, 0.45f, 0.08f, 1.0f);
+		const ImVec4 accentDim = ImVec4(0.60f, 0.35f, 0.08f, 1.0f);
 		
-		// Acento naranja refinado (menos saturado, más profesional)
-		const ImVec4 accent = ImVec4(0.90f, 0.50f, 0.10f, 1.0f);          // Naranja principal
-		const ImVec4 accentHover = ImVec4(1.0f, 0.60f, 0.20f, 1.0f);      // Hover más brillante
-		const ImVec4 accentActive = ImVec4(0.80f, 0.45f, 0.08f, 1.0f);    // Active más oscuro
-		const ImVec4 accentDim = ImVec4(0.60f, 0.35f, 0.08f, 1.0f);       // Dim para secundarios
-		const ImVec4 accentSubtle = ImVec4(0.90f, 0.50f, 0.10f, 0.30f);   // Transparente
+		// Text hierarchy
+		const ImVec4 text = ImVec4(0.90f, 0.90f, 0.90f, 1.0f);
+		const ImVec4 textBright = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+		const ImVec4 textDisabled = ImVec4(0.50f, 0.50f, 0.50f, 1.0f);
+		const ImVec4 textDim = ImVec4(0.65f, 0.65f, 0.65f, 1.0f);
 		
-		// Texto con mejor jerarquía
-		const ImVec4 text = ImVec4(0.92f, 0.92f, 0.92f, 1.0f);            // Texto principal
-		const ImVec4 textBright = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);         // Texto destacado
-		const ImVec4 textDisabled = ImVec4(0.45f, 0.45f, 0.45f, 1.0f);    // Texto deshabilitado
-		const ImVec4 textDim = ImVec4(0.65f, 0.65f, 0.65f, 1.0f);         // Texto secundario
+		// Borders (very subtle)
+		const ImVec4 border = ImVec4(0.15f, 0.15f, 0.15f, 1.0f);
+		const ImVec4 borderLight = ImVec4(0.20f, 0.20f, 0.20f, 1.0f);
 		
-		// Bordes y separadores sutiles
-		const ImVec4 border = ImVec4(0.18f, 0.18f, 0.18f, 1.0f);
-		const ImVec4 borderLight = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
-		const ImVec4 separator = ImVec4(0.22f, 0.22f, 0.22f, 1.0f);
-		
-		// ===== APLICACIÓN DE COLORES =====
+		// ===== APPLY COLORS =====
 		
 		// Backgrounds
 		colors[ImGuiCol_WindowBg] = bgDark;
@@ -185,40 +181,40 @@ namespace Lunex {
 		colors[ImGuiCol_TextDisabled] = textDisabled;
 		colors[ImGuiCol_TextSelectedBg] = ImVec4(accent.x, accent.y, accent.z, 0.35f);
 		
-		// Headers (más sutiles, menos saturados)
-		colors[ImGuiCol_Header] = ImVec4(0.20f, 0.20f, 0.20f, 1.0f);
-		colors[ImGuiCol_HeaderHovered] = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
+		// Headers (flat style like UE5)
+		colors[ImGuiCol_Header] = bgMedium;
+		colors[ImGuiCol_HeaderHovered] = bgLight;
 		colors[ImGuiCol_HeaderActive] = ImVec4(accent.x, accent.y, accent.z, 0.40f);
 		
-		// Buttons (más planos y profesionales)
-		colors[ImGuiCol_Button] = bgLight;
-		colors[ImGuiCol_ButtonHovered] = bgLighter;
-		colors[ImGuiCol_ButtonActive] = ImVec4(0.24f, 0.24f, 0.24f, 1.0f);
+		// Buttons (flat, like UE5)
+		colors[ImGuiCol_Button] = bgMedium;
+		colors[ImGuiCol_ButtonHovered] = bgLight;
+		colors[ImGuiCol_ButtonActive] = bgLighter;
 		
-		// Frame backgrounds (inputs, etc.)
+		// Frame backgrounds
 		colors[ImGuiCol_FrameBg] = bgVeryDark;
 		colors[ImGuiCol_FrameBgHovered] = bgMedium;
 		colors[ImGuiCol_FrameBgActive] = bgLight;
 		
-		// Tabs (más refinados)
+		// Tabs (cleaner look)
 		colors[ImGuiCol_Tab] = bgMedium;
-		colors[ImGuiCol_TabHovered] = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
-		colors[ImGuiCol_TabActive] = bgLight;
+		colors[ImGuiCol_TabHovered] = bgLight;
+		colors[ImGuiCol_TabActive] = bgLighter;
 		colors[ImGuiCol_TabUnfocused] = bgDark;
 		colors[ImGuiCol_TabUnfocusedActive] = bgMedium;
 		
-		// Title bar (más sutil)
+		// Title bar
 		colors[ImGuiCol_TitleBg] = bgVeryDark;
 		colors[ImGuiCol_TitleBgActive] = bgDark;
 		colors[ImGuiCol_TitleBgCollapsed] = bgVeryDark;
 		
-		// Scrollbar (más elegante)
+		// Scrollbar
 		colors[ImGuiCol_ScrollbarBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 		colors[ImGuiCol_ScrollbarGrab] = bgLight;
 		colors[ImGuiCol_ScrollbarGrabHovered] = bgLighter;
-		colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.26f, 0.26f, 0.26f, 1.0f);
+		colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
 		
-		// Sliders y checks (acento naranja refinado)
+		// Sliders and checkmarks (orange accent)
 		colors[ImGuiCol_CheckMark] = accent;
 		colors[ImGuiCol_SliderGrab] = accent;
 		colors[ImGuiCol_SliderGrabActive] = accentHover;
@@ -229,7 +225,7 @@ namespace Lunex {
 		colors[ImGuiCol_ResizeGripActive] = ImVec4(accent.x, accent.y, accent.z, 0.50f);
 		
 		// Separator
-		colors[ImGuiCol_Separator] = separator;
+		colors[ImGuiCol_Separator] = border;
 		colors[ImGuiCol_SeparatorHovered] = ImVec4(accent.x, accent.y, accent.z, 0.50f);
 		colors[ImGuiCol_SeparatorActive] = accent;
 		
@@ -237,10 +233,10 @@ namespace Lunex {
 		colors[ImGuiCol_DockingPreview] = ImVec4(accent.x, accent.y, accent.z, 0.30f);
 		colors[ImGuiCol_DockingEmptyBg] = bgVeryDark;
 		
-		// Tables
+		// Tables (cleaner borders)
 		colors[ImGuiCol_TableHeaderBg] = bgMedium;
 		colors[ImGuiCol_TableBorderStrong] = border;
-		colors[ImGuiCol_TableBorderLight] = ImVec4(0.14f, 0.14f, 0.14f, 1.0f);
+		colors[ImGuiCol_TableBorderLight] = ImVec4(0.12f, 0.12f, 0.12f, 1.0f);
 		colors[ImGuiCol_TableRowBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 		colors[ImGuiCol_TableRowBgAlt] = ImVec4(1.0f, 1.0f, 1.0f, 0.02f);
 		
@@ -260,5 +256,22 @@ namespace Lunex {
 		
 		// Modal
 		colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.70f);
+	}
+	
+	// OPTIONAL: Additional UE5-like improvements for the entire editor
+	
+	// Add this to make separators more visible (call after SetDarkThemeColor)
+	void ImGuiLayer::ApplyUE5Refinements() {
+		auto& style = ImGui::GetStyle();
+		
+		// Make separators slightly thicker and more visible
+		style.SeparatorTextBorderSize = 1.0f;
+		
+		// Adjust alpha for better visibility
+		style.Alpha = 1.0f;
+		style.DisabledAlpha = 0.5f;
+		
+		// Window settings
+		style.WindowMinSize = ImVec2(100, 100);
 	}
 }

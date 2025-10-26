@@ -1,5 +1,7 @@
 #pragma once
+
 #include "Renderer/Texture.h"
+
 #include <filesystem>
 #include <vector>
 #include <string>
