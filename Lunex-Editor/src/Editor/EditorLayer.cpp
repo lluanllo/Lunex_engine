@@ -2,6 +2,7 @@
 #include "imgui.h"
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 #include "Scene/SceneSerializer.h"
@@ -411,10 +412,11 @@ namespace Lunex {
 			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
 			if (!camera)
 				return;
-			Renderer2D::BeginScene(camera.GetComponent<CameraComponent>().Camera, camera.GetComponent<TransformComponent>().GetTransform());
+			glm::mat4 viewProjection = camera.GetComponent<CameraComponent>().Camera.GetProjection() * glm::inverse(camera.GetComponent<TransformComponent>().GetTransform());
+			Renderer2D::BeginScene(viewProjection);
 		}
 		else {
-			Renderer2D::BeginScene(m_EditorCamera);
+			Renderer2D::BeginScene(m_EditorCamera.GetViewProjection());
 		}
 		
 		if (m_ShowPhysicsColliders) {
@@ -431,7 +433,7 @@ namespace Lunex {
 						* glm::rotate(glm::mat4(1.0f), tc.Rotation.z, glm::vec3(0.0f, 0.0f, 1.0f))
 						* glm::scale(glm::mat4(1.0f), scale);
 					
-					Renderer2D::DrawRect(transform, glm::vec4(0, 1, 0, 1));
+					Renderer2D::DrawQuad(transform, glm::vec4(0, 1, 0, 1));
 				}
 			}
 			
@@ -455,7 +457,7 @@ namespace Lunex {
 		// Draw selected entity outline 
 		if (Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity()) {
 			const TransformComponent& transform = selectedEntity.GetComponent<TransformComponent>();
-			Renderer2D::DrawRect(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+			Renderer2D::DrawQuad(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
 		}
 		Renderer2D::EndScene();
 	}
