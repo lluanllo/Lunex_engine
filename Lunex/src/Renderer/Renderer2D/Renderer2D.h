@@ -42,5 +42,8 @@ namespace Lunex {
 			// --- Stats ---
 			static void ResetStats();
 			static RendererPipeline2D::Statistics GetStats();
+			
+		private:
+			static Ref<RendererPipeline2D> s_Pipeline;
 	};
 }

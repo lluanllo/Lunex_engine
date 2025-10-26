@@ -14,6 +14,21 @@ namespace Lunex {
 	// Initialize static
 	RendererPipeline2D::PipelineData RendererPipeline2D::s_Data;
 	
+	RendererPipeline2D::RendererPipeline2D() = default;
+	
+	// RenderPipeline interface implementations
+	void RendererPipeline2D::BeginFrame() {
+		// No-op for 2D renderer
+	}
+	
+	void RendererPipeline2D::EndFrame() {
+		// No-op for 2D renderer
+	}
+	
+	void RendererPipeline2D::Submit(const Ref<VertexArray>& vertexArray, const Ref<Shader>& shader, const glm::mat4& transform) {
+		// Not implemented for 2D renderer
+	}
+	
 	// -------------------------------------------------------------------------
 	// Init / Shutdown
 	// -------------------------------------------------------------------------
@@ -30,7 +45,7 @@ namespace Lunex {
 			{ ShaderDataType::Float,  "a_TexIndex"     },
 			{ ShaderDataType::Float,  "a_TilingFactor" },
 			{ ShaderDataType::Int,    "a_EntityID"     }
-			});
+		});
 		s_Data.QuadVertexArray->AddVertexBuffer(s_Data.QuadVertexBuffer);
 		
 		// Pre-allocate CPU-side buffer
@@ -61,7 +76,7 @@ namespace Lunex {
 			{ ShaderDataType::Float3, "a_Position" },
 			{ ShaderDataType::Float4, "a_Color"    },
 			{ ShaderDataType::Int,    "a_EntityID" }
-			});
+		});
 		s_Data.LineVertexArray->AddVertexBuffer(s_Data.LineVertexBuffer);
 		s_Data.LineVertexBufferBase = new LineVertex[s_Data.MaxVertices];
 		
@@ -75,7 +90,7 @@ namespace Lunex {
 			{ ShaderDataType::Float,  "a_Thickness"     },
 			{ ShaderDataType::Float,  "a_Fade"          },
 			{ ShaderDataType::Int,    "a_EntityID"      }
-			});
+		});
 		s_Data.CircleVertexArray->AddVertexBuffer(s_Data.CircleVertexBuffer);
 		s_Data.CircleVertexArray->SetIndexBuffer(quadIB); // reuse
 		s_Data.CircleVertexBufferBase = new CircleVertex[s_Data.MaxVertices];
@@ -308,7 +323,7 @@ namespace Lunex {
 		
 		// --- Lines ---
 		if (s_Data.LineVertexCount && s_Data.LineShader) {
-			uint32_t size = (uint32_t)((uint8_t*)s_Data.LineVertexBufferPtr - (uint8_t*)s_Data.LineVertexBufferBase);
+			uint32_t size = (uint8_t*)s_Data.LineVertexBufferPtr - (uint8_t*)s_Data.LineVertexBufferBase;
 			s_Data.LineVertexBuffer->SetData(s_Data.LineVertexBufferBase, size);
 			
 			s_Data.LineShader->Bind();

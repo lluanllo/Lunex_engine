@@ -1,14 +1,12 @@
 #pragma once
 
 #include "Core/Window.h"
-#include "Renderer/GraphicsContext.h"
+#include "Renderer/RenderCore/GraphicsContext.h"
 
 #include <GLFW/glfw3.h>
 
 namespace Lunex {
-
-	class   WindowsWindow : public Window {
-	
+	class WindowsWindow : public Window {
 		public:
 			WindowsWindow(const WindowProps& props);
 			~WindowsWindow();
