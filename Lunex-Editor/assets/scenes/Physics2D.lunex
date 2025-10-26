@@ -1,91 +1,12 @@
 Scene: Untitled
 Entities:
-  - Entity: 7014609919916056858
-    TagComponent:
-      Tag: rotated quad
-    TransformComponent:
-      Translation: [-4.655531, 3.7096076, -3.6379788e-10]
-      Rotation: [0, 0, 3.1415923]
-      Scale: [0.8199786, 0.8199786, 0.82]
-    SpriteRendererComponent:
-      Color: [1, 1, 1, 1]
-      TexturePath: assets\textures\Checkerboard.png
-      TilingFactor: 1
-    Rigidbody2DComponent:
-      BodyType: Dynamic
-      FixedRotation: false
-    BoxCollider2DComponent:
-      Offset: [0, 0]
-      Size: [0.5, 0.5]
-      Density: 0.88
-      Friction: 0.1
-      Restitution: 0.82
-      RestitutionThreshold: 0.5
-  - Entity: 2473530251302376865
-    TagComponent:
-      Tag: pyshics entioty
-    TransformComponent:
-      Translation: [2.875073, 2.0111547, 6.1035156e-05]
-      Rotation: [0, 0, 3.1415923]
-      Scale: [0.4999882, 0.4999882, 0.5]
-    SpriteRendererComponent:
-      Color: [1, 1, 1, 1]
-      TilingFactor: 1
-    Rigidbody2DComponent:
-      BodyType: Dynamic
-      FixedRotation: false
-    BoxCollider2DComponent:
-      Offset: [0, 0]
-      Size: [0.5, 0.5]
-      Density: 0.88
-      Friction: 0.1
-      Restitution: 0.82
-      RestitutionThreshold: 0.5
-  - Entity: 12837192831273
-    TagComponent:
-      Tag: Camera
-    TransformComponent:
-      Translation: [0, 0, 4.997113]
-      Rotation: [0, 0, 0]
-      Scale: [1, 1, 1]
-    CameraComponent:
-      Camera:
-        ProjectionType: 0
-        PerspectiveFOV: 0.7853982
-        PerspectiveNear: 0.01
-        PerspectiveFar: 1000
-        OrthographicSize: 10
-        OrthographicNear: -1
-        OrthographicFar: 1
-      Primary: true
-      FixedAspectRatio: false
-  - Entity: 15260605884837259240
-    TagComponent:
-      Tag: Sprite
-    TransformComponent:
-      Translation: [10.932297, -44.913464, 0.02251478]
-      Rotation: [0, 0, -1.0782439]
-      Scale: [0.36113706, 0.3755494, 0.84813577]
-    SpriteRendererComponent:
-      Color: [1, 1, 1, 1]
-      TilingFactor: 1
-    Rigidbody2DComponent:
-      BodyType: Dynamic
-      FixedRotation: false
-    BoxCollider2DComponent:
-      Offset: [0, 0]
-      Size: [0.5, 0.5]
-      Density: 0.88
-      Friction: 0.1
-      Restitution: 0.82
-      RestitutionThreshold: 0.5
-  - Entity: 14115245962319714999
+  - Entity: 3129428089542221761
     TagComponent:
       Tag: Floor
     TransformComponent:
-      Translation: [-2.9493256, -0.576783, 0]
-      Rotation: [0, 0, -0.49001917]
-      Scale: [6.741968, 0.46067828, 1]
+      Translation: [2.6493614, -0.35158736, -6.103592e-05]
+      Rotation: [0, 0, 0.5746606]
+      Scale: [6.741965, 0.46067804, 1]
     SpriteRendererComponent:
       Color: [0.52918243, 0, 1, 1]
       TilingFactor: 1
@@ -120,13 +41,13 @@ Entities:
       Friction: 0.2
       Restitution: 0.86
       RestitutionThreshold: 0.5
-  - Entity: 3129428089542221761
+  - Entity: 14115245962319714999
     TagComponent:
       Tag: Floor
     TransformComponent:
-      Translation: [2.5838106, -0.29915226, -3.8198777e-10]
-      Rotation: [0, 0, 0.5746606]
-      Scale: [6.741965, 0.46067804, 1]
+      Translation: [-2.9493256, -0.576783, 0]
+      Rotation: [0, 0, -0.49001917]
+      Scale: [6.741968, 0.46067828, 1]
     SpriteRendererComponent:
       Color: [0.52918243, 0, 1, 1]
       TilingFactor: 1
@@ -139,4 +60,84 @@ Entities:
       Density: 1
       Friction: 0.5
       Restitution: 0
+      RestitutionThreshold: 0.5
+  - Entity: 15260605884837259240
+    TagComponent:
+      Tag: Sprite
+    TransformComponent:
+      Translation: [-0.17896077, 3.3196313, -0.04407217]
+      Rotation: [0, 0, -1.0782439]
+      Scale: [0.36113706, 0.3755494, 0.84813577]
+    SpriteRendererComponent:
+      Color: [1, 0, 0, 1]
+      TilingFactor: 1
+    Rigidbody2DComponent:
+      BodyType: Dynamic
+      FixedRotation: false
+    BoxCollider2DComponent:
+      Offset: [0, 0]
+      Size: [0.5, 0.5]
+      Density: 0.63
+      Friction: 0.17
+      Restitution: 0.82
+      RestitutionThreshold: 0.5
+  - Entity: 12837192831273
+    TagComponent:
+      Tag: Camera
+    TransformComponent:
+      Translation: [0, 0, 4.997113]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    CameraComponent:
+      Camera:
+        ProjectionType: 0
+        PerspectiveFOV: 0.7853982
+        PerspectiveNear: 0.01
+        PerspectiveFar: 1000
+        OrthographicSize: 10
+        OrthographicNear: -1
+        OrthographicFar: 1
+      Primary: true
+      FixedAspectRatio: false
+  - Entity: 2473530251302376865
+    TagComponent:
+      Tag: pyshics entioty
+    TransformComponent:
+      Translation: [2.8750727, 2.0242612, 0]
+      Rotation: [0, 0, 3.1415923]
+      Scale: [0.4999882, 0.4999882, 0.5]
+    SpriteRendererComponent:
+      Color: [1, 1, 1, 1]
+      TexturePath: assets\textures\Checkerboard.png
+      TilingFactor: 1
+    Rigidbody2DComponent:
+      BodyType: Dynamic
+      FixedRotation: false
+    BoxCollider2DComponent:
+      Offset: [0, 0]
+      Size: [0.5, 0.5]
+      Density: 0.88
+      Friction: 0.1
+      Restitution: 0.82
+      RestitutionThreshold: 0.5
+  - Entity: 7014609919916056858
+    TagComponent:
+      Tag: rotated quad
+    TransformComponent:
+      Translation: [-4.655531, 3.7096076, -3.6379788e-10]
+      Rotation: [0, 0, 3.1415923]
+      Scale: [0.8199786, 0.8199786, 0.82]
+    SpriteRendererComponent:
+      Color: [1, 1, 1, 1]
+      TexturePath: assets\textures\Checkerboard.png
+      TilingFactor: 1
+    Rigidbody2DComponent:
+      BodyType: Dynamic
+      FixedRotation: false
+    BoxCollider2DComponent:
+      Offset: [0, 0]
+      Size: [0.5, 0.5]
+      Density: 0.88
+      Friction: 0.1
+      Restitution: 0.82
       RestitutionThreshold: 0.5
