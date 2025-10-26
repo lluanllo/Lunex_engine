@@ -22,6 +22,7 @@ namespace Lunex {
 			void BlockEvents(bool block) { m_BlockEvents = block; }
 			
 			void SetDarkThemeColor();
+			void ApplyUE5Refinements();
 			
 		private:		
 			bool m_BlockEvents = true;

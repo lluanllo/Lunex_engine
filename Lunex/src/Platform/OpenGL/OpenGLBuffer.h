@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Renderer/Buffer.h"
+#include "Renderer/Buffer/Buffer.h"
 
 namespace Lunex {
 	class OpenGLVertexBuffer : public VertexBuffer {

@@ -34,7 +34,7 @@ namespace Lunex {
 			void SerializeScene(Ref<Scene> scene, const std::filesystem::path& path);
 			
 			void OnScenePlay();
-			void OnSceneSimulate();  
+			void OnSceneSimulate();
 			void OnSceneStop();
 			
 			void OnDuplicateEntity();
@@ -42,7 +42,7 @@ namespace Lunex {
 			// UI Panels
 			void UI_Toolbar();
 			
-		private:			
+		private:
 			OrthographicCameraController m_CameraController;
 			
 			// Temp

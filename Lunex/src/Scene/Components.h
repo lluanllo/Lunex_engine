@@ -10,7 +10,6 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
 
-
 namespace Lunex {
 	struct IDComponent {
 		UUID ID;

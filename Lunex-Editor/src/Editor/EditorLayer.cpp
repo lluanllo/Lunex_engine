@@ -2,6 +2,7 @@
 #include "imgui.h"
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 #include "Scene/SceneSerializer.h"
@@ -59,13 +60,13 @@ namespace Lunex {
 		// Resize
 		if (FramebufferSpecification spec = m_Framebuffer->GetSpecification();
 			m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f && // zero sized framebuffer is invalid
-			(spec.Width != m_ViewportSize.x || spec.Height != m_ViewportSize.y)) 
+			(spec.Width != m_ViewportSize.x || spec.Height != m_ViewportSize.y))
 		{
-				m_Framebuffer->Resize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
-				m_CameraController.OnResize(m_ViewportSize.x, m_ViewportSize.y);
-				
-				m_EditorCamera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
-				m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
+			m_Framebuffer->Resize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
+			m_CameraController.OnResize(m_ViewportSize.x, m_ViewportSize.y);
+			
+			m_EditorCamera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
+			m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 		}
 		
 		// Render
@@ -78,25 +79,25 @@ namespace Lunex {
 		m_Framebuffer->ClearAttachment(1, -1);
 		
 		switch (m_SceneState) {
-			case SceneState::Edit: {
-				if (m_ViewportFocused)
-					m_CameraController.OnUpdate(ts);
-				
-				m_EditorCamera.OnUpdate(ts);
-				
-				m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
-				break;
-			}
-			case SceneState::Simulate: {
-				m_EditorCamera.OnUpdate(ts);
-				
-				m_ActiveScene->OnUpdateSimulation(ts, m_EditorCamera);
-				break;
-			}
-			case SceneState::Play: {
-				m_ActiveScene->OnUpdateRuntime(ts);
-				break;
-			}
+		case SceneState::Edit: {
+			if (m_ViewportFocused)
+				m_CameraController.OnUpdate(ts);
+			
+			m_EditorCamera.OnUpdate(ts);
+			
+			m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
+			break;
+		}
+		case SceneState::Simulate: {
+			m_EditorCamera.OnUpdate(ts);
+			
+			m_ActiveScene->OnUpdateSimulation(ts, m_EditorCamera);
+			break;
+		}
+		case SceneState::Play: {
+			m_ActiveScene->OnUpdateRuntime(ts);
+			break;
+		}
 		}
 		
 		auto [mx, my] = ImGui::GetMousePos();
@@ -222,7 +223,7 @@ namespace Lunex {
 		ImGui::Image(reinterpret_cast<void*>(textureID), ImVec2{ m_ViewportSize.x, m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
 		
 		if (ImGui::BeginDragDropTarget()) {
-			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM"))	{
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
 				const wchar_t* path = (const wchar_t*)payload->Data;
 				OpenScene(std::filesystem::path(g_AssetPath) / path);
 			}
@@ -266,7 +267,7 @@ namespace Lunex {
 				tc.Rotation += deltaRotation;
 				tc.Scale = scale;
 			}
-		}	
+		}
 		
 		ImGui::End();
 		ImGui::PopStyleVar();
@@ -349,50 +350,50 @@ namespace Lunex {
 		bool shift = Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift);
 		
 		switch (e.GetKeyCode()) {
-			case Key::N: {
-				if (control)
-					NewScene();
-				break;
+		case Key::N: {
+			if (control)
+				NewScene();
+			break;
+		}
+		case Key::O: {
+			if (control)
+				OpenScene();
+			break;
+		}
+		case Key::S: {
+			if (control) {
+				if (shift)
+					SaveSceneAs();
+				else
+					SaveScene();
 			}
-			case Key::O: {
-				if (control)
-					OpenScene();
-				break;
-			}
-			case Key::S: {
-				if (control) {
-					if (shift)
-						SaveSceneAs();
-					else
-						SaveScene();
-				}
-				break;
-			}
-			case Key::D: {
-				if (control)
-					OnDuplicateEntity();
-				break;
-			}
-			case Key::Q: {
-				if (!ImGuizmo::IsUsing())
-					m_GizmoType = -1;
-				break;
-			}
-			case Key::W: {
-				if (!ImGuizmo::IsUsing())
-					m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
-				break;
-			}
-			case Key::E: {
-				if (!ImGuizmo::IsUsing())
-					m_GizmoType = ImGuizmo::OPERATION::ROTATE;
-				break;
-			}
-			case Key::R: {
-				if (!ImGuizmo::IsUsing())
-					m_GizmoType = ImGuizmo::OPERATION::SCALE;
-				break;
-			}
+			break;
+		}
+		case Key::D: {
+			if (control)
+				OnDuplicateEntity();
+			break;
+		}
+		case Key::Q: {
+			if (!ImGuizmo::IsUsing())
+				m_GizmoType = -1;
+			break;
+		}
+		case Key::W: {
+			if (!ImGuizmo::IsUsing())
+				m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
+			break;
+		}
+		case Key::E: {
+			if (!ImGuizmo::IsUsing())
+				m_GizmoType = ImGuizmo::OPERATION::ROTATE;
+			break;
+		}
+		case Key::R: {
+			if (!ImGuizmo::IsUsing())
+				m_GizmoType = ImGuizmo::OPERATION::SCALE;
+			break;
+		}
 		}
 		
 		return false;
@@ -411,10 +412,11 @@ namespace Lunex {
 			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
 			if (!camera)
 				return;
-			Renderer2D::BeginScene(camera.GetComponent<CameraComponent>().Camera, camera.GetComponent<TransformComponent>().GetTransform());
+			glm::mat4 viewProjection = camera.GetComponent<CameraComponent>().Camera.GetProjection() * glm::inverse(camera.GetComponent<TransformComponent>().GetTransform());
+			Renderer2D::BeginScene(viewProjection);
 		}
 		else {
-			Renderer2D::BeginScene(m_EditorCamera);
+			Renderer2D::BeginScene(m_EditorCamera.GetViewProjection());
 		}
 		
 		if (m_ShowPhysicsColliders) {
@@ -431,7 +433,7 @@ namespace Lunex {
 						* glm::rotate(glm::mat4(1.0f), tc.Rotation.z, glm::vec3(0.0f, 0.0f, 1.0f))
 						* glm::scale(glm::mat4(1.0f), scale);
 					
-					Renderer2D::DrawRect(transform, glm::vec4(0, 1, 0, 1));
+					Renderer2D::DrawQuad(transform, glm::vec4(0, 1, 0, 1));
 				}
 			}
 			
@@ -455,7 +457,7 @@ namespace Lunex {
 		// Draw selected entity outline 
 		if (Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity()) {
 			const TransformComponent& transform = selectedEntity.GetComponent<TransformComponent>();
-			Renderer2D::DrawRect(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+			Renderer2D::DrawQuad(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
 		}
 		Renderer2D::EndScene();
 	}
@@ -476,7 +478,7 @@ namespace Lunex {
 	void EditorLayer::OpenScene(const std::filesystem::path& path) {
 		if (m_SceneState != SceneState::Edit)
 			OnSceneStop();
-			
+		
 		if (path.extension().string() != ".lunex") {
 			LNX_LOG_WARN("Could not load {0} - not a scene file", path.filename().string());
 			return;

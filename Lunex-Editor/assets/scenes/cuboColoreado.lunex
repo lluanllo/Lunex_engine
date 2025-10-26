@@ -1,23 +1,25 @@
 Scene: Untitled
 Entities:
-  - Entity: 17174961658420483605
+  - Entity: 12837192831273
     TagComponent:
-      Tag: Left
+      Tag: floor
     TransformComponent:
-      Translation: [-0.355, 0, 0.35]
-      Rotation: [0, -0.7853982, 0]
-      Scale: [1, 1, 1]
+      Translation: [-0.0048847413, -0.50143594, -0.90070003]
+      Rotation: [1.5707964, -4.656613e-10, -0.009599311]
+      Scale: [7, 7, 7]
     SpriteRendererComponent:
-      Color: [1, 0, 0, 1]
-  - Entity: 2359338716793703654
+      Color: [0.16183035, 0.24130066, 0.51785713, 1]
+      TilingFactor: 1
+  - Entity: 7568137285011262130
     TagComponent:
-      Tag: Right
+      Tag: Top
     TransformComponent:
-      Translation: [0.352, 0, 0.35]
-      Rotation: [0, 0.78539824, 0]
-      Scale: [1, 1, 1]
+      Translation: [-1.0415912e-05, 0.5, 0]
+      Rotation: [1.5707936, -0.7853975, -4.2146823e-08]
+      Scale: [1, 1, 1.0000006]
     SpriteRendererComponent:
-      Color: [0.09821427, 1, 0, 1]
+      Color: [0, 0.035714865, 1, 1]
+      TilingFactor: 1
   - Entity: 4746964712942598295
     TagComponent:
       Tag: Camera
@@ -36,21 +38,23 @@ Entities:
         OrthographicFar: 1
       Primary: true
       FixedAspectRatio: false
-  - Entity: 7568137285011262130
+  - Entity: 2359338716793703654
     TagComponent:
-      Tag: Top
+      Tag: Right
     TransformComponent:
-      Translation: [-1.0415912e-05, 0.5, 0]
-      Rotation: [1.5707936, -0.7853975, -4.2146823e-08]
-      Scale: [1, 1, 1.0000006]
+      Translation: [0.352, 0, 0.35]
+      Rotation: [0, 0.78539824, 0]
+      Scale: [1, 1, 1]
     SpriteRendererComponent:
-      Color: [0, 0.035714865, 1, 1]
-  - Entity: 12837192831273
+      Color: [0.09821427, 1, 0, 1]
+      TilingFactor: 1
+  - Entity: 17174961658420483605
     TagComponent:
-      Tag: moveable entity
+      Tag: Left
     TransformComponent:
-      Translation: [-0.0048847413, -0.50143594, -0.90070003]
-      Rotation: [1.5707964, -4.656613e-10, -0.009599311]
-      Scale: [7, 7, 7]
+      Translation: [-0.355, 0, 0.35]
+      Rotation: [0, -0.7853982, 0]
+      Scale: [1, 1, 1]
     SpriteRendererComponent:
-      Color: [0.16183035, 0.24130066, 0.51785713, 1]
+      Color: [1, 0, 0, 1]
+      TilingFactor: 1
