@@ -1,7 +1,7 @@
 ﻿#pragma once
 #include "Core/Core.h"
-
 #include "Renderer/RenderCore/RenderPipeline.h"
+
 #include "Renderer/Buffer/VertexArray.h"
 #include "Renderer/Buffer/Buffer.h"
 #include "Renderer/Shader.h"
