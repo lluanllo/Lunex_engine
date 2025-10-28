@@ -1,9 +1,11 @@
 ﻿#include "SceneHierarchyPanel.h"
+
+#include "Scene/Components.h"
+
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <filesystem>
-#include "Scene/Components.h"
 
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
@@ -621,7 +623,7 @@ namespace Lunex {
 			ImGui::SameLine(contentRegionAvailable.x - lineHeight * 0.5f);
 			ImGui::PushID((int)(intptr_t)(void*)typeid(T).hash_code());
 
-			if (ImGui::Button("+", ImVec2{ lineHeight, lineHeight })) {
+			if (ImGui::Button("-", ImVec2{ lineHeight, lineHeight })) {
 				ImGui::OpenPopup("ComponentSettings");
 			}
 
@@ -659,7 +661,7 @@ namespace Lunex {
 		ImGui::SameLine();
 		ImGui::PushItemWidth(-1);
 
-		if (ImGui::Button("Add Component"))
+		if (ImGui::Button("Add +"))
 			ImGui::OpenPopup("AddComponent");
 		if (ImGui::BeginPopup("AddComponent")) {
 			DisplayAddComponentEntry<CameraComponent>("Camera");
