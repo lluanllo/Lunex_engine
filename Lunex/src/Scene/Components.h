@@ -141,6 +141,30 @@ namespace Lunex {
 		CircleCollider2DComponent() = default;
 		CircleCollider2DComponent(const CircleCollider2DComponent&) = default;
 	};
+
+	// ============================================================================
+	// 3D Components
+	// ============================================================================
+
+	// Forward declarations for 3D types
+	class Mesh;
+	class Material;
+
+	struct MeshComponent {
+		Ref<Mesh> MeshAsset;
+		
+		MeshComponent() = default;
+		MeshComponent(const MeshComponent&) = default;
+		MeshComponent(const Ref<Mesh>& mesh) : MeshAsset(mesh) {}
+	};
+
+	struct MaterialComponent {
+		Ref<Material> MaterialInstance;
+		
+		MaterialComponent() = default;
+		MaterialComponent(const MaterialComponent&) = default;
+		MaterialComponent(const Ref<Material>& material) : MaterialInstance(material) {}
+	};
 	
 	template<typename... Component>
 	struct ComponentGroup
@@ -150,5 +174,6 @@ namespace Lunex {
 	using AllComponents =
 		ComponentGroup<TransformComponent, SpriteRendererComponent,
 		CircleRendererComponent, CameraComponent, NativeScriptComponent,
-		Rigidbody2DComponent, BoxCollider2DComponent, CircleCollider2DComponent>;
+		Rigidbody2DComponent, BoxCollider2DComponent, CircleCollider2DComponent,
+		MeshComponent, MaterialComponent>;
 }

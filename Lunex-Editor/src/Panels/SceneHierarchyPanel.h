@@ -46,11 +46,6 @@ namespace Lunex {
 		void RenderEntityContextMenu(Entity entity);
 		void RenderEmptySpaceContextMenu();
 
-		// Component drawing (mantenido original)
-		template<typename T>
-		void DisplayAddComponentEntry(const std::string& entryName);
-		void DrawComponents(Entity entity);
-
 		// Utility methods
 		bool PassesSearchFilter(Entity entity);
 		bool PassesTypeFilter(Entity entity);

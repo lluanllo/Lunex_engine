@@ -7,6 +7,7 @@
 #include "../Panels/SettingsPanel.h"
 #include "../Panels/ViewportPanel.h"
 #include "../Panels/ToolbarPanel.h"
+#include "../Panels/PropertiesPanel.h"
 
 #include "Renderer/CameraTypes/EditorCamera.h"
 
@@ -72,5 +73,6 @@ namespace Lunex {
 		SettingsPanel m_SettingsPanel;
 		ViewportPanel m_ViewportPanel;
 		ToolbarPanel m_ToolbarPanel;
+		PropertiesPanel m_PropertiesPanel;
 	};
 }

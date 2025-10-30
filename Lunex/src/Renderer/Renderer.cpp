@@ -3,6 +3,7 @@
 
 #include "Platform/OpenGL/OpenGLShader.h"
 #include "Renderer/Renderer2D/Renderer2D.h"
+#include "Renderer/Renderer3D/Renderer3D.h"
 
 namespace Lunex {
 	Scope<Renderer::SceneData> Renderer::s_SceneData = CreateScope<Renderer::SceneData>();
@@ -18,6 +19,7 @@ namespace Lunex {
 		
 		RenderCommand::Init();
 		Renderer2D::Init();
+		Renderer3D::Init(); // ✅ Inicializar Renderer3D
 		
 		LNX_LOG_INFO("Renderer initialized with API: {0}", (int)GetAPI());
 	}
@@ -25,6 +27,7 @@ namespace Lunex {
 	void Renderer::Shutdown() {
 		LNX_PROFILE_FUNCTION();
 		
+		Renderer3D::Shutdown(); // ✅ Shutdown Renderer3D
 		Renderer2D::Shutdown();
 		
 		if (s_RenderGraph)

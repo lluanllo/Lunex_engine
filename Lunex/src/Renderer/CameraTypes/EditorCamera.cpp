@@ -16,6 +16,8 @@ namespace Lunex {
 		: m_FOV(fov), m_AspectRatio(aspectRatio), m_NearClip(nearClip), m_FarClip(farClip), Camera(glm::perspective(glm::radians(fov), aspectRatio, nearClip, farClip))
 	{		
 		UpdateView();
+		LNX_LOG_INFO("EditorCamera created: FOV={0}, Distance={1}, Position=({2}, {3}, {4})", 
+			m_FOV, m_Distance, m_Position.x, m_Position.y, m_Position.z);
 	}
 	
 	void EditorCamera::UpdateProjection() {

@@ -36,6 +36,7 @@ namespace Lunex {
 		m_ActiveScene = m_EditorScene;
 
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
+		m_PropertiesPanel.SetContext(m_ActiveScene);
 
 		// Cargar escena inicial si se proporcionó
 		if (!m_InitialScenePath.empty()) {
@@ -212,6 +213,10 @@ namespace Lunex {
 		m_ContentBrowserPanel.OnImGuiRender();
 		m_StatsPanel.OnImGuiRender();
 		m_SettingsPanel.OnImGuiRender();
+		
+		// Properties panel - se sincroniza con la entidad seleccionada
+		m_PropertiesPanel.SetSelectedEntity(m_SceneHierarchyPanel.GetSelectedEntity());
+		m_PropertiesPanel.OnImGuiRender();
 
 		// Viewport panel
 		m_ViewportPanel.SetGizmoType(m_GizmoType);
@@ -300,8 +305,16 @@ namespace Lunex {
 
 	bool EditorLayer::OnMouseButtonPressed(MouseButtonPressedEvent& e) {
 		if (e.GetMouseButton() == Mouse::ButtonLeft) {
-			if (m_ViewportPanel.IsViewportHovered() && !ImGuizmo::IsOver() && !Input::IsKeyPressed(Key::LeftAlt))
-				m_SceneHierarchyPanel.SetSelectedEntity(m_HoveredEntity);
+			if (m_ViewportPanel.IsViewportHovered() && !ImGuizmo::IsOver() && !Input::IsKeyPressed(Key::LeftAlt)) {
+				// ✅ Validate entity before setting it as selected
+				if (m_HoveredEntity && m_HoveredEntity.HasComponent<IDComponent>()) {
+					m_SceneHierarchyPanel.SetSelectedEntity(m_HoveredEntity);
+				}
+				else {
+					// Deselect if clicking on empty space
+					m_SceneHierarchyPanel.SetSelectedEntity({});
+				}
+			}
 		}
 		return false;
 	}
@@ -320,7 +333,7 @@ namespace Lunex {
 		}
 
 		if (m_SettingsPanel.GetShowPhysicsColliders()) {
-			// Box Colliders
+			// Box Colliders - Draw as wireframe
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, BoxCollider2DComponent>();
 				for (auto entity : view) {
@@ -333,11 +346,22 @@ namespace Lunex {
 						* glm::rotate(glm::mat4(1.0f), tc.Rotation.z, glm::vec3(0.0f, 0.0f, 1.0f))
 						* glm::scale(glm::mat4(1.0f), scale);
 
-					Renderer2D::DrawQuad(transform, glm::vec4(0, 1, 0, 1));
+					// Draw box collider as lines (wireframe)
+					glm::vec3 lineVertices[4];
+					lineVertices[0] = transform * glm::vec4(-0.5f, -0.5f, 0.0f, 1.0f);
+					lineVertices[1] = transform * glm::vec4( 0.5f, -0.5f, 0.0f, 1.0f);
+					lineVertices[2] = transform * glm::vec4( 0.5f,  0.5f, 0.0f, 1.0f);
+					lineVertices[3] = transform * glm::vec4(-0.5f,  0.5f, 0.0f, 1.0f);
+
+					glm::vec4 color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+					Renderer2D::DrawLine(lineVertices[0], lineVertices[1], color);
+					Renderer2D::DrawLine(lineVertices[1], lineVertices[2], color);
+					Renderer2D::DrawLine(lineVertices[2], lineVertices[3], color);
+					Renderer2D::DrawLine(lineVertices[3], lineVertices[0], color);
 				}
 			}
 
-			// Circle Colliders
+			// Circle Colliders - Use thin thickness
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, CircleCollider2DComponent>();
 				for (auto entity : view) {
@@ -349,15 +373,28 @@ namespace Lunex {
 					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
 						* glm::scale(glm::mat4(1.0f), scale);
 
-					Renderer2D::DrawCircle(transform, glm::vec4(0, 1, 0, 1), 0.01f);
+					Renderer2D::DrawCircle(transform, glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), 0.05f, 0.005f);
 				}
 			}
 		}
 
-		// Draw selected entity outline
+		// Draw selected entity outline as wireframe
 		if (Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity()) {
 			const TransformComponent& transform = selectedEntity.GetComponent<TransformComponent>();
-			Renderer2D::DrawQuad(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+			glm::mat4 transformMatrix = transform.GetTransform();
+
+			// Draw selection outline as lines
+			glm::vec3 lineVertices[4];
+			lineVertices[0] = transformMatrix * glm::vec4(-0.5f, -0.5f, 0.0f, 1.0f);
+			lineVertices[1] = transformMatrix * glm::vec4( 0.5f, -0.5f, 0.0f, 1.0f);
+			lineVertices[2] = transformMatrix * glm::vec4( 0.5f,  0.5f, 0.0f, 1.0f);
+			lineVertices[3] = transformMatrix * glm::vec4(-0.5f,  0.5f, 0.0f, 1.0f);
+
+			glm::vec4 color = glm::vec4(1.0f, 0.5f, 0.0f, 1.0f);
+			Renderer2D::DrawLine(lineVertices[0], lineVertices[1], color);
+			Renderer2D::DrawLine(lineVertices[1], lineVertices[2], color);
+			Renderer2D::DrawLine(lineVertices[2], lineVertices[3], color);
+			Renderer2D::DrawLine(lineVertices[3], lineVertices[0], color);
 		}
 
 		Renderer2D::EndScene();
@@ -368,6 +405,7 @@ namespace Lunex {
 		glm::vec2 viewportSize = m_ViewportPanel.GetViewportSize();
 		m_ActiveScene->OnViewportResize((uint32_t)viewportSize.x, (uint32_t)viewportSize.y);
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
+		m_PropertiesPanel.SetContext(m_ActiveScene);
 		m_ViewportPanel.SetActiveScene(m_ActiveScene);
 		m_EditorScenePath = std::filesystem::path();
 	}
@@ -394,6 +432,7 @@ namespace Lunex {
 			glm::vec2 viewportSize = m_ViewportPanel.GetViewportSize();
 			m_EditorScene->OnViewportResize((uint32_t)viewportSize.x, (uint32_t)viewportSize.y);
 			m_SceneHierarchyPanel.SetContext(m_EditorScene);
+			m_PropertiesPanel.SetContext(m_EditorScene);
 			m_ActiveScene = m_EditorScene;
 			m_ViewportPanel.SetActiveScene(m_ActiveScene);
 			m_EditorScenePath = path;
@@ -428,6 +467,7 @@ namespace Lunex {
 		m_ActiveScene = Scene::Copy(m_EditorScene);
 		m_ActiveScene->OnRuntimeStart();
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
+		m_PropertiesPanel.SetContext(m_ActiveScene);
 		m_ViewportPanel.SetActiveScene(m_ActiveScene);
 	}
 
@@ -439,6 +479,7 @@ namespace Lunex {
 		m_ActiveScene = Scene::Copy(m_EditorScene);
 		m_ActiveScene->OnSimulationStart();
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
+		m_PropertiesPanel.SetContext(m_ActiveScene);
 		m_ViewportPanel.SetActiveScene(m_ActiveScene);
 	}
 
@@ -453,6 +494,7 @@ namespace Lunex {
 		m_SceneState = SceneState::Edit;
 		m_ActiveScene = m_EditorScene;
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
+		m_PropertiesPanel.SetContext(m_ActiveScene);
 		m_ViewportPanel.SetActiveScene(m_ActiveScene);
 	}
 

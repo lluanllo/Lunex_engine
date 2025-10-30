@@ -56,6 +56,7 @@ namespace Lunex {
 			// ----- Scene control (3D-specific) -----
 			// Provide camera and per-frame data
 			void BeginScene(const EditorCamera& camera, const glm::mat4& cameraTransform);
+			void BeginScene(const Camera& camera, const glm::mat4& viewMatrix, const glm::vec3& cameraPosition); // ? Generic camera
 			void EndScene();
 			
 			// Submit high-level objects: Mesh + Material

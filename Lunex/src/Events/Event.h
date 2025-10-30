@@ -1,6 +1,8 @@
 #pragma once
 
-#include "Core/core.h"
+#include "Core/Core.h"
+#include <string>
+#include <ostream>
 
 namespace Lunex {
     enum class EventType {

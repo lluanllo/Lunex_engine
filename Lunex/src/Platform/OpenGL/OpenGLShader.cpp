@@ -177,6 +177,7 @@ namespace Lunex {
 			std::filesystem::path shaderFilePath = m_FilePath;
 			std::filesystem::path cachedPath = cacheDirectory / (shaderFilePath.filename().string() + Utils::GLShaderStageCachedVulkanFileExtension(stage));
 			
+			bool loadedFromCache = false;
 			std::ifstream in(cachedPath, std::ios::in | std::ios::binary);
 			if (in.is_open()) {
 				in.seekg(0, std::ios::end);
@@ -186,12 +187,15 @@ namespace Lunex {
 				auto& data = shaderData[stage];
 				data.resize(size / sizeof(uint32_t));
 				in.read((char*)data.data(), size);
+				loadedFromCache = true;
+				in.close();
 			}
-			else {
+			
+			if (!loadedFromCache) {
 				shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(source, Utils::GLShaderStageToShaderC(stage), m_FilePath.c_str(), options);
 				if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
-					LNX_LOG_ERROR(module.GetErrorMessage());
-					LNX_CORE_ASSERT(false);
+					LNX_LOG_ERROR("Vulkan SPIR-V compilation failed: {0}", module.GetErrorMessage());
+					LNX_CORE_ASSERT(false, "Shader compilation failed");
 				}
 				
 				shaderData[stage] = std::vector<uint32_t>(module.cbegin(), module.cend());
@@ -206,8 +210,10 @@ namespace Lunex {
 			}
 		}
 		
-		for (auto&& [stage, data] : shaderData)
+		// Reflect after loading/compiling all stages
+		for (auto&& [stage, data] : shaderData) {
 			Reflect(stage, data);
+		}
 	}
 	
 	void OpenGLShader::CompileOrGetOpenGLBinaries() {
@@ -239,24 +245,43 @@ namespace Lunex {
 				in.read((char*)data.data(), size);
 			}
 			else {
-				spirv_cross::CompilerGLSL glslCompiler(spirv);
-				m_OpenGLSourceCode[stage] = glslCompiler.compile();
-				auto& source = m_OpenGLSourceCode[stage];
-				
-				shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(source, Utils::GLShaderStageToShaderC(stage), m_FilePath.c_str());
-				if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
-					LNX_LOG_ERROR(module.GetErrorMessage());
-					LNX_CORE_ASSERT(false);
+				// Wrap SPIRV-Cross compilation in try-catch to handle errors gracefully
+				try {
+					spirv_cross::CompilerGLSL glslCompiler(spirv);
+					m_OpenGLSourceCode[stage] = glslCompiler.compile();
+					auto& source = m_OpenGLSourceCode[stage];
+					
+					shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(source, Utils::GLShaderStageToShaderC(stage), m_FilePath.c_str());
+					if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
+						LNX_LOG_ERROR("OpenGL SPIR-V compilation failed: {0}", module.GetErrorMessage());
+						
+						// Delete corrupted cache files
+						std::filesystem::remove(cachedPath);
+						std::filesystem::path vulkanCachedPath = cacheDirectory / (std::filesystem::path(m_FilePath).filename().string() + Utils::GLShaderStageCachedVulkanFileExtension(stage));
+						std::filesystem::remove(vulkanCachedPath);
+						
+						LNX_CORE_ASSERT(false, "Shader compilation failed. Cache has been cleared. Please rebuild.");
+					}
+					
+					shaderData[stage] = std::vector<uint32_t>(module.cbegin(), module.cend());
+					
+					std::ofstream out(cachedPath, std::ios::out | std::ios::binary);
+					if (out.is_open()) {
+						auto& data = shaderData[stage];
+						out.write((char*)data.data(), data.size() * sizeof(uint32_t));
+						out.flush();
+						out.close();
+					}
 				}
-				
-				shaderData[stage] = std::vector<uint32_t>(module.cbegin(), module.cend());
-				
-				std::ofstream out(cachedPath, std::ios::out | std::ios::binary);
-				if (out.is_open()) {
-					auto& data = shaderData[stage];
-					out.write((char*)data.data(), data.size() * sizeof(uint32_t));
-					out.flush();
-					out.close();
+				catch (const spirv_cross::CompilerError& e) {
+					LNX_LOG_ERROR("SPIRV-Cross compilation error: {0}", e.what());
+					
+					// Delete corrupted cache files
+					std::filesystem::remove(cachedPath);
+					std::filesystem::path vulkanCachedPath = cacheDirectory / (std::filesystem::path(m_FilePath).filename().string() + Utils::GLShaderStageCachedVulkanFileExtension(stage));
+					std::filesystem::remove(vulkanCachedPath);
+					
+					LNX_CORE_ASSERT(false, "SPIRV-Cross failed to transpile shader. Cache has been cleared. Please rebuild with fixed shader.");
 				}
 			}
 		}
@@ -300,24 +325,31 @@ namespace Lunex {
 	}
 	
 	void OpenGLShader::Reflect(GLenum stage, const std::vector<uint32_t>& shaderData) {
-		spirv_cross::Compiler compiler(shaderData);
-		spirv_cross::ShaderResources resources = compiler.get_shader_resources();
-		
-		LNX_LOG_TRACE("OpenGLShader::Reflect - {0} {1}", Utils::GLShaderStageToString(stage), m_FilePath);
-		LNX_LOG_TRACE("    {0} uniform buffers", resources.uniform_buffers.size());
-		LNX_LOG_TRACE("    {0} resources", resources.sampled_images.size());
-		
-		LNX_LOG_TRACE("Uniform buffers:");
-		for (const auto& resource : resources.uniform_buffers) {
-			const auto& bufferType = compiler.get_type(resource.base_type_id);
-			uint32_t bufferSize = compiler.get_declared_struct_size(bufferType);
-			uint32_t binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
-			int memberCount = bufferType.member_types.size();
+		try {
+			spirv_cross::Compiler compiler(shaderData);
+			spirv_cross::ShaderResources resources = compiler.get_shader_resources();
 			
-			LNX_LOG_TRACE("  {0}", resource.name);
-			LNX_LOG_TRACE("    Size = {0}", bufferSize);
-			LNX_LOG_TRACE("    Binding = {0}", binding);
-			LNX_LOG_TRACE("    Members = {0}", memberCount);
+			LNX_LOG_TRACE("OpenGLShader::Reflect - {0} {1}", Utils::GLShaderStageToString(stage), m_FilePath);
+			LNX_LOG_TRACE("    {0} uniform buffers", resources.uniform_buffers.size());
+			LNX_LOG_TRACE("    {0} resources", resources.sampled_images.size());
+			
+			LNX_LOG_TRACE("Uniform buffers:");
+			for (const auto& resource : resources.uniform_buffers) {
+				const auto& bufferType = compiler.get_type(resource.base_type_id);
+				uint32_t bufferSize = compiler.get_declared_struct_size(bufferType);
+				uint32_t binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
+				int memberCount = bufferType.member_types.size();
+				
+				LNX_LOG_TRACE("  {0}", resource.name);
+				LNX_LOG_TRACE("    Size = {0}", bufferSize);
+				LNX_LOG_TRACE("    Binding = {0}", binding);
+				LNX_LOG_TRACE("    Members = {0}", memberCount);
+			}
+		}
+		catch (const spirv_cross::CompilerError& e) {
+			LNX_LOG_ERROR("SPIRV-Cross Reflect error for {0}: {1}", m_FilePath, e.what());
+			LNX_LOG_ERROR("Shader reflection failed, but compilation may still work.");
+			// Don't throw - reflection is optional
 		}
 	}
 	

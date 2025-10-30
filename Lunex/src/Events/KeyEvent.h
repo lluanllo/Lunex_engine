@@ -3,6 +3,8 @@
 #include "Core/Core.h"
 #include "Core/Input.h"
 #include "Event.h"
+#include <string>
+#include <sstream>
 
 namespace Lunex {
 	class KeyEvent : public Event {

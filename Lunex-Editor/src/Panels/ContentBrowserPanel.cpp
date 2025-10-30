@@ -134,20 +134,36 @@ namespace Lunex {
 
 		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
 
-		// Back button
+		// Back button with icon
 		ImGui::BeginDisabled(m_HistoryIndex <= 0);
-		if (ImGui::Button("<", ImVec2(30, 30))) {
-			NavigateBack();
+		if (m_BackIcon) {
+			if (ImGui::ImageButton("##Back", (void*)(intptr_t)m_BackIcon->GetRendererID(), 
+				ImVec2(20, 20), ImVec2(0, 1), ImVec2(1, 0))) {
+				NavigateBack();
+			}
+		}
+		else {
+			if (ImGui::Button("<", ImVec2(30, 30))) {
+				NavigateBack();
+			}
 		}
 		ImGui::EndDisabled();
 		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Back");
 
 		ImGui::SameLine();
 
-		// Forward button
+		// Forward button with icon
 		ImGui::BeginDisabled(m_HistoryIndex >= (int)m_NavigationHistory.size() - 1);
-		if (ImGui::Button(">", ImVec2(30, 30))) {
-			NavigateForward();
+		if (m_ForwardIcon) {
+			if (ImGui::ImageButton("##Forward", (void*)(intptr_t)m_ForwardIcon->GetRendererID(), 
+				ImVec2(20, 20), ImVec2(0, 1), ImVec2(1, 0))) {
+				NavigateForward();
+			}
+		}
+		else {
+			if (ImGui::Button(">", ImVec2(30, 30))) {
+				NavigateForward();
+			}
 		}
 		ImGui::EndDisabled();
 		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Forward");
@@ -207,7 +223,9 @@ namespace Lunex {
 
 		// Settings popup
 		if (ImGui::BeginPopup("ContentBrowserSettings")) {
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.90f, 0.50f, 0.10f, 1.0f));
 			ImGui::Text("Content Browser Settings");
+			ImGui::PopStyleColor();
 			ImGui::Separator();
 
 			ImGui::Checkbox("Show Favorites Panel", &m_ShowFavorites);

@@ -4,6 +4,9 @@
 #include "Components.h"
 #include "ScripteableEntity.h"
 #include "Renderer/Renderer2D/Renderer2D.h"
+#include "Renderer/Renderer3D/Renderer3D.h"
+#include "Renderer/Renderer3D/BasicShapes.h"
+#include "Renderer/MaterialSystem/MaterialInstance.h"
 
 #include <glm/glm.hpp>
 
@@ -158,7 +161,7 @@ namespace Lunex {
 			}
 		}
 		
-		// Render 2D
+		// Get main camera
 		Camera* mainCamera = nullptr;
 		glm::mat4 cameraTransform;
 		{
@@ -175,6 +178,7 @@ namespace Lunex {
 		}
 		
 		if (mainCamera) {
+			// Render 2D
 			Renderer2D::BeginScene(*mainCamera, cameraTransform);
 			
 			// Draw sprites
@@ -194,7 +198,60 @@ namespace Lunex {
 					Renderer2D::DrawCircle(transform.GetTransform(), circle.Color, circle.Thickness, circle.Fade, (int)entity);
 				}
 			}
+			
 			Renderer2D::EndScene();
+
+			// ✅ Render 3D in Runtime mode with scene camera
+			Renderer3D::BeginScene(*mainCamera, cameraTransform);
+
+			// Draw 3D meshes
+			{
+				auto view = m_Registry.view<TransformComponent, MeshComponent>();
+				int meshCount = 0;
+				for (auto entity : view) {
+					auto [transform, meshComp] = view.get<TransformComponent, MeshComponent>(entity);
+
+					if (meshComp.MeshAsset) {
+						meshCount++;
+						
+						// Get material (default or custom)
+						Ref<Material> material;
+						Entity ent = { entity, this };
+						
+						if (ent.HasComponent<MaterialComponent>()) {
+							material = ent.GetComponent<MaterialComponent>().MaterialInstance;
+						}
+						
+						// ❌ NO crear material aquí - cada entidad ya tiene uno desde OnComponentAdded
+						if (!material) {
+							LNX_LOG_WARN("Entity without MaterialComponent - skipping render");
+							continue;
+						}
+
+						// ✅ Use entt::entity handle directly as ID (it's just an uint32_t)
+						Renderer3D::DrawMesh(meshComp.MeshAsset, material, transform.GetTransform(), (uint32_t)entity);
+						
+						// Log first mesh render (only once to avoid spam)
+						static bool loggedFirstMesh = false;
+						if (!loggedFirstMesh) {
+							glm::vec3 pos = transform.Translation;
+							glm::vec3 camPos = glm::vec3(glm::inverse(cameraTransform)[3]);
+							LNX_LOG_INFO("Rendering 3D mesh at position ({0}, {1}, {2})", pos.x, pos.y, pos.z);
+							LNX_LOG_INFO("Camera position: ({0}, {1}, {2})", camPos.x, camPos.y, camPos.z);
+							loggedFirstMesh = true;
+						}
+					}
+				}
+				
+				// Log mesh count (only when it changes to avoid spam)
+				static int lastMeshCount = -1;
+				if (meshCount != lastMeshCount) {
+					LNX_LOG_INFO("Rendering {0} 3D meshes", meshCount);
+					lastMeshCount = meshCount;
+				}
+			}
+
+			Renderer3D::EndScene();
 		}
 	}
 	
@@ -354,6 +411,7 @@ namespace Lunex {
 	}
 	
 	void Scene::RenderScene(EditorCamera& camera) {
+		// Render 2D
 		Renderer2D::BeginScene(camera);
 		
 		// Draw sprites
@@ -375,6 +433,58 @@ namespace Lunex {
 		}
 		
 		Renderer2D::EndScene();
+
+		// Render 3D
+		Renderer3D::BeginScene(camera);
+
+		// Draw 3D meshes
+		{
+			auto view = m_Registry.view<TransformComponent, MeshComponent>();
+			int meshCount = 0;
+			for (auto entity : view) {
+				auto [transform, meshComp] = view.get<TransformComponent, MeshComponent>(entity);
+
+				if (meshComp.MeshAsset) {
+					meshCount++;
+					
+					// Get material (default or custom)
+					Ref<Material> material;
+					Entity ent = { entity, this };
+					
+					if (ent.HasComponent<MaterialComponent>()) {
+						material = ent.GetComponent<MaterialComponent>().MaterialInstance;
+					}
+					
+					// ❌ NO crear material aquí - cada entidad ya tiene uno desde OnComponentAdded
+					if (!material) {
+						LNX_LOG_WARN("Entity without MaterialComponent - skipping render");
+						continue;
+					}
+
+					// ✅ Use entt::entity handle directly as ID (it's just an uint32_t)
+					Renderer3D::DrawMesh(meshComp.MeshAsset, material, transform.GetTransform(), (uint32_t)entity);
+					
+					// Log first mesh render (only once to avoid spam)
+					static bool loggedFirstMesh = false;
+					if (!loggedFirstMesh) {
+						glm::vec3 pos = transform.Translation;
+						glm::vec3 camPos = glm::vec3(glm::inverse(camera.GetViewMatrix())[3]);
+						LNX_LOG_INFO("Rendering 3D mesh at position ({0}, {1}, {2})", pos.x, pos.y, pos.z);
+						LNX_LOG_INFO("Camera position: ({0}, {1}, {2})", camPos.x, camPos.y, camPos.z);
+						loggedFirstMesh = true;
+					}
+				}
+			}
+			
+			// Log mesh count (only when it changes to avoid spam)
+			static int lastMeshCount = -1;
+			if (meshCount != lastMeshCount) {
+				LNX_LOG_INFO("Rendering {0} 3D meshes", meshCount);
+				lastMeshCount = meshCount;
+			}
+		}
+
+		Renderer3D::EndScene();
 	}
 	
 	void Scene::DuplicateEntity(Entity entity) {
@@ -427,5 +537,31 @@ namespace Lunex {
 	
 	template<>
 	void Scene::OnComponentAdded<CircleCollider2DComponent>(Entity entity, CircleCollider2DComponent& component) {
+	}
+	
+	template<>
+	void Scene::OnComponentAdded<MeshComponent>(Entity entity, MeshComponent& component) {
+		// When a mesh is added, create a default cube if no mesh is assigned
+		if (!component.MeshAsset) {
+			component.MeshAsset = BasicShapes::CreateCube();
+			LNX_LOG_INFO("MeshComponent added with default Cube mesh");
+		}
+
+		// Automatically add a default material if it doesn't have one
+		if (!entity.HasComponent<MaterialComponent>()) {
+			// ✅ Create a NEW material instance for each entity (not static/shared)
+			Ref<Shader> defaultShader = Shader::Create("assets/shaders/Basic3D.glsl");
+			Ref<Material> material = CreateRef<Material>(defaultShader, "DefaultMaterial");
+			material->SetAlbedo(glm::vec3(0.7f, 0.7f, 0.7f)); // Gray
+			material->SetMetallic(0.1f);
+			material->SetRoughness(0.5f);
+			
+			entity.AddComponent<MaterialComponent>(material);
+			LNX_LOG_INFO("MaterialComponent added with default gray material");
+		}
+	}
+	
+	template<>
+	void Scene::OnComponentAdded<MaterialComponent>(Entity entity, MaterialComponent& component) {
 	}
 }
