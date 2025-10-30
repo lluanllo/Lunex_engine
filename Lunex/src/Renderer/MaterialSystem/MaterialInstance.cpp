@@ -19,37 +19,10 @@ namespace Lunex {
 
 		m_Shader->Bind();
 
-		// Upload material properties to UBO (binding = 2)
-		struct MaterialUBO {
-			glm::vec4 Albedo_Metallic;           // xyz = Albedo, w = Metallic
-			glm::vec4 Roughness_Emission_X;      // x = Roughness, yzw = Emission
-			glm::vec4 Flags;             // xyzw = HasAlbedoMap, HasNormalMap, HasMetallicMap, HasRoughnessMap
-		} materialUbo;
-
-		materialUbo.Albedo_Metallic = glm::vec4(m_Albedo, m_Metallic);
-		materialUbo.Roughness_Emission_X = glm::vec4(m_Roughness, m_Emission.x, m_Emission.y, m_Emission.z);
-		materialUbo.Flags = glm::vec4(
-			m_AlbedoMap ? 1.0f : 0.0f,
-			m_NormalMap ? 1.0f : 0.0f,
-			m_MetallicMap ? 1.0f : 0.0f,
-			m_RoughnessMap ? 1.0f : 0.0f
-		);
-
-		// TODO: Upload to UBO (binding = 2) instead of individual uniforms
-		// For now, use SetFloat4() which should work with UBO if the layout matches
-		m_Shader->SetFloat4("u_Material_Albedo_Metallic", materialUbo.Albedo_Metallic);
-		m_Shader->SetFloat4("u_Material_Roughness_Emission_X", materialUbo.Roughness_Emission_X);
-		m_Shader->SetFloat4("u_Material_Flags", materialUbo.Flags);
-
-		// Debug log (solo la primera vez)
-		static bool logged = false;
-		if (!logged) {
-			LNX_LOG_INFO("Material::Bind() - Albedo: ({0}, {1}, {2}), Metallic: {3}, Roughness: {4}",
-				m_Albedo.x, m_Albedo.y, m_Albedo.z, m_Metallic, m_Roughness);
-			logged = true;
-		}
-
-		// Bind textures to explicit binding points (matching shader layout(binding = X))
+		// ? NO usar SetFloat4() - estos van como uniforms individuales, NO como UBO
+		// El UBO se sube desde RendererPipeline3D::Flush()
+		
+		// ? Solo bind textures aquí
 		if (m_AlbedoMap) {
 			m_AlbedoMap->Bind(0); // binding = 0
 		}

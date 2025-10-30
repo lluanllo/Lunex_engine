@@ -131,7 +131,24 @@ namespace Lunex {
 
 		if (mouseX >= 0 && mouseY >= 0 && mouseX < (int)viewportSizePicking.x && mouseY < (int)viewportSizePicking.y) {
 			int pixelData = m_Framebuffer->ReadPixel(1, mouseX, mouseY);
-			m_HoveredEntity = pixelData == -1 ? Entity() : Entity((entt::entity)pixelData, m_ActiveScene.get());
+			
+			// ✅ Validate entity handle before creating Entity wrapper
+			if (pixelData == -1) {
+				m_HoveredEntity = Entity();
+			}
+			else {
+				entt::entity entityHandle = (entt::entity)pixelData;
+				
+				// ✅ Check if entity exists in registry before wrapping
+				if (m_ActiveScene->IsEntityValid(entityHandle)) {
+					m_HoveredEntity = Entity(entityHandle, m_ActiveScene.get());
+				}
+				else {
+					// Entity doesn't exist in registry (stale EntityID from previous frame?)
+					m_HoveredEntity = Entity();
+					LNX_LOG_WARN("Mouse picking: Invalid entity handle {0} (not in registry)", (uint32_t)pixelData);
+				}
+			}
 		}
 
 		// Update panels

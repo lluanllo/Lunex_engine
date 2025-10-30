@@ -189,9 +189,15 @@ namespace Lunex {
 				in.read((char*)data.data(), size);
 				loadedFromCache = true;
 				in.close();
+				
+				// ? LOG: Shader loaded from cache
+				LNX_LOG_WARN("Shader {0} ({1}) loaded from cache: {2}", m_FilePath, Utils::GLShaderStageToString(stage), cachedPath.string());
 			}
 			
 			if (!loadedFromCache) {
+				// ? LOG: Shader recompiled
+				LNX_LOG_WARN("Shader {0} ({1}) RECOMPILED from source", m_FilePath, Utils::GLShaderStageToString(stage));
+				
 				shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(source, Utils::GLShaderStageToShaderC(stage), m_FilePath.c_str(), options);
 				if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
 					LNX_LOG_ERROR("Vulkan SPIR-V compilation failed: {0}", module.GetErrorMessage());

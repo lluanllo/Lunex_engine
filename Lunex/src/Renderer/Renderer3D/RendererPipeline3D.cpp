@@ -1,4 +1,4 @@
-// Renderer/Renderer3D/RendererPipeline3D.cpp
+ï»¿// Renderer/Renderer3D/RendererPipeline3D.cpp
 #include "stpch.h"
 #include "Renderer/Renderer3D/RendererPipeline3D.h"
 #include "Renderer/Renderer3D/Mesh.h"
@@ -16,13 +16,13 @@ namespace Lunex {
 
 	// Minimal Light definition
 	struct Light {
-		enum class Type : uint32_t { Directional = 0, Point = 1, Spot = 2 };
+		enum class Type : uint32_t { Directional =0, Point =1, Spot =2 };
 		Type LightType = Type::Directional;
-		glm::vec3 Position = { 0.0f, 0.0f, 0.0f };
-		glm::vec3 Direction = { 0.0f, -1.0f, 0.0f };
-		glm::vec3 Color = { 1.0f, 1.0f, 1.0f };
-		float Intensity = 1.0f;
-		float Range = 10.0f;
+		glm::vec3 Position = {0.0f,0.0f,0.0f };
+		glm::vec3 Direction = {0.0f, -1.0f,0.0f };
+		glm::vec3 Color = {1.0f,1.0f,1.0f };
+		float Intensity =1.0f;
+		float Range =10.0f;
 		float InnerCone = glm::radians(15.0f);
 		float OuterCone = glm::radians(30.0f);
 	};
@@ -45,12 +45,26 @@ namespace Lunex {
 		InitShaders();
 		InitBuffers();
 
-		// Create camera UBO (binding = 0)
+		// Create camera UBO (binding =4)
 		// Layout: mat4 ViewProjection + vec4 CameraPosition
-		m_CameraUniformBuffer = UniformBuffer::Create(sizeof(glm::mat4) + sizeof(glm::vec4), 0);
+		m_CameraUniformBuffer = UniformBuffer::Create(sizeof(glm::mat4) + sizeof(glm::vec4),4);
 
-		// For lights: fixed size buffer (binding = 1)
-		m_LightsUniformBuffer = UniformBuffer::Create(16 * 1024, 1);
+		// Create transform UBO (binding =5)
+		// Layout: mat4 Transform + mat4 NormalMatrix + int EntityID + padding
+		struct TransformUBO {
+			glm::mat4 Transform;
+			glm::mat4 NormalMatrix;
+			int EntityID;
+			glm::vec3 _padding; // Align to16 bytes
+		};
+		m_TransformUniformBuffer = UniformBuffer::Create(sizeof(TransformUBO),5);
+
+		// Create material UBO (binding =6)
+		// Layout matches shader: vec4 Albedo_Metallic + vec4 Roughness_Emission + vec4 Flags
+		m_MaterialUniformBuffer = UniformBuffer::Create(sizeof(glm::vec4) *3,6);
+
+		// For lights: fixed size buffer (binding =7 to avoid conflict)
+		m_LightsUniformBuffer = UniformBuffer::Create(16 *1024,7);
 
 		// Stats
 		m_Stats = {};
@@ -59,10 +73,10 @@ namespace Lunex {
 	void RendererPipeline3D::InitFramebuffers() {
 		LNX_PROFILE_FUNCTION();
 
-		// Main framebuffer for 3D rendering
+		// Main framebuffer for3D rendering
 		FramebufferSpecification spec;
-		spec.Width = 1280;
-		spec.Height = 720;
+		spec.Width =1280;
+		spec.Height =720;
 		spec.Attachments = { 
 			FramebufferTextureFormat::RGBA8, 
 			FramebufferTextureFormat::RED_INTEGER, 
@@ -79,7 +93,7 @@ namespace Lunex {
 	void RendererPipeline3D::InitShaders() {
 		LNX_PROFILE_FUNCTION();
 
-		// Load basic 3D shader from Lunex-Editor assets
+		// Load basic3D shader from Lunex-Editor assets
 		m_GeometryShader = Shader::Create("assets/shaders/Basic3D.glsl");
 
 		// TODO: Shadow shader, lighting pass shader (future)
@@ -96,23 +110,21 @@ namespace Lunex {
 	void RendererPipeline3D::BeginFrame() {
 		LNX_PROFILE_FUNCTION();
 
-		// ? NO bind framebuffer aquí - el EditorLayer ya tiene uno bound
-		// Solo habilitamos depth test para 3D
+		// Enable depth test for3D
 		RenderCommand::SetDepthTest(true);
 
 		// Reset stats
-		m_Stats.DrawCalls = 0;
-		m_Stats.TriangleCount = 0;
+		m_Stats.DrawCalls =0;
+		m_Stats.TriangleCount =0;
 	}
 
 	void RendererPipeline3D::EndFrame() {
 		LNX_PROFILE_FUNCTION();
 
 		// Execute rendering passes
-		ExecuteGeometryPass();
+		Flush();
 
-		// ? NO unbind framebuffer aquí - el EditorLayer lo maneja
-	
+		// Do not toggle global states here. Editor manages framebuffer.
 		// Clear submissions for next frame
 		ResetSubmissions();
 	}
@@ -130,46 +142,41 @@ namespace Lunex {
 		} camUbo;
 
 		camUbo.ViewProjection = camera.GetViewProjection();
-		
-		// Extract camera position from view matrix
 		glm::vec3 camPos = camera.GetPosition();
-		camUbo.CameraPosition = glm::vec4(camPos, 1.0f);
+		camUbo.CameraPosition = glm::vec4(camPos,1.0f);
 
 		if (m_CameraUniformBuffer) {
 			m_CameraUniformBuffer->SetData(&camUbo, sizeof(CameraUBO));
 		}
+
+		StartBatch();
 	}
 
-	// ? Generic camera overload for SceneCamera in Runtime
 	void RendererPipeline3D::BeginScene(const Camera& camera, const glm::mat4& viewMatrix, const glm::vec3& cameraPosition) {
 		LNX_PROFILE_FUNCTION();
 
-		// Upload camera data to UBO
 		struct CameraUBO {
 			glm::mat4 ViewProjection;
 			glm::vec4 CameraPosition;
 		} camUbo;
 
 		camUbo.ViewProjection = camera.GetProjection() * viewMatrix;
-		camUbo.CameraPosition = glm::vec4(cameraPosition, 1.0f);
+		camUbo.CameraPosition = glm::vec4(cameraPosition,1.0f);
 
 		if (m_CameraUniformBuffer) {
 			m_CameraUniformBuffer->SetData(&camUbo, sizeof(CameraUBO));
 		}
 
-		LNX_LOG_INFO("BeginScene with SceneCamera: ViewProj uploaded, Position=({0}, {1}, {2})", 
-			cameraPosition.x, cameraPosition.y, cameraPosition.z);
+		StartBatch();
 	}
 
 	void RendererPipeline3D::EndScene() {
 		LNX_PROFILE_FUNCTION();
-		
-		// Execute all rendering
 		EndFrame();
 	}
 
 	// --------------------------------------------------------------------
-	// Submissions
+	// Submissions (BATCH MODE)
 	// --------------------------------------------------------------------
 	void RendererPipeline3D::Submit(const Ref<VertexArray>& vertexArray, const Ref<Shader>& shader, const glm::mat4& transform) {
 		LNX_PROFILE_FUNCTION();
@@ -184,7 +191,7 @@ namespace Lunex {
 		
 		Ref<IndexBuffer> ib = vertexArray->GetIndexBuffer();
 		if (ib) {
-			m_Stats.TriangleCount += (ib->GetCount() / 3);
+			m_Stats.TriangleCount += (ib->GetCount() /3);
 		}
 	}
 
@@ -212,45 +219,77 @@ namespace Lunex {
 	}
 
 	// --------------------------------------------------------------------
-	// Passes
+	// Batch Management (following Renderer2D pattern)
 	// --------------------------------------------------------------------
-	void RendererPipeline3D::ExecuteGeometryPass() {
+	void RendererPipeline3D::StartBatch() {
+		m_MeshSubmissions.clear();
+		m_Lights.clear();
+	}
+
+	void RendererPipeline3D::NextBatch() {
+		Flush();
+		StartBatch();
+	}
+
+	void RendererPipeline3D::Flush() {
 		LNX_PROFILE_FUNCTION();
 
-		// Debug log
-		static bool logged = false;
-		if (!logged) {
-			LNX_LOG_INFO("ExecuteGeometryPass() - Rendering {0} mesh submissions", m_MeshSubmissions.size());
-			logged = true;
-		}
+		if (m_MeshSubmissions.empty()) return;
 
-		// Render all submitted meshes
+		Ref<Shader> lastShader = nullptr;
+		Ref<Material> lastMaterial = nullptr;
+
 		for (auto& submission : m_MeshSubmissions) {
-			// Bind material (sets shader + uniforms)
-			if (submission.Material) {
+			if (submission.Material != lastMaterial) {
+				if (lastMaterial) {
+					lastMaterial->Unbind();
+				}
 				submission.Material->Bind();
+				lastMaterial = submission.Material;
+				lastShader = submission.Material->GetShader();
 				
-				// Set per-object uniforms via Transform UBO (binding = 1)
-				Ref<Shader> shader = submission.Material->GetShader();
-				if (shader) {
-					// Calculate normal matrix
-					glm::mat3 normalMatrix3 = glm::transpose(glm::inverse(glm::mat3(submission.Transform)));
-					glm::mat4 normalMatrix4 = glm::mat4(
-						glm::vec4(normalMatrix3[0], 0.0f),
-						glm::vec4(normalMatrix3[1], 0.0f),
-						glm::vec4(normalMatrix3[2], 0.0f),
-						glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
-					);
-
-					// Upload Transform UBO data
-					// TODO: Use actual UBO instead of individual uniforms
-					shader->SetMat4("u_Transform", submission.Transform);
-					shader->SetMat4("u_NormalMatrix", normalMatrix4);
-					shader->SetInt("u_EntityID", (int)submission.EntityID);
+				// Upload Material to UBO (binding =6)
+				struct MaterialUBO {
+					glm::vec4 Albedo_Metallic;
+					glm::vec4 Roughness_Emission_X;
+					glm::vec4 Flags;
+				} materialUbo;
+				
+				materialUbo.Albedo_Metallic = glm::vec4(submission.Material->GetAlbedo(), submission.Material->GetMetallic());
+				materialUbo.Roughness_Emission_X = glm::vec4(submission.Material->GetRoughness(), submission.Material->GetEmission());
+				materialUbo.Flags = glm::vec4(0.0f);
+				
+				if (m_MaterialUniformBuffer) {
+					m_MaterialUniformBuffer->SetData(&materialUbo, sizeof(MaterialUBO));
 				}
 			}
 
-			// Draw mesh
+			if (lastShader) {
+				// Upload Transform UBO data (binding =5)
+				struct TransformUBO {
+					glm::mat4 Transform;
+					glm::mat4 NormalMatrix;
+					int EntityID;
+					glm::vec3 _padding;
+				} transformUbo;
+
+				glm::mat3 normalMatrix3 = glm::transpose(glm::inverse(glm::mat3(submission.Transform)));
+				glm::mat4 normalMatrix4 = glm::mat4(
+					glm::vec4(normalMatrix3[0],0.0f),
+					glm::vec4(normalMatrix3[1],0.0f),
+					glm::vec4(normalMatrix3[2],0.0f),
+					glm::vec4(0.0f,0.0f,0.0f,1.0f)
+				);
+
+				transformUbo.Transform = submission.Transform;
+				transformUbo.NormalMatrix = normalMatrix4;
+				transformUbo.EntityID = (int)submission.EntityID;
+
+				if (m_TransformUniformBuffer) {
+					m_TransformUniformBuffer->SetData(&transformUbo, sizeof(TransformUBO));
+				}
+			}
+
 			if (submission.Mesh) {
 				Ref<VertexArray> va = submission.Mesh->GetVertexArray();
 				if (va) {
@@ -258,14 +297,16 @@ namespace Lunex {
 					RenderCommand::DrawIndexed(va);
 					
 					m_Stats.DrawCalls++;
-					m_Stats.TriangleCount += (submission.Mesh->GetIndexCount() / 3);
-				}
-
-				if (submission.Material) {
-					submission.Material->Unbind();
+					m_Stats.TriangleCount += (submission.Mesh->GetIndexCount() /3);
 				}
 			}
 		}
+
+		if (lastMaterial) {
+			lastMaterial->Unbind();
+		}
+
+		m_MeshSubmissions.clear();
 	}
 
 	// --------------------------------------------------------------------

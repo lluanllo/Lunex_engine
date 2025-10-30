@@ -1,4 +1,4 @@
-#version 450 core
+#version 460 core
 
 #ifdef VERTEX
 
@@ -8,46 +8,40 @@ layout(location = 2) in vec2 a_TexCoord;
 layout(location = 3) in vec3 a_Tangent;
 layout(location = 4) in vec3 a_Bitangent;
 
-// Camera UBO (binding = 0)
-layout(std140, binding = 0) uniform Camera
+// Camera UBO (binding = 4) - moved to avoid conflicts with 2D
+layout(std140, binding = 4) uniform Camera
 {
 	mat4 u_ViewProjection;
 	vec4 u_CameraPosition;
 };
 
-// Transform UBO (binding = 1)
-layout(std140, binding = 1) uniform Transform
+// Transform UBO (binding = 5)
+layout(std140, binding = 5) uniform Transform
 {
 	mat4 u_Transform;
 	mat4 u_NormalMatrix;
 	int u_EntityID;
 };
 
-// Outputs - usando el mismo patrón que Renderer2D_Quad.glsl
-struct VertexOutput {
-	vec3 Position;
-	vec3 Normal;
-	vec2 TexCoord;
-	vec3 Tangent;
-	vec3 Bitangent;
-};
-
-layout (location = 0) out VertexOutput Output;
-layout (location = 5) out flat int v_EntityID;
+// Outputs - usar variables individuales en lugar de struct
+layout(location = 0) out vec3 v_Position;
+layout(location = 1) out vec3 v_Normal;
+layout(location = 2) out vec2 v_TexCoord;
+layout(location = 3) out vec3 v_Tangent;
+layout(location = 4) out vec3 v_Bitangent;
+layout(location = 5) out flat int v_EntityID;
 
 void main()
 {
 	vec4 worldPos = u_Transform * vec4(a_Position, 1.0);
 	
-	// Extract mat3 from mat4 for normal transformation
 	mat3 normalMatrix = mat3(u_NormalMatrix);
 	
-	Output.Position = worldPos.xyz;
-	Output.Normal = normalize(normalMatrix * a_Normal);
-	Output.TexCoord = a_TexCoord;
-	Output.Tangent = normalize(normalMatrix * a_Tangent);
-	Output.Bitangent = normalize(normalMatrix * a_Bitangent);
-	
+	v_Position = worldPos.xyz;
+	v_Normal = normalize(normalMatrix * a_Normal);
+	v_TexCoord = a_TexCoord;
+	v_Tangent = normalize(normalMatrix * a_Tangent);
+	v_Bitangent = normalize(normalMatrix * a_Bitangent);
 	v_EntityID = u_EntityID;
 	
 	gl_Position = u_ViewProjection * worldPos;
@@ -58,34 +52,30 @@ void main()
 layout(location = 0) out vec4 o_Color;
 layout(location = 1) out int o_EntityID;
 
-// Inputs - mismo patrón que Renderer2D_Quad.glsl
-struct VertexOutput {
-	vec3 Position;
-	vec3 Normal;
-	vec2 TexCoord;
-	vec3 Tangent;
-	vec3 Bitangent;
-};
+// Inputs - usar variables individuales
+layout(location = 0) in vec3 v_Position;
+layout(location = 1) in vec3 v_Normal;
+layout(location = 2) in vec2 v_TexCoord;
+layout(location = 3) in vec3 v_Tangent;
+layout(location = 4) in vec3 v_Bitangent;
+layout(location = 5) in flat int v_EntityID;
 
-layout (location = 0) in VertexOutput Input;
-layout (location = 5) in flat int v_EntityID;
-
-// Camera UBO
-layout(std140, binding = 0) uniform Camera
+// Camera UBO (binding = 4)
+layout(std140, binding = 4) uniform Camera
 {
 	mat4 u_ViewProjection;
 	vec4 u_CameraPosition;
 };
 
-// ? Material UBO (binding = 2) - REQUERIDO para Vulkan
-layout(std140, binding = 2) uniform MaterialBlock
+// Material UBO (binding = 6)
+layout(std140, binding = 6) uniform MaterialBlock
 {
-	vec4 u_Material_Albedo_Metallic;  // xyz = Albedo, w = Metallic
-	vec4 u_Material_Roughness_Emission_X; // x = Roughness, yzw = Emission
-	vec4 u_Material_Flags;             // x = HasAlbedoMap, y = HasNormalMap, z = HasMetallicMap, w = HasRoughnessMap
+	vec4 u_Material_Albedo_Metallic;
+	vec4 u_Material_Roughness_Emission_X;
+	vec4 u_Material_Flags;
 };
 
-// Samplers con explicit bindings
+// Samplers
 layout(binding = 0) uniform sampler2D u_Material_AlbedoMap;
 layout(binding = 1) uniform sampler2D u_Material_NormalMap;
 layout(binding = 2) uniform sampler2D u_Material_MetallicMap;
@@ -100,11 +90,11 @@ vec3 GetNormal()
 {
 	if (u_Material_Flags.y > 0.5)
 	{
-		vec3 tangentNormal = texture(u_Material_NormalMap, Input.TexCoord).xyz * 2.0 - 1.0;
-		mat3 TBN = mat3(Input.Tangent, Input.Bitangent, Input.Normal);
+		vec3 tangentNormal = texture(u_Material_NormalMap, v_TexCoord).xyz * 2.0 - 1.0;
+		mat3 TBN = mat3(v_Tangent, v_Bitangent, v_Normal);
 		return normalize(TBN * tangentNormal);
 	}
-	return normalize(Input.Normal);
+	return normalize(v_Normal);
 }
 
 void main()
@@ -113,7 +103,7 @@ void main()
 	vec3 albedo = u_Material_Albedo_Metallic.xyz;
 	if (u_Material_Flags.x > 0.5)
 	{
-		albedo = texture(u_Material_AlbedoMap, Input.TexCoord).rgb;
+		albedo = texture(u_Material_AlbedoMap, v_TexCoord).rgb;
 	}
 
 	// Get metallic/roughness
@@ -122,12 +112,12 @@ void main()
 	
 	if (u_Material_Flags.z > 0.5)
 	{
-		metallic = texture(u_Material_MetallicMap, Input.TexCoord).r;
+		metallic = texture(u_Material_MetallicMap, v_TexCoord).r;
 	}
 	
 	if (u_Material_Flags.w > 0.5)
 	{
-		roughness = texture(u_Material_RoughnessMap, Input.TexCoord).r;
+		roughness = texture(u_Material_RoughnessMap, v_TexCoord).r;
 	}
 
 	// Get emission
@@ -137,7 +127,7 @@ void main()
 	vec3 normal = GetNormal();
 
 	// Simple lighting calculation (Blinn-Phong approximation)
-	vec3 viewDir = normalize(u_CameraPosition.xyz - Input.Position);
+	vec3 viewDir = normalize(u_CameraPosition.xyz - v_Position);
 	vec3 halfDir = normalize(-lightDir + viewDir);
 
 	// Diffuse

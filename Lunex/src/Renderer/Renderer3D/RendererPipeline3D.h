@@ -68,6 +68,11 @@ namespace Lunex {
 			
 			// Clear submitted data from last frame without destroying pipeline resources
 			void ResetSubmissions();
+		
+			// ? Batch management (following Renderer2D pattern)
+			void StartBatch();
+			void NextBatch();
+			void Flush();
 			
 			// Pipeline statistics (simple)
 			struct Statistics {
@@ -83,7 +88,6 @@ namespace Lunex {
 			void InitShaders();
 			void InitBuffers();
 			
-			void ExecuteGeometryPass();   // fill G-buffer or forward geometry
 			void ExecuteShadowPass();     // render shadow maps for lights that cast shadows
 			void ExecuteLightingPass();   // perform lighting (deferred or forward)
 			void ExecutePostProcess();    // tonemapping, FXAA, bloom, etc.
@@ -110,9 +114,11 @@ namespace Lunex {
 			Ref<Texture2D> m_GAlbedo;
 			// ... add as needed
 			
-			// Per-frame UBOs
-			Ref<UniformBuffer> m_CameraUniformBuffer;
-			Ref<UniformBuffer> m_LightsUniformBuffer;
+			// ? Per-frame UBOs
+			Ref<UniformBuffer> m_CameraUniformBuffer;     // binding = 0
+			Ref<UniformBuffer> m_TransformUniformBuffer;  // binding = 1
+			Ref<UniformBuffer> m_MaterialUniformBuffer;   // binding = 2
+			Ref<UniformBuffer> m_LightsUniformBuffer;// binding = 3
 			
 			// Submissions recorded this frame
 			struct MeshSubmission {
