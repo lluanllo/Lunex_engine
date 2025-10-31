@@ -1,0 +1,35 @@
+Scene: Untitled
+Entities:
+  - Entity: 6230634635200783568
+    TagComponent:
+      Tag: plane
+    TransformComponent:
+      Translation: [2.208992, -0.50825596, -0.12850559]
+      Rotation: [0, 0, 0]
+      Scale: [5.3699994, 5.3699994, 5.3699994]
+    MeshComponent:
+      Type: 2
+      FilePath: ""
+      Color: [1, 1, 1, 1]
+  - Entity: 9247698822994108608
+    TagComponent:
+      Tag: Cube
+    TransformComponent:
+      Translation: [3.7329867, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    MeshComponent:
+      Type: 1
+      FilePath: ""
+      Color: [0.65656984, 0.8362832, 0.421842, 1]
+  - Entity: 9788156866223600444
+    TagComponent:
+      Tag: tek turret
+    TransformComponent:
+      Translation: [1.3186772, -0.40621978, 0]
+      Rotation: [-1.5707964, 0, 0]
+      Scale: [0.00875, 0.008749725, 0.008749725]
+    MeshComponent:
+      Type: 4
+      FilePath: assets\3DAssets\tek_turret_RIG.FBX
+      Color: [0.3928264, 0.58344567, 0.6725664, 1]

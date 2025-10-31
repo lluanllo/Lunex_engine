@@ -3,33 +3,39 @@
 	url = https://github.com/glfw/glfw.git
 	branch = master
 	ignore = dirty
+
 [submodule "vendor/ImGuiLib"]
 	path = vendor/ImGuiLib
 	url = https://github.com/ocornut/imgui.git
 	branch = docking
 	ignore = dirty
+
 [submodule "vendor/glm"]
 	path = vendor/glm
 	url = https://github.com/g-truc/glm.git
 	branch = master
 	ignore = dirty
+
 [submodule "vendor/yaml-cpp"]
 	path = vendor/yaml-cpp
 	url = https://github.com/jbeder/yaml-cpp.git
 	branch = master
 	ignore = dirty
+
 [submodule "vendor/ImGuizmo"]
 	path = vendor/ImGuizmo
 	url = https://github.com/CedricGuillemet/ImGuizmo.git
 	branch = master
 	ignore = dirty
-[submodule "vendor/Box2D"]
-	path = vendor/Box2D
-	url = https://github.com/erincatto/box2d.git
-	branch = master
-	ignore = dirty
+
 [submodule "vendor/Box2D"]
 	path = vendor/Box2D
 	url = https://github.com/erincatto/box2d.git
 	branch = main
+	ignore = dirty
+
+[submodule "vendor/assimp"]
+	path = vendor/assimp
+	url = https://github.com/assimp/assimp.git
+	branch = master
 	ignore = dirty

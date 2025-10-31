@@ -4,6 +4,7 @@
 #include "Components.h"
 #include "ScriptableEntity.h"
 #include "Renderer/Renderer2D.h"
+#include "Renderer/Renderer3D.h"
 
 #include <glm/glm.hpp>
 
@@ -373,8 +374,20 @@ namespace Lunex {
 				Renderer2D::DrawCircle(transform.GetTransform(), circle.Color, circle.Thickness, circle.Fade, (int)entity);
 			}
 		}
-		
 		Renderer2D::EndScene();
+
+		// Render 3D meshes
+		Renderer3D::BeginScene(camera);
+		
+		{
+			auto view = m_Registry.view<TransformComponent, MeshComponent>();
+			for (auto entity : view) {
+				auto [transform, mesh] = view.get<TransformComponent, MeshComponent>(entity);
+				Renderer3D::DrawMesh(transform.GetTransform(), mesh, (int)entity);
+			}
+		}
+		
+		Renderer3D::EndScene();
 	}
 	
 	void Scene::DuplicateEntity(Entity entity) {
@@ -427,5 +440,8 @@ namespace Lunex {
 	
 	template<>
 	void Scene::OnComponentAdded<CircleCollider2DComponent>(Entity entity, CircleCollider2DComponent& component) {
+	}
+
+	template<> void Scene::OnComponentAdded<MeshComponent>(Entity entity, MeshComponent& component) {
 	}
 }
