@@ -4,6 +4,8 @@
 #include "Core/Input.h"
 #include "Event.h"
 
+#include <sstream>
+
 namespace Lunex {
 	class MouseMovedEvent : public Event {
 		public:

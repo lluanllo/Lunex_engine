@@ -3,6 +3,10 @@
 #include <Lunex.h>
 #include "../Panels/SceneHierarchyPanel.h"
 #include "../Panels/ContentBrowserPanel.h"
+#include "../Panels/StatsPanel.h"
+#include "../Panels/SettingsPanel.h"
+#include "../Panels/ViewportPanel.h"
+#include "../Panels/ToolbarPanel.h"
 
 #include "Renderer/EditorCamera.h"
 
@@ -39,9 +43,6 @@ namespace Lunex {
 			
 			void OnDuplicateEntity();
 			
-			// UI Panels
-			void UI_Toolbar();
-			
 		private:
 			OrthographicCameraController m_CameraController;
 			
@@ -64,7 +65,6 @@ namespace Lunex {
 			
 			Ref<Texture2D> m_CheckerboardTexture;
 			
-			bool m_ViewportFocused = false, m_ViewportHovered = false;
 			glm::vec2 m_ViewportSize = { 0.0f, 0.0f };
 			glm::vec2 m_ViewportBounds[2];
 			
@@ -72,16 +72,15 @@ namespace Lunex {
 			
 			int m_GizmoType = -1;
 			
-			bool m_ShowPhysicsColliders = false;
-			
-			enum class SceneState {
-				Edit = 0, Play = 1, Simulate = 2
-			};
 			SceneState m_SceneState = SceneState::Edit;
 			
 			// Panels
 			SceneHierarchyPanel m_SceneHierarchyPanel;
 			ContentBrowserPanel m_ContentBrowserPanel;
+			StatsPanel m_StatsPanel;
+			SettingsPanel m_SettingsPanel;
+			ViewportPanel m_ViewportPanel;
+			ToolbarPanel m_ToolbarPanel;
 			
 			// Editor resources
 			Ref<Texture2D> m_IconPlay, m_IconSimulate, m_IconStop;

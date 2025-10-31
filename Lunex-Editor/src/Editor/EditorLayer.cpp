@@ -27,9 +27,48 @@ namespace Lunex {
 		LNX_PROFILE_FUNCTION();
 		
 		m_CheckerboardTexture = Texture2D::Create("assets/textures/Checkerboard.png");
+		
+		// Cargar iconos de toolbar con logs de depuración
+		LNX_LOG_INFO("Loading toolbar icons...");
+		
 		m_IconPlay = Texture2D::Create("Resources/Icons/PlayStopButtons/PlayButtonIcon.png");
+		if (!m_IconPlay) {
+			LNX_LOG_WARN("Failed to load PlayButtonIcon.png - using fallback");
+		} else {
+			LNX_LOG_INFO("✓ PlayButtonIcon loaded successfully");
+		}
+		
 		m_IconSimulate = Texture2D::Create("Resources/Icons/PlayStopButtons/SimulateButtonIcon.png");
+		if (!m_IconSimulate) {
+			LNX_LOG_WARN("Failed to load SimulateButtonIcon.png - using fallback");
+		} else {
+			LNX_LOG_INFO("✓ SimulateButtonIcon loaded successfully");
+		}
+		
 		m_IconStop = Texture2D::Create("Resources/Icons/PlayStopButtons/StopButtonIcon.png");
+		if (!m_IconStop) {
+			LNX_LOG_WARN("Failed to load StopButtonIcon.png - using fallback");
+		} else {
+			LNX_LOG_INFO("✓ StopButtonIcon loaded successfully");
+		}
+		
+		// Configure toolbar panel
+		m_ToolbarPanel.SetPlayIcon(m_IconPlay);
+		m_ToolbarPanel.SetSimulateIcon(m_IconSimulate);
+		m_ToolbarPanel.SetStopIcon(m_IconStop);
+		m_ToolbarPanel.SetOnPlayCallback([this]() { OnScenePlay(); });
+		m_ToolbarPanel.SetOnSimulateCallback([this]() { OnSceneSimulate(); });
+		m_ToolbarPanel.SetOnStopCallback([this]() { OnSceneStop(); });
+		
+		LNX_LOG_INFO("Toolbar configured with icons: Play={0}, Simulate={1}, Stop={2}",
+			m_IconPlay ? "OK" : "NULL", 
+			m_IconSimulate ? "OK" : "NULL", 
+			m_IconStop ? "OK" : "NULL");
+		
+		// Configure viewport panel
+		m_ViewportPanel.SetOnSceneDropCallback([this](const std::filesystem::path& path) {
+			OpenScene(path);
+		});
 		
 		Lunex::FramebufferSpecification fbSpec;
 		fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
@@ -56,6 +95,12 @@ namespace Lunex {
 	void EditorLayer::OnUpdate(Lunex::Timestep ts) {
 		LNX_PROFILE_FUNCTION();
 		
+		// Get viewport size from ViewportPanel
+		m_ViewportSize = m_ViewportPanel.GetViewportSize();
+		const glm::vec2* viewportBounds = m_ViewportPanel.GetViewportBounds();
+		m_ViewportBounds[0] = viewportBounds[0];
+		m_ViewportBounds[1] = viewportBounds[1];
+		
 		// Resize
 		if (FramebufferSpecification spec = m_Framebuffer->GetSpecification();
 			m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f && // zero sized framebuffer is invalid
@@ -79,7 +124,7 @@ namespace Lunex {
 		
 		switch (m_SceneState) {
 			case SceneState::Edit: {
-				if (m_ViewportFocused)
+				if (m_ViewportPanel.IsViewportFocused())
 					m_CameraController.OnUpdate(ts);
 				
 				m_EditorCamera.OnUpdate(ts);
@@ -108,9 +153,13 @@ namespace Lunex {
 		int mouseY = (int)my;
 		
 		if (mouseX >= 0 && mouseY >= 0 && mouseX < (int)viewportSize.x && mouseY < (int)viewportSize.y) {
+			// Cambiado a -1 para mayor coherencia, antes era 0
 			int pixelData = m_Framebuffer->ReadPixel(1, mouseX, mouseY);
 			m_HoveredEntity = pixelData == -1 ? Entity() : Entity((entt::entity)pixelData, m_ActiveScene.get());
 		}
+		
+		// Update stats panel with hovered entity
+		m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
 		
 		OnOverlayRender();
 		
@@ -180,153 +229,17 @@ namespace Lunex {
 			ImGui::EndMenuBar();
 		}
 		
+		// Render all panels
 		m_SceneHierarchyPanel.OnImGuiRender();
 		m_ContentBrowserPanel.OnImGuiRender();
+		m_StatsPanel.OnImGuiRender();
+		m_SettingsPanel.OnImGuiRender();
 		
-		ImGui::Begin("Stats");
-		
-		std::string name = "None";
-		if (m_HoveredEntity)
-			name = m_HoveredEntity.GetComponent<TagComponent>().Tag;
-		ImGui::Text("Hovered Entity: %s", name.c_str());
-		
-		auto stats = Renderer2D::GetStats();
-		ImGui::Text("Renderer2D Stats:");
-		ImGui::Text("Draw Calls: %d", stats.DrawCalls);
-		ImGui::Text("Quads: %d", stats.QuadCount);
-		ImGui::Text("Vertices: %d", stats.GetTotalVertexCount());
-		ImGui::Text("Indices: %d", stats.GetTotalIndexCount());
-		
-		ImGui::End();
-		
-		ImGui::Begin("Settings");
-		ImGui::Checkbox("Show physics colliders", &m_ShowPhysicsColliders);
-		ImGui::End();
-		
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
-		ImGui::Begin("Viewport");
-		auto viewportMinRegion = ImGui::GetWindowContentRegionMin();
-		auto viewportMaxRegion = ImGui::GetWindowContentRegionMax();
-		auto viewportOffset = ImGui::GetWindowPos();
-		m_ViewportBounds[0] = { viewportMinRegion.x + viewportOffset.x, viewportMinRegion.y + viewportOffset.y };
-		m_ViewportBounds[1] = { viewportMaxRegion.x + viewportOffset.x, viewportMaxRegion.y + viewportOffset.y };
-		
-		m_ViewportFocused = ImGui::IsWindowFocused();
-		m_ViewportHovered = ImGui::IsWindowHovered();
-		Application::Get().GetImGuiLayer()->BlockEvents(!m_ViewportFocused && !m_ViewportHovered);
-		
-		ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
-		m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
-		
-		uint64_t textureID = m_Framebuffer->GetColorAttachmentRendererID();
-		ImGui::Image(reinterpret_cast<void*>(textureID), ImVec2{ m_ViewportSize.x, m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
-		
-		if (ImGui::BeginDragDropTarget()) {
-			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM"))	{
-				const wchar_t* path = (const wchar_t*)payload->Data;
-				OpenScene(std::filesystem::path(g_AssetPath) / path);
-			}
-			ImGui::EndDragDropTarget();
-		}
-		
-		// Gizmos
 		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
-		if (selectedEntity && m_GizmoType != -1) {
-			ImGuizmo::SetOrthographic(false);
-			ImGuizmo::SetDrawlist();
-			
-			ImGuizmo::SetRect(m_ViewportBounds[0].x, m_ViewportBounds[0].y, m_ViewportBounds[1].x - m_ViewportBounds[0].x, m_ViewportBounds[1].y - m_ViewportBounds[0].y);
-			
-			// Editor camera
-			const glm::mat4& cameraProjection = m_EditorCamera.GetProjection();
-			glm::mat4 cameraView = m_EditorCamera.GetViewMatrix();
-			
-			// Entity transform
-			auto& tc = selectedEntity.GetComponent<TransformComponent>();
-			glm::mat4 transform = tc.GetTransform();
-			
-			// Snapping
-			bool snap = Input::IsKeyPressed(Key::LeftControl);
-			float snapValue = 0.5f;
-			if (m_GizmoType == ImGuizmo::OPERATION::ROTATE)
-				snapValue = 45.0f;
-			
-			float snapValues[3] = { snapValue, snapValue, snapValue };
-			
-			ImGuizmo::Manipulate(glm::value_ptr(cameraView), glm::value_ptr(cameraProjection),
-				(ImGuizmo::OPERATION)m_GizmoType, ImGuizmo::LOCAL, glm::value_ptr(transform),
-				nullptr, snap ? snapValues : nullptr);
-			
-			if (ImGuizmo::IsUsing()) {
-				glm::vec3 translation, rotation, scale;
-				Math::DecomposeTransform(transform, translation, rotation, scale);
-				
-				glm::vec3 deltaRotation = rotation - tc.Rotation;
-				tc.Translation = translation;
-				tc.Rotation += deltaRotation;
-				tc.Scale = scale;
-			}
-		}	
+		m_ViewportPanel.OnImGuiRender(m_Framebuffer, m_SceneHierarchyPanel, m_EditorCamera, 
+									  selectedEntity, m_GizmoType, m_ToolbarPanel, 
+									  m_SceneState, (bool)m_ActiveScene);
 		
-		ImGui::End();
-		ImGui::PopStyleVar();
-		
-		UI_Toolbar();
-		
-		ImGui::End();
-	}
-	
-	void EditorLayer::UI_Toolbar() {
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 2));
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(0, 0));
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-		auto& colors = ImGui::GetStyle().Colors;
-		const auto& buttonHovered = colors[ImGuiCol_ButtonHovered];
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(buttonHovered.x, buttonHovered.y, buttonHovered.z, 0.5f));
-		const auto& buttonActive = colors[ImGuiCol_ButtonActive];
-		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(buttonActive.x, buttonActive.y, buttonActive.z, 0.5f));
-		
-		ImGui::Begin("##toolbar", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-		
-		bool toolbarEnabled = (bool)m_ActiveScene;
-		
-		ImVec4 tintColor = ImVec4(1, 1, 1, 1);
-		if (!toolbarEnabled)
-			tintColor.w = 0.5f;
-		
-		float size = ImGui::GetWindowHeight() - 4.0f;
-		
-		// ✅ Botón Play/Stop con fondo transparente
-		{
-			Ref<Texture2D> icon = (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Simulate) ? m_IconPlay : m_IconStop;
-			ImGui::SetCursorPosX((ImGui::GetWindowContentRegionMax().x * 0.5f) - (size * 0.5f));
-			
-			// ✅ Fondo completamente transparente (ImVec4(0, 0, 0, 0))
-			if (ImGui::ImageButton("##PlayButton", (ImTextureID)(intptr_t)icon->GetRendererID(), ImVec2(size, size), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0), tintColor) && toolbarEnabled) {
-				if (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Simulate)
-					OnScenePlay();
-				else if (m_SceneState == SceneState::Play)
-					OnSceneStop();
-			}
-		}
-		
-		ImGui::SameLine();
-		
-		// ✅ Botón Simulate/Stop con fondo transparente
-		{
-			Ref<Texture2D> icon = (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Play) ? m_IconSimulate : m_IconStop;
-			
-			// ✅ Fondo completamente transparente (ImVec4(0, 0, 0, 0))
-			if (ImGui::ImageButton("##SimulateButton", (ImTextureID)(intptr_t)icon->GetRendererID(), ImVec2(size, size), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0), tintColor) && toolbarEnabled) {
-				if (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Play)
-					OnSceneSimulate();
-				else if (m_SceneState == SceneState::Simulate)
-					OnSceneStop();
-			}
-		}
-		
-		ImGui::PopStyleVar(2);
-		ImGui::PopStyleColor(3);
 		ImGui::End();
 	}
 	
@@ -400,7 +313,7 @@ namespace Lunex {
 	
 	bool EditorLayer::OnMouseButtonPressed(MouseButtonPressedEvent& e) {
 		if (e.GetMouseButton() == Mouse::ButtonLeft) {
-			if (m_ViewportHovered && !ImGuizmo::IsOver() && !Input::IsKeyPressed(Key::LeftAlt))
+			if (m_ViewportPanel.IsViewportHovered() && !ImGuizmo::IsOver() && !Input::IsKeyPressed(Key::LeftAlt))
 				m_SceneHierarchyPanel.SetSelectedEntity(m_HoveredEntity);
 		}
 		return false;
@@ -417,7 +330,7 @@ namespace Lunex {
 			Renderer2D::BeginScene(m_EditorCamera);
 		}
 		
-		if (m_ShowPhysicsColliders) {
+		if (m_SettingsPanel.GetShowPhysicsColliders()) {
 			// Box Colliders
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, BoxCollider2DComponent>();
