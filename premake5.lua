@@ -27,17 +27,19 @@ IncludeDir["entt"]      = "vendor/entt/include"
 IncludeDir["yaml_cpp"]  = "vendor/yaml-cpp/include"
 IncludeDir["Box2D"]     = "vendor/Box2D/include" 
 IncludeDir["ImGuizmo"]  = "vendor/ImGuizmo"
+IncludeDir["Assimp"]    = "vendor/assimp/include"
 IncludeDir["Lunex"]     = "Lunex/src"
 IncludeDir["VulkanSDK"] = "%{VULKAN_SDK}/Include"
 
--- ✅ Librerías de Vulkan habilitadas
+-- ✅ Librerías de Vulkan y Assimp
 LibraryDir = {}
 LibraryDir["VulkanSDK"] = "%{VULKAN_SDK}/Lib"
+LibraryDir["Assimp"]    = "vendor/assimp/lib"
 
 Library = {}
 Library["Vulkan"] = "%{LibraryDir.VulkanSDK}/vulkan-1.lib"
 
--- ✅ Usar versiones específicas para Debug y Release
+-- ✅ Usar versiones específicas para Debug y Release (corrige nombres)
 Library["ShaderC_Debug"] = "%{LibraryDir.VulkanSDK}/shaderc_combinedd.lib"
 Library["ShaderC_Release"] = "%{LibraryDir.VulkanSDK}/shaderc_combined.lib"
 
@@ -46,6 +48,10 @@ Library["SPIRV_Cross_Release"] = "%{LibraryDir.VulkanSDK}/spirv-cross-core.lib"
 
 Library["SPIRV_Cross_GLSL_Debug"] = "%{LibraryDir.VulkanSDK}/spirv-cross-glsld.lib"
 Library["SPIRV_Cross_GLSL_Release"] = "%{LibraryDir.VulkanSDK}/spirv-cross-glsl.lib"
+
+-- Assimp libraries (usaremos libdirs + nombres de lib)
+Library["Assimp_Debug_Name"] = "assimp-vc143-mtd"
+Library["Assimp_Release_Name"] = "assimp-vc143-mt"
 
 -- ============================================================================
 -- DEPENDENCIES
@@ -249,25 +255,25 @@ project "Box2D"
 
     files
     {
-        "vendor/Box2D/src/**.h",
-        "vendor/Box2D/src/**.c",
-        "vendor/Box2D/include/**.h"
+    "vendor/Box2D/src/**.h",
+  "vendor/Box2D/src/**.c",
+  "vendor/Box2D/include/**.h"
     }
 
     includedirs
     {
-        "vendor/Box2D/include",
-        "vendor/Box2D/src"
+     "vendor/Box2D/include",
+    "vendor/Box2D/src"
     }
 
     filter "system:windows"
         systemversion "latest"
 
     filter "configurations:Debug"
-        runtime "Debug"
-        symbols "on"
+   runtime "Debug"
+      symbols "on"
 
-    filter "configurations:Release"
+filter "configurations:Release"
         runtime "Release"
         optimize "on"
 
@@ -330,6 +336,7 @@ project "Lunex"
         "%{IncludeDir.entt}",
         "%{IncludeDir.yaml_cpp}",
         "%{IncludeDir.ImGuizmo}",
+        "%{IncludeDir.Assimp}",
         "%{IncludeDir.VulkanSDK}"
     }
 
@@ -354,36 +361,51 @@ project "Lunex"
         defines { "LN_DEBUG" }
         runtime "Debug"
         symbols "on"
-        
+        libdirs { "$(SolutionDir)vendor/assimp/lib/Debug" }
         links
         {
             "%{Library.ShaderC_Debug}",
             "%{Library.SPIRV_Cross_Debug}",
-            "%{Library.SPIRV_Cross_GLSL_Debug}"
+            "%{Library.SPIRV_Cross_GLSL_Debug}",
+            "%{Library.Assimp_Debug_Name}"
+        }
+        postbuildcommands
+        {
+            "{COPY} $(SolutionDir)vendor/assimp/lib/Debug/assimp-vc143-mtd.dll %{cfg.targetdir}"
         }
 
     filter "configurations:Release"
         defines { "LN_RELEASE" }
         runtime "Release"
         optimize "on"
-        
+        libdirs { "$(SolutionDir)vendor/assimp/lib/Release" }
         links
         {
             "%{Library.ShaderC_Release}",
             "%{Library.SPIRV_Cross_Release}",
-            "%{Library.SPIRV_Cross_GLSL_Release}"
+            "%{Library.SPIRV_Cross_GLSL_Release}",
+            "%{Library.Assimp_Release_Name}"
+        }
+        postbuildcommands
+        {
+            "{COPY} $(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll %{cfg.targetdir}"
         }
 
     filter "configurations:Dist"
         defines { "LN_DIST" }
         runtime "Release"
         optimize "on"
-        
+        libdirs { "$(SolutionDir)vendor/assimp/lib/Release" }
         links
         {
             "%{Library.ShaderC_Release}",
             "%{Library.SPIRV_Cross_Release}",
-            "%{Library.SPIRV_Cross_GLSL_Release}"
+            "%{Library.SPIRV_Cross_GLSL_Release}",
+            "%{Library.Assimp_Release_Name}"
+        }
+        postbuildcommands
+        {
+            "{COPY} $(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll %{cfg.targetdir}"
         }
 
 project "Sandbox"
@@ -395,6 +417,7 @@ project "Sandbox"
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
+    debugdir ("%{cfg.targetdir}")
 
     files
     {
@@ -433,26 +456,39 @@ project "Sandbox"
         defines { "LN_DEBUG" }
         runtime "Debug"
         symbols "on"
+        postbuildcommands
+        {
+            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Debug/assimp-vc143-mtd.dll\" \"%{cfg.targetdir}\""
+        }
 
     filter "configurations:Release"
         defines { "LN_RELEASE" }
         runtime "Release"
         optimize "on"
+        postbuildcommands
+        {
+            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\""
+        }
 
     filter "configurations:Dist"
         defines { "LN_DIST" }
         runtime "Release"
         optimize "on"
+        postbuildcommands
+        {
+            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\""
+        }
 
 project "Lunex-Editor"
     location "Lunex-Editor"
     kind "ConsoleApp"
     language "C++"
     cppdialect "C++20"
-    staticruntime "off"  -- ✅ Cambio a dinámico
+    staticruntime "off"
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
+    debugdir ("%{cfg.targetdir}")
 
     files
     {
@@ -479,6 +515,7 @@ project "Lunex-Editor"
         "%{IncludeDir.glm}",
         "%{IncludeDir.entt}",
         "%{IncludeDir.yaml_cpp}",
+        "%{IncludeDir.Assimp}",
         "%{IncludeDir.ImGuizmo}"
     }
 
@@ -501,13 +538,25 @@ project "Lunex-Editor"
         defines { "LN_DEBUG" }
         runtime "Debug"
         symbols "on"
+        postbuildcommands
+        {
+            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Debug/assimp-vc143-mtd.dll\" \"%{cfg.targetdir}\""
+        }
 
     filter "configurations:Release"
         defines { "LN_RELEASE" }
         runtime "Release"
         optimize "on"
+        postbuildcommands
+        {
+            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\""
+        }
 
     filter "configurations:Dist"
         defines { "LN_DIST" }
         runtime "Release"
         optimize "on"
+        postbuildcommands
+        {
+            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\""
+        }

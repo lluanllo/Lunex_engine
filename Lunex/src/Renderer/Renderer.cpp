@@ -3,6 +3,7 @@
 #include "Renderer.h"
 #include "Platform/OpenGL/OpenGLShader.h"
 #include "Renderer2D.h"
+#include "Renderer3D.h"
 
 namespace Lunex {
 	
@@ -12,10 +13,12 @@ namespace Lunex {
 		LNX_PROFILE_FUNCTION();
 		RenderCommand::Init();
 		Renderer2D::Init();
+		Renderer3D::Init();
 	}
 	
 	void Renderer::Shutdown() {
 		Renderer2D::Shutdown();
+		Renderer3D::Shutdown();
 	}
 	
 	void Renderer::onWindowResize(uint32_t width, uint32_t height) {

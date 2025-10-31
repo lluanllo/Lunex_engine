@@ -3,6 +3,7 @@
 #include "SceneCamera.h"
 #include "Core/UUID.h"
 #include "Renderer/Texture.h"
+#include "Renderer/Model.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -72,6 +73,47 @@ namespace Lunex {
 		
 		CircleRendererComponent() = default;
 		CircleRendererComponent(const CircleRendererComponent&) = default;
+	};
+
+	struct MeshComponent {
+		Ref<Model> MeshModel;
+		ModelType Type = ModelType::Cube;
+		std::string FilePath;
+		glm::vec4 Color{ 1.0f, 1.0f, 1.0f, 1.0f };
+		
+		MeshComponent() = default;
+		MeshComponent(const MeshComponent&) = default;
+		MeshComponent(ModelType type)
+			: Type(type) {
+			CreatePrimitive(type);
+		}
+
+		void CreatePrimitive(ModelType type) {
+			Type = type;
+			switch (type) {
+				case ModelType::Cube:
+					MeshModel = Model::CreateCube();
+					break;
+				case ModelType::Sphere:
+					MeshModel = Model::CreateSphere();
+					break;
+				case ModelType::Plane:
+					MeshModel = Model::CreatePlane();
+					break;
+				case ModelType::Cylinder:
+					MeshModel = Model::CreateCylinder();
+					break;
+				case ModelType::FromFile:
+					// Will be loaded from FilePath
+					break;
+			}
+		}
+
+		void LoadFromFile(const std::string& path) {
+			FilePath = path;
+			Type = ModelType::FromFile;
+			MeshModel = CreateRef<Model>(path);
+		}
 	};
 	
 	struct CameraComponent {
@@ -151,5 +193,6 @@ namespace Lunex {
 	using AllComponents =
 		ComponentGroup<TransformComponent, SpriteRendererComponent,
 		CircleRendererComponent, CameraComponent, NativeScriptComponent,
-		Rigidbody2DComponent, BoxCollider2DComponent, CircleCollider2DComponent>;
+		Rigidbody2DComponent, BoxCollider2DComponent, CircleCollider2DComponent,
+		MeshComponent>;
 }

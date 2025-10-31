@@ -224,7 +224,7 @@ namespace Lunex {
 			// ✅ El popup DEBE estar dentro del mismo PushID/PopID que el botón
 			if (ImGui::BeginPopup("ComponentSettings")) {
 				if (ImGui::MenuItem("Remove component"))
-					removeComponent = true;
+				removeComponent = true;
 				
 				ImGui::EndPopup();
 			}
@@ -262,6 +262,7 @@ namespace Lunex {
 			DisplayAddComponentEntry<CameraComponent>("Camera");
 			DisplayAddComponentEntry<SpriteRendererComponent>("Sprite Renderer");
 			DisplayAddComponentEntry<CircleRendererComponent>("Circle Renderer");
+			DisplayAddComponentEntry<MeshComponent>("Mesh Renderer");
 			DisplayAddComponentEntry<Rigidbody2DComponent>("Rigidbody 2D");
 			DisplayAddComponentEntry<BoxCollider2DComponent>("Box Collider 2D");
 			DisplayAddComponentEntry<CircleCollider2DComponent>("Circle Collider 2D");
@@ -408,6 +409,80 @@ namespace Lunex {
 			ImGui::DragFloat("Friction", &component.Friction, 0.01f, 0.0f, 1.0f);
 			ImGui::DragFloat("Restitution", &component.Restitution, 0.01f, 0.0f, 1.0f);
 			ImGui::DragFloat("Restitution Threshold", &component.RestitutionThreshold, 0.01f, 0.0f);
+		});
+		
+		DrawComponent<MeshComponent>("Mesh Renderer", entity, [](auto& component) {
+			ImGui::ColorEdit4("Color", glm::value_ptr(component.Color));
+
+			// Model type selector
+			const char* modelTypes[] = { "Cube", "Sphere", "Plane", "Cylinder", "From File" };
+			int currentType = (int)component.Type;
+			
+			if (ImGui::Combo("Model Type", &currentType, modelTypes, IM_ARRAYSIZE(modelTypes))) {
+				component.Type = (ModelType)currentType;
+				
+				if (component.Type != ModelType::FromFile) {
+					component.CreatePrimitive(component.Type);
+				}
+			}
+
+			// File path input for FromFile type
+			if (component.Type == ModelType::FromFile) {
+				ImGui::Text("File Path:");
+				ImGui::SameLine();
+				
+				char buffer[256];
+				memset(buffer, 0, sizeof(buffer));
+				if (!component.FilePath.empty()) {
+					strcpy_s(buffer, sizeof(buffer), component.FilePath.c_str());
+				}
+				
+				if (ImGui::InputText("##FilePath", buffer, sizeof(buffer))) {
+					component.FilePath = std::string(buffer);
+				}
+
+				ImGui::SameLine();
+				if (ImGui::Button("Load")) {
+					if (!component.FilePath.empty()) {
+						component.LoadFromFile(component.FilePath);
+					}
+				}
+
+				// Drag and drop support
+				ImGui::Button("Drop Model Here", ImVec2(200.0f, 30.0f));
+				if (ImGui::BeginDragDropTarget()) {
+					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+						const wchar_t* path = (const wchar_t*)payload->Data;
+						std::filesystem::path modelPath = std::filesystem::path(g_AssetPath) / path;
+						
+						std::string ext = modelPath.extension().string();
+						std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+						
+						if (ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb") {
+							component.LoadFromFile(modelPath.string());
+						} else {
+							LNX_LOG_WARN("Unsupported model format: {0}", ext);
+						}
+					}
+					ImGui::EndDragDropTarget();
+				}
+			}
+
+			// Display mesh info
+			if (component.MeshModel) {
+				ImGui::Separator();
+				ImGui::Text("Mesh Info:");
+				ImGui::Text("  Submeshes: %d", component.MeshModel->GetMeshes().size());
+				
+				uint32_t totalVertices = 0;
+				uint32_t totalIndices = 0;
+				for (const auto& mesh : component.MeshModel->GetMeshes()) {
+					totalVertices += (uint32_t)mesh->GetVertices().size();
+					totalIndices += (uint32_t)mesh->GetIndices().size();
+				}
+				ImGui::Text("  Total Vertices: %d", totalVertices);
+				ImGui::Text("  Total Triangles: %d", totalIndices / 3);
+			}
 		});
 	}
 	
