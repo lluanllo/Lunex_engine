@@ -24,6 +24,10 @@ namespace Lunex {
 		static void DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, int entityID = -1);
 		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& color = glm::vec4(1.0f), int entityID = -1);
 
+		// Outline rendering for selection
+		static void DrawMeshOutline(const glm::mat4& transform, MeshComponent& meshComponent, const glm::vec4& outlineColor = glm::vec4(1.0f, 0.5f, 0.0f, 1.0f), float outlineThickness = 0.02f);
+		static void DrawModelOutline(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& outlineColor = glm::vec4(1.0f, 0.5f, 0.0f, 1.0f), float outlineThickness = 0.02f);
+
 		static void SetLightPosition(const glm::vec3& position);
 		static void SetLightColor(const glm::vec3& color);
 

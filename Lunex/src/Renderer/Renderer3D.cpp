@@ -16,13 +16,15 @@ namespace Lunex {
 		};
 
 		struct MaterialData {
-			glm::vec4 Color;
-			glm::vec3 LightPos;
-			float padding1;
-			glm::vec3 ViewPos;
-			float padding2;
-			glm::vec3 LightColor;
-			int UseTexture;
+			glm::vec4 Color;   // 16 bytes, offset 0
+			glm::vec3 LightPos;     // 12 bytes, offset 16
+			float padding1;           // 4 bytes, offset 28
+			glm::vec3 ViewPos;        // 12 bytes, offset 32
+			float padding2;           // 4 bytes, offset 44
+			glm::vec3 LightColor;     // 12 bytes, offset 48
+			int UseTexture;      // 4 bytes, offset 60
+			int EntityID;  // 4 bytes, offset 64
+			glm::vec2 padding3;       // 8 bytes padding to reach multiple of 16 (total: 80 bytes)
 		};
 
 		CameraData CameraBuffer;
@@ -127,6 +129,14 @@ namespace Lunex {
 			}
 		}
 		s_Data.MaterialBuffer.UseTexture = hasTextures ? 1 : 0;
+		s_Data.MaterialBuffer.EntityID = entityID;
+
+		// Debug log
+		static int lastEntityID = -999;
+		if (entityID != lastEntityID && entityID != -1) {
+			LNX_LOG_INFO("Renderer3D: Drawing mesh with EntityID: {0}", entityID);
+			lastEntityID = entityID;
+		}
 
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialData));
 
@@ -150,6 +160,60 @@ namespace Lunex {
 	void Renderer3D::SetLightColor(const glm::vec3& color)
 	{
 		s_Data.LightColor = color;
+	}
+
+	void Renderer3D::DrawMeshOutline(const glm::mat4& transform, MeshComponent& meshComponent, const glm::vec4& outlineColor, float outlineThickness)
+	{
+		if (!meshComponent.MeshModel)
+			return;
+
+		DrawModelOutline(transform, meshComponent.MeshModel, outlineColor, outlineThickness);
+	}
+
+	void Renderer3D::DrawModelOutline(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& outlineColor, float outlineThickness)
+	{
+		LNX_PROFILE_FUNCTION();
+
+		if (!model || model->GetMeshes().empty())
+			return;
+
+		// First pass: Draw the mesh normally to establish depth
+		// This is already done in the calling code (EditorLayer)
+
+		// Second pass: Draw the outline
+		// Scale up slightly for outline effect
+		glm::mat4 scaledTransform = glm::scale(transform, glm::vec3(1.0f + outlineThickness));
+
+		// Disable depth writing but keep depth test
+		// This way the outline won't write to depth buffer but will still be occluded by other objects
+		RenderCommand::SetDepthFunc(RendererAPI::DepthFunc::LessOrEqual);
+		
+		// Enable front-face culling to only show the "shell" of the scaled model
+		RenderCommand::SetCullMode(RendererAPI::CullMode::Front);
+
+		// Update Transform uniform buffer with scaled transform
+		s_Data.TransformBuffer.Transform = scaledTransform;
+		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
+
+		// Update Material uniform buffer with outline color (solid color, no lighting)
+		s_Data.MaterialBuffer.Color = outlineColor;
+		s_Data.MaterialBuffer.LightPos = s_Data.LightPosition;
+		s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
+		s_Data.MaterialBuffer.LightColor = glm::vec3(1.0f); // Full brightness for outline
+		s_Data.MaterialBuffer.UseTexture = 0; // No texture for outline
+		s_Data.MaterialBuffer.EntityID = -1; // No entity ID for outline
+
+		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialData));
+
+		// Draw the model
+		s_Data.MeshShader->Bind();
+		model->Draw(s_Data.MeshShader);
+
+		// Restore default state
+		RenderCommand::SetCullMode(RendererAPI::CullMode::Back);
+		RenderCommand::SetDepthFunc(RendererAPI::DepthFunc::Less);
+
+		s_Data.Stats.DrawCalls++;
 	}
 
 	void Renderer3D::ResetStats()

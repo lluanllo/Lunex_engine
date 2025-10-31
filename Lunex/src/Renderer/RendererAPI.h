@@ -11,6 +11,20 @@ namespace Lunex {
 			enum class API {
 				None = 0, OpenGL = 1
 			};
+
+			enum class DepthFunc {
+				Less = 0,
+				LessOrEqual,
+				Greater,
+				Always
+			};
+
+			enum class CullMode {
+				None = 0,
+				Front,
+				Back,
+				FrontAndBack
+			};
 			
 		public:
 			virtual ~RendererAPI() = default;
@@ -24,6 +38,13 @@ namespace Lunex {
 			virtual void DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) = 0;
 			
 			virtual void SetLineWidth(float width) = 0;
+
+			// Depth testing
+			virtual void SetDepthTest(bool enabled) = 0;
+			virtual void SetDepthFunc(DepthFunc func) = 0;
+
+			// Face culling
+			virtual void SetCullMode(CullMode mode) = 0;
 			
 			inline static API GetAPI() { return s_API; }
 			

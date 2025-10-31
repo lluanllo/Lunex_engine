@@ -64,4 +64,40 @@ namespace Lunex {
 	void OpenGLRendererAPI::SetLineWidth(float width) {
 		glLineWidth(width);
 	}
+
+	void OpenGLRendererAPI::SetDepthTest(bool enabled) {
+		if (enabled)
+			glEnable(GL_DEPTH_TEST);
+		else
+			glDisable(GL_DEPTH_TEST);
+	}
+
+	void OpenGLRendererAPI::SetDepthFunc(DepthFunc func) {
+		switch (func) {
+			case DepthFunc::Less:         glDepthFunc(GL_LESS); break;
+			case DepthFunc::LessOrEqual:  glDepthFunc(GL_LEQUAL); break;
+			case DepthFunc::Greater:      glDepthFunc(GL_GREATER); break;
+			case DepthFunc::Always:       glDepthFunc(GL_ALWAYS); break;
+		}
+	}
+
+	void OpenGLRendererAPI::SetCullMode(CullMode mode) {
+		switch (mode) {
+			case CullMode::None:
+				glDisable(GL_CULL_FACE);
+				break;
+			case CullMode::Front:
+				glEnable(GL_CULL_FACE);
+				glCullFace(GL_FRONT);
+				break;
+			case CullMode::Back:
+				glEnable(GL_CULL_FACE);
+				glCullFace(GL_BACK);
+				break;
+			case CullMode::FrontAndBack:
+				glEnable(GL_CULL_FACE);
+				glCullFace(GL_FRONT_AND_BACK);
+				break;
+		}
+	}
 }

@@ -153,7 +153,6 @@ namespace Lunex {
 		int mouseY = (int)my;
 		
 		if (mouseX >= 0 && mouseY >= 0 && mouseX < (int)viewportSize.x && mouseY < (int)viewportSize.y) {
-			// Cambiado a -1 para mayor coherencia, antes era 0
 			int pixelData = m_Framebuffer->ReadPixel(1, mouseX, mouseY);
 			m_HoveredEntity = pixelData == -1 ? Entity() : Entity((entt::entity)pixelData, m_ActiveScene.get());
 		}
@@ -365,12 +364,35 @@ namespace Lunex {
 			}
 		}
 		
-		// Draw selected entity outline 
+		// Draw selected entity outline (2D)
 		if (Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity()) {
 			const TransformComponent& transform = selectedEntity.GetComponent<TransformComponent>();
-			Renderer2D::DrawRect(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+			
+			// Outline for 2D entities (sprites and circles)
+			if (selectedEntity.HasComponent<SpriteRendererComponent>() || selectedEntity.HasComponent<CircleRendererComponent>()) {
+				Renderer2D::DrawRect(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+			}
 		}
+		
 		Renderer2D::EndScene();
+
+		// Draw selected entity outline (3D)
+		if (Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity()) {
+			if (selectedEntity.HasComponent<MeshComponent>()) {
+				Renderer3D::BeginScene(m_EditorCamera);
+				
+				const TransformComponent& transform = selectedEntity.GetComponent<TransformComponent>();
+				auto& meshComponent = selectedEntity.GetComponent<MeshComponent>();
+				
+				// Render the mesh normally first
+				Renderer3D::DrawMesh(transform.GetTransform(), meshComponent, (int)(entt::entity)selectedEntity);
+				
+				// Then render the outline on top
+				Renderer3D::DrawMeshOutline(transform.GetTransform(), meshComponent, glm::vec4(1.0f, 0.5f, 0.0f, 1.0f), 0.02f);
+				
+				Renderer3D::EndScene();
+			}
+		}
 	}
 	
 	void EditorLayer::NewScene() {

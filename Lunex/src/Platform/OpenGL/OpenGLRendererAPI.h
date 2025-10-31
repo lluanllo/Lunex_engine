@@ -15,5 +15,9 @@ namespace Lunex {
 			virtual void DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) override;
 			
 			virtual void SetLineWidth(float width) override;
+
+			virtual void SetDepthTest(bool enabled) override;
+			virtual void SetDepthFunc(DepthFunc func) override;
+			virtual void SetCullMode(CullMode mode) override;
 	};
 }

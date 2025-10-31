@@ -36,6 +36,7 @@ void main() {
 #elif defined(FRAGMENT)
 
 layout(location = 0) out vec4 FragColor;
+layout(location = 1) out int o_EntityID;
 
 struct VertexOutput {
 	vec3 FragPos;
@@ -48,9 +49,12 @@ layout (location = 0) in VertexOutput Input;
 layout(std140, binding = 2) uniform Material {
 	vec4 u_Color;
 	vec3 u_LightPos;
+	float padding1;
 	vec3 u_ViewPos;
+	float padding2;
 	vec3 u_LightColor;
-	bool u_UseTexture;
+	int u_UseTexture;
+	int u_EntityID;
 };
 
 layout (binding = 0) uniform sampler2D texture_diffuse1;
@@ -74,7 +78,7 @@ void main() {
 	vec3 specular = specularStrength * spec * u_LightColor;
 	
 	vec3 result;
-	if (u_UseTexture) {
+	if (u_UseTexture == 1) {
 		vec4 texColor = texture(texture_diffuse1, Input.TexCoords);
 		result = (ambient + diffuse + specular) * texColor.rgb;
 	} else {
@@ -82,6 +86,7 @@ void main() {
 	}
 	
 	FragColor = vec4(result, u_Color.a);
+	o_EntityID = u_EntityID;
 }
 
 #endif
