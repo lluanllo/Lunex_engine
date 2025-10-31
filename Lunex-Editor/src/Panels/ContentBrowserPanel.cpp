@@ -169,9 +169,15 @@ namespace Lunex {
 		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
 		ImGui::AlignTextToFramePadding();
 		
+		// Crear buffer estático con tamaño fijo para el path
+		static char pathBuffer[512];
 		std::string currentPath = m_CurrentDirectory.string();
+		
+		// Copiar el path al buffer de forma segura
+		strncpy_s(pathBuffer, sizeof(pathBuffer), currentPath.c_str(), _TRUNCATE);
+		
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 220);
-		ImGui::InputText("##PathDisplay", currentPath.data(), currentPath.size(), ImGuiInputTextFlags_ReadOnly);
+		ImGui::InputText("##PathDisplay", pathBuffer, sizeof(pathBuffer), ImGuiInputTextFlags_ReadOnly);
 		
 		ImGui::PopStyleColor(2);
 		
@@ -252,7 +258,32 @@ namespace Lunex {
 						flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
 					}
 					
-					bool opened = ImGui::TreeNodeEx(dirName.c_str(), flags);
+					// Dibujar icono de carpeta antes del TreeNode
+					ImGui::PushID(dirName.c_str());
+					
+					// Añadir espacio invisible al nombre para que el texto no se superponga con el icono
+					std::string displayName = "   " + dirName; // 3 espacios para el icono
+					
+					// Guardar posición del cursor
+					ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+					
+					bool opened = ImGui::TreeNodeEx(displayName.c_str(), flags);
+					
+					// Dibujar el icono después del TreeNode para que aparezca encima
+					if (m_DirectoryIcon) {
+						ImDrawList* drawList = ImGui::GetWindowDrawList();
+						float iconSize = 16.0f;
+						float arrowWidth = 20.0f; // Espacio que ocupa la flecha del TreeNode
+						ImVec2 iconPos = ImVec2(cursorPos.x + arrowWidth, cursorPos.y + 2.0f);
+						
+						drawList->AddImage(
+							(ImTextureID)(intptr_t)m_DirectoryIcon->GetRendererID(),
+							iconPos,
+							ImVec2(iconPos.x + iconSize, iconPos.y + iconSize),
+							ImVec2(0, 0),
+							ImVec2(1, 1)
+						);
+					}
 					
 					if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
 						if (m_CurrentDirectory != dirPath) {
@@ -272,6 +303,8 @@ namespace Lunex {
 						displayDirectoryTree(dirPath);
 						ImGui::TreePop();
 					}
+					
+					ImGui::PopID();
 				}
 			}
 		};
@@ -286,7 +319,27 @@ namespace Lunex {
 			rootFlags |= ImGuiTreeNodeFlags_Selected;
 		}
 		
-		bool rootOpened = ImGui::TreeNodeEx("?? Assets", rootFlags);
+		// Guardar posición del cursor para la raíz
+		ImVec2 rootCursorPos = ImGui::GetCursorScreenPos();
+		
+		// Añadir espacio invisible al nombre de Assets
+		bool rootOpened = ImGui::TreeNodeEx("   Assets", rootFlags);
+		
+		// Dibujar el icono de carpeta para Assets
+		if (m_DirectoryIcon) {
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			float iconSize = 16.0f;
+			float arrowWidth = 20.0f;
+			ImVec2 iconPos = ImVec2(rootCursorPos.x + arrowWidth, rootCursorPos.y + 2.0f);
+			
+			drawList->AddImage(
+				(ImTextureID)(intptr_t)m_DirectoryIcon->GetRendererID(),
+				iconPos,
+				ImVec2(iconPos.x + iconSize, iconPos.y + iconSize),
+				ImVec2(0, 0),
+				ImVec2(1, 1)
+			);
+		}
 		
 		if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
 			if (m_CurrentDirectory != m_BaseDirectory) {
@@ -328,9 +381,43 @@ namespace Lunex {
 		return m_FileIcon;
 	}
 	
+	Ref<Texture2D> ContentBrowserPanel::GetThumbnailForFile(const std::filesystem::path& path) {
+		std::string extension = path.extension().string();
+		std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+		
+		// Si es una imagen, intentar cargar el preview
+		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp" || extension == ".tga") {
+			std::string pathStr = path.string();
+			
+			// Verificar si ya está en caché
+			auto it = m_TextureCache.find(pathStr);
+			if (it != m_TextureCache.end()) {
+				return it->second;
+			}
+			
+			// Intentar cargar la textura
+			try {
+				Ref<Texture2D> texture = Texture2D::Create(pathStr);
+				if (texture) {
+					m_TextureCache[pathStr] = texture;
+					return texture;
+				}
+			}
+			catch (...) {
+				// Si falla, usar el icono por defecto
+			}
+		}
+		
+		// Para otros archivos, usar el icono correspondiente
+		return GetIconForFile(path);
+	}
+	
 	void ContentBrowserPanel::RenderFileGrid() {
 		ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8, 8));
 		ImGui::BeginChild("FileGridContent", ImVec2(0, -28), false);
+		
+		// Agregar padding lateral al contenido
+		ImGui::Indent(16.0f);
 		
 		float cellSize = m_ThumbnailSize + m_Padding * 2;
 		float panelWidth = ImGui::GetContentRegionAvail().x;
@@ -375,34 +462,66 @@ namespace Lunex {
 				// Usar columna vertical para icono + texto
 				ImGui::BeginGroup();
 				
-				Ref<Texture2D> icon = directoryEntry.is_directory() ? m_DirectoryIcon : GetIconForFile(path);
+				// Usar GetThumbnailForFile en lugar de GetIconForFile para mostrar previews
+				Ref<Texture2D> icon = directoryEntry.is_directory() ? m_DirectoryIcon : GetThumbnailForFile(path);
 				
 				if (icon) {
 					float iconSize = m_ThumbnailSize;
 					
 					// Botón con padding para el hover effect
-					ImVec2 cursorPos = ImGui::GetCursorPos();
+					ImVec2 cursorPos = ImGui::GetCursorScreenPos();
 					
-					if (ImGui::ImageButton(filenameString.c_str(),
-						(void*)(intptr_t)icon->GetRendererID(),
-						{ iconSize, iconSize },
-						{ 0, 1 },
-						{ 1, 0 })) {
-						// Click simple no hace nada
-					}
+					// Dibujar marco redondeado detrás de la imagen
+					ImDrawList* drawList = ImGui::GetWindowDrawList();
+					float rounding = 8.0f;
+					float padding = 2.0f;
 					
-					// Sombra sutil bajo el icono cuando se hace hover
+					// Marco de fondo con bordes redondeados
+					ImU32 bgColor = IM_COL32(30, 30, 30, 255);
+					drawList->AddRectFilled(
+						ImVec2(cursorPos.x - padding, cursorPos.y - padding),
+						ImVec2(cursorPos.x + iconSize + padding, cursorPos.y + iconSize + padding),
+						bgColor,
+						rounding
+					);
+					
+					// Dibujar la imagen con bordes redondeados usando AddImageRounded
+					ImVec2 imageMin = ImVec2(cursorPos.x, cursorPos.y);
+					ImVec2 imageMax = ImVec2(cursorPos.x + iconSize, cursorPos.y + iconSize);
+					
+					drawList->AddImageRounded(
+						(ImTextureID)(intptr_t)icon->GetRendererID(),
+						imageMin,
+						imageMax,
+						ImVec2(0, 1),
+						ImVec2(1, 0),
+						IM_COL32(255, 255, 255, 255),
+						rounding
+					);
+					
+					// Botón invisible para capturar clicks
+					ImGui::SetCursorScreenPos(cursorPos);
+					ImGui::InvisibleButton(filenameString.c_str(), ImVec2(iconSize, iconSize));
+					
+					// Borde redondeado al hacer hover
 					if (ImGui::IsItemHovered()) {
-						ImDrawList* drawList = ImGui::GetWindowDrawList();
-						ImVec2 itemMin = ImGui::GetItemRectMin();
-						ImVec2 itemMax = ImGui::GetItemRectMax();
+						ImU32 borderColor = IM_COL32(100, 100, 100, 200);
+						drawList->AddRect(
+							ImVec2(cursorPos.x - padding, cursorPos.y - padding),
+							ImVec2(cursorPos.x + iconSize + padding, cursorPos.y + iconSize + padding),
+							borderColor,
+							rounding,
+							0,
+							2.0f
+						);
 						
+						// Sombra sutil bajo el icono cuando se hace hover
 						for (int i = 0; i < 3; i++) {
 							float alpha = (1.0f - (i / 3.0f)) * 0.2f;
 							ImU32 shadowColor = IM_COL32(0, 0, 0, (int)(alpha * 255));
 							drawList->AddRectFilled(
-								ImVec2(itemMin.x - i, itemMax.y + i),
-								ImVec2(itemMax.x + i, itemMax.y + i + 1),
+								ImVec2(cursorPos.x - padding - i, cursorPos.y + iconSize + padding + i),
+								ImVec2(cursorPos.x + iconSize + padding + i, cursorPos.y + iconSize + padding + i + 1),
 								shadowColor
 							);
 						}
@@ -426,7 +545,7 @@ namespace Lunex {
 								);
 							}
 							m_DirectoryHistory.push_back(path);
-							m_CurrentDirectory = path;
+						 m_CurrentDirectory = path;
 						}
 					}
 				}
@@ -463,6 +582,9 @@ namespace Lunex {
 		}
 		
 		ImGui::PopStyleVar();
+		
+		// Remover el indent al final
+		ImGui::Unindent(16.0f);
 		
 		ImGui::EndChild();
 		ImGui::PopStyleVar();
