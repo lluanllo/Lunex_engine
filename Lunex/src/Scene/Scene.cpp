@@ -449,7 +449,7 @@ namespace Lunex {
 	template<>
 	void Scene::OnComponentAdded<CircleCollider2DComponent>(Entity entity, CircleCollider2DComponent& component) {
 	}
-
+	
 	template<> void Scene::OnComponentAdded<MeshComponent>(Entity entity, MeshComponent& component) {
 	}
 }

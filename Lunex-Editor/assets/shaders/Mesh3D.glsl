@@ -7,6 +7,7 @@ layout(location = 1) in vec3 a_Normal;
 layout(location = 2) in vec2 a_TexCoords;
 layout(location = 3) in vec3 a_Tangent;
 layout(location = 4) in vec3 a_Bitangent;
+layout(location = 5) in int a_EntityID;
 
 layout(std140, binding = 0) uniform Camera {
 	mat4 u_ViewProjection;
@@ -23,12 +24,14 @@ struct VertexOutput {
 };
 
 layout (location = 0) out VertexOutput Output;
+layout (location = 3) flat out int v_EntityID;
 
 void main() {
 	vec4 worldPos = u_Transform * vec4(a_Position, 1.0);
 	Output.FragPos = worldPos.xyz;
 	Output.Normal = mat3(transpose(inverse(u_Transform))) * a_Normal;
 	Output.TexCoords = a_TexCoords;
+	v_EntityID = a_EntityID;
 	
 	gl_Position = u_ViewProjection * worldPos;
 }
@@ -45,21 +48,23 @@ struct VertexOutput {
 };
 
 layout (location = 0) in VertexOutput Input;
+layout (location = 3) flat in int v_EntityID;
 
 layout(std140, binding = 2) uniform Material {
 	vec4 u_Color;
 	vec3 u_LightPos;
-	float padding1;
 	vec3 u_ViewPos;
 	float padding2;
 	vec3 u_LightColor;
 	int u_UseTexture;
-	int u_EntityID;
 };
 
 layout (binding = 0) uniform sampler2D texture_diffuse1;
 
 void main() {
+	// Set entity ID from vertex attribute
+	o_EntityID = v_EntityID;
+	
 	// Ambient
 	float ambientStrength = 0.2;
 	vec3 ambient = ambientStrength * u_LightColor;
@@ -86,7 +91,6 @@ void main() {
 	}
 	
 	FragColor = vec4(result, u_Color.a);
-	o_EntityID = u_EntityID;
 }
 
 #endif

@@ -11,8 +11,7 @@ namespace Lunex {
 		SetupMesh();
 	}
 
-	void Mesh::SetupMesh()
-	{
+	void Mesh::SetupMesh() {
 		m_VertexArray = VertexArray::Create();
 
 		m_VertexBuffer = VertexBuffer::Create((float*)m_Vertices.data(), (uint32_t)(m_Vertices.size() * sizeof(Vertex)));
@@ -22,7 +21,8 @@ namespace Lunex {
 			{ ShaderDataType::Float3, "a_Normal" },
 			{ ShaderDataType::Float2, "a_TexCoords" },
 			{ ShaderDataType::Float3, "a_Tangent" },
-			{ ShaderDataType::Float3, "a_Bitangent" }
+			{ ShaderDataType::Float3, "a_Bitangent" },
+			{ ShaderDataType::Int,    "a_EntityID"  }
 		};
 
 		m_VertexBuffer->SetLayout(layout);
@@ -31,9 +31,18 @@ namespace Lunex {
 		m_IndexBuffer = IndexBuffer::Create(m_Indices.data(), (uint32_t)m_Indices.size());
 		m_VertexArray->SetIndexBuffer(m_IndexBuffer);
 	}
+	
+	void Mesh::SetEntityID(int entityID) {
+		// Update all vertices with the new entity ID
+		for (auto& vertex : m_Vertices) {
+			vertex.EntityID = entityID;
+		}
+		
+		// Re-upload vertex data to GPU
+		m_VertexBuffer->SetData((float*)m_Vertices.data(), (uint32_t)(m_Vertices.size() * sizeof(Vertex)));
+	}
 
-	void Mesh::Draw(const Ref<Shader>& shader)
-	{
+	void Mesh::Draw(const Ref<Shader>& shader) {
 		uint32_t diffuseNr = 1;
 		uint32_t specularNr = 1;
 		uint32_t normalNr = 1;
