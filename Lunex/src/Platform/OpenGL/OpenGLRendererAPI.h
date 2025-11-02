@@ -18,6 +18,10 @@ namespace Lunex {
 
 			virtual void SetDepthTest(bool enabled) override;
 			virtual void SetDepthFunc(DepthFunc func) override;
+			virtual void SetDepthMask(bool enabled) override;
 			virtual void SetCullMode(CullMode mode) override;
+			
+			virtual void SetBlend(bool enabled) override;
+			virtual void SetBlendFunc(BlendFactor src, BlendFactor dst) override;
 	};
 }

@@ -10,9 +10,10 @@ namespace Lunex {
 		LNX_PROFILE_FUNCTION();
 		m_InternalFormat = GL_RGBA8;
 		m_DataFormat = GL_RGBA;
+		m_OwnsRendererID = true;
 		
-		glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
-		glTextureStorage2D(m_RendererID, 1, m_InternalFormat, m_Width, m_Height);
+		glCreateTextures(GL_TEXTURE_2D,1, &m_RendererID);
+		glTextureStorage2D(m_RendererID,1, m_InternalFormat, m_Width, m_Height);
 		
 		glTextureParameteri(m_RendererID, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTextureParameteri(m_RendererID, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -23,13 +24,14 @@ namespace Lunex {
 	
 	OpenGLTexture2D::OpenGLTexture2D(const std::string& path) : m_Path(path) {
 		LNX_PROFILE_FUNCTION();
+		m_OwnsRendererID = true;
 		
 		int width, height, channels;
 		stbi_set_flip_vertically_on_load(1);
 		stbi_uc* data = nullptr;
 		{
 			LNX_PROFILE_SCOPE("stbi_load - OpenGLTexture2D::OpenGLTexture2D(const std::string&)");
-			data = stbi_load(path.c_str(), &width, &height, &channels, 0);
+			data = stbi_load(path.c_str(), &width, &height, &channels,0);
 		}
 		
 		if (data) {
@@ -38,12 +40,12 @@ namespace Lunex {
 			m_Width = width;
 			m_Height = height;
 			
-			GLenum internalFormat = 0, dataFormat = 0;
-			if (channels == 4) {
+			GLenum internalFormat =0, dataFormat =0;
+			if (channels ==4) {
 				internalFormat = GL_RGBA8;
 				dataFormat = GL_RGBA;
 			}
-			else if (channels == 3) {
+			else if (channels ==3) {
 				internalFormat = GL_RGB8;
 				dataFormat = GL_RGB;
 			}
@@ -53,8 +55,8 @@ namespace Lunex {
 			
 			LNX_CORE_ASSERT(internalFormat & dataFormat, "Format not supported!");
 			
-			glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
-			glTextureStorage2D(m_RendererID, 1, internalFormat, m_Width, m_Height);
+			glCreateTextures(GL_TEXTURE_2D,1, &m_RendererID);
+			glTextureStorage2D(m_RendererID,1, internalFormat, m_Width, m_Height);
 			
 			glTextureParameteri(m_RendererID, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 			glTextureParameteri(m_RendererID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -62,22 +64,29 @@ namespace Lunex {
 			glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_S, GL_REPEAT);
 			glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_T, GL_REPEAT);
 			
-			glTextureSubImage2D(m_RendererID, 0, 0, 0, m_Width, m_Height, dataFormat, GL_UNSIGNED_BYTE, data);
+			glTextureSubImage2D(m_RendererID,0,0,0, m_Width, m_Height, dataFormat, GL_UNSIGNED_BYTE, data);
 			
 			stbi_image_free(data);
 		}
 	}
+
+	// New wrapper constructor - does not take ownership by default
+	OpenGLTexture2D::OpenGLTexture2D(uint32_t rendererID, uint32_t width, uint32_t height, bool owns)
+		: m_RendererID(rendererID), m_Width(width), m_Height(height), m_OwnsRendererID(owns) {
+		m_IsLoaded = (rendererID !=0);
+	}
 	
 	OpenGLTexture2D::~OpenGLTexture2D() {
 		LNX_PROFILE_FUNCTION();
-		glDeleteTextures(1, &m_RendererID);
+		if (m_OwnsRendererID && m_RendererID)
+			glDeleteTextures(1, &m_RendererID);
 	}
 	
 	void OpenGLTexture2D::SetData(void* data, uint32_t size) {
 		LNX_PROFILE_FUNCTION();
-		uint32_t bpp = m_DataFormat == GL_RGBA ? 4 : 3;
+		uint32_t bpp = m_DataFormat == GL_RGBA ?4 :3;
 		LNX_CORE_ASSERT(size == m_Width * m_Height * bpp, "Data must be entire texture!");
-		glTextureSubImage2D(m_RendererID, 0, 0, 0, m_Width, m_Height, m_DataFormat, GL_UNSIGNED_BYTE, data);
+		glTextureSubImage2D(m_RendererID,0,0,0, m_Width, m_Height, m_DataFormat, GL_UNSIGNED_BYTE, data);
 	}
 	
 	void OpenGLTexture2D::Bind(uint32_t slot) const {

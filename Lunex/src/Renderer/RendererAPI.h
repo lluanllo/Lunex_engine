@@ -6,7 +6,7 @@
 #include "glm/glm.hpp"
 
 namespace Lunex {
-	class   RendererAPI {
+	class RendererAPI {
 		public:
 			enum class API {
 				None = 0, OpenGL = 1
@@ -25,6 +25,14 @@ namespace Lunex {
 				Back,
 				FrontAndBack
 			};
+
+			// Simple blend factors supported by renderer abstraction
+			enum class BlendFactor {
+				SrcAlpha = 0,
+				OneMinusSrcAlpha = 1,
+				One = 2,
+				Zero = 3
+			};
 			
 		public:
 			virtual ~RendererAPI() = default;
@@ -42,9 +50,15 @@ namespace Lunex {
 			// Depth testing
 			virtual void SetDepthTest(bool enabled) = 0;
 			virtual void SetDepthFunc(DepthFunc func) = 0;
+			// Control whether depth writes are enabled (depth mask)
+			virtual void SetDepthMask(bool enabled) = 0;
 
 			// Face culling
 			virtual void SetCullMode(CullMode mode) = 0;
+
+			// Blending
+			virtual void SetBlend(bool enabled) = 0;
+			virtual void SetBlendFunc(BlendFactor src, BlendFactor dst) = 0;
 			
 			inline static API GetAPI() { return s_API; }
 			

@@ -1,7 +1,6 @@
 #version 460 core
 
 #ifdef VERTEX
-
 layout(location = 0) in vec3 a_Position;
 layout(location = 1) in vec3 a_Normal;
 layout(location = 2) in vec2 a_TexCoords;
@@ -37,7 +36,6 @@ void main() {
 }
 
 #elif defined(FRAGMENT)
-
 layout(location = 0) out vec4 FragColor;
 layout(location = 1) out int o_EntityID;
 
@@ -53,6 +51,7 @@ layout (location = 3) flat in int v_EntityID;
 layout(std140, binding = 2) uniform Material {
 	vec4 u_Color;
 	vec3 u_LightPos;
+	float padding1;
 	vec3 u_ViewPos;
 	float padding2;
 	vec3 u_LightColor;
@@ -62,7 +61,6 @@ layout(std140, binding = 2) uniform Material {
 layout (binding = 0) uniform sampler2D texture_diffuse1;
 
 void main() {
-	// Set entity ID from vertex attribute
 	o_EntityID = v_EntityID;
 	
 	// Ambient
@@ -92,5 +90,4 @@ void main() {
 	
 	FragColor = vec4(result, u_Color.a);
 }
-
 #endif

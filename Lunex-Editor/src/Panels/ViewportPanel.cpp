@@ -5,6 +5,7 @@
 #include "Core/Input.h"
 #include "Scene/Components.h"
 #include "Math/Math.h"
+#include "Renderer/OutlineRenderer.h"
 #include <glm/gtc/type_ptr.hpp>
 
 namespace Lunex {
@@ -29,8 +30,8 @@ namespace Lunex {
 		ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
 		m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
 
-		// Renderizar la imagen del framebuffer
-		uint64_t textureID = framebuffer->GetColorAttachmentRendererID();
+		// Renderizar la imagen del framebuffer (color attachment 0)
+		uint64_t textureID = framebuffer->GetColorAttachmentRendererID(0);
 		ImGui::Image(reinterpret_cast<void*>(textureID), ImVec2{ m_ViewportSize.x, m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
 
 		if (ImGui::BeginDragDropTarget()) {
@@ -87,7 +88,6 @@ namespace Lunex {
 		ImGui::PopStyleVar();
 		
 		// Renderizar toolbar flotante DESPUÉS del viewport y gizmos
-		// El toolbar debe renderizarse al final para estar encima de todo
 		toolbarPanel.OnImGuiRender(sceneState, toolbarEnabled, m_ViewportBounds[0], m_ViewportSize);
 	}
 }

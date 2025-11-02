@@ -41,6 +41,10 @@ namespace Lunex {
 			auto GetAllEntitiesWith() {
 				return m_Registry.view<Components...>();
 			}
+
+			// Public helper: validate an entt entity handle belongs to this scene
+			inline bool IsValidEntity(entt::entity e) const { return m_Registry.valid(e); }
+			inline bool IsValidEntity(uint32_t id) const { return m_Registry.valid((entt::entity)id); }
 			
 		private:
 			template<typename T>

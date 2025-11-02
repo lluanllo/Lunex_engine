@@ -13,6 +13,8 @@ public:
 	}
 };
 
-Lunex::Ref <Lunex::Application> CreateApplication() {
+// Match signature expected by EntryPoint (accept ApplicationCommandLineArgs)
+Lunex::Ref<Lunex::Application> Lunex::CreateApplication(Lunex::ApplicationCommandLineArgs args) {
+	// args can be used to configure the app if needed
 	return Lunex::CreateScope<Sandbox>();
 }

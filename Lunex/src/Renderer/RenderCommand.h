@@ -41,8 +41,20 @@ namespace Lunex {
 				s_RendererAPI->SetDepthFunc(func);
 			}
 
+			static void SetDepthMask(bool enabled) {
+				s_RendererAPI->SetDepthMask(enabled);
+			}
+
 			static void SetCullMode(RendererAPI::CullMode mode) {
 				s_RendererAPI->SetCullMode(mode);
+			}
+
+			static void SetBlend(bool enabled) {
+				s_RendererAPI->SetBlend(enabled);
+			}
+			
+			static void SetBlendFunc(RendererAPI::BlendFactor src, RendererAPI::BlendFactor dst) {
+				s_RendererAPI->SetBlendFunc(src, dst);
 			}
 		private:
 			static Scope<RendererAPI> s_RendererAPI;

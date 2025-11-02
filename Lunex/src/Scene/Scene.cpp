@@ -383,14 +383,6 @@ namespace Lunex {
 			auto view = m_Registry.view<TransformComponent, MeshComponent>();
 			for (auto entity : view) {
 				auto [transform, mesh] = view.get<TransformComponent, MeshComponent>(entity);
-				
-				// Debug: Log que estamos dibujando un mesh
-				static bool logged = false;
-				if (!logged) {
-					LNX_LOG_INFO("Scene: Rendering mesh with EntityID: {0}", (int)entity);
-					logged = true;
-				}
-				
 				Renderer3D::DrawMesh(transform.GetTransform(), mesh, (int)entity);
 			}
 		}

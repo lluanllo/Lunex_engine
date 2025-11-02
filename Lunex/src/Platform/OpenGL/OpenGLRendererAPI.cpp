@@ -100,4 +100,30 @@ namespace Lunex {
 				break;
 		}
 	}
+	
+	void OpenGLRendererAPI::SetDepthMask(bool enabled) {
+		glDepthMask(enabled ? GL_TRUE : GL_FALSE);
+	}
+	
+	void OpenGLRendererAPI::SetBlend(bool enabled) {
+		if (enabled)
+			glEnable(GL_BLEND);
+		else
+			glDisable(GL_BLEND);
+	}
+
+	void OpenGLRendererAPI::SetBlendFunc(BlendFactor src, BlendFactor dst) {
+		GLenum s = GL_SRC_ALPHA, d = GL_ONE_MINUS_SRC_ALPHA;
+		auto toGL = [](BlendFactor f) -> GLenum {
+			switch (f) {
+				case BlendFactor::SrcAlpha: return GL_SRC_ALPHA;
+				case BlendFactor::OneMinusSrcAlpha: return GL_ONE_MINUS_SRC_ALPHA;
+				case BlendFactor::One: return GL_ONE;
+				case BlendFactor::Zero: return GL_ZERO;
+			}
+			return GL_ZERO;
+		};
+		s = toGL(src); d = toGL(dst);
+		glBlendFunc(s, d);
+	}
 }
