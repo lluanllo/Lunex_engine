@@ -12,7 +12,7 @@ layout(location = 5) in int a_EntityID;
 layout(std140, binding = 0) uniform Camera {
 	mat4 u_ViewProjection;
 };
-
+ 
 struct VertexOutput {
 	vec4 Color;
 	vec2 TexCoord;

@@ -68,9 +68,20 @@ namespace Lunex {
 		}
 	}
 	
+	OpenGLTexture2D::OpenGLTexture2D(uint32_t textureID, uint32_t width, uint32_t height, bool takeOwnership)
+		: m_RendererID(textureID), m_Width(width), m_Height(height), m_OwnsTexture(takeOwnership)
+	{
+		LNX_PROFILE_FUNCTION();
+		m_InternalFormat = GL_RGBA8;
+		m_DataFormat = GL_RGBA;
+		m_IsLoaded = true;
+	}
+	
 	OpenGLTexture2D::~OpenGLTexture2D() {
 		LNX_PROFILE_FUNCTION();
-		glDeleteTextures(1, &m_RendererID);
+		if (m_OwnsTexture) {
+			glDeleteTextures(1, &m_RendererID);
+		}
 	}
 	
 	void OpenGLTexture2D::SetData(void* data, uint32_t size) {

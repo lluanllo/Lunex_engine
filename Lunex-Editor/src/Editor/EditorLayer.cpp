@@ -5,6 +5,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "Scene/SceneSerializer.h"
+#include "Renderer/OutlineRenderer.h"
 
 #include "Utils/PlatformUtils.h"
 
@@ -27,6 +28,8 @@ namespace Lunex {
 		LNX_PROFILE_FUNCTION();
 		
 		m_CheckerboardTexture = Texture2D::Create("assets/textures/Checkerboard.png");
+		
+		OutlineRenderer::Init();
 		
 		// Cargar iconos de toolbar con logs de depuración
 		LNX_LOG_INFO("Loading toolbar icons...");
@@ -90,6 +93,7 @@ namespace Lunex {
 	
 	void EditorLayer::OnDetach() {
 		LNX_PROFILE_FUNCTION();
+		OutlineRenderer::Shutdown();
 	}
 	
 	void EditorLayer::OnUpdate(Lunex::Timestep ts) {
@@ -115,6 +119,8 @@ namespace Lunex {
 		
 		// Render
 		Renderer2D::ResetStats();
+		Renderer3D::ResetStats();
+		
 		m_Framebuffer->Bind();
 		RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
 		RenderCommand::Clear();
@@ -365,12 +371,29 @@ namespace Lunex {
 			}
 		}
 		
-		// Draw selected entity outline 
+		// Draw selected entity outline (2D only - 3D se hace con post-procesamiento)
 		if (Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity()) {
 			const TransformComponent& transform = selectedEntity.GetComponent<TransformComponent>();
-			Renderer2D::DrawRect(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+			
+			// Solo dibujar outline 2D para sprites y círculos
+			if (selectedEntity.HasComponent<SpriteRendererComponent>() || selectedEntity.HasComponent<CircleRendererComponent>()) {
+				Renderer2D::DrawRect(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+			}
 		}
 		Renderer2D::EndScene();
+		
+		// Renderizar outline 3D usando post-procesamiento (mientras el framebuffer está bind)
+		if (Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity()) {
+			if (selectedEntity.HasComponent<MeshComponent>()) {
+				int entityID = (int)(entt::entity)selectedEntity;
+				OutlineRenderer::RenderOutline(
+					m_Framebuffer,
+					entityID,
+					glm::vec4(1.0f, 0.5f, 0.0f, 1.0f), // Color naranja Blender
+					2.0f // Grosor en pixels
+				);
+			}
+		}
 	}
 	
 	void EditorLayer::NewScene() {

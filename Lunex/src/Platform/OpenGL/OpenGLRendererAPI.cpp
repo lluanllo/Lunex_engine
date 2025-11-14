@@ -55,7 +55,7 @@ namespace Lunex {
 		uint32_t count = indexCount ? indexCount : vertexArray->GetIndexBuffer()->GetCount();
 		glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, nullptr);
 	}
-
+	
 	void OpenGLRendererAPI::DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) {
 		vertexArray->Bind();
 		glDrawArrays(GL_LINES, 0, vertexCount);
@@ -63,5 +63,67 @@ namespace Lunex {
 	
 	void OpenGLRendererAPI::SetLineWidth(float width) {
 		glLineWidth(width);
+	}
+	
+	void OpenGLRendererAPI::SetDepthTest(bool enabled) {
+		if (enabled)
+			glEnable(GL_DEPTH_TEST);
+		else
+			glDisable(GL_DEPTH_TEST);
+	}
+	
+	void OpenGLRendererAPI::SetDepthFunc(DepthFunc func) {
+		switch (func) {
+		case DepthFunc::Less:         glDepthFunc(GL_LESS); break;
+		case DepthFunc::LessOrEqual:  glDepthFunc(GL_LEQUAL); break;
+		case DepthFunc::Greater:      glDepthFunc(GL_GREATER); break;
+		case DepthFunc::Always:       glDepthFunc(GL_ALWAYS); break;
+		}
+	}
+	
+	void OpenGLRendererAPI::SetCullMode(CullMode mode) {
+		switch (mode) {
+		case CullMode::None:
+			glDisable(GL_CULL_FACE);
+			break;
+		case CullMode::Front:
+			glEnable(GL_CULL_FACE);
+			glCullFace(GL_FRONT);
+			break;
+		case CullMode::Back:
+			glEnable(GL_CULL_FACE);
+			glCullFace(GL_BACK);
+			break;
+		case CullMode::FrontAndBack:
+			glEnable(GL_CULL_FACE);
+			glCullFace(GL_FRONT_AND_BACK);
+			break;
+		}
+	}
+	
+	void OpenGLRendererAPI::SetDepthMask(bool enabled) {
+		glDepthMask(enabled ? GL_TRUE : GL_FALSE);
+	}
+	
+	void OpenGLRendererAPI::SetBlend(bool enabled) {
+		if (enabled)
+			glEnable(GL_BLEND);
+		else
+			glDisable(GL_BLEND);
+	}
+	
+	void OpenGLRendererAPI::SetBlendFunc(BlendFactor src, BlendFactor dst) {
+		GLenum s = GL_SRC_ALPHA, d = GL_ONE_MINUS_SRC_ALPHA;
+		auto toGL = [](BlendFactor f) -> GLenum {
+			switch (f) {
+			case BlendFactor::SrcAlpha: return GL_SRC_ALPHA;
+			case BlendFactor::OneMinusSrcAlpha: return GL_ONE_MINUS_SRC_ALPHA;
+			case BlendFactor::One: return GL_ONE;
+			case BlendFactor::Zero: return GL_ZERO;
+			}
+			return GL_ZERO;
+			};
+		s = toGL(src); d = toGL(dst);
+		glBlendFunc(s, d);
 	}
 }

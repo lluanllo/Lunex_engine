@@ -196,6 +196,29 @@ namespace Lunex {
 				}
 			}
 			Renderer2D::EndScene();
+
+			Renderer3D::BeginScene(*mainCamera, cameraTransform);
+			// Draw meshes
+			{
+				auto group = m_Registry.group<TransformComponent>(entt::get<MeshComponent>);
+				for (auto entity : group) {
+					auto [transform, mesh] = group.get<TransformComponent, MeshComponent>(entity);
+					Renderer3D::DrawMesh(transform.GetTransform(), mesh, (int)entity);
+				}
+			}
+
+			{
+				auto group = m_Registry.group<TransformComponent>(entt::get<MeshComponent>);
+				for (auto entity : group) {
+					auto [transform, mesh] = group.get<TransformComponent, MeshComponent>(entity);
+					Renderer3D::DrawModel(transform.GetTransform(), mesh.MeshModel, mesh.Color, (int)entity);
+				}
+			}
+
+			Renderer3D::EndScene();
+
+
+
 		}
 	}
 	

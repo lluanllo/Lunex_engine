@@ -9,6 +9,8 @@ namespace Lunex {
 		public:
 			OpenGLTexture2D(uint32_t width, uint32_t height);
 			OpenGLTexture2D(const std::string& path);
+			// Constructor to wrap an existing OpenGL texture ID (does not take ownership)
+			OpenGLTexture2D(uint32_t textureID, uint32_t width, uint32_t height, bool takeOwnership = false);
 			virtual ~OpenGLTexture2D();
 			
 			virtual uint32_t GetWidth() const override { return m_Width; };
@@ -29,6 +31,7 @@ namespace Lunex {
 		private:
 			std::string m_Path;
 			bool m_IsLoaded = true;
+			bool m_OwnsTexture = true;  // Whether this object should delete the texture
 			uint32_t m_Width, m_Height;
 			uint32_t m_RendererID;
 			GLenum m_InternalFormat, m_DataFormat;

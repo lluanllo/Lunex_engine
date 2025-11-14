@@ -11,7 +11,6 @@
 #include <string>
 
 namespace Lunex {
-
 	struct Vertex {
 		glm::vec3 Position;
 		glm::vec3 Normal;
@@ -19,37 +18,36 @@ namespace Lunex {
 		glm::vec3 Tangent;
 		glm::vec3 Bitangent;
 	};
-
+	
 	struct MeshTexture {
 		Ref<Texture2D> Texture;
 		std::string Type;  // diffuse, specular, normal, etc.
 		std::string Path;
 	};
-
+	
 	class Mesh {
-	public:
-		Mesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices, const std::vector<MeshTexture>& textures);
-		~Mesh() = default;
-
-		void Draw(const Ref<Shader>& shader);
-
-		const std::vector<Vertex>& GetVertices() const { return m_Vertices; }
-		const std::vector<uint32_t>& GetIndices() const { return m_Indices; }
-		const std::vector<MeshTexture>& GetTextures() const { return m_Textures; }
-
-		const Ref<VertexArray>& GetVertexArray() const { return m_VertexArray; }
-
-	private:
-		void SetupMesh();
-
-	private:
-		std::vector<Vertex> m_Vertices;
-		std::vector<uint32_t> m_Indices;
-		std::vector<MeshTexture> m_Textures;
-
-		Ref<VertexArray> m_VertexArray;
-		Ref<VertexBuffer> m_VertexBuffer;
-		Ref<IndexBuffer> m_IndexBuffer;
+		public:
+			Mesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices, const std::vector<MeshTexture>& textures);
+			~Mesh() = default;
+			
+			void Draw(const Ref<Shader>& shader);
+			
+			const std::vector<Vertex>& GetVertices() const { return m_Vertices; }
+			const std::vector<uint32_t>& GetIndices() const { return m_Indices; }
+			const std::vector<MeshTexture>& GetTextures() const { return m_Textures; }
+			
+			const Ref<VertexArray>& GetVertexArray() const { return m_VertexArray; }
+			
+		private:
+			void SetupMesh();
+			
+		private:
+			std::vector<Vertex> m_Vertices;
+			std::vector<uint32_t> m_Indices;
+			std::vector<MeshTexture> m_Textures;
+			
+			Ref<VertexArray> m_VertexArray;
+			Ref<VertexBuffer> m_VertexBuffer;
+			Ref<IndexBuffer> m_IndexBuffer;
 	};
-
 }

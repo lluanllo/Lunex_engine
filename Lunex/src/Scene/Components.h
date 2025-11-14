@@ -11,7 +11,6 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
 
-
 namespace Lunex {
 	struct IDComponent {
 		UUID ID;
@@ -74,20 +73,22 @@ namespace Lunex {
 		CircleRendererComponent() = default;
 		CircleRendererComponent(const CircleRendererComponent&) = default;
 	};
-
+	
 	struct MeshComponent {
 		Ref<Model> MeshModel;
 		ModelType Type = ModelType::Cube;
 		std::string FilePath;
 		glm::vec4 Color{ 1.0f, 1.0f, 1.0f, 1.0f };
 		
-		MeshComponent() = default;
+		MeshComponent() {
+			CreatePrimitive(Type);
+		}
 		MeshComponent(const MeshComponent&) = default;
 		MeshComponent(ModelType type)
 			: Type(type) {
 			CreatePrimitive(type);
 		}
-
+		
 		void CreatePrimitive(ModelType type) {
 			Type = type;
 			switch (type) {
@@ -108,7 +109,7 @@ namespace Lunex {
 					break;
 			}
 		}
-
+		
 		void LoadFromFile(const std::string& path) {
 			FilePath = path;
 			Type = ModelType::FromFile;
