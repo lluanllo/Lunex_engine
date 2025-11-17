@@ -1,7 +1,6 @@
 #version 450 core
 
 #ifdef VERTEX
-
 layout(location = 0) in vec3 a_Position;
 layout(location = 1) in vec4 a_Color;
 layout(location = 2) in vec2 a_TexCoord;
@@ -21,7 +20,7 @@ struct VertexOutput {
 };
 
 layout (location = 0) out VertexOutput Output;
-layout (location = 4) out flat int v_EntityID;
+layout (location = 5) out flat int v_EntityID;  // CAMBIADO: ahora es location 5
 
 void main() {
 	Output.Color = a_Color;
@@ -46,14 +45,15 @@ struct VertexOutput {
 };
 
 layout (location = 0) in VertexOutput Input;
-layout (location = 4) in flat int v_EntityID;
+layout (location = 5) in flat int v_EntityID;  // CAMBIADO: ahora es location 5
 
 layout (binding = 0) uniform sampler2D u_Textures[32];
 
 void main() {
 	vec4 texColor = Input.Color;
 	
-	switch(int(Input.TexIndex)) {
+	int texIndex = int(Input.TexIndex);
+	switch(texIndex) {
 		case  0: texColor *= texture(u_Textures[ 0], Input.TexCoord * Input.TilingFactor); break;
 		case  1: texColor *= texture(u_Textures[ 1], Input.TexCoord * Input.TilingFactor); break;
 		case  2: texColor *= texture(u_Textures[ 2], Input.TexCoord * Input.TilingFactor); break;
@@ -92,7 +92,6 @@ void main() {
 		discard;
 	
 	o_color = texColor;
-	
 	o_EntityID = v_EntityID;
 }
 

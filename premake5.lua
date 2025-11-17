@@ -417,7 +417,7 @@ project "Sandbox"
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
-    debugdir ("%{cfg.targetdir}")
+    debugdir ("$(SolutionDir)")  -- ← CAMBIADO
 
     files
     {
@@ -485,11 +485,11 @@ project "Lunex-Editor"
     language "C++"
     cppdialect "C++20"
     staticruntime "off"
-
+        
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
-    debugdir ("%{cfg.targetdir}")
-
+    debugdir ("$(SolutionDir)/Lunex-Editor")  -- ← CAMBIADO de "%{cfg.targetdir}"
+        
     files
     {
         "%{prj.name}/src/**.h",
@@ -540,7 +540,10 @@ project "Lunex-Editor"
         symbols "on"
         postbuildcommands
         {
-            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Debug/assimp-vc143-mtd.dll\" \"%{cfg.targetdir}\""
+            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Debug/assimp-vc143-mtd.dll\" \"%{cfg.targetdir}\"",
+            -- ✅ AÑADE ESTOS COMANDOS para copiar assets
+            "{MKDIR} \"%{cfg.targetdir}/assets\"",
+            "{COPYDIR} \"$(SolutionDir)Lunex-Editor/assets\" \"%{cfg.targetdir}/assets\""
         }
 
     filter "configurations:Release"
@@ -549,7 +552,10 @@ project "Lunex-Editor"
         optimize "on"
         postbuildcommands
         {
-            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\""
+            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
+            -- ✅ AÑADE ESTOS COMANDOS
+            "{MKDIR} \"%{cfg.targetdir}/assets\"",
+            "{COPYDIR} \"$(SolutionDir)Lunex-Editor/assets\" \"%{cfg.targetdir}/assets\""
         }
 
     filter "configurations:Dist"
@@ -558,5 +564,8 @@ project "Lunex-Editor"
         optimize "on"
         postbuildcommands
         {
-            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\""
+            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
+            -- ✅ AÑADE ESTOS COMANDOS
+            "{MKDIR} \"%{cfg.targetdir}/assets\"",
+            "{COPYDIR} \"$(SolutionDir)Lunex-Editor/assets\" \"%{cfg.targetdir}/assets\""
         }

@@ -75,29 +75,70 @@ namespace Lunex {
 	
 	OpenGLShader::OpenGLShader(const std::string& filepath) : m_FilePath(filepath) {
 		LNX_PROFILE_FUNCTION();
-		
+
 		Utils::CreateCacheDirectoryIfNeeded();
-		
+
 		std::string source = ReadFile(filepath);
-		
+
+		if (source.empty()) {
+			LNX_LOG_ERROR("Shader source file is empty: {0}", filepath);
+			LNX_CORE_ASSERT(false, "Empty shader source");
+		}
+
+		// Verificar que el archivo tenga #version
+		if (source.find("#version") == std::string::npos) {
+			LNX_LOG_ERROR("Shader file missing #version directive: {0}", filepath);
+			LNX_CORE_ASSERT(false, "Shader missing #version");
+		}
+
 		std::unordered_map<GLenum, std::string> shaderSources;
-		shaderSources[GL_VERTEX_SHADER] = InsertDefineAfterVersion(source, "#define VERTEX\n");
-		shaderSources[GL_FRAGMENT_SHADER] = InsertDefineAfterVersion(source, "#define FRAGMENT\n");
-		
+
+		// Insertar defines
+		std::string vertexSource = InsertDefineAfterVersion(source, "#define VERTEX");
+		std::string fragmentSource = InsertDefineAfterVersion(source, "#define FRAGMENT");
+
+		// Verificar que se insertaron correctamente
+		if (vertexSource.find("#define VERTEX") == std::string::npos) {
+			LNX_LOG_ERROR("Failed to insert VERTEX define");
+			LNX_CORE_ASSERT(false);
+		}
+
+		if (fragmentSource.find("#define FRAGMENT") == std::string::npos) {
+			LNX_LOG_ERROR("Failed to insert FRAGMENT define");
+			LNX_CORE_ASSERT(false);
+		}
+
+		shaderSources[GL_VERTEX_SHADER] = vertexSource;
+		shaderSources[GL_FRAGMENT_SHADER] = fragmentSource;
+
+		// Log para debugging
+		LNX_LOG_TRACE("Vertex shader preview:\n{0}", vertexSource.substr(0, 300));
+		LNX_LOG_TRACE("Fragment shader preview:\n{0}", fragmentSource.substr(0, 300));
+
 		{
 			Timer timer;
-			CompileOrGetVulkanBinaries(shaderSources);
-			CompileOrGetOpenGLBinaries();
-			CreateProgram();
-			LNX_LOG_WARN("Shader creation took {0} ms", timer.ElapsedMillis());
+
+			try {
+				CompileOrGetVulkanBinaries(shaderSources);
+				CompileOrGetOpenGLBinaries();
+				CreateProgram();
+
+				LNX_LOG_WARN("Shader creation took {0} ms", timer.ElapsedMillis());
+			}
+			catch (const std::exception& e) {
+				LNX_LOG_ERROR("Shader creation failed: {0}", e.what());
+				LNX_CORE_ASSERT(false, "Shader compilation failed");
+			}
 		}
-		
+
 		// Extract name from filepath
 		auto lastSlash = filepath.find_last_of("/\\");
 		lastSlash = lastSlash == std::string::npos ? 0 : lastSlash + 1;
 		auto lastDot = filepath.rfind('.');
 		auto count = lastDot == std::string::npos ? filepath.size() - lastSlash : lastDot - lastSlash;
 		m_Name = filepath.substr(lastSlash, count);
+
+		LNX_LOG_INFO("Shader '{0}' created successfully", m_Name);
 	}
 	
 	OpenGLShader::OpenGLShader(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc)
@@ -118,149 +159,366 @@ namespace Lunex {
 		glDeleteProgram(m_RendererID);
 	}
 	
+	// REEMPLAZA ReadFile en OpenGLShader.cpp
+
 	std::string OpenGLShader::ReadFile(const std::string& filepath) {
 		LNX_PROFILE_FUNCTION();
+
+		// Verificar que el path no esté vacío
+		if (filepath.empty()) {
+			LNX_LOG_ERROR("ReadFile: filepath is empty!");
+			return "";
+		}
+
+		// Log del path completo
+		std::filesystem::path fullPath = std::filesystem::absolute(filepath);
+		LNX_LOG_TRACE("ReadFile: Attempting to read: {0}", fullPath.string());
+		LNX_LOG_TRACE("ReadFile: Relative path: {0}", filepath);
+
+		// Verificar que el archivo existe
+		if (!std::filesystem::exists(filepath)) {
+			LNX_LOG_ERROR("ReadFile: File does not exist: {0}", filepath);
+			LNX_LOG_ERROR("ReadFile: Absolute path: {0}", fullPath.string());
+			LNX_LOG_ERROR("ReadFile: Current working directory: {0}",
+				std::filesystem::current_path().string());
+			return "";
+		}
+
+		// Verificar el tamaño del archivo
+		auto fileSize = std::filesystem::file_size(filepath);
+		LNX_LOG_TRACE("ReadFile: File size: {0} bytes", fileSize);
+
+		if (fileSize == 0) {
+			LNX_LOG_ERROR("ReadFile: File is empty (0 bytes): {0}", filepath);
+			return "";
+		}
+
 		std::string result;
 		std::ifstream in(filepath, std::ios::in | std::ios::binary);
-		
+
 		if (in) {
 			in.seekg(0, std::ios::end);
-			size_t size = in.tellg();
-			if (size != -1) {
-				result.resize(size);
-				in.seekg(0, std::ios::beg);
-				in.read(&result[0], size);
+			std::streamsize size = in.tellg();
+
+			if (size == -1) {
+				LNX_LOG_ERROR("ReadFile: Could not determine file size: {0}", filepath);
+				in.close();
+				return "";
 			}
-			else {
-				LNX_LOG_ERROR("Could not read from file '{0}'", filepath);
+
+			if (size == 0) {
+				LNX_LOG_ERROR("ReadFile: File reports 0 size: {0}", filepath);
+				in.close();
+				return "";
+			}
+
+			result.resize(size);
+			in.seekg(0, std::ios::beg);
+			in.read(&result[0], size);
+
+			if (!in) {
+				LNX_LOG_ERROR("ReadFile: Error reading file content: {0}", filepath);
+				LNX_LOG_ERROR("ReadFile: Read {0} of {1} bytes", in.gcount(), size);
+				in.close();
+				return "";
+			}
+
+			in.close();
+
+			LNX_LOG_INFO("ReadFile: Successfully read {0} bytes from {1}", result.size(), filepath);
+
+			// Log primeras líneas para verificar contenido
+			size_t firstNewline = result.find('\n');
+			if (firstNewline != std::string::npos) {
+				LNX_LOG_TRACE("ReadFile: First line: {0}", result.substr(0, firstNewline));
 			}
 		}
 		else {
-			LNX_CORE_ASSERT(false, "Could not open file '{0}'", filepath);
+			LNX_LOG_ERROR("ReadFile: Could not open file: {0}", filepath);
+			LNX_LOG_ERROR("ReadFile: Error code: {0}", strerror(errno));
+
+			// Intentar con diferentes modos
+			std::ifstream testIn(filepath);
+			if (testIn) {
+				LNX_LOG_WARN("ReadFile: File CAN be opened in text mode, trying again...");
+				testIn.seekg(0, std::ios::end);
+				size_t size = testIn.tellg();
+				result.resize(size);
+				testIn.seekg(0, std::ios::beg);
+				testIn.read(&result[0], size);
+				testIn.close();
+
+				if (!result.empty()) {
+					LNX_LOG_WARN("ReadFile: Successfully read in text mode");
+					return result;
+				}
+			}
 		}
-		
+
 		return result;
 	}
 	
 	std::string OpenGLShader::InsertDefineAfterVersion(const std::string& source, const std::string& defineLine) {
 		LNX_PROFILE_FUNCTION();
-		// Buscar la directiva #version en cualquier parte del shader
-		size_t pos = source.find("#version");
-		if (pos != std::string::npos) {
-			// Buscar el final de la línea donde está el #version
-			size_t eol = source.find('\n', pos);
-			if (eol != std::string::npos) {
-				// Insertar el define justo después de esa línea
-				return source.substr(0, eol + 1) + defineLine + source.substr(eol + 1);
-			}
+
+		// Buscar #version
+		size_t versionPos = source.find("#version");
+
+		if (versionPos == std::string::npos) {
+			// Si no hay #version, agregar uno estándar + el define
+			LNX_LOG_WARN("No #version found in shader, adding default");
+			return "#version 450 core\n" + defineLine + "\n" + source;
 		}
-		
-		// Si no hay #version, ponemos el define al inicio
-		return defineLine + source;
+
+		// Encontrar el final de la línea del #version
+		size_t eolPos = source.find('\n', versionPos);
+
+		if (eolPos == std::string::npos) {
+			// Si no hay salto de línea, el #version está al final
+			LNX_LOG_WARN("No newline after #version, shader might be malformed");
+			return source + "\n" + defineLine;
+		}
+
+		// Construir el resultado: #version ... \n + define + resto
+		std::string result = source.substr(0, eolPos + 1);  // Incluye el \n del #version
+		result += defineLine;                                // Agrega el define
+
+		// Si el defineLine no termina en \n, agregarlo
+		if (!defineLine.empty() && defineLine.back() != '\n') {
+			result += '\n';
+		}
+
+		result += source.substr(eolPos + 1);                // Resto del código
+
+		// Log para debugging
+		LNX_LOG_TRACE("Inserted define after #version:");
+		LNX_LOG_TRACE("{0}", result.substr(0, 200)); // Primeras 200 chars
+
+		return result;
 	}
 	
+	// REEMPLAZA CompileOrGetVulkanBinaries en OpenGLShader.cpp
+
 	void OpenGLShader::CompileOrGetVulkanBinaries(const std::unordered_map<GLenum, std::string>& shaderSources) {
-		GLuint program = glCreateProgram();
-		
 		shaderc::Compiler compiler;
 		shaderc::CompileOptions options;
 		options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
+
 		const bool optimize = true;
 		if (optimize)
 			options.SetOptimizationLevel(shaderc_optimization_level_performance);
-		
+
 		std::filesystem::path cacheDirectory = Utils::GetCacheDirectory();
-		
+
 		auto& shaderData = m_VulkanSPIRV;
 		shaderData.clear();
+
 		for (auto&& [stage, source] : shaderSources) {
 			std::filesystem::path shaderFilePath = m_FilePath;
 			std::filesystem::path cachedPath = cacheDirectory / (shaderFilePath.filename().string() + Utils::GLShaderStageCachedVulkanFileExtension(stage));
-			
+
+			// Intentar cargar desde cache
+			bool cacheLoaded = false;
 			std::ifstream in(cachedPath, std::ios::in | std::ios::binary);
 			if (in.is_open()) {
 				in.seekg(0, std::ios::end);
 				auto size = in.tellg();
-				in.seekg(0, std::ios::beg);
-				
-				auto& data = shaderData[stage];
-				data.resize(size / sizeof(uint32_t));
-				in.read((char*)data.data(), size);
+
+				if (size > 0 && size % sizeof(uint32_t) == 0) {
+					in.seekg(0, std::ios::beg);
+
+					auto& data = shaderData[stage];
+					data.resize(size / sizeof(uint32_t));
+					in.read((char*)data.data(), size);
+
+					if (in.good() && !data.empty()) {
+						cacheLoaded = true;
+						LNX_LOG_TRACE("Loaded cached Vulkan SPIR-V: {0}", cachedPath.string());
+					}
+				}
+				in.close();
 			}
-			else {
-				shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(source, Utils::GLShaderStageToShaderC(stage), m_FilePath.c_str(), options);
+
+			// Si no hay cache válida, compilar
+			if (!cacheLoaded) {
+				LNX_LOG_WARN("Compiling Vulkan SPIR-V: {0} - {1}", m_FilePath, Utils::GLShaderStageToString(stage));
+
+				// CRÍTICO: Verificar que el source no esté vacío
+				if (source.empty()) {
+					LNX_LOG_ERROR("Source code is empty for stage: {0}", Utils::GLShaderStageToString(stage));
+					LNX_CORE_ASSERT(false);
+					continue;
+				}
+
+				// Log del código fuente para debugging
+				LNX_LOG_TRACE("Source code to compile:\n{0}", source.substr(0, 500)); // Primeras 500 chars
+
+				shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
+					source,
+					Utils::GLShaderStageToShaderC(stage),
+					m_FilePath.c_str(),
+					options
+				);
+
 				if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
-					LNX_LOG_ERROR(module.GetErrorMessage());
+					LNX_LOG_ERROR("Vulkan SPIR-V compilation failed: {0}", module.GetErrorMessage());
+					LNX_LOG_ERROR("Failed source code:\n{0}", source);
+					LNX_CORE_ASSERT(false, "Shader compilation failed!");
+				}
+
+				shaderData[stage] = std::vector<uint32_t>(module.cbegin(), module.cend());
+
+				if (shaderData[stage].empty()) {
+					LNX_LOG_ERROR("Compiled SPIR-V data is empty!");
 					LNX_CORE_ASSERT(false);
 				}
-				
-				shaderData[stage] = std::vector<uint32_t>(module.cbegin(), module.cend());
-				
-				std::ofstream out(cachedPath, std::ios::out | std::ios::binary);
+
+				// Guardar en cache
+				std::ofstream out(cachedPath, std::ios::out | std::ios::binary | std::ios::trunc);
 				if (out.is_open()) {
 					auto& data = shaderData[stage];
 					out.write((char*)data.data(), data.size() * sizeof(uint32_t));
 					out.flush();
 					out.close();
+					LNX_LOG_TRACE("Saved Vulkan SPIR-V cache: {0}", cachedPath.string());
+				}
+				else {
+					LNX_LOG_ERROR("Failed to save cache: {0}", cachedPath.string());
 				}
 			}
 		}
-		
-		for (auto&& [stage, data] : shaderData)
-			Reflect(stage, data);
+
+		// Verificar que tengamos datos válidos antes de hacer Reflect
+		for (auto&& [stage, data] : shaderData) {
+			if (data.empty()) {
+				LNX_LOG_ERROR("No SPIR-V data for stage: {0}", Utils::GLShaderStageToString(stage));
+				LNX_CORE_ASSERT(false);
+			}
+			else {
+				LNX_LOG_TRACE("Reflecting stage {0} with {1} words", Utils::GLShaderStageToString(stage), data.size());
+
+				// CRÍTICO: Envolver Reflect en try-catch para capturar errores de SPIRV-Cross
+				try {
+					Reflect(stage, data);
+				}
+				catch (const std::exception& e) {
+					LNX_LOG_ERROR("Reflect failed for stage {0}: {1}", Utils::GLShaderStageToString(stage), e.what());
+					LNX_LOG_ERROR("This might be caused by invalid SPIR-V data. Clearing cache and retrying...");
+
+					// Borrar el archivo de cache corrupto
+					std::filesystem::path shaderFilePath = m_FilePath;
+					std::filesystem::path cachedPath = cacheDirectory / (shaderFilePath.filename().string() + Utils::GLShaderStageCachedVulkanFileExtension(stage));
+					if (std::filesystem::exists(cachedPath)) {
+						std::filesystem::remove(cachedPath);
+						LNX_LOG_WARN("Deleted corrupted cache: {0}", cachedPath.string());
+					}
+
+					throw; // Re-lanzar la excepción
+				}
+			}
+		}
 	}
-	
+
+	// TAMBIÉN REEMPLAZA CompileOrGetOpenGLBinaries
+
 	void OpenGLShader::CompileOrGetOpenGLBinaries() {
 		auto& shaderData = m_OpenGLSPIRV;
-		
+
 		shaderc::Compiler compiler;
 		shaderc::CompileOptions options;
 		options.SetTargetEnvironment(shaderc_target_env_opengl, shaderc_env_version_opengl_4_5);
+
 		const bool optimize = false;
 		if (optimize)
 			options.SetOptimizationLevel(shaderc_optimization_level_performance);
-		
+
 		std::filesystem::path cacheDirectory = Utils::GetCacheDirectory();
-		
+
 		shaderData.clear();
 		m_OpenGLSourceCode.clear();
+
 		for (auto&& [stage, spirv] : m_VulkanSPIRV) {
 			std::filesystem::path shaderFilePath = m_FilePath;
 			std::filesystem::path cachedPath = cacheDirectory / (shaderFilePath.filename().string() + Utils::GLShaderStageCachedOpenGLFileExtension(stage));
-			
+
+			bool cacheLoaded = false;
 			std::ifstream in(cachedPath, std::ios::in | std::ios::binary);
 			if (in.is_open()) {
 				in.seekg(0, std::ios::end);
 				auto size = in.tellg();
-				in.seekg(0, std::ios::beg);
-				
-				auto& data = shaderData[stage];
-				data.resize(size / sizeof(uint32_t));
-				in.read((char*)data.data(), size);
-			}
-			else {
-				spirv_cross::CompilerGLSL glslCompiler(spirv);
-				m_OpenGLSourceCode[stage] = glslCompiler.compile();
-				auto& source = m_OpenGLSourceCode[stage];
-				
-				shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(source, Utils::GLShaderStageToShaderC(stage), m_FilePath.c_str());
-				if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
-					LNX_LOG_ERROR(module.GetErrorMessage());
-					LNX_CORE_ASSERT(false);
-				}
-				
-				shaderData[stage] = std::vector<uint32_t>(module.cbegin(), module.cend());
-				
-				std::ofstream out(cachedPath, std::ios::out | std::ios::binary);
-				if (out.is_open()) {
+
+				if (size > 0 && size % sizeof(uint32_t) == 0) {
+					in.seekg(0, std::ios::beg);
+
 					auto& data = shaderData[stage];
-					out.write((char*)data.data(), data.size() * sizeof(uint32_t));
-					out.flush();
-					out.close();
+					data.resize(size / sizeof(uint32_t));
+					in.read((char*)data.data(), size);
+
+					if (in.good() && !data.empty()) {
+						cacheLoaded = true;
+						LNX_LOG_TRACE("Loaded cached OpenGL SPIR-V: {0}", cachedPath.string());
+					}
+				}
+				in.close();
+			}
+
+			if (!cacheLoaded) {
+				LNX_LOG_WARN("Compiling OpenGL SPIR-V from Vulkan SPIR-V: {0}", Utils::GLShaderStageToString(stage));
+
+				// Cross-compile de Vulkan SPIR-V a GLSL
+				try {
+					spirv_cross::CompilerGLSL glslCompiler(spirv);
+
+					// Configurar opciones
+					spirv_cross::CompilerGLSL::Options glslOptions;
+					glslOptions.version = 450;
+					glslOptions.es = false;
+					glslOptions.vulkan_semantics = false;
+					glslCompiler.set_common_options(glslOptions);
+
+					m_OpenGLSourceCode[stage] = glslCompiler.compile();
+					auto& source = m_OpenGLSourceCode[stage];
+
+					if (source.empty()) {
+						LNX_LOG_ERROR("Cross-compiled GLSL source is empty!");
+						LNX_CORE_ASSERT(false);
+					}
+
+					LNX_LOG_TRACE("Cross-compiled to GLSL ({0} chars)", source.size());
+
+					// Compilar GLSL a OpenGL SPIR-V
+					shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
+						source,
+						Utils::GLShaderStageToShaderC(stage),
+						m_FilePath.c_str(),
+						options
+					);
+
+					if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
+						LNX_LOG_ERROR("OpenGL SPIR-V compilation failed: {0}", module.GetErrorMessage());
+						LNX_LOG_ERROR("Failed GLSL source:\n{0}", source);
+						LNX_CORE_ASSERT(false);
+					}
+
+					shaderData[stage] = std::vector<uint32_t>(module.cbegin(), module.cend());
+
+					// Guardar cache
+					std::ofstream out(cachedPath, std::ios::out | std::ios::binary | std::ios::trunc);
+					if (out.is_open()) {
+						auto& data = shaderData[stage];
+						out.write((char*)data.data(), data.size() * sizeof(uint32_t));
+						out.flush();
+						out.close();
+					}
+				}
+				catch (const std::exception& e) {
+					LNX_LOG_ERROR("SPIR-V Cross compilation failed: {0}", e.what());
+					throw;
 				}
 			}
 		}
 	}
+	// Añade esto en OpenGLShader.cpp después de CompileOrGetOpenGLBinaries()
 	
 	void OpenGLShader::CreateProgram() {
 		GLuint program = glCreateProgram();
