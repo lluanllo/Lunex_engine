@@ -1,7 +1,6 @@
-#version 460 core
+#version 450 core
 
 #ifdef VERTEX
-
 layout(location = 0) in vec3 a_Position;
 layout(location = 1) in vec3 a_Normal;
 layout(location = 2) in vec2 a_TexCoords;
@@ -45,12 +44,15 @@ struct VertexOutput {
 
 layout (location = 0) in VertexOutput Input;
 
+// ARREGLADO: Cambiado bool por int y ajustado padding std140
 layout(std140, binding = 2) uniform Material {
-	vec4 u_Color;
-	vec3 u_LightPos;
-	vec3 u_ViewPos;
-	vec3 u_LightColor;
-	bool u_UseTexture;
+	vec4 u_Color;          // 16 bytes, offset 0
+	vec3 u_LightPos;       // 12 bytes, offset 16
+	float _padding1;       // 4 bytes, offset 28 (completa a 32)
+	vec3 u_ViewPos;        // 12 bytes, offset 32
+	float _padding2;       // 4 bytes, offset 44 (completa a 48)
+	vec3 u_LightColor;     // 12 bytes, offset 48
+	int u_UseTexture;      // 4 bytes, offset 60 (cambiado de bool a int)
 };
 
 layout (binding = 0) uniform sampler2D texture_diffuse1;
@@ -74,7 +76,7 @@ void main() {
 	vec3 specular = specularStrength * spec * u_LightColor;
 	
 	vec3 result;
-	if (u_UseTexture) {
+	if (u_UseTexture != 0) {  // CAMBIADO: comparación con int en lugar de bool
 		vec4 texColor = texture(texture_diffuse1, Input.TexCoords);
 		result = (ambient + diffuse + specular) * texColor.rgb;
 	} else {
