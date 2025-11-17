@@ -488,7 +488,7 @@ project "Lunex-Editor"
         
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
-    debugdir ("$(SolutionDir)")  -- ← CAMBIADO de "%{cfg.targetdir}"
+    debugdir ("$(SolutionDir)/Lunex-Editor")  -- ← CAMBIADO de "%{cfg.targetdir}"
         
     files
     {
