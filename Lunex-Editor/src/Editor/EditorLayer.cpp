@@ -427,7 +427,7 @@ namespace Lunex {
 	}
 	
 	void EditorLayer::OnScenePlay() {
-		if (m_SceneState == SceneState::Simulate)
+		if (m_SceneState == SceneState::Play)
 			OnSceneStop();
 		
 		m_SceneState = SceneState::Play;
@@ -437,7 +437,7 @@ namespace Lunex {
 	}
 	
 	void EditorLayer::OnSceneSimulate() {
-		if (m_SceneState == SceneState::Play)
+		if (m_SceneState == SceneState::Simulate)
 			OnSceneStop();
 		
 		m_SceneState = SceneState::Simulate;
