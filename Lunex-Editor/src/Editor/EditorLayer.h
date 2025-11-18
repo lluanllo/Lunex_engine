@@ -7,6 +7,7 @@
 #include "../Panels/SettingsPanel.h"
 #include "../Panels/ViewportPanel.h"
 #include "../Panels/ToolbarPanel.h"
+#include "../Panels/ConsolePanel.h"
 
 #include "Renderer/EditorCamera.h"
 
@@ -81,6 +82,7 @@ namespace Lunex {
 			SettingsPanel m_SettingsPanel;
 			ViewportPanel m_ViewportPanel;
 			ToolbarPanel m_ToolbarPanel;
+			ConsolePanel m_ConsolePanel;
 			
 			// Editor resources
 			Ref<Texture2D> m_IconPlay, m_IconSimulate, m_IconStop;

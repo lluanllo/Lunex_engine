@@ -86,6 +86,69 @@ namespace Lunex {
 		}
 		
 		Renderer2D::SetLineWidth(4.0f);
+		
+		// Register custom console commands
+		m_ConsolePanel.RegisterCommand("load_scene", "Load a scene file", "load_scene <path>",
+			[this](const std::vector<std::string>& args) {
+				if (args.empty()) {
+					m_ConsolePanel.AddLog("Usage: load_scene <path>", LogLevel::Warning, "Scene");
+					return;
+				}
+				OpenScene(args[0]);
+				m_ConsolePanel.AddLog("Scene loaded: " + args[0], LogLevel::Info, "Scene");
+			});
+
+		m_ConsolePanel.RegisterCommand("save_scene", "Save the current scene", "save_scene [path]",
+			[this](const std::vector<std::string>& args) {
+				if (args.empty()) {
+					SaveScene();
+				} else {
+					SerializeScene(m_ActiveScene, args[0]);
+				}
+				m_ConsolePanel.AddLog("Scene saved successfully", LogLevel::Info, "Scene");
+			});
+
+		m_ConsolePanel.RegisterCommand("new_scene", "Create a new empty scene", "new_scene",
+			[this](const std::vector<std::string>& args) {
+				NewScene();
+				m_ConsolePanel.AddLog("New scene created", LogLevel::Info, "Scene");
+			});
+
+		m_ConsolePanel.RegisterCommand("play", "Start playing the scene", "play",
+			[this](const std::vector<std::string>& args) {
+				OnScenePlay();
+				m_ConsolePanel.AddLog("Playing scene...", LogLevel::Info, "Runtime");
+			});
+
+		m_ConsolePanel.RegisterCommand("stop", "Stop playing the scene", "stop",
+			[this](const std::vector<std::string>& args) {
+				OnSceneStop();
+				m_ConsolePanel.AddLog("Scene stopped", LogLevel::Info, "Runtime");
+			});
+
+		m_ConsolePanel.RegisterCommand("list_entities", "List all entities in the scene", "list_entities",
+			[this](const std::vector<std::string>& args) {
+				m_ConsolePanel.AddLog("Entities in scene:", LogLevel::Info, "Scene");
+				auto view = m_ActiveScene->GetAllEntitiesWith<TagComponent>();
+				int count = 0;
+				for (auto entity : view) {
+					Entity e = { entity, m_ActiveScene.get() };
+					auto& tag = e.GetComponent<TagComponent>().Tag;
+					m_ConsolePanel.AddLog("  - " + tag, LogLevel::Info, "Scene");
+					count++;
+				}
+				m_ConsolePanel.AddLog("Total: " + std::to_string(count) + " entities", LogLevel::Info, "Scene");
+			});
+
+		m_ConsolePanel.RegisterCommand("fps", "Show current FPS", "fps",
+			[this](const std::vector<std::string>& args) {
+				auto stats = Renderer2D::GetStats();
+				m_ConsolePanel.AddLog("FPS: " + std::to_string(1.0f / ImGui::GetIO().DeltaTime), LogLevel::Info, "Performance");
+				m_ConsolePanel.AddLog("Draw Calls: " + std::to_string(stats.DrawCalls), LogLevel::Info, "Performance");
+			});
+
+		m_ConsolePanel.AddLog("Lunex Editor initialized", LogLevel::Info, "System");
+		m_ConsolePanel.AddLog("Welcome! Type 'help' to see available commands", LogLevel::Info, "System");
 	}
 	
 	void EditorLayer::OnDetach() {
@@ -234,6 +297,7 @@ namespace Lunex {
 		m_ContentBrowserPanel.OnImGuiRender();
 		m_StatsPanel.OnImGuiRender();
 		m_SettingsPanel.OnImGuiRender();
+		m_ConsolePanel.OnImGuiRender();
 		
 		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
 		m_ViewportPanel.OnImGuiRender(m_Framebuffer, m_SceneHierarchyPanel, m_EditorCamera, 
