@@ -4,6 +4,7 @@
 #include "Core/UUID.h"
 #include "Renderer/Texture.h"
 #include "Renderer/Model.h"
+#include "Renderer/Material.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -115,7 +116,38 @@ namespace Lunex {
 			MeshModel = CreateRef<Model>(path);
 		}
 	};
-	
+
+	struct MaterialComponent {
+		Ref<Material> MaterialInstance;
+		
+		MaterialComponent() 
+			: MaterialInstance(CreateRef<Material>()) {
+		}
+		
+		MaterialComponent(const MaterialComponent& other) 
+			: MaterialInstance(CreateRef<Material>(*other.MaterialInstance)) {
+		}
+		
+		MaterialComponent(const glm::vec4& color) 
+			: MaterialInstance(CreateRef<Material>(color)) {
+		}
+		
+		// Material properties accessors
+		void SetColor(const glm::vec4& color) { MaterialInstance->SetColor(color); }
+		void SetMetallic(float metallic) { MaterialInstance->SetMetallic(metallic); }
+		void SetRoughness(float roughness) { MaterialInstance->SetRoughness(roughness); }
+		void SetSpecular(float specular) { MaterialInstance->SetSpecular(specular); }
+		void SetEmissionColor(const glm::vec3& color) { MaterialInstance->SetEmissionColor(color); }
+		void SetEmissionIntensity(float intensity) { MaterialInstance->SetEmissionIntensity(intensity); }
+		
+		const glm::vec4& GetColor() const { return MaterialInstance->GetColor(); }
+		float GetMetallic() const { return MaterialInstance->GetMetallic(); }
+		float GetRoughness() const { return MaterialInstance->GetRoughness(); }
+		float GetSpecular() const { return MaterialInstance->GetSpecular(); }
+		const glm::vec3& GetEmissionColor() const { return MaterialInstance->GetEmissionColor(); }
+		float GetEmissionIntensity() const { return MaterialInstance->GetEmissionIntensity(); }
+	};
+
 	struct CameraComponent {
 		SceneCamera Camera;
 		bool Primary = true;
@@ -194,5 +226,5 @@ namespace Lunex {
 		ComponentGroup<TransformComponent, SpriteRendererComponent,
 		CircleRendererComponent, CameraComponent, NativeScriptComponent,
 		Rigidbody2DComponent, BoxCollider2DComponent, CircleCollider2DComponent,
-		MeshComponent>;
+		MeshComponent, MaterialComponent>;
 }

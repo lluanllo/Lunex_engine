@@ -5,11 +5,13 @@
 #include "Renderer/Model.h"
 #include "Renderer/OrthographicCamera.h"
 #include "Renderer/EditorCamera.h"
-#include "Scene/Components.h"
 
 #include <glm/glm.hpp>
 
 namespace Lunex {
+	// Forward declarations
+	struct MeshComponent;
+	struct MaterialComponent;
 
 	class Renderer3D {
 	public:
@@ -22,7 +24,9 @@ namespace Lunex {
 		static void EndScene();
 
 		static void DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, int entityID = -1);
+		static void DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, MaterialComponent& materialComponent, int entityID = -1);
 		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& color = glm::vec4(1.0f), int entityID = -1);
+		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, MaterialComponent& materialComponent, int entityID = -1);
 
 		static void SetLightPosition(const glm::vec3& position);
 		static void SetLightColor(const glm::vec3& color);

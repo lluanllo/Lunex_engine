@@ -250,6 +250,21 @@ namespace Lunex {
 			
 			out << YAML::EndMap; // MeshComponent
 		}
+
+		if (entity.HasComponent<MaterialComponent>()) {
+			out << YAML::Key << "MaterialComponent";
+			out << YAML::BeginMap; // MaterialComponent
+			
+			auto& materialComponent = entity.GetComponent<MaterialComponent>();
+			out << YAML::Key << "Color" << YAML::Value << materialComponent.GetColor();
+			out << YAML::Key << "Metallic" << YAML::Value << materialComponent.GetMetallic();
+			out << YAML::Key << "Roughness" << YAML::Value << materialComponent.GetRoughness();
+			out << YAML::Key << "Specular" << YAML::Value << materialComponent.GetSpecular();
+			out << YAML::Key << "EmissionColor" << YAML::Value << materialComponent.GetEmissionColor();
+			out << YAML::Key << "EmissionIntensity" << YAML::Value << materialComponent.GetEmissionIntensity();
+			
+			out << YAML::EndMap; // MaterialComponent
+		}
 		
 		out << YAML::EndMap; // Entity
 	}
@@ -414,6 +429,26 @@ namespace Lunex {
 					if (mc.Type != ModelType::FromFile) {
 						mc.CreatePrimitive(mc.Type);
 					}
+				}
+
+				auto materialComponent = entity["MaterialComponent"];
+				if (materialComponent) {
+					// MeshComponent already created MaterialComponent automatically
+					// So we need to get it instead of adding a new one
+					MaterialComponent* mat = nullptr;
+					
+					if (deserializedEntity.HasComponent<MaterialComponent>()) {
+						mat = &deserializedEntity.GetComponent<MaterialComponent>();
+					} else {
+						mat = &deserializedEntity.AddComponent<MaterialComponent>();
+					}
+					
+					mat->SetColor(materialComponent["Color"].as<glm::vec4>());
+					mat->SetMetallic(materialComponent["Metallic"].as<float>());
+					mat->SetRoughness(materialComponent["Roughness"].as<float>());
+					mat->SetSpecular(materialComponent["Specular"].as<float>());
+					mat->SetEmissionColor(materialComponent["EmissionColor"].as<glm::vec3>());
+					mat->SetEmissionIntensity(materialComponent["EmissionIntensity"].as<float>());
 				}
 			}
 		}
