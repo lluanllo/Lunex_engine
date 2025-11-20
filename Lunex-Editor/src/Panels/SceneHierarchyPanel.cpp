@@ -213,31 +213,62 @@ namespace Lunex {
 			
 			ImGui::SameLine(contentRegionAvailable.x - lineHeight * 0.5f);
 			
-			// ✅ CORRECCIÓN: Usar PushID antes del botón y mantenerlo hasta después del popup
 			ImGui::PushID((int)(intptr_t)(void*)typeid(T).hash_code());
 			
+			// Special handling for MeshComponent - cannot be removed if MaterialComponent exists
+			bool canRemove = true;
+			if constexpr (std::is_same_v<T, MeshComponent>) {
+				// MeshComponent can always be removed, it will remove MaterialComponent too
+				canRemove = true;
+			}
+			
+			// MaterialComponent cannot be removed independently
+			if constexpr (std::is_same_v<T, MaterialComponent>) {
+				canRemove = false;
+			}
+			
+			// Siempre mostrar el botón, pero desactivarlo visualmente si es necesario
+			if (!canRemove) {
+				ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.5f);
+			}
+			
 			if (ImGui::Button("+", ImVec2{ lineHeight, lineHeight })) {
-				ImGui::OpenPopup("ComponentSettings");
+				if (canRemove) {
+					ImGui::OpenPopup("ComponentSettings");
+				}
+			}
+			
+			if (!canRemove) {
+				ImGui::PopStyleVar();
+				if (ImGui::IsItemHovered()) {
+					ImGui::SetTooltip("This component cannot be removed independently");
+				}
 			}
 			
 			bool removeComponent = false;
-			// ✅ El popup DEBE estar dentro del mismo PushID/PopID que el botón
-			if (ImGui::BeginPopup("ComponentSettings")) {
+			if (canRemove && ImGui::BeginPopup("ComponentSettings")) {
 				if (ImGui::MenuItem("Remove component"))
-				removeComponent = true;
+					removeComponent = true;
 				
 				ImGui::EndPopup();
 			}
 			
-			ImGui::PopID();  // ✅ Ahora el PopID está DESPUÉS del popup
+			ImGui::PopID();
 			
 			if (open) {
 				uifunction(component);
 				ImGui::TreePop();
 			}
 			
-			if (removeComponent)
+			if (removeComponent) {
+				// Special handling: removing MeshComponent also removes MaterialComponent
+				if constexpr (std::is_same_v<T, MeshComponent>) {
+					if (entity.HasComponent<MaterialComponent>()) {
+						entity.RemoveComponent<MaterialComponent>();
+					}
+				}
 				entity.RemoveComponent<T>();
+			}
 		}
 	}
 	
@@ -483,6 +514,59 @@ namespace Lunex {
 				ImGui::Text("  Total Vertices: %d", totalVertices);
 				ImGui::Text("  Total Triangles: %d", totalIndices / 3);
 			}
+		});
+		
+		DrawComponent<MaterialComponent>("Material", entity, [](auto& component) {
+			ImGui::Text("Surface Properties");
+			ImGui::Separator();
+			
+			// Color
+			glm::vec4 color = component.GetColor();
+			if (ImGui::ColorEdit4("Base Color", glm::value_ptr(color))) {
+				component.SetColor(color);
+			}
+			
+			// Metallic
+			float metallic = component.GetMetallic();
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
+			if (ImGui::SliderFloat("Metallic", &metallic, 0.0f, 1.0f)) {
+				component.SetMetallic(metallic);
+			}
+			ImGui::PopStyleColor();
+			
+			// Roughness
+			float roughness = component.GetRoughness();
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
+			if (ImGui::SliderFloat("Roughness", &roughness, 0.0f, 1.0f)) {
+				component.SetRoughness(roughness);
+			}
+			ImGui::PopStyleColor();
+			
+			// Specular
+			float specular = component.GetSpecular();
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
+			if (ImGui::SliderFloat("Specular", &specular, 0.0f, 1.0f)) {
+				component.SetSpecular(specular);
+			}
+			ImGui::PopStyleColor();
+			
+			ImGui::Spacing();
+			ImGui::Text("Emission");
+			ImGui::Separator();
+			
+			// Emission Color
+			glm::vec3 emissionColor = component.GetEmissionColor();
+			if (ImGui::ColorEdit3("Emission Color", glm::value_ptr(emissionColor))) {
+				component.SetEmissionColor(emissionColor);
+			}
+			
+			// Emission Intensity
+			float emissionIntensity = component.GetEmissionIntensity();
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
+			if (ImGui::DragFloat("Emission Intensity", &emissionIntensity, 0.1f, 0.0f, 100.0f)) {
+				component.SetEmissionIntensity(emissionIntensity);
+			}
+			ImGui::PopStyleColor();
 		});
 	}
 	

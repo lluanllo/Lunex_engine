@@ -40,7 +40,7 @@ void main() {
 #elif defined(FRAGMENT)
 
 layout(location = 0) out vec4 FragColor;
-layout(location = 1) out int o_EntityID;  // ✅ SIN "flat"
+layout(location = 1) out int o_EntityID;
 
 struct VertexOutput {
 	vec3 FragPos;
@@ -53,10 +53,16 @@ layout (location = 3) in flat int v_EntityID;
 
 layout(std140, binding = 2) uniform Material {
 	vec4 u_Color;
-	vec3 u_LightPos;
+	float u_Metallic;
+	float u_Roughness;
+	float u_Specular;
+	float u_EmissionIntensity;
+	vec3 u_EmissionColor;
 	float _padding1;
-	vec3 u_ViewPos;
+	vec3 u_LightPos;
 	float _padding2;
+	vec3 u_ViewPos;
+	float _padding3;
 	vec3 u_LightColor;
 	int u_UseTexture;
 };
@@ -64,6 +70,7 @@ layout(std140, binding = 2) uniform Material {
 layout (binding = 0) uniform sampler2D texture_diffuse1;
 
 void main() {
+	// Basic lighting calculation (will be enhanced with full PBR later)
 	float ambientStrength = 0.2;
 	vec3 ambient = ambientStrength * u_LightColor;
 	
@@ -72,22 +79,34 @@ void main() {
 	float diff = max(dot(norm, lightDir), 0.0);
 	vec3 diffuse = diff * u_LightColor;
 	
-	float specularStrength = 0.5;
+	// Specular with material specular property
+	float specularStrength = u_Specular;
 	vec3 viewDir = normalize(u_ViewPos - Input.FragPos);
 	vec3 reflectDir = reflect(-lightDir, norm);
-	float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+	float spec = pow(max(dot(viewDir, reflectDir), 0.0), mix(2.0, 128.0, 1.0 - u_Roughness));
 	vec3 specular = specularStrength * spec * u_LightColor;
 	
-	vec3 result;
+	// Apply metallic (simple lerp for now)
+	vec3 baseColor;
 	if (u_UseTexture != 0) {
 		vec4 texColor = texture(texture_diffuse1, Input.TexCoords);
-		result = (ambient + diffuse + specular) * texColor.rgb;
+		baseColor = texColor.rgb;
 	} else {
-		result = (ambient + diffuse + specular) * u_Color.rgb;
+		baseColor = u_Color.rgb;
 	}
 	
+	// Simple metallic effect
+	vec3 result = mix(
+		(ambient + diffuse + specular) * baseColor,
+		(ambient * 0.5 + diffuse + specular * 2.0) * baseColor,
+		u_Metallic
+	);
+	
+	// Add emission
+	result += u_EmissionColor * u_EmissionIntensity;
+	
 	FragColor = vec4(result, u_Color.a);
-	o_EntityID = v_EntityID;  // ✅ Escribir EntityID
+	o_EntityID = v_EntityID;
 }
 
 #endif
