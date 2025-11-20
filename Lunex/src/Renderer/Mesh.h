@@ -18,6 +18,7 @@ namespace Lunex {
 		glm::vec2 TexCoords;
 		glm::vec3 Tangent;
 		glm::vec3 Bitangent;
+		int EntityID = -1;
 	};
 
 	struct MeshTexture {
@@ -32,6 +33,8 @@ namespace Lunex {
 		~Mesh() = default;
 
 		void Draw(const Ref<Shader>& shader);
+
+		void SetEntityID(int entityID);
 
 		const std::vector<Vertex>& GetVertices() const { return m_Vertices; }
 		const std::vector<uint32_t>& GetIndices() const { return m_Indices; }
