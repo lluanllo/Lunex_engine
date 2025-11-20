@@ -101,13 +101,14 @@ namespace Lunex {
 		DrawModel(transform, meshComponent.MeshModel, meshComponent.Color, entityID);
 	}
 
-	void Renderer3D::DrawModel(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& color, int entityID)
-	{
+	void Renderer3D::DrawModel(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& color, int entityID) {
 		LNX_PROFILE_FUNCTION();
-
+		
 		if (!model || model->GetMeshes().empty())
 			return;
-
+		
+		const_cast<Model*>(model.get())->SetEntityID(entityID);
+		
 		// Update Transform uniform buffer
 		s_Data.TransformBuffer.Transform = transform;
 		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
@@ -161,5 +162,4 @@ namespace Lunex {
 	{
 		return s_Data.Stats;
 	}
-
 }

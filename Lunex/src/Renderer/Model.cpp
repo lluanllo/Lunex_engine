@@ -344,5 +344,11 @@ namespace Lunex {
 		model->m_Meshes.push_back(CreateRef<Mesh>(vertices, indices, std::vector<MeshTexture>()));
 		return model;
 	}
-
+	
+	void Model::SetEntityID(int entityID) {
+		for (auto& mesh : m_Meshes) {
+			mesh->SetEntityID(entityID);
+		}
+	}
 }
+
