@@ -238,6 +238,18 @@ namespace Lunex {
 			
 			out << YAML::EndMap; // CircleCollider2DComponent
 		}
+
+		if (entity.HasComponent<MeshComponent>()) {
+			out << YAML::Key << "MeshComponent";
+			out << YAML::BeginMap; // MeshComponent
+			
+			auto& meshComponent = entity.GetComponent<MeshComponent>();
+			out << YAML::Key << "Type" << YAML::Value << (int)meshComponent.Type;
+			out << YAML::Key << "FilePath" << YAML::Value << meshComponent.FilePath;
+			out << YAML::Key << "Color" << YAML::Value << meshComponent.Color;
+			
+			out << YAML::EndMap; // MeshComponent
+		}
 		
 		out << YAML::EndMap; // Entity
 	}
@@ -383,6 +395,25 @@ namespace Lunex {
 					cc2d.Friction = circleCollider2DComponent["Friction"].as<float>();
 					cc2d.Restitution = circleCollider2DComponent["Restitution"].as<float>();
 					cc2d.RestitutionThreshold = circleCollider2DComponent["RestitutionThreshold"].as<float>();
+				}
+
+				auto meshComponent = entity["MeshComponent"];
+				if (meshComponent) {
+					auto& mc = deserializedEntity.AddComponent<MeshComponent>();
+					mc.Type = (ModelType)meshComponent["Type"].as<int>();
+					mc.Color = meshComponent["Color"].as<glm::vec4>();
+					
+					if (meshComponent["FilePath"]) {
+						mc.FilePath = meshComponent["FilePath"].as<std::string>();
+						if (!mc.FilePath.empty() && mc.Type == ModelType::FromFile) {
+							mc.LoadFromFile(mc.FilePath);
+						}
+					}
+					
+					// If it's a primitive type, create it
+					if (mc.Type != ModelType::FromFile) {
+						mc.CreatePrimitive(mc.Type);
+					}
 				}
 			}
 		}

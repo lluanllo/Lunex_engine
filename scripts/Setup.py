@@ -14,7 +14,7 @@ CheckPython.ValidatePackages()
 
 import Vulkan
 
-print("\n[2/5] Clonando/actualizando submodulos...")  # ✅ Cambio a 2/5
+print("\n[2/6] Clonando/actualizando submodulos...")  # ✅ Cambio a 2/6
 result = subprocess.call(["git", "submodule", "update", "--init", "--recursive"])
 
 if result != 0:
@@ -44,6 +44,7 @@ if result != 0:
             ("vendor/ImGuizmo", "https://github.com/CedricGuillemet/ImGuizmo.git", "master"),
             ("vendor/yaml-cpp", "https://github.com/jbeder/yaml-cpp.git", "master"),
             ("vendor/Box2D", "https://github.com/erincatto/box2d.git", "main"),  # ✅ Añadido Box2D (nota: usa 'main' en lugar de 'master')
+            ("vendor/assimp", "https://github.com/assimp/assimp.git", "master"),  # ✅ Añadido Assimp
         ]
         
         for path, url, branch in submodules:
@@ -71,7 +72,8 @@ required_files = {
     "vendor/glm/glm/glm.hpp": "GLM",
     "vendor/ImGuizmo/ImGuizmo.h": "ImGuizmo",
     "vendor/yaml-cpp/include/yaml-cpp/yaml.h": "yaml-cpp",
-    "vendor/Box2D/include/box2d/box2d.h": "Box2D",  # ✅ Añadido Box2D
+    "vendor/Box2D/include/box2d/box2d.h": "Box2D",
+    "vendor/assimp/include/assimp/Importer.hpp": "Assimp",  # ✅ Añadido Assimp
 }
 
 all_ok = True
@@ -96,13 +98,35 @@ if not all_ok:
 else:
     print("\n✓ Todos los submódulos están correctos")
 
-print("\n[3/5] Verificando Vulkan SDK...")  # ✅ Cambio a 3/5
+print("\n[3/6] Configurando Assimp...")
+# Configurar Assimp
+assimp_config = "vendor/assimp/include/assimp/config.h"
+if not os.path.exists(assimp_config):
+    print("  ⚠ Creando config.h para Assimp...")
+    os.makedirs(os.path.dirname(assimp_config), exist_ok=True)
+    with open(assimp_config, 'w') as f:
+        f.write("""#ifndef ASSIMP_CONFIG_H_INC
+#define ASSIMP_CONFIG_H_INC
+#define ASSIMP_BUILD_NO_C4D_IMPORTER
+#define ASSIMP_BUILD_NO_DRACO
+#ifdef _MSC_VER
+#define AI_FORCE_INLINE __forceinline
+#else
+#define AI_FORCE_INLINE inline
+#endif
+#endif
+""")
+    print("  ✓ config.h creado")
+else:
+    print("  ✓ Assimp ya configurado")
+
+print("\n[4/6] Verificando Vulkan SDK...")  # ✅ Cambio a 3/6
 vulkanInstalled = Vulkan.CheckVulkanSDK()
 if vulkanInstalled:
     # Solo verificar, no intentar descargar
     Vulkan.CheckVulkanSDKDebugLibs()
 
-print("\n[4/5] Generando archivos de proyecto con Premake...")  # ✅ Cambio a 4/5
+print("\n[5/6] Generando archivos de proyecto con Premake...")  # ✅ Cambio a 4/6
 if os.name == 'nt':  # Windows
     premake_path = "vendor/bin/premake/premake5.exe"
     if not os.path.exists(premake_path):
@@ -118,8 +142,9 @@ if os.name == 'nt':  # Windows
 else:
     subprocess.call(["vendor/bin/premake/premake5", "gmake2"])
 
-print("\n[5/5] Verificación final...")  # ✅ Nueva sección
+print("\n[6/6] Verificación final...")
 print("✓ Box2D integrado correctamente")
+print("✓ Assimp integrado correctamente")
 
 print("\n" + "="*60)
 print("✓ Setup completado correctamente!")
@@ -132,32 +157,6 @@ print("\nBibliotecas integradas:")
 print("  ✓ GLFW - Manejo de ventanas")
 print("  ✓ ImGui - Interfaz de usuario")
 print("  ✓ Box2D - Motor de física 2D")
+print("  ✓ Assimp - Carga de modelos 3D")
 print("  ✓ Vulkan SDK - Compilación de shaders SPIR-V")
 print("="*60)
-
-import subprocess
-import os
-
-def CleanSubmodule(submodule_path):
-    """Limpia completamente un submódulo corrupto"""
-    print(f"Limpiando submódulo: {submodule_path}")
-    
-    # Elimina el submódulo del índice
-    subprocess.call(['git', 'rm', '-rf', '--cached', submodule_path])
-    
-    # Elimina el directorio físico
-    if os.path.exists(submodule_path):
-        import shutil
-        shutil.rmtree(submodule_path)
-    
-    # Elimina la configuración en .git/modules
-    git_module_path = f".git/modules/{submodule_path}"
-    if os.path.exists(git_module_path):
-        import shutil
-        shutil.rmtree(git_module_path)
-    
-    print(f"Submódulo {submodule_path} limpiado correctamente")
-
-# Llamar esto si detectas el problema
-CleanSubmodule("vendor/Box2D")
-subprocess.call(['git', 'submodule', 'update', '--init', '--recursive', 'vendor/Box2D'])
