@@ -294,6 +294,7 @@ namespace Lunex {
 			DisplayAddComponentEntry<SpriteRendererComponent>("Sprite Renderer");
 			DisplayAddComponentEntry<CircleRendererComponent>("Circle Renderer");
 			DisplayAddComponentEntry<MeshComponent>("Mesh Renderer");
+			DisplayAddComponentEntry<LightComponent>("Light");
 			DisplayAddComponentEntry<Rigidbody2DComponent>("Rigidbody 2D");
 			DisplayAddComponentEntry<BoxCollider2DComponent>("Box Collider 2D");
 			DisplayAddComponentEntry<CircleCollider2DComponent>("Circle Collider 2D");
@@ -567,6 +568,90 @@ namespace Lunex {
 				component.SetEmissionIntensity(emissionIntensity);
 			}
 			ImGui::PopStyleColor();
+		});
+
+		DrawComponent<LightComponent>("Light", entity, [](auto& component) {
+			// Light Type selector
+			const char* lightTypes[] = { "Directional", "Point", "Spot" };
+			int currentType = (int)component.GetType();
+			
+			if (ImGui::Combo("Type", &currentType, lightTypes, IM_ARRAYSIZE(lightTypes))) {
+				component.SetType((LightType)currentType);
+			}
+
+			ImGui::Separator();
+			ImGui::Text("Basic Properties");
+			ImGui::Separator();
+			
+			// Color
+			glm::vec3 color = component.GetColor();
+			if (ImGui::ColorEdit3("Color", glm::value_ptr(color))) {
+				component.SetColor(color);
+			}
+			
+			// Intensity
+			float intensity = component.GetIntensity();
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
+			if (ImGui::DragFloat("Intensity", &intensity, 0.1f, 0.0f, 100.0f)) {
+				component.SetIntensity(intensity);
+			}
+			ImGui::PopStyleColor();
+
+			// Point and Spot specific properties
+			if (component.GetType() == LightType::Point || component.GetType() == LightType::Spot) {
+				ImGui::Spacing();
+				ImGui::Text("Attenuation");
+				ImGui::Separator();
+				
+				// Range
+				float range = component.GetRange();
+				ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
+				if (ImGui::DragFloat("Range", &range, 0.1f, 0.0f, 100.0f)) {
+					component.SetRange(range);
+				}
+				ImGui::PopStyleColor();
+				
+				// Attenuation
+				glm::vec3 attenuation = component.GetAttenuation();
+				ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
+				if (ImGui::DragFloat3("Attenuation (C/L/Q)", glm::value_ptr(attenuation), 0.001f, 0.0f, 10.0f)) {
+					component.SetAttenuation(attenuation);
+				}
+				ImGui::PopStyleColor();
+			}
+
+			// Spot specific properties
+			if (component.GetType() == LightType::Spot) {
+				ImGui::Spacing();
+				ImGui::Text("Spot Properties");
+				ImGui::Separator();
+				
+				// Inner Cone Angle
+				float innerAngle = component.GetInnerConeAngle();
+				ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
+				if (ImGui::SliderFloat("Inner Cone Angle", &innerAngle, 0.0f, 90.0f, "%.1f°")) {
+					component.SetInnerConeAngle(innerAngle);
+				}
+				ImGui::PopStyleColor();
+				
+				// Outer Cone Angle
+				float outerAngle = component.GetOuterConeAngle();
+				ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4{ 1.0f, 0.55f, 0.0f, 0.7f });
+				if (ImGui::SliderFloat("Outer Cone Angle", &outerAngle, 0.0f, 90.0f, "%.1f°")) {
+					component.SetOuterConeAngle(outerAngle);
+				}
+				ImGui::PopStyleColor();
+			}
+
+			ImGui::Spacing();
+			ImGui::Text("Shadows");
+			ImGui::Separator();
+			
+			// Cast Shadows
+			bool castShadows = component.GetCastShadows();
+			if (ImGui::Checkbox("Cast Shadows", &castShadows)) {
+				component.SetCastShadows(castShadows);
+			}
 		});
 	}
 	

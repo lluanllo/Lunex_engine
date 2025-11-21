@@ -273,7 +273,7 @@ namespace Lunex {
 		s_Data.LineVertexBufferPtr++;
 		
 		s_Data.LineVertexBufferPtr->Position = p1;
-		s_Data.LineVertexBufferPtr->Color = color;
+	 s_Data.LineVertexBufferPtr->Color = color;
 		s_Data.LineVertexBufferPtr->EntityID = entityID;
 		s_Data.LineVertexBufferPtr++;
 		
@@ -451,6 +451,29 @@ namespace Lunex {
 			DrawQuad(transform, src.Texture, src.TilingFactor, src.Color, entityID);
 		else
 			DrawQuad(transform, src.Color, entityID);
+	}
+
+	void Renderer2D::DrawBillboard(const glm::vec3& position, const Ref<Texture2D>& texture, 
+									const glm::vec3& cameraPosition, float size, int entityID) {
+		LNX_PROFILE_FUNCTION();
+		
+		// Calculate direction from position to camera
+		glm::vec3 toCamera = glm::normalize(cameraPosition - position);
+		
+		// Calculate right and up vectors for billboard
+		glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
+		glm::vec3 right = glm::normalize(glm::cross(worldUp, toCamera));
+		glm::vec3 up = glm::cross(toCamera, right);
+		
+		// Build billboard transform matrix
+		glm::mat4 transform = glm::mat4(1.0f);
+		transform[0] = glm::vec4(right * size, 0.0f);
+		transform[1] = glm::vec4(up * size, 0.0f);
+		transform[2] = glm::vec4(toCamera, 0.0f);
+		transform[3] = glm::vec4(position, 1.0f);
+		
+		// Draw as textured quad
+		DrawQuad(transform, texture, 1.0f, glm::vec4(1.0f), entityID);
 	}
 	
 	float Renderer2D::GetLineWidth() {

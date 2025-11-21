@@ -4,6 +4,11 @@
 #include "Renderer/RenderCommand.h"
 #include "Renderer/UniformBuffer.h"
 #include "Scene/Components.h"
+#include "Scene/Entity.h"
+#include "Log/Log.h"
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/quaternion.hpp>
 
 namespace Lunex {
 	struct Renderer3DData {
@@ -23,26 +28,28 @@ namespace Lunex {
 			float EmissionIntensity;
 			glm::vec3 EmissionColor;
 			float _padding1;
-			glm::vec3 LightPos;
-			float _padding2;
 			glm::vec3 ViewPos;
-			float _padding3;
-			glm::vec3 LightColor;
 			int UseTexture;
+		};
+
+		struct LightsUniformData {
+			int NumLights;
+			float _padding1, _padding2, _padding3;
+			Light::LightData Lights[16];
 		};
 
 		CameraData CameraBuffer;
 		TransformData TransformBuffer;
 		MaterialUniformData MaterialBuffer;
+		LightsUniformData LightsBuffer;
 
 		Ref<UniformBuffer> CameraUniformBuffer;
 		Ref<UniformBuffer> TransformUniformBuffer;
 		Ref<UniformBuffer> MaterialUniformBuffer;
+		Ref<UniformBuffer> LightsUniformBuffer;
 
 		Ref<Shader> MeshShader;
 
-		glm::vec3 LightPosition = { 5.0f, 5.0f, 5.0f };
-		glm::vec3 LightColor = { 1.0f, 1.0f, 1.0f };
 		glm::vec3 CameraPosition = { 0.0f, 0.0f, 0.0f };
 
 		Renderer3D::Statistics Stats;
@@ -59,6 +66,11 @@ namespace Lunex {
 		s_Data.CameraUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::CameraData), 0);
 		s_Data.TransformUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::TransformData), 1);
 		s_Data.MaterialUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::MaterialUniformData), 2);
+		s_Data.LightsUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::LightsUniformData), 3);
+		
+		// Initialize with zero lights
+		s_Data.LightsBuffer.NumLights = 0;
+		s_Data.LightsUniformBuffer->SetData(&s_Data.LightsBuffer, sizeof(Renderer3DData::LightsUniformData));
 	}
 
 	void Renderer3D::Shutdown() {
@@ -91,6 +103,36 @@ namespace Lunex {
 
 	void Renderer3D::EndScene() {
 		LNX_PROFILE_FUNCTION();
+	}
+
+	void Renderer3D::UpdateLights(Scene* scene) {
+		LNX_PROFILE_FUNCTION();
+		
+		s_Data.LightsBuffer.NumLights = 0;
+		
+		auto view = scene->GetAllEntitiesWith<TransformComponent, LightComponent>();
+		int lightIndex = 0;
+		
+		for (auto entity : view) {
+			if (lightIndex >= 16) break;
+			
+			Entity e = { entity, scene };
+			auto& transform = e.GetComponent<TransformComponent>();
+			auto& light = e.GetComponent<LightComponent>();
+			
+			glm::vec3 position = transform.Translation;
+			glm::vec3 direction = glm::normalize(
+				glm::rotate(glm::quat(transform.Rotation), glm::vec3(0.0f, 0.0f, -1.0f))
+			);
+			
+			s_Data.LightsBuffer.Lights[lightIndex] = 
+				light.LightInstance->GetLightData(position, direction);
+			lightIndex++;
+		}
+		
+		s_Data.LightsBuffer.NumLights = lightIndex;
+		s_Data.LightsUniformBuffer->SetData(&s_Data.LightsBuffer, 
+			sizeof(Renderer3DData::LightsUniformData));
 	}
 
 	void Renderer3D::DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, int entityID) {
@@ -126,9 +168,7 @@ namespace Lunex {
 		s_Data.MaterialBuffer.Specular = 0.5f;
 		s_Data.MaterialBuffer.EmissionIntensity = 0.0f;
 		s_Data.MaterialBuffer.EmissionColor = glm::vec3(0.0f);
-		s_Data.MaterialBuffer.LightPos = s_Data.LightPosition;
 		s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
-		s_Data.MaterialBuffer.LightColor = s_Data.LightColor;
 
 		// Check if model has textures
 		bool hasTextures = false;
@@ -174,9 +214,7 @@ namespace Lunex {
 		s_Data.MaterialBuffer.Specular = material->GetSpecular();
 		s_Data.MaterialBuffer.EmissionIntensity = material->GetEmissionIntensity();
 		s_Data.MaterialBuffer.EmissionColor = material->GetEmissionColor();
-		s_Data.MaterialBuffer.LightPos = s_Data.LightPosition;
 		s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
-		s_Data.MaterialBuffer.LightColor = s_Data.LightColor;
 
 		// Check if model has textures
 		bool hasTextures = false;
@@ -200,14 +238,6 @@ namespace Lunex {
 		for (const auto& mesh : model->GetMeshes()) {
 			s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
 		}
-	}
-
-	void Renderer3D::SetLightPosition(const glm::vec3& position) {
-		s_Data.LightPosition = position;
-	}
-
-	void Renderer3D::SetLightColor(const glm::vec3& color) {
-		s_Data.LightColor = color;
 	}
 
 	void Renderer3D::ResetStats() {
