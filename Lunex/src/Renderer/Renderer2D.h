@@ -44,6 +44,10 @@ namespace Lunex  {
 			
 			static void DrawSprite(const glm::mat4& transform, SpriteRendererComponent& src, int entityID);
 			
+			// Billboard rendering (always faces camera)
+			static void DrawBillboard(const glm::vec3& position, const Ref<Texture2D>& texture, 
+									  const glm::vec3& cameraPosition, float size = 0.5f, int entityID = -1);
+			
 			static float GetLineWidth();
 			static void SetLineWidth(float width);
 			

@@ -47,20 +47,31 @@ namespace Lunex {
 				internalFormat = GL_RGB8;
 				dataFormat = GL_RGB;
 			}
+			else if (channels == 1) {
+				internalFormat = GL_R8;
+				dataFormat = GL_RED;
+			}
 			
 			m_InternalFormat = internalFormat;
 			m_DataFormat = dataFormat;
 			
-			LNX_CORE_ASSERT(internalFormat & dataFormat, "Format not supported!");
+			LNX_CORE_ASSERT(internalFormat && dataFormat, "Format not supported!");
 			
 			glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
 			glTextureStorage2D(m_RendererID, 1, internalFormat, m_Width, m_Height);
 			
+			// Use LINEAR for better quality with alpha blending
 			glTextureParameteri(m_RendererID, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 			glTextureParameteri(m_RendererID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 			
-			glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_S, GL_REPEAT);
-			glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_T, GL_REPEAT);
+			// Use CLAMP_TO_EDGE for textures with transparency to avoid border artifacts
+			if (channels == 4) {
+				glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			} else {
+				glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_S, GL_REPEAT);
+				glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_T, GL_REPEAT);
+			}
 			
 			glTextureSubImage2D(m_RendererID, 0, 0, 0, m_Width, m_Height, dataFormat, GL_UNSIGNED_BYTE, data);
 			

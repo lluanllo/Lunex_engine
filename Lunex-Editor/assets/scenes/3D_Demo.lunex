@@ -1,21 +1,69 @@
 Scene: Untitled
 Entities:
-  - Entity: 9788156866223600444
+  - Entity: 7496925501055931221
     TagComponent:
-      Tag: tek turret
+      Tag: Empty Entity
     TransformComponent:
-      Translation: [1.3186772, -0.40621978, 0]
-      Rotation: [-1.5707964, 0, 0]
-      Scale: [0.00875, 0.008749725, 0.008749725]
+      Translation: [4.9, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    LightComponent:
+      Type: 1
+      Color: [0.42477876, 0.64875865, 1]
+      Intensity: 0.5
+      Range: 10
+      Attenuation: [1, 0.09, 0.032]
+      InnerConeAngle: 12.5
+      OuterConeAngle: 17.5
+      CastShadows: true
+  - Entity: 13450100013220178626
+    TagComponent:
+      Tag: Empty Entity
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    LightComponent:
+      Type: 1
+      Color: [0.64601755, 0, 1]
+      Intensity: 0.5
+      Range: 10
+      Attenuation: [1, 0.09, 0.032]
+      InnerConeAngle: 12.5
+      OuterConeAngle: 17.5
+      CastShadows: true
+  - Entity: 8522703758716784818
+    TagComponent:
+      Tag: Empty Entity
+    TransformComponent:
+      Translation: [2.5730026, 1.4127084, 0.042381853]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    LightComponent:
+      Type: 1
+      Color: [0.7743363, 0.7360106, 0.23298614]
+      Intensity: 1
+      Range: 10
+      Attenuation: [1, 0.09, 0.032]
+      InnerConeAngle: 12.5
+      OuterConeAngle: 17.5
+      CastShadows: true
+  - Entity: 6230634635200783568
+    TagComponent:
+      Tag: plane
+    TransformComponent:
+      Translation: [2.208992, -0.50825596, -0.12850559]
+      Rotation: [0, 0, 0]
+      Scale: [5.3699994, 5.3699994, 5.3699994]
     MeshComponent:
-      Type: 4
-      FilePath: assets\3DAssets\tek_turret_RIG.FBX
-      Color: [0.3928264, 0.58344567, 0.6725664, 1]
+      Type: 2
+      FilePath: ""
+      Color: [1, 1, 1, 1]
     MaterialComponent:
-      Color: [0.19500352, 0.605604, 0.7345133, 1]
+      Color: [1, 1, 1, 1]
       Metallic: 0
-      Roughness: 0.508
-      Specular: 1
+      Roughness: 0.5
+      Specular: 0.5
       EmissionColor: [0, 0, 0]
       EmissionIntensity: 0
   - Entity: 9247698822994108608
@@ -36,21 +84,21 @@ Entities:
       Specular: 0.5
       EmissionColor: [0, 0, 0]
       EmissionIntensity: 0
-  - Entity: 6230634635200783568
+  - Entity: 9788156866223600444
     TagComponent:
-      Tag: plane
+      Tag: tek turret
     TransformComponent:
-      Translation: [2.208992, -0.50825596, -0.12850559]
-      Rotation: [0, 0, 0]
-      Scale: [5.3699994, 5.3699994, 5.3699994]
+      Translation: [1.3186772, -0.40621978, 0]
+      Rotation: [-1.5707964, 0, 0]
+      Scale: [0.00875, 0.008749725, 0.008749725]
     MeshComponent:
-      Type: 2
-      FilePath: ""
-      Color: [1, 1, 1, 1]
+      Type: 4
+      FilePath: assets\3DAssets\tek_turret_RIG.FBX
+      Color: [0.3928264, 0.58344567, 0.6725664, 1]
     MaterialComponent:
-      Color: [1, 1, 1, 1]
+      Color: [0.19500352, 0.605604, 0.7345133, 1]
       Metallic: 0
-      Roughness: 0.5
-      Specular: 0.5
+      Roughness: 0.508
+      Specular: 1
       EmissionColor: [0, 0, 0]
       EmissionIntensity: 0
