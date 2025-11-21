@@ -5,6 +5,8 @@
 #include "Renderer/Texture.h"
 #include "Renderer/Model.h"
 #include "Renderer/Material.h"
+#include "Renderer/Light.h"
+#include "Log/Log.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -148,6 +150,52 @@ namespace Lunex {
 		float GetEmissionIntensity() const { return MaterialInstance->GetEmissionIntensity(); }
 	};
 
+	struct LightComponent {
+		Ref<Light> LightInstance;
+		Ref<Texture2D> IconTexture;
+		
+		LightComponent() 
+			: LightInstance(CreateRef<Light>()) {
+			LoadIcon();
+		}
+		
+		LightComponent(const LightComponent& other) 
+			: LightInstance(CreateRef<Light>(*other.LightInstance)),
+			  IconTexture(other.IconTexture) {
+		}
+		
+		LightComponent(LightType type) 
+			: LightInstance(CreateRef<Light>(type)) {
+			LoadIcon();
+		}
+		
+		void LoadIcon() {
+			IconTexture = Texture2D::Create("Resources/Icons/EntityIcons/LightIcon.png");
+			if (!IconTexture) {
+				LNX_LOG_WARN("Failed to load Light Icon");
+			}
+		}
+		
+		// Light properties accessors
+		void SetType(LightType type) { LightInstance->SetType(type); }
+		void SetColor(const glm::vec3& color) { LightInstance->SetColor(color); }
+		void SetIntensity(float intensity) { LightInstance->SetIntensity(intensity); }
+		void SetRange(float range) { LightInstance->SetRange(range); }
+		void SetAttenuation(const glm::vec3& attenuation) { LightInstance->SetAttenuation(attenuation); }
+		void SetInnerConeAngle(float angle) { LightInstance->SetInnerConeAngle(angle); }
+		void SetOuterConeAngle(float angle) { LightInstance->SetOuterConeAngle(angle); }
+		void SetCastShadows(bool cast) { LightInstance->SetCastShadows(cast); }
+		
+		LightType GetType() const { return LightInstance->GetType(); }
+		const glm::vec3& GetColor() const { return LightInstance->GetColor(); }
+		float GetIntensity() const { return LightInstance->GetIntensity(); }
+		float GetRange() const { return LightInstance->GetRange(); }
+		const glm::vec3& GetAttenuation() const { return LightInstance->GetAttenuation(); }
+		float GetInnerConeAngle() const { return LightInstance->GetInnerConeAngle(); }
+		float GetOuterConeAngle() const { return LightInstance->GetOuterConeAngle(); }
+		bool GetCastShadows() const { return LightInstance->GetCastShadows(); }
+	};
+
 	struct CameraComponent {
 		SceneCamera Camera;
 		bool Primary = true;
@@ -216,7 +264,7 @@ namespace Lunex {
 		CircleCollider2DComponent() = default;
 		CircleCollider2DComponent(const CircleCollider2DComponent&) = default;
 	};
-	
+
 	template<typename... Component>
 	struct ComponentGroup
 	{
@@ -226,5 +274,5 @@ namespace Lunex {
 		ComponentGroup<TransformComponent, SpriteRendererComponent,
 		CircleRendererComponent, CameraComponent, NativeScriptComponent,
 		Rigidbody2DComponent, BoxCollider2DComponent, CircleCollider2DComponent,
-		MeshComponent, MaterialComponent>;
+		MeshComponent, MaterialComponent, LightComponent>;
 }

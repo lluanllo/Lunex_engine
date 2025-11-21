@@ -265,6 +265,23 @@ namespace Lunex {
 			
 			out << YAML::EndMap; // MaterialComponent
 		}
+
+		if (entity.HasComponent<LightComponent>()) {
+			out << YAML::Key << "LightComponent";
+			out << YAML::BeginMap; // LightComponent
+			
+			auto& lightComponent = entity.GetComponent<LightComponent>();
+			out << YAML::Key << "Type" << YAML::Value << (int)lightComponent.GetType();
+			out << YAML::Key << "Color" << YAML::Value << lightComponent.GetColor();
+			out << YAML::Key << "Intensity" << YAML::Value << lightComponent.GetIntensity();
+			out << YAML::Key << "Range" << YAML::Value << lightComponent.GetRange();
+			out << YAML::Key << "Attenuation" << YAML::Value << lightComponent.GetAttenuation();
+			out << YAML::Key << "InnerConeAngle" << YAML::Value << lightComponent.GetInnerConeAngle();
+			out << YAML::Key << "OuterConeAngle" << YAML::Value << lightComponent.GetOuterConeAngle();
+			out << YAML::Key << "CastShadows" << YAML::Value << lightComponent.GetCastShadows();
+			
+			out << YAML::EndMap; // LightComponent
+		}
 		
 		out << YAML::EndMap; // Entity
 	}
@@ -449,6 +466,19 @@ namespace Lunex {
 					mat->SetSpecular(materialComponent["Specular"].as<float>());
 					mat->SetEmissionColor(materialComponent["EmissionColor"].as<glm::vec3>());
 					mat->SetEmissionIntensity(materialComponent["EmissionIntensity"].as<float>());
+				}
+
+				auto lightComponent = entity["LightComponent"];
+				if (lightComponent) {
+					auto& light = deserializedEntity.AddComponent<LightComponent>();
+					light.SetType((LightType)lightComponent["Type"].as<int>());
+					light.SetColor(lightComponent["Color"].as<glm::vec3>());
+					light.SetIntensity(lightComponent["Intensity"].as<float>());
+					light.SetRange(lightComponent["Range"].as<float>());
+					light.SetAttenuation(lightComponent["Attenuation"].as<glm::vec3>());
+					light.SetInnerConeAngle(lightComponent["InnerConeAngle"].as<float>());
+					light.SetOuterConeAngle(lightComponent["OuterConeAngle"].as<float>());
+					light.SetCastShadows(lightComponent["CastShadows"].as<bool>());
 				}
 			}
 		}
