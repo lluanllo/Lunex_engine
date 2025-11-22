@@ -12,6 +12,7 @@ namespace Lunex {
 	// Forward declarations
 	struct MeshComponent;
 	struct MaterialComponent;
+	struct TextureComponent;
 	class Scene;
 
 	class Renderer3D {
@@ -28,8 +29,10 @@ namespace Lunex {
 
 		static void DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, int entityID = -1);
 		static void DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, MaterialComponent& materialComponent, int entityID = -1);
+		static void DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, MaterialComponent& materialComponent, TextureComponent& textureComponent, int entityID = -1);
 		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& color = glm::vec4(1.0f), int entityID = -1);
 		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, MaterialComponent& materialComponent, int entityID = -1);
+		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, MaterialComponent& materialComponent, TextureComponent& textureComponent, int entityID = -1);
 
 		struct Statistics {
 			uint32_t DrawCalls = 0;

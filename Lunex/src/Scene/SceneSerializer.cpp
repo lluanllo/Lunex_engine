@@ -282,6 +282,26 @@ namespace Lunex {
 			
 			out << YAML::EndMap; // LightComponent
 		}
+
+		if (entity.HasComponent<TextureComponent>()) {
+			out << YAML::Key << "TextureComponent";
+			out << YAML::BeginMap; // TextureComponent
+			
+			auto& textureComponent = entity.GetComponent<TextureComponent>();
+			out << YAML::Key << "AlbedoPath" << YAML::Value << textureComponent.AlbedoPath;
+			out << YAML::Key << "NormalPath" << YAML::Value << textureComponent.NormalPath;
+			out << YAML::Key << "MetallicPath" << YAML::Value << textureComponent.MetallicPath;
+			out << YAML::Key << "RoughnessPath" << YAML::Value << textureComponent.RoughnessPath;
+			out << YAML::Key << "SpecularPath" << YAML::Value << textureComponent.SpecularPath;
+			out << YAML::Key << "EmissionPath" << YAML::Value << textureComponent.EmissionPath;
+			out << YAML::Key << "AOPath" << YAML::Value << textureComponent.AOPath;
+			out << YAML::Key << "MetallicMultiplier" << YAML::Value << textureComponent.MetallicMultiplier;
+			out << YAML::Key << "RoughnessMultiplier" << YAML::Value << textureComponent.RoughnessMultiplier;
+			out << YAML::Key << "SpecularMultiplier" << YAML::Value << textureComponent.SpecularMultiplier;
+			out << YAML::Key << "AOMultiplier" << YAML::Value << textureComponent.AOMultiplier;
+			
+			out << YAML::EndMap; // TextureComponent
+		}
 		
 		out << YAML::EndMap; // Entity
 	}
@@ -479,6 +499,77 @@ namespace Lunex {
 					light.SetInnerConeAngle(lightComponent["InnerConeAngle"].as<float>());
 					light.SetOuterConeAngle(lightComponent["OuterConeAngle"].as<float>());
 					light.SetCastShadows(lightComponent["CastShadows"].as<bool>());
+				}
+
+				auto textureComponent = entity["TextureComponent"];
+				if (textureComponent) {
+					auto& texture = deserializedEntity.AddComponent<TextureComponent>();
+					
+					// Load albedo
+					if (textureComponent["AlbedoPath"]) {
+						std::string path = textureComponent["AlbedoPath"].as<std::string>();
+						if (!path.empty()) {
+							texture.LoadAlbedo(path);
+						}
+					}
+					
+					// Load normal
+					if (textureComponent["NormalPath"]) {
+						std::string path = textureComponent["NormalPath"].as<std::string>();
+						if (!path.empty()) {
+							texture.LoadNormal(path);
+						}
+					}
+					
+					// Load metallic
+					if (textureComponent["MetallicPath"]) {
+						std::string path = textureComponent["MetallicPath"].as<std::string>();
+						if (!path.empty()) {
+							texture.LoadMetallic(path);
+						}
+					}
+					
+					// Load roughness
+					if (textureComponent["RoughnessPath"]) {
+						std::string path = textureComponent["RoughnessPath"].as<std::string>();
+						if (!path.empty()) {
+							texture.LoadRoughness(path);
+						}
+					}
+					
+					// Load specular
+					if (textureComponent["SpecularPath"]) {
+						std::string path = textureComponent["SpecularPath"].as<std::string>();
+						if (!path.empty()) {
+							texture.LoadSpecular(path);
+						}
+					}
+					
+					// Load emission
+					if (textureComponent["EmissionPath"]) {
+						std::string path = textureComponent["EmissionPath"].as<std::string>();
+						if (!path.empty()) {
+							texture.LoadEmission(path);
+						}
+					}
+					
+					// Load AO
+					if (textureComponent["AOPath"]) {
+						std::string path = textureComponent["AOPath"].as<std::string>();
+						if (!path.empty()) {
+							texture.LoadAO(path);
+						}
+					}
+					
+					// Load multipliers
+					if (textureComponent["MetallicMultiplier"])
+						texture.MetallicMultiplier = textureComponent["MetallicMultiplier"].as<float>();
+					if (textureComponent["RoughnessMultiplier"])
+						texture.RoughnessMultiplier = textureComponent["RoughnessMultiplier"].as<float>();
+					if (textureComponent["SpecularMultiplier"])
+						texture.SpecularMultiplier = textureComponent["SpecularMultiplier"].as<float>();
+					if (textureComponent["AOMultiplier"])
+						texture.AOMultiplier = textureComponent["AOMultiplier"].as<float>();
 				}
 			}
 		}
