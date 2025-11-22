@@ -191,11 +191,21 @@ vec3 CalculateLighting(vec3 normal, vec3 fragPos, vec3 viewDir, vec3 baseColor, 
 }
 
 void main() {
+	// DEBUG: Uncomment to visualize UVs
+	// FragColor = vec4(Input.TexCoords, 0.0, 1.0);
+	// o_EntityID = v_EntityID;
+	// return;
+	
 	// Sample albedo
 	vec3 albedo;
 	if (u_UseAlbedoMap != 0) {
 		vec4 texColor = texture(u_AlbedoMap, Input.TexCoords);
 		albedo = texColor.rgb;
+		
+		// DEBUG: Show texture sampling
+		// FragColor = texColor;
+		// o_EntityID = v_EntityID;
+		// return;
 	} else {
 		albedo = u_Color.rgb;
 	}
@@ -214,27 +224,27 @@ void main() {
 	float metallic = u_Metallic;
 	if (u_UseMetallicMap != 0) {
 		float metallicSample = texture(u_MetallicMap, Input.TexCoords).r;
-		metallic = metallicSample * u_MetallicMultiplier;
+		metallic = clamp(metallicSample * u_MetallicMultiplier, 0.0, 1.0);
 	}
 	
 	// Sample roughness
 	float roughness = u_Roughness;
 	if (u_UseRoughnessMap != 0) {
 		float roughnessSample = texture(u_RoughnessMap, Input.TexCoords).r;
-		roughness = roughnessSample * u_RoughnessMultiplier;
+		roughness = clamp(roughnessSample * u_RoughnessMultiplier, 0.0, 1.0);
 	}
 	
 	// Sample specular
 	float specular = u_Specular;
 	if (u_UseSpecularMap != 0) {
 		float specularSample = texture(u_SpecularMap, Input.TexCoords).r;
-		specular = specularSample * u_SpecularMultiplier;
+		specular = clamp(specularSample * u_SpecularMultiplier, 0.0, 1.0);
 	}
 	
 	// Sample AO
 	float ao = 1.0;
 	if (u_UseAOMap != 0) {
-		ao = texture(u_AOMap, Input.TexCoords).r * u_AOMultiplier;
+		ao = clamp(texture(u_AOMap, Input.TexCoords).r * u_AOMultiplier, 0.0, 1.0);
 	}
 	
 	vec3 viewDir = normalize(u_ViewPos - Input.FragPos);
