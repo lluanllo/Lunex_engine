@@ -151,8 +151,12 @@ namespace Lunex {
 				texture.Type = typeName;
 				texture.Path = str.C_Str();
 
-				textures.push_back(texture);
-				m_TexturesLoaded.push_back(texture);
+				if (texture.Texture && texture.Texture->IsLoaded()) {
+					textures.push_back(texture);
+					m_TexturesLoaded.push_back(texture);
+				} else {
+					LNX_LOG_WARN("Failed to load texture: {0}", texturePath);
+				}
 			}
 		}
 

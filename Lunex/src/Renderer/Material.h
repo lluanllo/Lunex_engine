@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Core.h"
+#include "Texture.h"
 #include <glm/glm.hpp>
 
 namespace Lunex {
@@ -35,9 +36,30 @@ namespace Lunex {
 			float EmissionIntensity;
 			glm::vec3 EmissionColor;
 			float _padding;
+			glm::vec3 ViewPos;
+			
+			// Texture flags
+			int UseAlbedoMap;
+			int UseNormalMap;
+			int UseMetallicMap;
+			int UseRoughnessMap;
+			int UseSpecularMap;
+			int UseEmissionMap;
+			int UseAOMap;
+			float _padding2;
+			
+			// Texture multipliers
+			float MetallicMultiplier;
+			float RoughnessMultiplier;
+			float SpecularMultiplier;
+			float AOMultiplier;
 		};
 
-		MaterialData GetMaterialData() const {
+		MaterialData GetMaterialData(const glm::vec3& viewPos, bool hasAlbedo, bool hasNormal, 
+									 bool hasMetallic, bool hasRoughness, bool hasSpecular,
+									 bool hasEmission, bool hasAO,
+									 float metallicMult, float roughnessMult, 
+									 float specularMult, float aoMult) const {
 			return {
 				m_Color,
 				m_Metallic,
@@ -45,7 +67,20 @@ namespace Lunex {
 				m_Specular,
 				m_EmissionIntensity,
 				m_EmissionColor,
-				0.0f
+				0.0f,
+				viewPos,
+				hasAlbedo ? 1 : 0,
+				hasNormal ? 1 : 0,
+				hasMetallic ? 1 : 0,
+				hasRoughness ? 1 : 0,
+				hasSpecular ? 1 : 0,
+				hasEmission ? 1 : 0,
+				hasAO ? 1 : 0,
+				0.0f,
+				metallicMult,
+				roughnessMult,
+				specularMult,
+				aoMult
 			};
 		}
 
