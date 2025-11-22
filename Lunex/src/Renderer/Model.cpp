@@ -16,10 +16,11 @@ namespace Lunex {
 	void Model::LoadModel(const std::string& path)
 	{
 		Assimp::Importer importer;
+		
+		// Removed aiProcess_FlipUVs - this can cause issues with some formats
 		const aiScene* scene = importer.ReadFile(path, 
 			aiProcess_Triangulate | 
 			aiProcess_GenSmoothNormals | 
-			aiProcess_FlipUVs | 
 			aiProcess_CalcTangentSpace);
 
 		if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
@@ -29,6 +30,11 @@ namespace Lunex {
 		}
 
 		m_Directory = path.substr(0, path.find_last_of('/'));
+		
+		// Also check for backslash (Windows paths)
+		if (m_Directory == path) {
+			m_Directory = path.substr(0, path.find_last_of('\\'));
+		}
 
 		ProcessNode(scene->mRootNode, scene);
 
@@ -57,6 +63,12 @@ namespace Lunex {
 		std::vector<uint32_t> indices;
 		std::vector<MeshTexture> textures;
 
+		bool hasUVs = mesh->HasTextureCoords(0);
+		LNX_LOG_TRACE("Processing mesh: {0} vertices, Has UVs: {1}, Has Normals: {2}", 
+					  mesh->mNumVertices, 
+					  hasUVs ? "Yes" : "No",
+					  mesh->HasNormals() ? "Yes" : "No");
+
 		// Process vertices
 		for (uint32_t i = 0; i < mesh->mNumVertices; i++)
 		{
@@ -67,19 +79,32 @@ namespace Lunex {
 
 			// Normals
 			if (mesh->HasNormals())
-				vertex.Normal = glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
-			else
-				vertex.Normal = glm::vec3(0.0f);
-
-			// Texture coordinates
-			if (mesh->mTextureCoords[0])
 			{
-				vertex.TexCoords = glm::vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y);
+				vertex.Normal = glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
 			}
 			else
-				vertex.TexCoords = glm::vec2(0.0f);
+			{
+				vertex.Normal = glm::vec3(0.0f, 1.0f, 0.0f);
+			}
 
-			// Tangent
+			// Texture coordinates - Using your working approach
+			if (hasUVs)
+			{
+				float u = mesh->mTextureCoords[0][i].x;
+				float v = mesh->mTextureCoords[0][i].y;
+				vertex.TexCoords = glm::vec2(u, v);
+				
+				// Debug: Log first few UVs to verify
+				if (i < 3) {
+					LNX_LOG_TRACE("Vertex {0} UV: ({1}, {2})", i, u, v);
+				}
+			}
+			else
+			{
+				vertex.TexCoords = glm::vec2(0.0f, 0.0f);
+			}
+
+			// Tangent and Bitangent
 			if (mesh->HasTangentsAndBitangents())
 			{
 				vertex.Tangent = glm::vec3(mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z);
@@ -87,11 +112,88 @@ namespace Lunex {
 			}
 			else
 			{
-				vertex.Tangent = glm::vec3(0.0f);
-				vertex.Bitangent = glm::vec3(0.0f);
+				vertex.Tangent = glm::vec3(1.0f, 0.0f, 0.0f);
+				vertex.Bitangent = glm::vec3(0.0f, 0.0f, 1.0f);
 			}
 
 			vertices.push_back(vertex);
+		}
+
+		// Calculate tangents and bitangents if they weren't provided by Assimp
+		if (!mesh->HasTangentsAndBitangents() && hasUVs)
+		{
+			LNX_LOG_TRACE("Calculating tangents and bitangents manually");
+			
+			// Initialize tangent accumulation
+			for (auto& vertex : vertices)
+			{
+				vertex.Tangent = glm::vec3(0.0f);
+				vertex.Bitangent = glm::vec3(0.0f);
+			}
+			
+			for (uint32_t i = 0; i < mesh->mNumFaces; i++)
+			{
+				aiFace face = mesh->mFaces[i];
+				if (face.mNumIndices == 3)
+				{
+					uint32_t i0 = face.mIndices[0];
+					uint32_t i1 = face.mIndices[1];
+					uint32_t i2 = face.mIndices[2];
+
+					glm::vec3& v0 = vertices[i0].Position;
+					glm::vec3& v1 = vertices[i1].Position;
+					glm::vec3& v2 = vertices[i2].Position;
+
+					glm::vec2& uv0 = vertices[i0].TexCoords;
+					glm::vec2& uv1 = vertices[i1].TexCoords;
+					glm::vec2& uv2 = vertices[i2].TexCoords;
+
+					glm::vec3 edge1 = v1 - v0;
+					glm::vec3 edge2 = v2 - v0;
+					glm::vec2 deltaUV1 = uv1 - uv0;
+					glm::vec2 deltaUV2 = uv2 - uv0;
+
+					float denominator = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
+					float f = (abs(denominator) > 0.0001f) ? 1.0f / denominator : 0.0f;
+
+					glm::vec3 tangent;
+					tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+					tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+					tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+
+					glm::vec3 bitangent;
+					bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+					bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+					bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+
+					vertices[i0].Tangent += tangent;
+					vertices[i1].Tangent += tangent;
+					vertices[i2].Tangent += tangent;
+
+					vertices[i0].Bitangent += bitangent;
+					vertices[i1].Bitangent += bitangent;
+					vertices[i2].Bitangent += bitangent;
+				}
+			}
+
+			// Normalize and orthogonalize
+			for (auto& vertex : vertices)
+			{
+				glm::vec3 n = vertex.Normal;
+				glm::vec3 t = vertex.Tangent;
+				
+				// Gram-Schmidt orthogonalize
+				t = glm::normalize(t - n * glm::dot(n, t));
+				
+				// Calculate handedness
+				if (glm::dot(glm::cross(n, t), vertex.Bitangent) < 0.0f)
+				{
+					t = t * -1.0f;
+				}
+				
+				vertex.Tangent = t;
+				vertex.Bitangent = glm::cross(n, t);
+			}
 		}
 
 		// Process indices
@@ -107,18 +209,51 @@ namespace Lunex {
 		{
 			aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
 
+			// Load diffuse/albedo maps
 			std::vector<MeshTexture> diffuseMaps = LoadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse");
 			textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
 
+			// Load specular maps
 			std::vector<MeshTexture> specularMaps = LoadMaterialTextures(material, aiTextureType_SPECULAR, "texture_specular");
 			textures.insert(textures.end(), specularMaps.begin(), specularMaps.end());
 
-			std::vector<MeshTexture> normalMaps = LoadMaterialTextures(material, aiTextureType_HEIGHT, "texture_normal");
+			// Load metallic maps
+			std::vector<MeshTexture> metallicMaps = LoadMaterialTextures(material, aiTextureType_METALNESS, "texture_metallic");
+			if (metallicMaps.empty()) {
+				// Some formats store metallic in specular channel
+				metallicMaps = LoadMaterialTextures(material, aiTextureType_SPECULAR, "texture_metallic");
+			}
+			textures.insert(textures.end(), metallicMaps.begin(), metallicMaps.end());
+
+			// Load roughness maps
+			std::vector<MeshTexture> roughnessMaps = LoadMaterialTextures(material, aiTextureType_DIFFUSE_ROUGHNESS, "texture_roughness");
+			if (roughnessMaps.empty()) {
+				// Some formats store roughness in shininess channel
+				roughnessMaps = LoadMaterialTextures(material, aiTextureType_SHININESS, "texture_roughness");
+			}
+			textures.insert(textures.end(), roughnessMaps.begin(), roughnessMaps.end());
+
+			// Load normal maps
+			std::vector<MeshTexture> normalMaps = LoadMaterialTextures(material, aiTextureType_NORMALS, "texture_normal");
+			if (normalMaps.empty()) {
+				normalMaps = LoadMaterialTextures(material, aiTextureType_HEIGHT, "texture_normal");
+			}
 			textures.insert(textures.end(), normalMaps.begin(), normalMaps.end());
 
-			std::vector<MeshTexture> heightMaps = LoadMaterialTextures(material, aiTextureType_AMBIENT, "texture_height");
-			textures.insert(textures.end(), heightMaps.begin(), heightMaps.end());
+			// Load AO maps
+			std::vector<MeshTexture> aoMaps = LoadMaterialTextures(material, aiTextureType_AMBIENT_OCCLUSION, "texture_ao");
+			if (aoMaps.empty()) {
+				aoMaps = LoadMaterialTextures(material, aiTextureType_AMBIENT, "texture_ao");
+			}
+			textures.insert(textures.end(), aoMaps.begin(), aoMaps.end());
+
+			// Load emissive maps
+			std::vector<MeshTexture> emissiveMaps = LoadMaterialTextures(material, aiTextureType_EMISSIVE, "texture_emissive");
+			textures.insert(textures.end(), emissiveMaps.begin(), emissiveMaps.end());
 		}
+
+		LNX_LOG_TRACE("Mesh created with {0} vertices, {1} indices, {2} textures", 
+					  vertices.size(), indices.size(), textures.size());
 
 		return CreateRef<Mesh>(vertices, indices, textures);
 	}
@@ -151,8 +286,12 @@ namespace Lunex {
 				texture.Type = typeName;
 				texture.Path = str.C_Str();
 
-				textures.push_back(texture);
-				m_TexturesLoaded.push_back(texture);
+				if (texture.Texture && texture.Texture->IsLoaded()) {
+					textures.push_back(texture);
+					m_TexturesLoaded.push_back(texture);
+				} else {
+					LNX_LOG_WARN("Failed to load texture: {0}", texturePath);
+				}
 			}
 		}
 
@@ -176,42 +315,41 @@ namespace Lunex {
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
 
-		// Cube vertices with normals
 		// Front face
-		vertices.push_back({ {-0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f} });
-		vertices.push_back({ { 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f} });
-		vertices.push_back({ { 0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f} });
-		vertices.push_back({ {-0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f} });
+		vertices.push_back({ {-0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f} });
+		vertices.push_back({ { 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f} });
+		vertices.push_back({ { 0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f} });
+		vertices.push_back({ {-0.5f,  0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f} });
 
 		// Back face
-		vertices.push_back({ { 0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f} });
-		vertices.push_back({ {-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f} });
-		vertices.push_back({ {-0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f} });
-		vertices.push_back({ { 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f} });
+		vertices.push_back({ { 0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f} });
+		vertices.push_back({ {-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f} });
+		vertices.push_back({ {-0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {1.0f, 1.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f} });
+		vertices.push_back({ { 0.5f,  0.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f} });
 
 		// Top face
-		vertices.push_back({ {-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f} });
-		vertices.push_back({ { 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f} });
-		vertices.push_back({ { 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f} });
-		vertices.push_back({ {-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f} });
+		vertices.push_back({ {-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} });
+		vertices.push_back({ { 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} });
+		vertices.push_back({ { 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} });
+		vertices.push_back({ {-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} });
 
 		// Bottom face
-		vertices.push_back({ {-0.5f, -0.5f, -0.5f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f} });
-		vertices.push_back({ { 0.5f, -0.5f, -0.5f}, {0.0f, -1.0f, 0.0f}, {1.0f, 0.0f} });
-		vertices.push_back({ { 0.5f, -0.5f,  0.5f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f} });
-		vertices.push_back({ {-0.5f, -0.5f,  0.5f}, {0.0f, -1.0f, 0.0f}, {0.0f, 1.0f} });
+		vertices.push_back({ {-0.5f, -0.5f, -0.5f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} });
+		vertices.push_back({ { 0.5f, -0.5f, -0.5f}, {0.0f, -1.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} });
+		vertices.push_back({ { 0.5f, -0.5f,  0.5f}, {0.0f, -1.0f, 0.0f}, {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} });
+		vertices.push_back({ {-0.5f, -0.5f,  0.5f}, {0.0f, -1.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f} });
 
 		// Right face
-		vertices.push_back({ { 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f} });
-		vertices.push_back({ { 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f} });
-		vertices.push_back({ { 0.5f,  0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f} });
-		vertices.push_back({ { 0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f} });
+		vertices.push_back({ { 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f} });
+		vertices.push_back({ { 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f} });
+		vertices.push_back({ { 0.5f,  0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f} });
+		vertices.push_back({ { 0.5f,  0.5f,  0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f} });
 
 		// Left face
-		vertices.push_back({ {-0.5f, -0.5f, -0.5f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 0.0f} });
-		vertices.push_back({ {-0.5f, -0.5f,  0.5f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 0.0f} });
-		vertices.push_back({ {-0.5f,  0.5f,  0.5f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 1.0f} });
-		vertices.push_back({ {-0.5f,  0.5f, -0.5f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f} });
+		vertices.push_back({ {-0.5f, -0.5f, -0.5f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f} });
+		vertices.push_back({ {-0.5f, -0.5f,  0.5f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f} });
+		vertices.push_back({ {-0.5f,  0.5f,  0.5f}, {-1.0f, 0.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f} });
+		vertices.push_back({ {-0.5f,  0.5f, -0.5f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f} });
 
 		// Indices
 		for (uint32_t i = 0; i < 6; i++)
@@ -255,8 +393,11 @@ namespace Lunex {
 				vertex.Position = glm::vec3(x * radius, y * radius, z * radius);
 				vertex.Normal = glm::normalize(glm::vec3(x, y, z));
 				vertex.TexCoords = glm::vec2(s * S, r * R);
-				vertex.Tangent = glm::vec3(0.0f);
-				vertex.Bitangent = glm::vec3(0.0f);
+				
+				// Calculate tangent and bitangent for sphere
+				float const theta = 2 * glm::pi<float>() * s * S;
+				vertex.Tangent = glm::normalize(glm::vec3(-sin(theta), 0.0f, cos(theta)));
+				vertex.Bitangent = glm::normalize(glm::cross(vertex.Normal, vertex.Tangent));
 
 				vertices.push_back(vertex);
 			}
@@ -287,11 +428,11 @@ namespace Lunex {
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
 
-		// Plane vertices (Y-up)
-		vertices.push_back({ {-0.5f, 0.0f,  0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f} });
-		vertices.push_back({ { 0.5f, 0.0f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f} });
-		vertices.push_back({ { 0.5f, 0.0f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f} });
-		vertices.push_back({ {-0.5f, 0.0f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f} });
+		// Plane vertices (Y-up) with proper tangents
+		vertices.push_back({ {-0.5f, 0.0f,  0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} });
+		vertices.push_back({ { 0.5f, 0.0f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} });
+		vertices.push_back({ { 0.5f, 0.0f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} });
+		vertices.push_back({ {-0.5f, 0.0f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -1.0f} });
 
 		// Indices
 		indices = { 0, 1, 2, 2, 3, 0 };
@@ -317,11 +458,15 @@ namespace Lunex {
 			float angle = (float)i / (float)segments * glm::two_pi<float>();
 			float x = cos(angle) * radius;
 			float z = sin(angle) * radius;
+			
+			glm::vec3 normal = glm::normalize(glm::vec3(x, 0.0f, z));
+			glm::vec3 tangent = glm::normalize(glm::vec3(-sin(angle), 0.0f, cos(angle)));
+			glm::vec3 bitangent = glm::vec3(0.0f, 1.0f, 0.0f);
 
 			// Top vertex
-			vertices.push_back({ {x, halfHeight, z}, {x / radius, 0.0f, z / radius}, {(float)i / segments, 1.0f} });
+			vertices.push_back({ {x, halfHeight, z}, normal, {(float)i / segments, 1.0f}, tangent, bitangent });
 			// Bottom vertex
-			vertices.push_back({ {x, -halfHeight, z}, {x / radius, 0.0f, z / radius}, {(float)i / segments, 0.0f} });
+			vertices.push_back({ {x, -halfHeight, z}, normal, {(float)i / segments, 0.0f}, tangent, bitangent });
 		}
 
 		// Side faces

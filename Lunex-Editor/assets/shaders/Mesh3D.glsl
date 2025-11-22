@@ -21,16 +21,26 @@ struct VertexOutput {
 	vec3 FragPos;
 	vec3 Normal;
 	vec2 TexCoords;
+	mat3 TBN;
 };
 
 layout (location = 0) out VertexOutput Output;
-layout (location = 3) out flat int v_EntityID;
+layout (location = 6) out flat int v_EntityID;
 
 void main() {
 	vec4 worldPos = u_Transform * vec4(a_Position, 1.0);
 	Output.FragPos = worldPos.xyz;
-	Output.Normal = mat3(transpose(inverse(u_Transform))) * a_Normal;
+	
+	mat3 normalMatrix = mat3(transpose(inverse(u_Transform)));
+	Output.Normal = normalize(normalMatrix * a_Normal);
 	Output.TexCoords = a_TexCoords;
+	
+	// Calculate TBN matrix for normal mapping
+	vec3 T = normalize(normalMatrix * a_Tangent);
+	vec3 N = Output.Normal;
+	T = normalize(T - dot(T, N) * N);
+	vec3 B = cross(N, T);
+	Output.TBN = mat3(T, B, N);
 	
 	v_EntityID = a_EntityID;
 	
@@ -46,10 +56,11 @@ struct VertexOutput {
 	vec3 FragPos;
 	vec3 Normal;
 	vec2 TexCoords;
+	mat3 TBN;
 };
 
 layout (location = 0) in VertexOutput Input;
-layout (location = 3) in flat int v_EntityID;
+layout (location = 6) in flat int v_EntityID;
 
 // Material properties
 layout(std140, binding = 2) uniform Material {
@@ -61,32 +72,54 @@ layout(std140, binding = 2) uniform Material {
 	vec3 u_EmissionColor;
 	float _padding1;
 	vec3 u_ViewPos;
-	int u_UseTexture;
+	
+	// Texture flags
+	int u_UseAlbedoMap;
+	int u_UseNormalMap;
+	int u_UseMetallicMap;
+	int u_UseRoughnessMap;
+	int u_UseSpecularMap;
+	int u_UseEmissionMap;
+	int u_UseAOMap;
+	float _padding2;
+	
+	// Texture multipliers
+	float u_MetallicMultiplier;
+	float u_RoughnessMultiplier;
+	float u_SpecularMultiplier;
+	float u_AOMultiplier;
 };
 
 // Lights array
 #define MAX_LIGHTS 16
 
 struct LightData {
-	vec4 Position;      // xyz = position, w = type (0=Dir, 1=Point, 2=Spot)
-	vec4 Direction;     // xyz = direction, w = unused
-	vec4 Color;         // rgb = color, a = intensity
-	vec4 Params;        // x = range, y = innerCone, z = outerCone, w = castShadows
-	vec4 Attenuation;   // xyz = constant/linear/quadratic, w = unused
+	vec4 Position;
+	vec4 Direction;
+	vec4 Color;
+	vec4 Params;
+	vec4 Attenuation;
 };
 
 layout(std140, binding = 3) uniform Lights {
 	int u_NumLights;
-	float _padding2;
 	float _padding3;
 	float _padding4;
+	float _padding5;
 	LightData u_Lights[MAX_LIGHTS];
 };
 
-layout (binding = 0) uniform sampler2D texture_diffuse1;
+// Texture samplers
+layout (binding = 0) uniform sampler2D u_AlbedoMap;
+layout (binding = 1) uniform sampler2D u_NormalMap;
+layout (binding = 2) uniform sampler2D u_MetallicMap;
+layout (binding = 3) uniform sampler2D u_RoughnessMap;
+layout (binding = 4) uniform sampler2D u_SpecularMap;
+layout (binding = 5) uniform sampler2D u_EmissionMap;
+layout (binding = 6) uniform sampler2D u_AOMap;
 
 // Calculate light contribution
-vec3 CalculateLighting(vec3 normal, vec3 fragPos, vec3 viewDir, vec3 baseColor) {
+vec3 CalculateLighting(vec3 normal, vec3 fragPos, vec3 viewDir, vec3 baseColor, float metallic, float roughness, float specular) {
 	vec3 totalLight = vec3(0.0);
 	
 	for (int i = 0; i < u_NumLights && i < MAX_LIGHTS; i++) {
@@ -96,45 +129,37 @@ vec3 CalculateLighting(vec3 normal, vec3 fragPos, vec3 viewDir, vec3 baseColor) 
 		vec3 lightDir;
 		float attenuation = 1.0;
 		
-		// Directional Light
 		if (lightType == 0) {
 			lightDir = normalize(-light.Direction.xyz);
 		}
-		// Point Light
 		else if (lightType == 1) {
 			vec3 lightVec = light.Position.xyz - fragPos;
 			float distance = length(lightVec);
 			lightDir = normalize(lightVec);
 			
-			// Attenuation
 			float constant = light.Attenuation.x;
 			float linear = light.Attenuation.y;
 			float quadratic = light.Attenuation.z;
 			attenuation = 1.0 / (constant + linear * distance + quadratic * distance * distance);
 			
-			// Range check
 			if (distance > light.Params.x) {
 				attenuation = 0.0;
 			}
 		}
-		// Spot Light
 		else if (lightType == 2) {
 			vec3 lightVec = light.Position.xyz - fragPos;
 			float distance = length(lightVec);
 			lightDir = normalize(lightVec);
 			
-			// Attenuation
 			float constant = light.Attenuation.x;
 			float linear = light.Attenuation.y;
 			float quadratic = light.Attenuation.z;
 			attenuation = 1.0 / (constant + linear * distance + quadratic * distance * distance);
 			
-			// Range check
 			if (distance > light.Params.x) {
 				attenuation = 0.0;
 			}
 			
-			// Spot cone
 			float theta = dot(lightDir, normalize(-light.Direction.xyz));
 			float innerCone = light.Params.y;
 			float outerCone = light.Params.z;
@@ -143,7 +168,6 @@ vec3 CalculateLighting(vec3 normal, vec3 fragPos, vec3 viewDir, vec3 baseColor) 
 			attenuation *= intensity;
 		}
 		
-		// Skip if no contribution
 		if (attenuation <= 0.0) continue;
 		
 		// Diffuse
@@ -152,46 +176,95 @@ vec3 CalculateLighting(vec3 normal, vec3 fragPos, vec3 viewDir, vec3 baseColor) 
 		
 		// Specular (Blinn-Phong)
 		vec3 halfwayDir = normalize(lightDir + viewDir);
-		float shininess = mix(2.0, 128.0, 1.0 - u_Roughness);
+		float shininess = mix(2.0, 128.0, 1.0 - roughness);
 		float spec = pow(max(dot(normal, halfwayDir), 0.0), shininess);
-		vec3 specular = u_Specular * spec * light.Color.rgb * light.Color.a;
+		vec3 specularContrib = specular * spec * light.Color.rgb * light.Color.a;
 		
 		// Apply metallic effect
-		vec3 F0 = mix(vec3(0.04), baseColor, u_Metallic);
-		specular *= F0;
+		vec3 F0 = mix(vec3(0.04), baseColor, metallic);
+		specularContrib *= F0;
 		
-		// Combine and apply attenuation
-		totalLight += (diffuse + specular) * attenuation;
+		totalLight += (diffuse + specularContrib) * attenuation;
 	}
 	
 	return totalLight;
 }
 
 void main() {
-	// Get base color
-	vec3 baseColor;
-	if (u_UseTexture != 0) {
-		vec4 texColor = texture(texture_diffuse1, Input.TexCoords);
-		baseColor = texColor.rgb * u_Color.rgb;
+	// DEBUG: Uncomment to visualize UVs
+	// FragColor = vec4(Input.TexCoords, 0.0, 1.0);
+	// o_EntityID = v_EntityID;
+	// return;
+	
+	// Sample albedo
+	vec3 albedo;
+	if (u_UseAlbedoMap != 0) {
+		vec4 texColor = texture(u_AlbedoMap, Input.TexCoords);
+		albedo = texColor.rgb;
+		
+		// DEBUG: Show texture sampling
+		// FragColor = texColor;
+		// o_EntityID = v_EntityID;
+		// return;
 	} else {
-		baseColor = u_Color.rgb;
+		albedo = u_Color.rgb;
 	}
 	
-	// Normalize inputs
-	vec3 norm = normalize(Input.Normal);
+	// Sample and apply normal map
+	vec3 normal;
+	if (u_UseNormalMap != 0) {
+		vec3 normalMapSample = texture(u_NormalMap, Input.TexCoords).rgb;
+		normalMapSample = normalMapSample * 2.0 - 1.0;
+		normal = normalize(Input.TBN * normalMapSample);
+	} else {
+		normal = normalize(Input.Normal);
+	}
+	
+	// Sample metallic
+	float metallic = u_Metallic;
+	if (u_UseMetallicMap != 0) {
+		float metallicSample = texture(u_MetallicMap, Input.TexCoords).r;
+		metallic = clamp(metallicSample * u_MetallicMultiplier, 0.0, 1.0);
+	}
+	
+	// Sample roughness
+	float roughness = u_Roughness;
+	if (u_UseRoughnessMap != 0) {
+		float roughnessSample = texture(u_RoughnessMap, Input.TexCoords).r;
+		roughness = clamp(roughnessSample * u_RoughnessMultiplier, 0.0, 1.0);
+	}
+	
+	// Sample specular
+	float specular = u_Specular;
+	if (u_UseSpecularMap != 0) {
+		float specularSample = texture(u_SpecularMap, Input.TexCoords).r;
+		specular = clamp(specularSample * u_SpecularMultiplier, 0.0, 1.0);
+	}
+	
+	// Sample AO
+	float ao = 1.0;
+	if (u_UseAOMap != 0) {
+		ao = clamp(texture(u_AOMap, Input.TexCoords).r * u_AOMultiplier, 0.0, 1.0);
+	}
+	
 	vec3 viewDir = normalize(u_ViewPos - Input.FragPos);
 	
-	// Ambient light (simple global ambient)
-	vec3 ambient = vec3(0.1) * baseColor;
+	// Ambient light with AO
+	vec3 ambient = vec3(0.1) * albedo * ao;
 	
-	// Calculate lighting from all lights
-	vec3 lighting = CalculateLighting(norm, Input.FragPos, viewDir, baseColor);
+	// Calculate lighting
+	vec3 lighting = CalculateLighting(normal, Input.FragPos, viewDir, albedo, metallic, roughness, specular);
 	
 	// Combine
-	vec3 result = ambient + lighting * baseColor;
+	vec3 result = ambient + lighting * albedo;
 	
-	// Add emission
-	result += u_EmissionColor * u_EmissionIntensity;
+	// Sample and add emission
+	vec3 emission = u_EmissionColor * u_EmissionIntensity;
+	if (u_UseEmissionMap != 0) {
+		vec3 emissionSample = texture(u_EmissionMap, Input.TexCoords).rgb;
+		emission = emissionSample * u_EmissionColor * u_EmissionIntensity;
+	}
+	result += emission;
 	
 	FragColor = vec4(result, u_Color.a);
 	o_EntityID = v_EntityID;

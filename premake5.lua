@@ -435,6 +435,7 @@ project "Sandbox"
         "%{IncludeDir.entt}",
         "%{IncludeDir.yaml_cpp}",
         "%{IncludeDir.ImGuizmo}",
+        "%{IncludeDir.Assimp}",
         "%{IncludeDir.Box2D}"  -- ✅ AÑADIDO
     }
 

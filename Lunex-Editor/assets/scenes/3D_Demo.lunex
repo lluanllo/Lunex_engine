@@ -1,53 +1,81 @@
 Scene: Untitled
 Entities:
-  - Entity: 7496925501055931221
+  - Entity: 16893908232519978912
     TagComponent:
       Tag: Empty Entity
     TransformComponent:
-      Translation: [4.9, 0, 0]
-      Rotation: [0, 0, 0]
+      Translation: [-0.9434167, 2.6334765, 0]
+      Rotation: [-0.54803336, 0.9442231, 0]
       Scale: [1, 1, 1]
     LightComponent:
-      Type: 1
-      Color: [0.42477876, 0.64875865, 1]
-      Intensity: 0.5
+      Type: 0
+      Color: [0.460177, 0.7276999, 1]
+      Intensity: 0.75
       Range: 10
       Attenuation: [1, 0.09, 0.032]
       InnerConeAngle: 12.5
       OuterConeAngle: 17.5
       CastShadows: true
-  - Entity: 13450100013220178626
+  - Entity: 16436075251604764143
     TagComponent:
-      Tag: Empty Entity
+      Tag: tek floor
     TransformComponent:
-      Translation: [0, 0, 0]
+      Translation: [-1.844847, -0.47767046, -0.031797796]
       Rotation: [0, 0, 0]
       Scale: [1, 1, 1]
-    LightComponent:
-      Type: 1
-      Color: [0.64601755, 0, 1]
-      Intensity: 0.5
-      Range: 10
-      Attenuation: [1, 0.09, 0.032]
-      InnerConeAngle: 12.5
-      OuterConeAngle: 17.5
-      CastShadows: true
-  - Entity: 8522703758716784818
+    MeshComponent:
+      Type: 4
+      FilePath: assets\3DAssets\tekFloor.obj
+      Color: [1, 1, 1, 1]
+    MaterialComponent:
+      Color: [1, 1, 1, 1]
+      Metallic: 0
+      Roughness: 0.838
+      Specular: 0.5
+      EmissionColor: [0, 0, 0]
+      EmissionIntensity: 0
+    TextureComponent:
+      AlbedoPath: assets\textures\tek_floor_D.TGA.png
+      NormalPath: assets\textures\tek_floor_N.TGA
+      MetallicPath: assets\textures\tek_floor_LayeredM.png
+      RoughnessPath: assets\textures\tek_floor_LayeredR.png
+      SpecularPath: ""
+      EmissionPath: ""
+      AOPath: ""
+      MetallicMultiplier: 2
+      RoughnessMultiplier: 2
+      SpecularMultiplier: 1
+      AOMultiplier: 1
+  - Entity: 9788156866223600444
     TagComponent:
-      Tag: Empty Entity
+      Tag: tek turret
     TransformComponent:
-      Translation: [2.5730026, 1.4127084, 0.042381853]
-      Rotation: [0, 0, 0]
-      Scale: [1, 1, 1]
-    LightComponent:
-      Type: 1
-      Color: [0.7743363, 0.7360106, 0.23298614]
-      Intensity: 1
-      Range: 10
-      Attenuation: [1, 0.09, 0.032]
-      InnerConeAngle: 12.5
-      OuterConeAngle: 17.5
-      CastShadows: true
+      Translation: [2.5637429, -0.40621978, 0]
+      Rotation: [-1.5707964, 0, 0]
+      Scale: [0.00875, 0.008749541, 0.008749541]
+    MeshComponent:
+      Type: 4
+      FilePath: assets\3DAssets\tek_turret_RIG.FBX
+      Color: [0.3928264, 0.58344567, 0.6725664, 1]
+    MaterialComponent:
+      Color: [0.19500352, 0.605604, 0.7345133, 1]
+      Metallic: 1
+      Roughness: 0
+      Specular: 1
+      EmissionColor: [0, 0, 0]
+      EmissionIntensity: 0.4
+    TextureComponent:
+      AlbedoPath: assets\textures\tek_turret_Colorize_d.png
+      NormalPath: assets\textures\tek_turret_low_N.png
+      MetallicPath: assets\textures\tek_turret_low_Layered.png
+      RoughnessPath: assets\textures\tek_turret_low_LayeredR.png
+      SpecularPath: ""
+      EmissionPath: ""
+      AOPath: ""
+      MetallicMultiplier: 2
+      RoughnessMultiplier: 2
+      SpecularMultiplier: 1
+      AOMultiplier: 1
   - Entity: 6230634635200783568
     TagComponent:
       Tag: plane
@@ -61,44 +89,68 @@ Entities:
       Color: [1, 1, 1, 1]
     MaterialComponent:
       Color: [1, 1, 1, 1]
-      Metallic: 0
-      Roughness: 0.5
-      Specular: 0.5
-      EmissionColor: [0, 0, 0]
-      EmissionIntensity: 0
-  - Entity: 9247698822994108608
-    TagComponent:
-      Tag: Cube
-    TransformComponent:
-      Translation: [3.7329867, 0, 0]
-      Rotation: [0, 0, 0]
-      Scale: [1, 1, 1]
-    MeshComponent:
-      Type: 1
-      FilePath: ""
-      Color: [0.65656984, 0.8362832, 0.421842, 1]
-    MaterialComponent:
-      Color: [0.49259034, 0.6681416, 0.3074634, 1]
-      Metallic: 0
-      Roughness: 0.5
-      Specular: 0.5
-      EmissionColor: [0, 0, 0]
-      EmissionIntensity: 0
-  - Entity: 9788156866223600444
-    TagComponent:
-      Tag: tek turret
-    TransformComponent:
-      Translation: [1.3186772, -0.40621978, 0]
-      Rotation: [-1.5707964, 0, 0]
-      Scale: [0.00875, 0.008749725, 0.008749725]
-    MeshComponent:
-      Type: 4
-      FilePath: assets\3DAssets\tek_turret_RIG.FBX
-      Color: [0.3928264, 0.58344567, 0.6725664, 1]
-    MaterialComponent:
-      Color: [0.19500352, 0.605604, 0.7345133, 1]
-      Metallic: 0
-      Roughness: 0.508
+      Metallic: 1
+      Roughness: 1
       Specular: 1
       EmissionColor: [0, 0, 0]
       EmissionIntensity: 0
+    TextureComponent:
+      AlbedoPath: assets\textures\planks.png
+      NormalPath: assets\textures\LightMetal_N.TGA
+      MetallicPath: ""
+      RoughnessPath: assets\textures\planksSpec.png
+      SpecularPath: assets\textures\planksSpec.png
+      EmissionPath: ""
+      AOPath: ""
+      MetallicMultiplier: 1
+      RoughnessMultiplier: 1.17
+      SpecularMultiplier: 2
+      AOMultiplier: 1
+  - Entity: 8522703758716784818
+    TagComponent:
+      Tag: light
+    TransformComponent:
+      Translation: [1.3439443, 2.281767, 0.042382557]
+      Rotation: [-1.5707964, 0, 0]
+      Scale: [1, 0.99995863, 0.99995863]
+    LightComponent:
+      Type: 2
+      Color: [0.7743363, 0.7360106, 0.23298614]
+      Intensity: 1
+      Range: 10
+      Attenuation: [1, 0.09, 0.032]
+      InnerConeAngle: 13.4
+      OuterConeAngle: 52.3
+      CastShadows: true
+  - Entity: 13450100013220178626
+    TagComponent:
+      Tag: light
+    TransformComponent:
+      Translation: [-1.0996697, 1.6388991, -6.1035156e-05]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    LightComponent:
+      Type: 1
+      Color: [0.64601755, 0, 1]
+      Intensity: 0.5
+      Range: 10
+      Attenuation: [1, 0.09, 0.032]
+      InnerConeAngle: 12.5
+      OuterConeAngle: 17.5
+      CastShadows: true
+  - Entity: 7496925501055931221
+    TagComponent:
+      Tag: light
+    TransformComponent:
+      Translation: [3.6993532, 0.97675014, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    LightComponent:
+      Type: 1
+      Color: [0.42477876, 0.64875865, 1]
+      Intensity: 0.5
+      Range: 10
+      Attenuation: [1, 0.09, 0.032]
+      InnerConeAngle: 12.5
+      OuterConeAngle: 17.5
+      CastShadows: true
