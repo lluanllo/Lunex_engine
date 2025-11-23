@@ -5,6 +5,9 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "Scene/SceneSerializer.h"
+#include "Project/Project.h"
+#include "Project/ProjectManager.h"
+#include "Project/ProjectSerializer.h"
 
 #include "Utils/PlatformUtils.h"
 
@@ -73,11 +76,32 @@ namespace Lunex {
 			OpenScene(path);
 			});
 
+		// Configure menu bar panel
+		m_MenuBarPanel.SetOnNewProjectCallback([this]() { NewProject(); });
+		m_MenuBarPanel.SetOnOpenProjectCallback([this]() { OpenProject(); });
+		m_MenuBarPanel.SetOnSaveProjectCallback([this]() { SaveProject(); });
+		m_MenuBarPanel.SetOnSaveProjectAsCallback([this]() { SaveProjectAs(); });
+		
+		m_MenuBarPanel.SetOnNewSceneCallback([this]() { NewScene(); });
+		m_MenuBarPanel.SetOnOpenSceneCallback([this]() { OpenScene(); });
+		m_MenuBarPanel.SetOnSaveSceneCallback([this]() { SaveScene(); });
+		m_MenuBarPanel.SetOnSaveSceneAsCallback([this]() { SaveSceneAs(); });
+		
+		m_MenuBarPanel.SetOnExitCallback([this]() { Application::Get().Close(); });
+
+		// Configure project creation dialog
+		m_ProjectCreationDialog.SetOnCreateCallback([this](const std::string& name, const std::filesystem::path& location) {
+			CreateProjectWithDialog(name, location);
+		});
+
 		Lunex::FramebufferSpecification fbSpec;
 		fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
 		fbSpec.Width = 1280;
 		fbSpec.Height = 720;
 		m_Framebuffer = Framebuffer::Create(fbSpec);
+
+		// Create initial project
+		ProjectManager::New();
 
 		m_EditorScene = CreateRef<Scene>();
 		m_ActiveScene = m_EditorScene;
@@ -118,6 +142,18 @@ namespace Lunex {
 				m_ConsolePanel.AddLog("New scene created", LogLevel::Info, "Scene");
 			});
 
+		// Project commands
+		m_ConsolePanel.RegisterCommand("new_project", "Create a new project", "new_project",
+			[this](const std::vector<std::string>& args) {
+				NewProject();
+				m_ConsolePanel.AddLog("New project created", LogLevel::Info, "Project");
+			});
+
+		m_ConsolePanel.RegisterCommand("save_project", "Save the current project", "save_project",
+			[this](const std::vector<std::string>& args) {
+				SaveProject();
+			});
+
 		m_ConsolePanel.RegisterCommand("play", "Start playing the scene", "play",
 			[this](const std::vector<std::string>& args) {
 				OnScenePlay();
@@ -153,6 +189,8 @@ namespace Lunex {
 
 		m_ConsolePanel.AddLog("Lunex Editor initialized", LogLevel::Info, "System");
 		m_ConsolePanel.AddLog("Welcome! Type 'help' to see available commands", LogLevel::Info, "System");
+
+		UI_UpdateWindowTitle();
 	}
 
 	void EditorLayer::OnDetach() {
@@ -277,26 +315,8 @@ namespace Lunex {
 
 		style.WindowMinSize.x = minWinSizeX;
 
-		if (ImGui::BeginMenuBar()) {
-			if (ImGui::BeginMenu("File")) {
-				if (ImGui::MenuItem("Save", "Ctrl+S"))
-					SaveScene();
-
-				if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S"))
-					SaveSceneAs();
-
-				if (ImGui::MenuItem("New", "Ctrl+N"))
-					NewScene();
-
-				if (ImGui::MenuItem("Open...", "Ctrl+O"))
-					OpenScene();
-
-				if (ImGui::MenuItem("Exit")) Application::Get().Close();
-				ImGui::EndMenu();
-			}
-
-			ImGui::EndMenuBar();
-		}
+		// Render MenuBar using MenuBarPanel
+		m_MenuBarPanel.OnImGuiRender();
 
 		// Render all panels
 		m_SceneHierarchyPanel.OnImGuiRender();
@@ -304,6 +324,9 @@ namespace Lunex {
 		m_StatsPanel.OnImGuiRender();
 		m_SettingsPanel.OnImGuiRender();
 		m_ConsolePanel.OnImGuiRender();
+
+		// Render dialogs (on top)
+		m_ProjectCreationDialog.OnImGuiRender();
 
 		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
 		m_ViewportPanel.OnImGuiRender(m_Framebuffer, m_SceneHierarchyPanel, m_EditorCamera,
@@ -318,6 +341,9 @@ namespace Lunex {
 		if (m_SceneState == SceneState::Edit) {
 			m_EditorCamera.OnEvent(e);
 		}
+		
+		// Forward events to Content Browser for file drop
+		m_ContentBrowserPanel.OnEvent(e);
 
 		EventDispatcher dispatcher(e);
 		dispatcher.Dispatch<KeyPressedEvent>(LNX_BIND_EVENT_FN(EditorLayer::OnKeyPressed));
@@ -330,32 +356,40 @@ namespace Lunex {
 
 		bool control = Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl);
 		bool shift = Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift);
+		bool alt = Input::IsKeyPressed(Key::LeftAlt) || Input::IsKeyPressed(Key::RightAlt);
 
 		switch (e.GetKeyCode()) {
+		// Project shortcuts
 		case Key::N: {
-			if (control)
+			if (control && shift)
+				NewProject();
+			else if (control)
 				NewScene();
 			break;
 		}
 		case Key::O: {
-			if (control)
+			if (control && shift)
+				OpenProject();
+			else if (control)
 				OpenScene();
 			break;
 		}
 		case Key::S: {
-			if (control) {
-				if (shift)
-					SaveSceneAs();
-				else
-					SaveScene();
-			}
+			if (control && shift)
+				SaveProject();
+			else if (control && alt)
+				SaveSceneAs();
+			else if (control)
+				SaveScene();
 			break;
 		}
+		// Entity operations
 		case Key::D: {
 			if (control)
 				OnDuplicateEntity();
 			break;
 		}
+		// Gizmo modes
 		case Key::Q: {
 			if (!ImGuizmo::IsUsing())
 				m_GizmoType = -1;
@@ -538,5 +572,172 @@ namespace Lunex {
 		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
 		if (selectedEntity)
 			m_EditorScene->DuplicateEntity(selectedEntity);
+	}
+
+	// ============================================================================
+	// PROJECT MANAGEMENT
+	// ============================================================================
+
+	void EditorLayer::NewProject() {
+		// Open project creation dialog
+		m_ProjectCreationDialog.Open();
+	}
+
+	void EditorLayer::CreateProjectWithDialog(const std::string& name, const std::filesystem::path& location) {
+		// Create project directory
+		std::filesystem::path projectPath = location / name;
+		std::filesystem::path projectFile = projectPath / "project.lunex";
+		
+		// Create new project
+		Ref<Project> project = ProjectManager::New();
+		project->SetName(name);
+		project->GetConfig().AssetDirectory = "Assets";
+		project->GetConfig().Width = 1920;
+		project->GetConfig().Height = 1080;
+		project->GetConfig().VSync = true;
+		project->GetConfig().StartScene = "Scenes/SampleScene.lunex";
+		
+		// Save project (this will create directories and default scene)
+		if (!ProjectManager::SaveActive(projectFile)) {
+			LNX_LOG_ERROR("Failed to create project");
+			m_ConsolePanel.AddLog("Failed to create project: " + name, LogLevel::Error, "Project");
+			return;
+		}
+		
+		// Update Content Browser to show project assets
+		m_ContentBrowserPanel.SetRootDirectory(project->GetAssetDirectory());
+		
+		// Load the default scene
+		auto startScenePath = project->GetAssetFileSystemPath(project->GetConfig().StartScene);
+		if (std::filesystem::exists(startScenePath)) {
+			OpenScene(startScenePath);
+		}
+		else {
+			// If default scene doesn't exist, create new empty scene
+			NewScene();
+		}
+		
+		UI_UpdateWindowTitle();
+		m_ConsolePanel.AddLog("Project created: " + name, LogLevel::Info, "Project");
+		LNX_LOG_INFO("Project created successfully at: {0}", projectPath.string());
+	}
+
+	void EditorLayer::OpenProject() {
+		std::string filepath = FileDialogs::OpenFile("Lunex Project (*.lunex)\0*.lunex\0");
+		if (!filepath.empty())
+			OpenProject(filepath);
+	}
+
+	void EditorLayer::OpenProject(const std::filesystem::path& path) {
+		if (m_SceneState != SceneState::Edit)
+			OnSceneStop();
+
+		if (path.extension().string() != ".lunex") {
+			LNX_LOG_WARN("Could not load {0} - not a project file", path.filename().string());
+			m_ConsolePanel.AddLog("Failed to open project: Not a .lunex file", LogLevel::Error, "Project");
+			return;
+		}
+
+		Ref<Project> project = ProjectManager::Load(path);
+		if (!project) {
+			m_ConsolePanel.AddLog("Failed to load project: " + path.string(), LogLevel::Error, "Project");
+			return;
+		}
+
+		// Update Content Browser to show project assets
+		m_ContentBrowserPanel.SetRootDirectory(project->GetAssetDirectory());
+
+		// Load start scene if specified
+		auto& config = project->GetConfig();
+		if (!config.StartScene.empty()) {
+			auto startScenePath = project->GetAssetFileSystemPath(config.StartScene);
+			if (std::filesystem::exists(startScenePath)) {
+				OpenScene(startScenePath);
+			}
+			else {
+				LNX_LOG_WARN("Start scene not found: {0}", startScenePath.string());
+				NewScene();
+			}
+		}
+		else {
+			NewScene();
+		}
+
+		UI_UpdateWindowTitle();
+		m_ConsolePanel.AddLog("Project opened: " + project->GetName(), LogLevel::Info, "Project");
+	}
+
+	void EditorLayer::SaveProject() {
+		auto project = ProjectManager::GetActiveProject();
+		if (!project) {
+			LNX_LOG_ERROR("No active project!");
+			m_ConsolePanel.AddLog("No active project to save", LogLevel::Error, "Project");
+			return;
+		}
+
+		auto projectPath = project->GetProjectPath();
+		if (projectPath.empty()) {
+			SaveProjectAs();
+			return;
+		}
+
+		// Save current scene first
+		if (!m_EditorScenePath.empty()) {
+			SerializeScene(m_ActiveScene, m_EditorScenePath);
+		}
+
+		if (ProjectManager::SaveActive(projectPath)) {
+			m_ConsolePanel.AddLog("Project saved: " + project->GetName(), LogLevel::Info, "Project");
+		}
+		else {
+			m_ConsolePanel.AddLog("Failed to save project", LogLevel::Error, "Project");
+		}
+	}
+
+	void EditorLayer::SaveProjectAs() {
+		auto project = ProjectManager::GetActiveProject();
+		if (!project) {
+			LNX_LOG_ERROR("No active project!");
+			return;
+		}
+
+		std::string filepath = FileDialogs::SaveFile("Lunex Project (*.lunex)\0*.lunex\0");
+		if (!filepath.empty()) {
+			// Ensure .lunex extension
+			std::filesystem::path path(filepath);
+			if (path.extension() != ".lunex") {
+				path += ".lunex";
+			}
+
+			// Update project name from filename
+			project->SetName(path.stem().string());
+
+			// Set asset directory relative to project file
+			project->GetConfig().AssetDirectory = "Assets";
+
+			if (ProjectManager::SaveActive(path)) {
+				m_ConsolePanel.AddLog("Project saved as: " + path.string(), LogLevel::Info, "Project");
+				UI_UpdateWindowTitle();
+			}
+			else {
+				m_ConsolePanel.AddLog("Failed to save project", LogLevel::Error, "Project");
+			}
+		}
+	}
+
+	void EditorLayer::UI_UpdateWindowTitle() {
+		auto project = ProjectManager::GetActiveProject();
+		std::string title = "Lunex Editor";
+
+		if (project) {
+			title += " - " + project->GetName();
+			m_MenuBarPanel.SetProjectName(project->GetName());
+		}
+		else {
+			m_MenuBarPanel.SetProjectName("No Project");
+		}
+
+		// Update window title through Application
+		// Application::Get().GetWindow().SetTitle(title);
 	}
 }
