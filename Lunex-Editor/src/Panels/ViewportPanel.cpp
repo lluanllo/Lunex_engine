@@ -1,4 +1,5 @@
 #include "ViewportPanel.h"
+#include "ContentBrowserPanel.h"
 #include "imgui.h"
 #include "ImGuizmo.h"
 #include "Core/Application.h"
@@ -33,11 +34,20 @@ namespace Lunex {
 		uint64_t textureID = framebuffer->GetColorAttachmentRendererID();
 		ImGui::Image(reinterpret_cast<void*>(textureID), ImVec2{ m_ViewportSize.x, m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
 
+		// Drag & drop de escenas desde Content Browser
 		if (ImGui::BeginDragDropTarget()) {
 			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
-				const wchar_t* path = (const wchar_t*)payload->Data;
-				if (m_OnSceneDropCallback) {
-					m_OnSceneDropCallback(std::filesystem::path(g_AssetPath) / path);
+				ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+				
+				// Validar que sea un archivo .lunex (escena)
+				std::string ext = data->Extension;
+				if (ext == ".lunex") {
+					if (m_OnSceneDropCallback) {
+						m_OnSceneDropCallback(data->FilePath);
+					}
+				}
+				else {
+					LNX_LOG_WARN("Dropped file is not a scene file (.lunex)");
 				}
 			}
 			ImGui::EndDragDropTarget();

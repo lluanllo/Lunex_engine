@@ -253,8 +253,12 @@ namespace Lunex {
 
 		void LoadIcon() {
 			IconTexture = Texture2D::Create("Resources/Icons/EntityIcons/LightIcon.png");
-			if (!IconTexture) {
-				LNX_LOG_WARN("Failed to load Light Icon");
+			if (!IconTexture || !IconTexture->IsLoaded()) {
+				LNX_LOG_ERROR("Failed to load Light Icon from Resources/Icons/EntityIcons/LightIcon.png");
+				LNX_LOG_ERROR("  -> Check that the file exists at this path");
+			}
+			else {
+				LNX_LOG_INFO("Light Icon loaded successfully: {0}x{1}", IconTexture->GetWidth(), IconTexture->GetHeight());
 			}
 		}
 
@@ -282,9 +286,29 @@ namespace Lunex {
 		SceneCamera Camera;
 		bool Primary = true;
 		bool FixedAspectRatio = false;
+		Ref<Texture2D> IconTexture;
 
-		CameraComponent() = default;
-		CameraComponent(const CameraComponent&) = default;
+		CameraComponent() {
+			LoadIcon();
+		}
+		
+		CameraComponent(const CameraComponent& other)
+			: Camera(other.Camera),
+			  Primary(other.Primary),
+			  FixedAspectRatio(other.FixedAspectRatio),
+			  IconTexture(other.IconTexture) {
+		}
+
+		void LoadIcon() {
+			IconTexture = Texture2D::Create("Resources/Icons/HierarchyPanel/CameraIcon.png");
+			if (!IconTexture || !IconTexture->IsLoaded()) {
+				LNX_LOG_ERROR("Failed to load Camera Icon from Resources/Icons/HierarchyPanel/CameraIcon.png");
+				LNX_LOG_ERROR("  -> Check that the file exists at this path");
+			}
+			else {
+				LNX_LOG_INFO("Camera Icon loaded successfully: {0}x{1}", IconTexture->GetWidth(), IconTexture->GetHeight());
+			}
+		}
 	};
 
 	class ScriptableEntity;

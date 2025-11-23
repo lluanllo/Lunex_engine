@@ -32,6 +32,10 @@ namespace Lunex {
 			static void SetLineWidth(float width) {
 				s_RendererAPI->SetLineWidth(width);
 			}
+			
+			static void SetDepthMask(bool enabled) {
+				s_RendererAPI->SetDepthMask(enabled);
+			}
 		private:
 			static Scope<RendererAPI> s_RendererAPI;
 	};
