@@ -341,6 +341,9 @@ namespace Lunex {
 		if (m_SceneState == SceneState::Edit) {
 			m_EditorCamera.OnEvent(e);
 		}
+		
+		// Forward events to Content Browser for file drop
+		m_ContentBrowserPanel.OnEvent(e);
 
 		EventDispatcher dispatcher(e);
 		dispatcher.Dispatch<KeyPressedEvent>(LNX_BIND_EVENT_FN(EditorLayer::OnKeyPressed));

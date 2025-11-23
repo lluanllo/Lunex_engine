@@ -383,14 +383,38 @@ namespace Lunex {
 
 			ImGui::Button("Texture", ImVec2(100.0f, 0.0f));
 			if (ImGui::BeginDragDropTarget()) {
-				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
-					const wchar_t* path = (const wchar_t*)payload->Data;
-					std::filesystem::path texturePath = std::filesystem::path(g_AssetPath) / path;
+				// Accept new texture-specific payload
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("TEXTURE_PATH")) {
+					const char* path = (const char*)payload->Data;
+					Ref<Texture2D> texture = Texture2D::Create(path);
+					if (texture->IsLoaded())
+						component.Texture = texture;
+					else
+						LNX_LOG_WARN("Could not load texture {0}", std::filesystem::path(path).filename().string());
+				}
+				// Fallback to old payload for compatibility
+				else if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+					const wchar_t* wpath = (const wchar_t*)payload->Data;
+					std::filesystem::path texturePath = std::filesystem::path(g_AssetPath) / wpath;
 					Ref<Texture2D> texture = Texture2D::Create(texturePath.string());
 					if (texture->IsLoaded())
 						component.Texture = texture;
 					else
 						LNX_LOG_WARN("Could not load texture {0}", texturePath.filename().string());
+				}
+				// Generic file path
+				else if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("FILE_PATH")) {
+					const char* path = (const char*)payload->Data;
+					std::string ext = std::filesystem::path(path).extension().string();
+					std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+					
+					if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".tga") {
+						Ref<Texture2D> texture = Texture2D::Create(path);
+						if (texture->IsLoaded())
+							component.Texture = texture;
+						else
+							LNX_LOG_WARN("Could not load texture {0}", std::filesystem::path(path).filename().string());
+					}
 				}
 				ImGui::EndDragDropTarget();
 			}
@@ -484,15 +508,42 @@ namespace Lunex {
 				// Drag and drop support
 				ImGui::Button("Drop Model Here", ImVec2(200.0f, 30.0f));
 				if (ImGui::BeginDragDropTarget()) {
-					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
-						const wchar_t* path = (const wchar_t*)payload->Data;
-						std::filesystem::path modelPath = std::filesystem::path(g_AssetPath) / path;
+					// Accept new model-specific payload
+					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("MODEL_PATH")) {
+						const char* path = (const char*)payload->Data;
+						std::string ext = std::filesystem::path(path).extension().string();
+						std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+						if (ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb") {
+							component.LoadFromFile(path);
+						}
+						else {
+							LNX_LOG_WARN("Unsupported model format: {0}", ext);
+						}
+					}
+					// Fallback to old payload for compatibility
+					else if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+						const wchar_t* wpath = (const wchar_t*)payload->Data;
+						std::filesystem::path modelPath = std::filesystem::path(g_AssetPath) / wpath;
 
 						std::string ext = modelPath.extension().string();
 						std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
 						if (ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb") {
 							component.LoadFromFile(modelPath.string());
+						}
+						else {
+							LNX_LOG_WARN("Unsupported model format: {0}", ext);
+						}
+					}
+					// Generic file path
+					else if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("FILE_PATH")) {
+						const char* path = (const char*)payload->Data;
+						std::string ext = std::filesystem::path(path).extension().string();
+						std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+						if (ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb" || ext == ".dae") {
+							component.LoadFromFile(path);
 						}
 						else {
 							LNX_LOG_WARN("Unsupported model format: {0}", ext);
@@ -692,15 +743,40 @@ namespace Lunex {
 				
 				// Drag and drop target
 				if (ImGui::BeginDragDropTarget()) {
-					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+					// Accept new texture-specific payload
+					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("TEXTURE_PATH")) {
+						const char* texturePath = (const char*)payload->Data;
+						std::string ext = std::filesystem::path(texturePath).extension().string();
+						std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+						
+						if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" || ext == ".hdr") {
+							loadFunc(component, texturePath);
+						} else {
+							LNX_LOG_WARN("Unsupported texture format: {0}", ext);
+						}
+					}
+					// Fallback to old payload for compatibility
+					else if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
 						const wchar_t* wpath = (const wchar_t*)payload->Data;
 						std::filesystem::path texturePath = std::filesystem::path(g_AssetPath) / wpath;
 						
 						std::string ext = texturePath.extension().string();
 						std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 						
-						if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp") {
+						if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" || ext == ".hdr") {
 							loadFunc(component, texturePath.string());
+						} else {
+							LNX_LOG_WARN("Unsupported texture format: {0}", ext);
+						}
+					}
+					// Generic file path
+					else if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("FILE_PATH")) {
+						const char* texturePath = (const char*)payload->Data;
+						std::string ext = std::filesystem::path(texturePath).extension().string();
+						std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+						
+						if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" || ext == ".hdr") {
+							loadFunc(component, texturePath);
 						} else {
 							LNX_LOG_WARN("Unsupported texture format: {0}", ext);
 						}
@@ -746,7 +822,7 @@ namespace Lunex {
 						ImGui::SliderFloat("##mult", &component.AOMultiplier, 0.0f, 2.0f, "%.2f");
 					}
 					
-					ImGui::PopStyleColor();
+					ImGui::PopStyleColor(); // Balance the Push
 				}
 				
 				ImGui::EndGroup();
