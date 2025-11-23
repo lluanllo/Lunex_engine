@@ -4,13 +4,13 @@ Entities:
     TagComponent:
       Tag: light
     TransformComponent:
-      Translation: [3.6993532, 0.97675014, 0]
+      Translation: [3.6993532, 1.3175356, 0]
       Rotation: [0, 0, 0]
       Scale: [1, 1, 1]
     LightComponent:
       Type: 1
       Color: [0.42477876, 0.64875865, 1]
-      Intensity: 0.5
+      Intensity: 1
       Range: 10
       Attenuation: [1, 0.09, 0.032]
       InnerConeAngle: 12.5
@@ -20,13 +20,13 @@ Entities:
     TagComponent:
       Tag: light
     TransformComponent:
-      Translation: [-1.0996697, 1.6388991, -6.1035156e-05]
+      Translation: [0.13557133, 1.6388991, -6.1035156e-05]
       Rotation: [0, 0, 0]
       Scale: [1, 1, 1]
     LightComponent:
       Type: 1
       Color: [0.64601755, 0, 1]
-      Intensity: 0.5
+      Intensity: 1
       Range: 10
       Attenuation: [1, 0.09, 0.032]
       InnerConeAngle: 12.5
@@ -36,13 +36,13 @@ Entities:
     TagComponent:
       Tag: light
     TransformComponent:
-      Translation: [1.3439443, 2.281767, 0.042382557]
+      Translation: [1.5276756, 2.6002553, 0.04232104]
       Rotation: [-1.5707964, 0, 0]
-      Scale: [1, 0.99995863, 0.99995863]
+      Scale: [1, 0.99985135, 0.99985135]
     LightComponent:
       Type: 2
       Color: [0.7743363, 0.7360106, 0.23298614]
-      Intensity: 1
+      Intensity: 10.6
       Range: 10
       Attenuation: [1, 0.09, 0.032]
       InnerConeAngle: 13.4
@@ -61,7 +61,7 @@ Entities:
       Color: [1, 1, 1, 1]
     MaterialComponent:
       Color: [1, 1, 1, 1]
-      Metallic: 0
+      Metallic: 1
       Roughness: 1
       Specular: 1
       EmissionColor: [0, 0, 0]
@@ -75,8 +75,8 @@ Entities:
       EmissionPath: ""
       AOPath: ""
       MetallicMultiplier: 1
-      RoughnessMultiplier: 0.28
-      SpecularMultiplier: 1.95
+      RoughnessMultiplier: 0.62
+      SpecularMultiplier: 2
       AOMultiplier: 1
   - Entity: 9788156866223600444
     TagComponent:
@@ -104,7 +104,7 @@ Entities:
       SpecularPath: ""
       EmissionPath: ""
       AOPath: ""
-      MetallicMultiplier: 1.1
+      MetallicMultiplier: 2
       RoughnessMultiplier: 2
       SpecularMultiplier: 1
       AOMultiplier: 1
@@ -122,8 +122,8 @@ Entities:
     MaterialComponent:
       Color: [1, 1, 1, 1]
       Metallic: 0
-      Roughness: 1
-      Specular: 1
+      Roughness: 0.838
+      Specular: 0.5
       EmissionColor: [0, 0, 0]
       EmissionIntensity: 0
     TextureComponent:
@@ -134,21 +134,21 @@ Entities:
       SpecularPath: ""
       EmissionPath: ""
       AOPath: ""
-      MetallicMultiplier: 1.14
-      RoughnessMultiplier: 0.97
+      MetallicMultiplier: 2
+      RoughnessMultiplier: 2
       SpecularMultiplier: 1
       AOMultiplier: 1
   - Entity: 16893908232519978912
     TagComponent:
       Tag: Empty Entity
     TransformComponent:
-      Translation: [-0.9434167, 2.6334765, 0]
-      Rotation: [-0.54803336, 0.9442231, 0]
-      Scale: [1, 1, 1]
+      Translation: [-0.9434167, 2.6334765, 1.8626451e-09]
+      Rotation: [-0.54803276, 0.94422317, -5.082491e-08]
+      Scale: [0.9999999, 0.9999997, 0.9999993]
     LightComponent:
       Type: 0
       Color: [0.460177, 0.7276999, 1]
-      Intensity: 0.75
+      Intensity: 1.5
       Range: 10
       Attenuation: [1, 0.09, 0.032]
       InnerConeAngle: 12.5
