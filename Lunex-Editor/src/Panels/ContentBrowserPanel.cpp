@@ -306,27 +306,48 @@ namespace Lunex {
 					
 					// Drag & drop target for sidebar folders
 					if (ImGui::BeginDragDropTarget()) {
+						// Visual highlight when hovering
+						ImDrawList* dropDrawList = ImGui::GetWindowDrawList();
+						ImVec2 itemMin = ImGui::GetItemRectMin();
+						ImVec2 itemMax = ImGui::GetItemRectMax();
+						
+						// Draw highlight background
+						ImU32 highlightColor = IM_COL32(90, 150, 255, 80);
+						dropDrawList->AddRectFilled(itemMin, itemMax, highlightColor);
+						
+						// Draw border
+						ImU32 borderColor = IM_COL32(90, 150, 255, 200);
+						dropDrawList->AddRect(itemMin, itemMax, borderColor, 0.0f, 0, 2.0f);
+						
 						// Accept single item
-						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM", ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
+							"CONTENT_BROWSER_ITEM", 
+							ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+							
 							if (payload->IsDelivery()) {
-								const wchar_t* wpath = (const wchar_t*)payload->Data;
-								std::filesystem::path sourcePath = std::filesystem::path(g_AssetPath) / wpath;
+								ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+								std::filesystem::path sourcePath(data->FilePath);
 								std::filesystem::path destPath = dirPath / sourcePath.filename();
 								
 								try {
 									if (sourcePath != destPath && !std::filesystem::exists(destPath)) {
 										std::filesystem::rename(sourcePath, destPath);
-										LNX_LOG_INFO("Moved {0} to {1}", sourcePath.filename().string(), dirPath.filename().string());
+										LNX_LOG_INFO("Moved {0} to {1}", 
+											sourcePath.filename().string(), dirPath.filename().string());
 									}
 								}
 								catch (const std::exception& e) {
-									LNX_LOG_ERROR("Failed to move {0}: {1}", sourcePath.filename().string(), e.what());
+									LNX_LOG_ERROR("Failed to move {0}: {1}", 
+										sourcePath.filename().string(), e.what());
 								}
 							}
 						}
 						
 						// Accept multiple items
-						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEMS", ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
+							"CONTENT_BROWSER_ITEMS", 
+							ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+							
 							if (payload->IsDelivery()) {
 								std::string payloadData = (const char*)payload->Data;
 								std::stringstream ss(payloadData);
@@ -341,11 +362,13 @@ namespace Lunex {
 									try {
 										if (sourcePath != destPath && !std::filesystem::exists(destPath)) {
 											std::filesystem::rename(sourcePath, destPath);
-											LNX_LOG_INFO("Moved {0} to {1}", sourcePath.filename().string(), dirPath.filename().string());
+											LNX_LOG_INFO("Moved {0} to {1}", 
+												sourcePath.filename().string(), dirPath.filename().string());
 										}
 									}
 									catch (const std::exception& e) {
-										LNX_LOG_ERROR("Failed to move {0}: {1}", sourcePath.filename().string(), e.what());
+										LNX_LOG_ERROR("Failed to move {0}: {1}", 
+											sourcePath.filename().string(), e.what());
 									}
 								}
 								
@@ -414,11 +437,27 @@ namespace Lunex {
 		
 		// Drag & drop target for Assets root
 		if (ImGui::BeginDragDropTarget()) {
+			// Visual highlight when hovering
+			ImDrawList* dropDrawList = ImGui::GetWindowDrawList();
+			ImVec2 itemMin = ImGui::GetItemRectMin();
+			ImVec2 itemMax = ImGui::GetItemRectMax();
+			
+			// Draw highlight background
+			ImU32 highlightColor = IM_COL32(90, 150, 255, 80);
+			dropDrawList->AddRectFilled(itemMin, itemMax, highlightColor);
+			
+			// Draw border
+			ImU32 borderColor = IM_COL32(90, 150, 255, 200);
+			dropDrawList->AddRect(itemMin, itemMax, borderColor, 0.0f, 0, 2.0f);
+			
 			// Accept single item
-			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM", ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
+				"CONTENT_BROWSER_ITEM", 
+				ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+				
 				if (payload->IsDelivery()) {
-					const wchar_t* wpath = (const wchar_t*)payload->Data;
-					std::filesystem::path sourcePath = std::filesystem::path(g_AssetPath) / wpath;
+					ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+					std::filesystem::path sourcePath(data->FilePath);
 					std::filesystem::path destPath = m_BaseDirectory / sourcePath.filename();
 					
 					try {
@@ -428,13 +467,17 @@ namespace Lunex {
 						}
 					}
 					catch (const std::exception& e) {
-						LNX_LOG_ERROR("Failed to move {0}: {1}", sourcePath.filename().string(), e.what());
+						LNX_LOG_ERROR("Failed to move {0}: {1}", 
+							sourcePath.filename().string(), e.what());
 					}
 				}
 			}
 			
 			// Accept multiple items
-			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEMS", ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
+				"CONTENT_BROWSER_ITEMS", 
+				ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+				
 				if (payload->IsDelivery()) {
 					std::string payloadData = (const char*)payload->Data;
 					std::stringstream ss(payloadData);
@@ -453,7 +496,8 @@ namespace Lunex {
 							}
 						}
 						catch (const std::exception& e) {
-							LNX_LOG_ERROR("Failed to move {0}: {1}", sourcePath.filename().string(), e.what());
+							LNX_LOG_ERROR("Failed to move {0}: {1}", 
+								sourcePath.filename().string(), e.what());
 						}
 					}
 					
@@ -700,12 +744,9 @@ namespace Lunex {
 					
 					// ============ DRAG & DROP SOURCE - FIXED ============
 					if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-						std::filesystem::path fullPath = path;
-						auto relativePath = std::filesystem::relative(fullPath, g_AssetPath);
-						
 						// Si hay múltiples items seleccionados Y este está entre ellos
 						if (IsSelected(path) && m_SelectedItems.size() > 1) {
-							// Payload para Content Browser interno
+							// Payload para múltiples items (solo Content Browser interno)
 							std::string payloadData;
 							for (const auto& selectedPath : m_SelectedItems) {
 								std::filesystem::path sp(selectedPath);
@@ -717,34 +758,24 @@ namespace Lunex {
 							ImGui::Text("%d items", (int)m_SelectedItems.size());
 						}
 						else {
-							// Single item - múltiples payloads para compatibilidad
-							const std::wstring wRelativePath = relativePath.wstring();
-							const std::string pathStr = fullPath.string();
+							// Single item - UN SOLO PAYLOAD con toda la info
+							ContentBrowserPayload payload = {};
+							
+							std::filesystem::path fullPath = path;
+							auto relativePath = std::filesystem::relative(fullPath, g_AssetPath);
+							
+							strncpy_s(payload.FilePath, fullPath.string().c_str(), _TRUNCATE);
+							strncpy_s(payload.RelativePath, relativePath.string().c_str(), _TRUNCATE);
+							
 							std::string extension = path.extension().string();
 							std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+							strncpy_s(payload.Extension, extension.c_str(), _TRUNCATE);
 							
-							// Payload 1: Content Browser interno (wchar_t para compatibilidad)
-							ImGui::SetDragDropPayload("CONTENT_BROWSER_ITEM", 
-								wRelativePath.c_str(), (wRelativePath.size() + 1) * sizeof(wchar_t));
+							payload.IsDirectory = directoryEntry.is_directory();
+							payload.ItemCount = 1;
 							
-							// Payload 2: Path genérico (para componentes)
-							ImGui::SetDragDropPayload("FILE_PATH", pathStr.c_str(), pathStr.size() + 1);
-							
-							// Payload 3: Tipo específico
-							if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || 
-								extension == ".bmp" || extension == ".tga" || extension == ".hdr") {
-								ImGui::SetDragDropPayload("TEXTURE_PATH", pathStr.c_str(), pathStr.size() + 1);
-							}
-							else if (extension == ".obj" || extension == ".fbx" || extension == ".gltf" || 
-									 extension == ".glb" || extension == ".dae") {
-								ImGui::SetDragDropPayload("MODEL_PATH", pathStr.c_str(), pathStr.size() + 1);
-							}
-							else if (extension == ".lunex") {
-								ImGui::SetDragDropPayload("SCENE_PATH", pathStr.c_str(), pathStr.size() + 1);
-							}
-							else if (extension == ".glsl" || extension == ".shader") {
-								ImGui::SetDragDropPayload("SHADER_PATH", pathStr.c_str(), pathStr.size() + 1);
-							}
+							// UN SOLO SetDragDropPayload
+							ImGui::SetDragDropPayload("CONTENT_BROWSER_ITEM", &payload, sizeof(ContentBrowserPayload));
 							
 							ImGui::Text("%s", filenameString.c_str());
 						}
@@ -765,8 +796,8 @@ namespace Lunex {
 								);
 								
 								if (shouldAccept && payload->IsDelivery()) {
-									const wchar_t* wpath = (const wchar_t*)payload->Data;
-									std::filesystem::path sourcePath = std::filesystem::path(g_AssetPath) / wpath;
+									ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+									std::filesystem::path sourcePath(data->FilePath);
 									std::filesystem::path destPath = path / sourcePath.filename();
 									
 									try {
@@ -901,7 +932,7 @@ namespace Lunex {
 							if (directoryEntry.is_directory()) {
 								if (ImGui::MenuItem("Open in File Explorer")) {
 									std::string command = "explorer " + path.string();
-									system(command.c_str());
+								 system(command.c_str());
 								}
 							}
 						}
@@ -928,7 +959,7 @@ namespace Lunex {
 				// Filename label
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.85f, 1.0f));
 				
-				std::string displayName = filenameString;
+			 std::string displayName = filenameString;
 				const int maxChars = 18;
 				if (displayName.length() > maxChars) {
 					displayName = displayName.substr(0, maxChars - 3) + "...";
@@ -974,7 +1005,7 @@ namespace Lunex {
 			ImVec2 rectMin((std::min)(m_SelectionStart.x, m_SelectionEnd.x), (std::min)(m_SelectionStart.y, m_SelectionEnd.y));
 			ImVec2 rectMax((std::max)(m_SelectionStart.x, m_SelectionEnd.x), (std::max)(m_SelectionStart.y, m_SelectionEnd.y));
 			// Fill
-			ImU32 fillColor = IM_COL32(90, 150, 255, 50);
+		 ImU32 fillColor = IM_COL32(90, 150, 255, 50);
 			drawList->AddRectFilled(rectMin, rectMax, fillColor);
 			
 			// Border
