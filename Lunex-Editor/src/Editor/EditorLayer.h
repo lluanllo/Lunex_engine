@@ -8,6 +8,8 @@
 #include "../Panels/ViewportPanel.h"
 #include "../Panels/ToolbarPanel.h"
 #include "../Panels/ConsolePanel.h"
+#include "../Panels/MenuBarPanel.h"
+#include "../Panels/ProjectCreationDialog.h"
 
 #include "Renderer/EditorCamera.h"
 
@@ -30,6 +32,15 @@ namespace Lunex {
 			
 			void OnOverlayRender();
 			
+			// Project management
+			void NewProject();
+			void CreateProjectWithDialog(const std::string& name, const std::filesystem::path& location);
+			void OpenProject();
+			void OpenProject(const std::filesystem::path& path);
+			void SaveProject();
+			void SaveProjectAs();
+			
+			// Scene management
 			void NewScene();
 			void OpenScene();
 			void OpenScene(const std::filesystem::path& path);
@@ -43,6 +54,9 @@ namespace Lunex {
 			void OnSceneStop();
 			
 			void OnDuplicateEntity();
+			
+			// UI Refresh
+			void UI_UpdateWindowTitle();
 			
 		private:
 			OrthographicCameraController m_CameraController;
@@ -83,6 +97,8 @@ namespace Lunex {
 			ViewportPanel m_ViewportPanel;
 			ToolbarPanel m_ToolbarPanel;
 			ConsolePanel m_ConsolePanel;
+			MenuBarPanel m_MenuBarPanel;
+			ProjectCreationDialog m_ProjectCreationDialog;
 			
 			// Editor resources
 			Ref<Texture2D> m_IconPlay, m_IconSimulate, m_IconStop;

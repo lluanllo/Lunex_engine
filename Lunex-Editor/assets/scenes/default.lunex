@@ -1,0 +1,54 @@
+Scene: Untitled
+Entities:
+  - Entity: 2207194862773423064
+    TagComponent:
+      Tag: point light
+    TransformComponent:
+      Translation: [0, 2, 2.7]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    LightComponent:
+      Type: 1
+      Color: [1, 1, 1]
+      Intensity: 1
+      Range: 10
+      Attenuation: [1, 0.09, 0.032]
+      InnerConeAngle: 12.5
+      OuterConeAngle: 17.5
+      CastShadows: true
+  - Entity: 13952283562700553889
+    TagComponent:
+      Tag: camera
+    TransformComponent:
+      Translation: [3.6729867, 1.5245061, 4.00342]
+      Rotation: [0, 0.78539824, 0]
+      Scale: [1, 1, 1]
+    CameraComponent:
+      Camera:
+        ProjectionType: 1
+        PerspectiveFOV: 0.7853982
+        PerspectiveNear: 0.01
+        PerspectiveFar: 1000
+        OrthographicSize: 10
+        OrthographicNear: -1
+        OrthographicFar: 1
+      Primary: true
+      FixedAspectRatio: false
+  - Entity: 11697999568453830733
+    TagComponent:
+      Tag: cube
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    MeshComponent:
+      Type: 0
+      FilePath: ""
+      Color: [1, 1, 1, 1]
+    MaterialComponent:
+      Color: [1, 1, 1, 1]
+      Metallic: 0
+      Roughness: 0.5
+      Specular: 0.5
+      EmissionColor: [0, 0, 0]
+      EmissionIntensity: 0

@@ -26,6 +26,19 @@ namespace Lunex {
 		m_DirectoryHistory.push_back(m_CurrentDirectory);
 		m_HistoryIndex = 0;
 	}
+
+	void ContentBrowserPanel::SetRootDirectory(const std::filesystem::path& directory) {
+		m_BaseDirectory = directory;
+		m_CurrentDirectory = directory;
+		
+		// Reset history
+		m_DirectoryHistory.clear();
+		m_DirectoryHistory.push_back(m_CurrentDirectory);
+		m_HistoryIndex = 0;
+		
+		// Clear texture cache
+		m_TextureCache.clear();
+	}
 	
 	void ContentBrowserPanel::OnImGuiRender() {
 		// Estilo específico para Content Browser (oscuro como Unity con sombras)

@@ -14,6 +14,8 @@ namespace Lunex {
           ContentBrowserPanel();
          
 void OnImGuiRender();
+
+void SetRootDirectory(const std::filesystem::path& directory);
   
      private:
             void RenderTopBar();
