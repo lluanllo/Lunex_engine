@@ -20,7 +20,7 @@ struct VertexOutput {
 };
 
 layout (location = 0) out VertexOutput Output;
-layout (location = 5) out flat int v_EntityID;  // CAMBIADO: ahora es location 5
+layout (location = 5) out flat int v_EntityID;
 
 void main() {
 	Output.Color = a_Color;
@@ -45,7 +45,7 @@ struct VertexOutput {
 };
 
 layout (location = 0) in VertexOutput Input;
-layout (location = 5) in flat int v_EntityID;  // CAMBIADO: ahora es location 5
+layout (location = 5) in flat int v_EntityID;
 
 layout (binding = 0) uniform sampler2D u_Textures[32];
 
@@ -53,6 +53,8 @@ void main() {
 	vec4 texColor = Input.Color;
 	
 	int texIndex = int(Input.TexIndex);
+	
+	// Sample texture based on index
 	switch(texIndex) {
 		case  0: texColor *= texture(u_Textures[ 0], Input.TexCoord * Input.TilingFactor); break;
 		case  1: texColor *= texture(u_Textures[ 1], Input.TexCoord * Input.TilingFactor); break;
@@ -88,7 +90,8 @@ void main() {
 		case 31: texColor *= texture(u_Textures[31], Input.TexCoord * Input.TilingFactor); break;
 	}
 	
-	if (texColor.a == 0.0)
+	// Discard only fully transparent pixels
+	if (texColor.a < 0.01)
 		discard;
 	
 	o_color = texColor;

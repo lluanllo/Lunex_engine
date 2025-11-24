@@ -5,6 +5,7 @@
 #include "ScriptableEntity.h"
 #include "Renderer/Renderer2D.h"
 #include "Renderer/Renderer3D.h"
+#include "Renderer/RenderCommand.h"
 
 #include <glm/glm.hpp>
 
@@ -159,7 +160,7 @@ namespace Lunex {
 			}
 		}
 
-		// Render 2D
+		// Render con la cámara principal de la escena
 		Camera* mainCamera = nullptr;
 		glm::mat4 cameraTransform;
 		{
@@ -176,6 +177,7 @@ namespace Lunex {
 		}
 
 		if (mainCamera) {
+			// Render 2D
 			Renderer2D::BeginScene(*mainCamera, cameraTransform);
 
 			// Draw sprites
@@ -195,7 +197,110 @@ namespace Lunex {
 					Renderer2D::DrawCircle(transform.GetTransform(), circle.Color, circle.Thickness, circle.Fade, (int)entity);
 				}
 			}
+
+			// End current batch before rendering billboards to avoid texture slot conflicts
 			Renderer2D::EndScene();
+			
+			// Start fresh batch for billboards
+			Renderer2D::BeginScene(*mainCamera, cameraTransform);
+
+			// Render billboards (lights and cameras) sorted by distance
+			struct BillboardData {
+				glm::vec3 Position;
+				Ref<Texture2D> Texture;
+				int EntityID;
+				float Distance;
+				float Size;
+				int Priority; // 0 = luz (primero), 1 = cámara (después)
+			};
+			
+			std::vector<BillboardData> billboards;
+			// Extract camera position from transform matrix
+			glm::vec3 cameraPos = glm::vec3(cameraTransform[3]);
+			
+			// Collect light billboards
+			{
+				auto view = m_Registry.view<TransformComponent, LightComponent>();
+				for (auto entity : view) {
+					auto [transform, light] = view.get<TransformComponent, LightComponent>(entity);
+					
+					// Only add billboard if texture is valid and loaded
+					if (light.IconTexture && light.IconTexture->IsLoaded()) {
+						float distance = glm::length(cameraPos - transform.Translation);
+						billboards.push_back({ transform.Translation, light.IconTexture, (int)entity, distance, 0.5f, 0 });
+					}
+				}
+			}
+			
+			// Collect camera billboards
+			{
+				auto view = m_Registry.view<TransformComponent, CameraComponent>();
+				for (auto entity : view) {
+					auto [transform, cameraComp] = view.get<TransformComponent, CameraComponent>(entity);
+					
+					// Only add billboard if texture is valid and loaded
+					if (cameraComp.IconTexture && cameraComp.IconTexture->IsLoaded()) {
+						float distance = glm::length(cameraPos - transform.Translation);
+						// Offset slightly towards camera to avoid z-fighting
+						glm::vec3 offsetPos = transform.Translation + glm::normalize(cameraPos - transform.Translation) * 0.01f;
+						billboards.push_back({ offsetPos, cameraComp.IconTexture, (int)entity, distance, 1.0f, 1 });
+					}
+				}
+			}
+			
+			// Sort billboards: first by distance (farthest first), then by priority
+			std::sort(billboards.begin(), billboards.end(), 
+				[](const BillboardData& a, const BillboardData& b) {
+					if (std::abs(a.Distance - b.Distance) < 0.01f) {
+						return a.Priority < b.Priority; // Luces antes que cámaras si están en la misma posición
+					}
+					return a.Distance > b.Distance; // Farthest first
+				});
+			
+			// Disable depth writing for billboards (but keep depth testing)
+			RenderCommand::SetDepthMask(false);
+			
+			// Render sorted billboards
+			for (const auto& billboard : billboards) {
+				Renderer2D::DrawBillboard(billboard.Position, billboard.Texture,
+					cameraPos, billboard.Size, billboard.EntityID);
+			}
+			
+			// Re-enable depth writing
+			RenderCommand::SetDepthMask(true);
+
+			Renderer2D::EndScene();
+			
+			// Render 3D (SIN iconos de luz en runtime)
+			Renderer3D::BeginScene(*mainCamera, cameraTransform);
+
+			// Update lights before rendering meshes (para iluminación, pero iconos NO se renderizan)
+			Renderer3D::UpdateLights(this);
+
+			{
+				auto view = m_Registry.view<TransformComponent, MeshComponent>();
+				for (auto entity : view) {
+					Entity e = { entity, this };
+					auto [transform, mesh] = view.get<TransformComponent, MeshComponent>(entity);
+
+					// Check for TextureComponent and MaterialComponent
+					if (e.HasComponent<TextureComponent>() && e.HasComponent<MaterialComponent>()) {
+						auto& texture = e.GetComponent<TextureComponent>();
+						auto& material = e.GetComponent<MaterialComponent>();
+						Renderer3D::DrawMesh(transform.GetTransform(), mesh, material, texture, (int)entity);
+					}
+					// Use MaterialComponent if available
+					else if (e.HasComponent<MaterialComponent>()) {
+						auto& material = e.GetComponent<MaterialComponent>();
+						Renderer3D::DrawMesh(transform.GetTransform(), mesh, material, (int)entity);
+					}
+					else {
+						Renderer3D::DrawMesh(transform.GetTransform(), mesh, (int)entity);
+					}
+				}
+			}
+
+			Renderer3D::EndScene();
 		}
 	}
 
@@ -375,18 +480,75 @@ namespace Lunex {
 			}
 		}
 
-		// Render light icons as billboards
+		// End current batch before rendering billboards to avoid texture slot conflicts
+		Renderer2D::EndScene();
+		
+		// Start fresh batch for billboards
+		Renderer2D::BeginScene(camera);
+
+		// Render billboards (lights and cameras) sorted by distance
+		struct BillboardData {
+			glm::vec3 Position;
+			Ref<Texture2D> Texture;
+			int EntityID;
+			float Distance;
+			float Size;
+			int Priority; // 0 = luz (primero), 1 = cámara (después)
+		};
+		
+		std::vector<BillboardData> billboards;
+		glm::vec3 cameraPos = camera.GetPosition();
+		
+		// Collect light billboards
 		{
 			auto view = m_Registry.view<TransformComponent, LightComponent>();
 			for (auto entity : view) {
 				auto [transform, light] = view.get<TransformComponent, LightComponent>(entity);
-
-				if (light.IconTexture) {
-					Renderer2D::DrawBillboard(transform.Translation, light.IconTexture,
-						camera.GetPosition(), 0.5f, (int)entity);
+				
+				// Only add billboard if texture is valid and loaded
+				if (light.IconTexture && light.IconTexture->IsLoaded()) {
+					float distance = glm::length(cameraPos - transform.Translation);
+					billboards.push_back({ transform.Translation, light.IconTexture, (int)entity, distance, 0.5f, 0 });
 				}
 			}
 		}
+		
+		// Collect camera billboards
+		{
+			auto view = m_Registry.view<TransformComponent, CameraComponent>();
+			for (auto entity : view) {
+				auto [transform, cameraComp] = view.get<TransformComponent, CameraComponent>(entity);
+				
+				// Only add billboard if texture is valid and loaded
+				if (cameraComp.IconTexture && cameraComp.IconTexture->IsLoaded()) {
+					float distance = glm::length(cameraPos - transform.Translation);
+					// Offset slightly towards camera to avoid z-fighting
+					glm::vec3 offsetPos = transform.Translation + glm::normalize(cameraPos - transform.Translation) * 0.01f;
+					billboards.push_back({ offsetPos, cameraComp.IconTexture, (int)entity, distance, 1.0f, 1 });
+				}
+			}
+		}
+		
+		// Sort billboards: first by distance (farthest first), then by priority
+		std::sort(billboards.begin(), billboards.end(), 
+			[](const BillboardData& a, const BillboardData& b) {
+				if (std::abs(a.Distance - b.Distance) < 0.01f) {
+					return a.Priority < b.Priority; // Luces antes que cámaras si están en la misma posición
+				}
+				return a.Distance > b.Distance; // Farthest first
+			});
+		
+		// Disable depth writing for billboards (but keep depth testing)
+		RenderCommand::SetDepthMask(false);
+		
+		// Render sorted billboards
+		for (const auto& billboard : billboards) {
+			Renderer2D::DrawBillboard(billboard.Position, billboard.Texture,
+				cameraPos, billboard.Size, billboard.EntityID);
+		}
+		
+		// Re-enable depth writing
+		RenderCommand::SetDepthMask(true);
 
 		Renderer2D::EndScene();
 

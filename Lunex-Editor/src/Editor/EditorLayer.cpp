@@ -28,9 +28,7 @@ namespace Lunex {
 
 	void EditorLayer::OnAttach() {
 		LNX_PROFILE_FUNCTION();
-
-		m_CheckerboardTexture = Texture2D::Create("assets/textures/Checkerboard.png");
-
+		
 		// Cargar iconos de toolbar con logs de depuración
 		LNX_LOG_INFO("Loading toolbar icons...");
 

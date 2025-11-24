@@ -64,4 +64,8 @@ namespace Lunex {
 	void OpenGLRendererAPI::SetLineWidth(float width) {
 		glLineWidth(width);
 	}
+	
+	void OpenGLRendererAPI::SetDepthMask(bool enabled) {
+		glDepthMask(enabled ? GL_TRUE : GL_FALSE);
+	}
 }
