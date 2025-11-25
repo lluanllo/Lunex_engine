@@ -372,35 +372,81 @@ namespace Lunex {
 	};
 
 	// C++ Script Component - integración con sistema de scripting dinámico
+	// SOPORTA MÚLTIPLES SCRIPTS POR ENTIDAD
 	struct ScriptComponent {
-		std::string ScriptPath;          // Ruta relativa al script .cpp
-		std::string CompiledDLLPath;     // Ruta a la DLL compilada
-		bool AutoCompile = true;         // Auto-compilar al entrar en Play mode
-		bool IsLoaded = false;           // Estado de carga del script
+		// Lista de scripts asociados a esta entidad
+		std::vector<std::string> ScriptPaths;          // Rutas relativas a scripts .cpp
+		std::vector<std::string> CompiledDLLPaths;     // Rutas a DLLs compiladas
+		std::vector<bool> ScriptLoadedStates;          // Estado de carga de cada script
 		
-		// Runtime data (no serializar)
-		void* ScriptPluginInstance = nullptr;  // Puntero al ScriptPlugin (cast a Lunex::ScriptPlugin*)
+		bool AutoCompile = true;         // Auto-compilar al entrar en Play mode
+		
+		// Runtime data (no serializar) - un plugin por script
+		std::vector<void*> ScriptPluginInstances;  // Punteros a ScriptPlugin*
 		
 		ScriptComponent() = default;
+		
 		ScriptComponent(const ScriptComponent& other)
-			: ScriptPath(other.ScriptPath)
-			, CompiledDLLPath(other.CompiledDLLPath)
+			: ScriptPaths(other.ScriptPaths)
+			, CompiledDLLPaths(other.CompiledDLLPaths)
+			, ScriptLoadedStates(other.ScriptPaths.size(), false)
 			, AutoCompile(other.AutoCompile)
-			, IsLoaded(false)
-			, ScriptPluginInstance(nullptr)
 		{
 		}
 		
 		ScriptComponent(const std::string& scriptPath)
-			: ScriptPath(scriptPath)
-			, AutoCompile(true)
-			, IsLoaded(false)
-			, ScriptPluginInstance(nullptr)
+			: AutoCompile(true)
 		{
+			AddScript(scriptPath);
 		}
 		
 		~ScriptComponent() {
 			// Cleanup manejado por Scene
+		}
+		
+		// ===== API PARA GESTIÓN DE SCRIPTS =====
+		
+		void AddScript(const std::string& scriptPath) {
+			ScriptPaths.push_back(scriptPath);
+			CompiledDLLPaths.push_back("");
+			ScriptLoadedStates.push_back(false);
+			ScriptPluginInstances.push_back(nullptr);
+		}
+		
+		void RemoveScript(size_t index) {
+			if (index < ScriptPaths.size()) {
+				ScriptPaths.erase(ScriptPaths.begin() + index);
+				CompiledDLLPaths.erase(CompiledDLLPaths.begin() + index);
+				ScriptLoadedStates.erase(ScriptLoadedStates.begin() + index);
+				ScriptPluginInstances.erase(ScriptPluginInstances.begin() + index);
+			}
+		}
+		
+		size_t GetScriptCount() const {
+			return ScriptPaths.size();
+		}
+		
+		bool IsScriptLoaded(size_t index) const {
+			return index < ScriptLoadedStates.size() && ScriptLoadedStates[index];
+		}
+		
+		const std::string& GetScriptPath(size_t index) const {
+			static std::string empty;
+			return (index < ScriptPaths.size()) ? ScriptPaths[index] : empty;
+		}
+		
+		// Compatibilidad con código legacy (usa el primer script)
+		std::string GetLegacyScriptPath() const {
+			return ScriptPaths.empty() ? "" : ScriptPaths[0];
+		}
+		
+		void SetLegacyScriptPath(const std::string& path) {
+			if (ScriptPaths.empty()) {
+				AddScript(path);
+			} else {
+				ScriptPaths[0] = path;
+				ScriptLoadedStates[0] = false;
+			}
 		}
 	};
 

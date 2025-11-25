@@ -231,26 +231,47 @@ namespace Lunex {
 			});
 
 		DrawComponent<ScriptComponent>("Script", entity, [](auto& component) {
-			// Script Path Section
+			// ===== HEADER SECTION =====
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.85f, 1.0f));
-			ImGui::Text("Script");
+			ImGui::Text("C++ Scripts");
 			ImGui::PopStyleColor();
 			
 			ImGui::Indent(8.0f);
 			
-			if (component.ScriptPath.empty()) {
-				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.22f, 0.22f, 0.24f, 1.0f));
-				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.26f, 0.28f, 1.0f));
-				ImGui::Button("Drop C++ Script Here", ImVec2(-1, 40.0f));
-				ImGui::PopStyleColor(2);
-			}
-			else {
-				std::filesystem::path scriptPath(component.ScriptPath);
-				std::string filename = scriptPath.filename().string();
-
-				// Script info box con fondo
+			// ===== LISTA DE SCRIPTS =====
+			for (size_t i = 0; i < component.GetScriptCount(); i++) {
+				ImGui::PushID((int)i);
+				
+				const std::string& scriptPath = component.GetScriptPath(i);
+				std::filesystem::path path(scriptPath);
+				std::string filename = path.filename().string();
+				bool isLoaded = component.IsScriptLoaded(i);
+				
+				// Script info box
 				ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.16f, 0.16f, 0.17f, 1.0f));
-				ImGui::BeginChild("##ScriptInfo", ImVec2(-1, 70.0f), true);
+				ImGui::BeginChild(("##ScriptInfo" + std::to_string(i)).c_str(), ImVec2(-1, 90.0f), true);
+				
+				// Header con número de script
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
+				ImGui::Text("Script #%d", (int)i + 1);
+				ImGui::PopStyleColor();
+				ImGui::SameLine(ImGui::GetContentRegionAvail().x - 60);
+				
+				// Botón remove
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.2f, 0.2f, 0.7f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.3f, 0.3f, 1.0f));
+				if (ImGui::Button("Remove", ImVec2(60, 0))) {
+					component.RemoveScript(i);
+					ImGui::PopStyleColor(2);
+					ImGui::EndChild();
+					ImGui::PopStyleColor();
+					ImGui::PopID();
+					break; // Salir del loop después de remover
+				}
+				ImGui::PopStyleColor(2);
+				
+				ImGui::Separator();
+				ImGui::Spacing();
 				
 				// Icono + Nombre
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.26f, 0.59f, 0.98f, 1.0f));
@@ -263,7 +284,7 @@ namespace Lunex {
 				ImGui::Spacing();
 				ImGui::Text("Status: ");
 				ImGui::SameLine();
-				if (component.IsLoaded) {
+				if (isLoaded) {
 					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 0.8f, 0.3f, 1.0f));
 					ImGui::Text("✓ Loaded & Ready");
 					ImGui::PopStyleColor();
@@ -277,39 +298,29 @@ namespace Lunex {
 				ImGui::EndChild();
 				ImGui::PopStyleColor();
 				
-				// Action buttons
 				ImGui::Spacing();
-			 float buttonWidth = (ImGui::GetContentRegionAvail().x - 8.0f) * 0.5f;
 				
-				if (ImGui::Button("Open in Editor", ImVec2(buttonWidth, 0))) {
-					std::filesystem::path fullPath = std::filesystem::path("assets") / component.ScriptPath;
-					if (std::filesystem::exists(fullPath)) {
-						std::string command = "cmd /c start \"\" \"" + fullPath.string() + "\"";
-						system(command.c_str());
-					}
-				}
-				
-				ImGui::SameLine();
-				
-				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 0.8f));
-				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.3f, 0.3f, 1.0f));
-				if (ImGui::Button("Remove Script", ImVec2(buttonWidth, 0))) {
-				 component.ScriptPath.clear();
-				 component.CompiledDLLPath.clear();
-				 component.IsLoaded = false;
-				}
-				ImGui::PopStyleColor(2);
+				ImGui::PopID();
 			}
 			
-			// Drag and drop target
+			// ===== BOTÓN AÑADIR SCRIPT =====
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.22f, 0.22f, 0.24f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.59f, 0.98f, 0.4f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.26f, 0.59f, 0.98f, 0.6f));
+			
+			if (ImGui::Button("➕ Add Script", ImVec2(-1, 30.0f))) {
+				// Placeholder - se añadirá mediante drag & drop
+			}
+			ImGui::PopStyleColor(3);
+			
+			// Drag and drop para añadir scripts
 			if (ImGui::BeginDragDropTarget()) {
 				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
 					ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
 					std::string ext = data->Extension;
 					if (ext == ".cpp" || ext == ".h") {
-						component.ScriptPath = data->RelativePath;
-						component.IsLoaded = false;
-						LNX_LOG_INFO("Script assigned: {0}", data->RelativePath);
+						component.AddScript(data->RelativePath);
+						LNX_LOG_INFO("Added script: {0}", data->RelativePath);
 					}
 					else {
 						LNX_LOG_WARN("Only .cpp files are valid C++ scripts");
@@ -320,9 +331,9 @@ namespace Lunex {
 			
 			ImGui::Unindent(8.0f);
 			
-			// TODO: Public Variables Section (Unity-style)
-			// Esta sección se implementará cuando el sistema de reflexión esté listo
-			if (component.IsLoaded && !component.ScriptPath.empty()) {
+			// ===== TODO: PUBLIC VARIABLES SECTION =====
+			// Esta sección mostrará variables editables de todos los scripts
+			if (component.GetScriptCount() > 0) {
 				ImGui::Spacing();
 				ImGui::Separator();
 				ImGui::Spacing();

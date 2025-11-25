@@ -201,48 +201,63 @@ namespace Lunex {
 			auto& scriptComp = view.get<ScriptComponent>(entity);
 			auto& idComp = view.get<IDComponent>(entity);
 
-			if (scriptComp.ScriptPath.empty()) {
-				continue;
-			}
-
-			// Compilar script si es necesario
-			if (scriptComp.AutoCompile) {
-				std::string dllPath;
-				if (CompileScript(scriptComp.ScriptPath, dllPath)) {
-					scriptComp.CompiledDLLPath = dllPath;
-					LNX_LOG_INFO("Script compiled successfully: {0}", dllPath);
-				}
-				else {
-					LNX_LOG_ERROR("Failed to compile script: {0}", scriptComp.ScriptPath);
+			// ===== ITERAR POR TODOS LOS SCRIPTS DE LA ENTIDAD =====
+			for (size_t i = 0; i < scriptComp.GetScriptCount(); i++) {
+				const std::string& scriptPath = scriptComp.GetScriptPath(i);
+				
+				if (scriptPath.empty()) {
 					continue;
 				}
-			}
 
-			// Si no hay DLL compilada, saltar
-			if (scriptComp.CompiledDLLPath.empty()) {
-				LNX_LOG_WARN("No compiled DLL for script: {0}", scriptComp.ScriptPath);
-				continue;
-			}
+				// Compilar script si es necesario
+				std::string dllPath;
+				if (scriptComp.AutoCompile) {
+					if (CompileScript(scriptPath, dllPath)) {
+						// Actualizar DLL path en el componente
+						if (i < scriptComp.CompiledDLLPaths.size()) {
+							scriptComp.CompiledDLLPaths[i] = dllPath;
+						}
+						LNX_LOG_INFO("Script #{0} compiled successfully: {1}", i + 1, dllPath);
+					}
+					else {
+						LNX_LOG_ERROR("Failed to compile script #{0}: {1}", i + 1, scriptPath);
+						continue;
+					}
+				}
 
-			// Cargar script
-			auto plugin = std::make_unique<ScriptPlugin>();
+				// Si no hay DLL compilada, saltar
+				if (i >= scriptComp.CompiledDLLPaths.size() || scriptComp.CompiledDLLPaths[i].empty()) {
+					LNX_LOG_WARN("No compiled DLL for script #{0}: {1}", i + 1, scriptPath);
+					continue;
+				}
 
-			// Establecer CurrentEntity antes de cargar el script
-			auto entityHandle = (entt::entity)entity;
-			m_EngineContext->CurrentEntity = reinterpret_cast<void*>(static_cast<uintptr_t>(entityHandle));
+				// Cargar script
+				auto plugin = std::make_unique<ScriptPlugin>();
 
-			if (plugin->Load(scriptComp.CompiledDLLPath, m_EngineContext.get())) {
-				plugin->OnPlayModeEnter();
-				scriptComp.IsLoaded = true;
-				scriptComp.ScriptPluginInstance = plugin.get();
+				// Establecer CurrentEntity antes de cargar el script
+				auto entityHandle = (entt::entity)entity;
+				m_EngineContext->CurrentEntity = reinterpret_cast<void*>(static_cast<uintptr_t>(entityHandle));
 
-				// Guardar el plugin en el mapa usando el UUID de la entidad
-				m_ScriptInstances[idComp.ID] = std::move(plugin);
+				if (plugin->Load(scriptComp.CompiledDLLPaths[i], m_EngineContext.get())) {
+					plugin->OnPlayModeEnter();
+					
+					// Actualizar estado en el componente
+					if (i < scriptComp.ScriptLoadedStates.size()) {
+						scriptComp.ScriptLoadedStates[i] = true;
+					}
+					if (i < scriptComp.ScriptPluginInstances.size()) {
+						scriptComp.ScriptPluginInstances[i] = plugin.get();
+					}
 
-				LNX_LOG_INFO("Script loaded and started: {0}", scriptComp.CompiledDLLPath);
-			}
-			else {
-				LNX_LOG_ERROR("Failed to load script: {0}", scriptComp.CompiledDLLPath);
+					// Guardar el plugin en el mapa usando UUID + índice
+					uint64_t uniqueKey = ((uint64_t)idComp.ID << 32) | i;
+					m_ScriptInstances[uniqueKey] = std::move(plugin);
+
+					LNX_LOG_INFO("Script #{0} loaded and started: {1}", i + 1, scriptComp.CompiledDLLPaths[i]);
+				}
+				else {
+					LNX_LOG_ERROR("Failed to load script #{0}: {1}", i + 1, scriptComp.CompiledDLLPaths[i]);
+				}
 			}
 		}
 	}
@@ -263,8 +278,14 @@ namespace Lunex {
 		auto view = registry.view<ScriptComponent>();
 		for (auto entity : view) {
 			auto& scriptComp = view.get<ScriptComponent>(entity);
-			scriptComp.IsLoaded = false;
-			scriptComp.ScriptPluginInstance = nullptr;
+			
+			// Limpiar estados de todos los scripts
+			for (size_t i = 0; i < scriptComp.ScriptLoadedStates.size(); i++) {
+				scriptComp.ScriptLoadedStates[i] = false;
+			}
+			for (size_t i = 0; i < scriptComp.ScriptPluginInstances.size(); i++) {
+				scriptComp.ScriptPluginInstances[i] = nullptr;
+			}
 		}
 	}
 
@@ -326,18 +347,34 @@ namespace Lunex {
 					auto& scriptComp = view.get<ScriptComponent>(entity);
 					auto& idComp = view.get<IDComponent>(entity);
 
-					if (scriptComp.CompiledDLLPath == dllPath.string() && scriptComp.IsLoaded) {
-						if (it->first == idComp.ID) {
-							LNX_LOG_INFO("Unloading plugin for entity: {0}", (uint64_t)idComp.ID);
-							it->second->OnPlayModeExit();
-							it->second->Unload();
-							it = m_ScriptInstances.erase(it);
-							scriptComp.IsLoaded = false;
-							scriptComp.ScriptPluginInstance = nullptr;
-							found = true;
-							break;
+					// Buscar en todos los scripts del componente
+					for (size_t i = 0; i < scriptComp.CompiledDLLPaths.size(); i++) {
+						if (scriptComp.CompiledDLLPaths[i] == dllPath.string() && 
+							i < scriptComp.ScriptLoadedStates.size() && 
+							scriptComp.ScriptLoadedStates[i]) {
+							
+							// Construir clave única (UUID + índice)
+							uint64_t uniqueKey = ((uint64_t)idComp.ID << 32) | i;
+							
+							if (it->first == uniqueKey) {
+								LNX_LOG_INFO("Unloading script #{0} for entity: {1}", i + 1, (uint64_t)idComp.ID);
+								it->second->OnPlayModeExit();
+								it->second->Unload();
+								it = m_ScriptInstances.erase(it);
+								
+								// Actualizar estado en el componente
+								scriptComp.ScriptLoadedStates[i] = false;
+								if (i < scriptComp.ScriptPluginInstances.size()) {
+									scriptComp.ScriptPluginInstances[i] = nullptr;
+								}
+								
+								found = true;
+								break;
+							}
 						}
 					}
+					
+					if (found) break;
 				}
 				if (!found) ++it;
 			}

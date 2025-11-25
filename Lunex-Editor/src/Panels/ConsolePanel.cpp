@@ -38,7 +38,7 @@ namespace Lunex {
 	}
 
 	void ConsoleTab::Draw() {
-		// Filters bar
+		// ===== FILTERS BAR (FIJA) =====
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 2));
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
 		
@@ -70,7 +70,7 @@ namespace Lunex {
 			ImGui::SameLine();
 			ImGui::SetNextItemWidth(200);
 			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.26f, 0.59f, 0.98f, 0.50f));
-			ImGui::InputTextWithHint("##search", "Search...", m_SearchFilter, IM_ARRAYSIZE(m_SearchFilter));
+			ImGui::InputTextWithHint("##search", "?? Search...", m_SearchFilter, IM_ARRAYSIZE(m_SearchFilter));
 			ImGui::PopStyleColor();
 			
 			ImGui::SameLine();
@@ -86,8 +86,10 @@ namespace Lunex {
 		ImGui::PopStyleColor();
 		ImGui::PopStyleVar();
 
-		// Messages area
+		// ===== MESSAGES AREA CON SCROLL =====
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.08f, 0.08f, 0.08f, 1.0f));
+		
+		// BeginChild SIN especificar altura - tomará todo el espacio disponible
 		if (ImGui::BeginChild("##scrolling", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar)) {
 			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 2));
 			

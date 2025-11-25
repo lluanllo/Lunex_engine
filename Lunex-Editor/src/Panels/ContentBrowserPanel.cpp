@@ -47,10 +47,11 @@ namespace Lunex {
 	}
 	
 	void ContentBrowserPanel::OnImGuiRender() {
-		// Estilo específico para Content Browser (oscuro como Unity con sombras)
-		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.11f, 0.11f, 0.11f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.11f, 0.11f, 0.11f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.0f, 0.0f, 0.5f));
+		// ===== ESTILO PROFESIONAL OSCURO (como Unreal Engine) =====
+		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.12f, 0.13f, 1.0f));        // Fondo principal
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.12f, 0.13f, 1.0f));         // Child backgrounds
+		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.08f, 0.08f, 0.09f, 1.0f));          // Bordes más sutiles
+		ImGui::PushStyleColor(ImGuiCol_BorderShadow, ImVec4(0.0f, 0.0f, 0.0f, 0.6f));       // Sombras
 		
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 		ImGui::Begin("Content Browser");
@@ -68,22 +69,22 @@ namespace Lunex {
 		
 		ImVec2 availSize = ImGui::GetContentRegionAvail();
 		
-		// Sidebar con fondo más oscuro y sombra
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.09f, 0.09f, 0.09f, 1.0f));
+		// Sidebar con fondo más oscuro
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.10f, 0.11f, 1.0f));
 		ImGui::BeginChild("Sidebar", ImVec2(sidebarWidth, availSize.y), false);
 		RenderSidebar();
 		ImGui::EndChild();
 		ImGui::PopStyleColor();
 		
-		// Dibujar sombra del sidebar
+		// Dibujar sombra del sidebar (gradiente sutil)
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
 		ImVec2 sidebarMax = ImGui::GetItemRectMax();
 		ImVec2 shadowStart = ImVec2(sidebarMax.x, sidebarMax.y - availSize.y);
 		ImVec2 shadowEnd = sidebarMax;
 		
-		// Sombra gradiente de 8px
-		for (int i = 0; i < 8; i++) {
-			float alpha = (1.0f - (i / 8.0f)) * 0.3f;
+		// Sombra gradiente de 6px (más sutil)
+		for (int i = 0; i < 6; i++) {
+			float alpha = (1.0f - (i / 6.0f)) * 0.25f;
 			ImU32 shadowColor = IM_COL32(0, 0, 0, (int)(alpha * 255));
 			drawList->AddRectFilled(
 				ImVec2(shadowStart.x + i, shadowStart.y),
@@ -96,8 +97,8 @@ namespace Lunex {
 		
 		// Splitter invisible
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 0.3f));
-		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.59f, 0.98f, 0.3f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.26f, 0.59f, 0.98f, 0.5f));
 		ImGui::Button("##Splitter", ImVec2(4.0f, availSize.y));
 		ImGui::PopStyleColor(3);
 		
@@ -114,7 +115,7 @@ namespace Lunex {
 		ImGui::SameLine();
 		
 		// Grid de archivos con fondo ligeramente más claro
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.13f, 0.13f, 0.13f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.14f, 0.14f, 0.15f, 1.0f));
 		ImGui::BeginChild("FileGrid", ImVec2(0, availSize.y), false);
 		RenderFileGrid();
 		ImGui::EndChild();
@@ -124,21 +125,21 @@ namespace Lunex {
 		
 		ImGui::End();
 		
-		ImGui::PopStyleColor(3);
+		ImGui::PopStyleColor(4);
 	}
 	
 	void ContentBrowserPanel::RenderTopBar() {
-		// Barra superior oscura con sombra inferior
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.09f, 0.09f, 0.09f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.20f, 0.20f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.14f, 0.14f, 0.14f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.18f, 0.18f, 0.18f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.0f, 0.0f, 0.5f));
+		// Barra superior con colores profesionales
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.10f, 0.11f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.16f, 0.17f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.59f, 0.98f, 0.4f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.26f, 0.59f, 0.98f, 0.6f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.16f, 0.16f, 0.17f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.20f, 0.20f, 0.21f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.08f, 0.08f, 0.09f, 1.0f));
 		
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
-		ImGui::BeginChild("TopBar", ImVec2(0, 36), true, ImGuiWindowFlags_NoScrollbar);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 6));
+		ImGui::BeginChild("TopBar", ImVec2(0, 40), true, ImGuiWindowFlags_NoScrollbar);
 		
 		// Botones de navegación con iconos
 		bool canGoBack = m_HistoryIndex > 0;
@@ -146,18 +147,19 @@ namespace Lunex {
 		
 		if (m_BackIcon) {
 			if (ImGui::ImageButton("##BackButton", (ImTextureID)(intptr_t)m_BackIcon->GetRendererID(),
-				ImVec2(20, 20), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0)) && canGoBack) {
+				ImVec2(22, 22), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0)) && canGoBack) {
 				m_HistoryIndex--;
 				m_CurrentDirectory = m_DirectoryHistory[m_HistoryIndex];
 			}
 		} else {
-			if (ImGui::Button("<", ImVec2(28, 28)) && canGoBack) {
+			if (ImGui::Button("<", ImVec2(30, 30)) && canGoBack) {
 				m_HistoryIndex--;
 				m_CurrentDirectory = m_DirectoryHistory[m_HistoryIndex];
 			}
 		}
 		
 		if (!canGoBack) ImGui::PopStyleVar();
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Back");
 		
 		ImGui::SameLine();
 		
@@ -166,33 +168,31 @@ namespace Lunex {
 		
 		if (m_ForwardIcon) {
 			if (ImGui::ImageButton("##ForwardButton", (ImTextureID)(intptr_t)m_ForwardIcon->GetRendererID(),
-				ImVec2(20, 20), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0)) && canGoForward) {
+				ImVec2(22, 22), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0)) && canGoForward) {
 				m_HistoryIndex++;
 				m_CurrentDirectory = m_DirectoryHistory[m_HistoryIndex];
 			}
 		} else {
-			if (ImGui::Button(">", ImVec2(28, 28)) && canGoForward) {
+			if (ImGui::Button(">", ImVec2(30, 30)) && canGoForward) {
 				m_HistoryIndex++;
 				m_CurrentDirectory = m_DirectoryHistory[m_HistoryIndex];
 			}
 		}
 		
 		if (!canGoForward) ImGui::PopStyleVar();
+		if (ImGui::IsItemHovered()) ImGui::SetTooltip("Forward");
 		
 		ImGui::SameLine();
-		ImGui::Dummy(ImVec2(12, 0));
+		ImGui::Dummy(ImVec2(16, 0));
 		ImGui::SameLine();
 		
-		// Path display con fondo sutil
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.75f, 0.75f, 0.75f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
+		// Path display con estilo mejorado
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.80f, 0.80f, 0.82f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.14f, 0.14f, 0.15f, 1.0f));
 		ImGui::AlignTextToFramePadding();
 		
-		// Crear buffer estático con tamaño fijo para el path
 		static char pathBuffer[512];
 		std::string currentPath = m_CurrentDirectory.string();
-		
-		// Copiar el path al buffer de forma segura
 		strncpy_s(pathBuffer, sizeof(pathBuffer), currentPath.c_str(), _TRUNCATE);
 		
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 220);
@@ -200,13 +200,15 @@ namespace Lunex {
 		
 		ImGui::PopStyleColor(2);
 		
-		// Search bar a la derecha
+		// Search bar con icono
 		ImGui::SameLine();
-		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.18f, 0.18f, 0.18f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.18f, 0.18f, 0.19f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.22f, 0.22f, 0.23f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.26f, 0.59f, 0.98f, 0.3f));
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.87f, 1.0f));
 		ImGui::SetNextItemWidth(200);
 		ImGui::InputTextWithHint("##Search", "?? Search...", m_SearchBuffer, 256);
-		ImGui::PopStyleColor(2);
+		ImGui::PopStyleColor(4);
 		
 		ImGui::EndChild();
 		
@@ -215,8 +217,8 @@ namespace Lunex {
 		ImVec2 topbarMax = ImGui::GetItemRectMax();
 		ImVec2 shadowStart = ImVec2(topbarMax.x - ImGui::GetContentRegionAvail().x, topbarMax.y);
 		
-		for (int i = 0; i < 4; i++) {
-			float alpha = (1.0f - (i / 4.0f)) * 0.4f;
+		for (int i = 0; i < 3; i++) {
+			float alpha = (1.0f - (i / 3.0f)) * 0.35f;
 			ImU32 shadowColor = IM_COL32(0, 0, 0, (int)(alpha * 255));
 			drawList->AddRectFilled(
 				ImVec2(shadowStart.x, shadowStart.y + i),
