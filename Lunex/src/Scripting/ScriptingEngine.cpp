@@ -5,6 +5,7 @@
 
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
+#include <box2d/box2d.h>
 #include <filesystem>
 #include <fstream>
 
@@ -184,6 +185,153 @@ namespace Lunex {
 
 		m_EngineContext->GetMouseY = []() -> float {
 			return Input::GetMouseY();
+		};
+
+		// === RIGIDBODY2D COMPONENT ===
+		m_EngineContext->HasRigidbody2D = [](void* entity) -> bool {
+			if (!entity || !g_CurrentScene) return false;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			return ent.HasComponent<Rigidbody2DComponent>();
+		};
+
+		m_EngineContext->GetLinearVelocity = [](void* entity, Vec2* outVelocity) {
+			if (!entity || !g_CurrentScene || !outVelocity) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					b2Vec2 velocity = b2Body_GetLinearVelocity(bodyId);
+					outVelocity->x = velocity.x;
+					outVelocity->y = velocity.y;
+				}
+			}
+		};
+
+		m_EngineContext->SetLinearVelocity = [](void* entity, const Vec2* velocity) {
+			if (!entity || !g_CurrentScene || !velocity) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					b2Vec2 vel = { velocity->x, velocity->y };
+					b2Body_SetLinearVelocity(bodyId, vel);
+				}
+			}
+		};
+
+		m_EngineContext->ApplyLinearImpulse = [](void* entity, const Vec2* impulse, bool wake) {
+			if (!entity || !g_CurrentScene || !impulse) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					b2Vec2 imp = { impulse->x, impulse->y };
+					b2Vec2 point = b2Body_GetPosition(bodyId);
+					b2Body_ApplyLinearImpulse(bodyId, imp, point, wake);
+				}
+			}
+		};
+
+		m_EngineContext->ApplyLinearImpulseToCenter = [](void* entity, const Vec2* impulse, bool wake) {
+			if (!entity || !g_CurrentScene || !impulse) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					b2Vec2 imp = { impulse->x, impulse->y };
+					b2Vec2 point = b2Body_GetPosition(bodyId);
+					b2Body_ApplyLinearImpulse(bodyId, imp, point, wake);
+				}
+			}
+		};
+
+		m_EngineContext->ApplyForce = [](void* entity, const Vec2* force, const Vec2* point, bool wake) {
+			if (!entity || !g_CurrentScene || !force || !point) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					b2Vec2 f = { force->x, force->y };
+					b2Vec2 p = { point->x, point->y };
+					b2Body_ApplyForce(bodyId, f, p, wake);
+				}
+			}
+		};
+
+		m_EngineContext->ApplyForceToCenter = [](void* entity, const Vec2* force, bool wake) {
+			if (!entity || !g_CurrentScene || !force) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					b2Vec2 f = { force->x, force->y };
+					b2Vec2 point = b2Body_GetPosition(bodyId);
+					b2Body_ApplyForce(bodyId, f, point, wake);
+				}
+			}
+		};
+
+		m_EngineContext->GetMass = [](void* entity) -> float {
+			if (!entity || !g_CurrentScene) return 0.0f;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					return b2Body_GetMass(bodyId);
+				}
+			}
+			return 0.0f;
+		};
+
+		m_EngineContext->GetGravityScale = [](void* entity) -> float {
+			if (!entity || !g_CurrentScene) return 1.0f;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					return b2Body_GetGravityScale(bodyId);
+				}
+			}
+			return 1.0f;
+		};
+
+		m_EngineContext->SetGravityScale = [](void* entity, float scale) {
+			if (!entity || !g_CurrentScene) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					b2Body_SetGravityScale(bodyId, scale);
+				}
+			}
 		};
 
 		// CurrentEntity se establecerá cuando se cargue el script

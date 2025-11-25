@@ -307,7 +307,8 @@ project "Lunex-ScriptCore"
     {
         "%{prj.name}/src",
         "Lunex/src",
-        "vendor/spdlog/include"
+        "vendor/spdlog/include",
+        "%{IncludeDir.glm}"
     }
 
     filter "system:windows"
@@ -620,6 +621,6 @@ project "Lunex-Editor"
 -- ============================================================================
 group "Scripts"
 
-include "Scripts/ExampleScript"
+-- include "Scripts/ExampleScript"  -- Comentado temporalmente si no existe
 
 group ""

@@ -11,7 +11,8 @@
 #endif
 
 #include <cstdint>
-#include <cmath>
+#include <glm/glm.hpp>
+#include <glm/gtc/constants.hpp>
 
 namespace Lunex {
 
@@ -23,9 +24,10 @@ namespace Lunex {
     class Scene;
 
     // ========================================================================
-    // MATH UTILITIES - Para usar en scripts sin dependencias externas
+    // MATH UTILITIES - Thin wrappers around GLM for script API
     // ========================================================================
     
+    // Lightweight Vec3 wrapper that can convert to/from glm::vec3
     struct Vec3 {
         float x, y, z;
         
@@ -33,7 +35,11 @@ namespace Lunex {
         Vec3(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
         Vec3(float scalar) : x(scalar), y(scalar), z(scalar) {}
         
-        // Operadores aritméticos
+        // GLM interop
+        Vec3(const glm::vec3& v) : x(v.x), y(v.y), z(v.z) {}
+        operator glm::vec3() const { return glm::vec3(x, y, z); }
+        
+        // Basic operators
         Vec3 operator+(const Vec3& other) const { return Vec3(x + other.x, y + other.y, z + other.z); }
         Vec3 operator-(const Vec3& other) const { return Vec3(x - other.x, y - other.y, z - other.z); }
         Vec3 operator*(float scalar) const { return Vec3(x * scalar, y * scalar, z * scalar); }
@@ -46,62 +52,52 @@ namespace Lunex {
         
         Vec3 operator-() const { return Vec3(-x, -y, -z); }
         
-        // Producto punto
+        // Common vector operations (inline, using GLM)
         float Dot(const Vec3& other) const {
-            return x * other.x + y * other.y + z * other.z;
+            return glm::dot(glm::vec3(*this), glm::vec3(other));
         }
         
-        // Producto cruz
         Vec3 Cross(const Vec3& other) const {
-            return Vec3(
-                y * other.z - z * other.y,
-                z * other.x - x * other.z,
-                x * other.y - y * other.x
-            );
+            glm::vec3 result = glm::cross(glm::vec3(*this), glm::vec3(other));
+            return Vec3(result);
         }
         
-        // Magnitud
         float Length() const {
-            return std::sqrt(x * x + y * y + z * z);
+            return glm::length(glm::vec3(*this));
         }
         
-        float LengthSquared() const {
-            return x * x + y * y + z * z;
+        float LengthSquared() const { 
+            return x * x + y * y + z * z; 
         }
         
-        // Normalizar
         Vec3 Normalized() const {
-            float len = Length();
-            if (len > 0.0001f)
-                return (*this) / len;
-            return Vec3(0, 0, 0);
+            glm::vec3 result = glm::normalize(glm::vec3(*this));
+            return Vec3(result);
         }
         
         void Normalize() {
-            float len = Length();
-            if (len > 0.0001f) {
-                x /= len;
-                y /= len;
-                z /= len;
-            }
+            glm::vec3 v = glm::normalize(glm::vec3(*this));
+            x = v.x;
+            y = v.y;
+            z = v.z;
         }
         
-        // Distancia
         float Distance(const Vec3& other) const {
-            return (*this - other).Length();
+            return glm::distance(glm::vec3(*this), glm::vec3(other));
         }
         
-        // Lerp
+        // Static helpers
         static Vec3 Lerp(const Vec3& a, const Vec3& b, float t) {
-            return a + (b - a) * t;
+            glm::vec3 result = glm::mix(glm::vec3(a), glm::vec3(b), t);
+            return Vec3(result);
         }
         
-        // Reflect
         Vec3 Reflect(const Vec3& normal) const {
-            return (*this) - normal * 2.0f * Dot(normal);
+            glm::vec3 result = glm::reflect(glm::vec3(*this), glm::vec3(normal));
+            return Vec3(result);
         }
         
-        // Vectores predefinidos
+        // Predefined vectors
         static Vec3 Zero() { return Vec3(0, 0, 0); }
         static Vec3 One() { return Vec3(1, 1, 1); }
         static Vec3 Up() { return Vec3(0, 1, 0); }
@@ -112,12 +108,17 @@ namespace Lunex {
         static Vec3 Back() { return Vec3(0, 0, -1); }
     };
     
+    // Lightweight Vec2 wrapper
     struct Vec2 {
         float x, y;
         
         Vec2() : x(0), y(0) {}
         Vec2(float _x, float _y) : x(_x), y(_y) {}
         Vec2(float scalar) : x(scalar), y(scalar) {}
+        
+        // GLM interop
+        Vec2(const glm::vec2& v) : x(v.x), y(v.y) {}
+        operator glm::vec2() const { return glm::vec2(x, y); }
         
         Vec2 operator+(const Vec2& other) const { return Vec2(x + other.x, y + other.y); }
         Vec2 operator-(const Vec2& other) const { return Vec2(x - other.x, y - other.y); }
@@ -129,16 +130,21 @@ namespace Lunex {
         Vec2& operator*=(float scalar) { x *= scalar; y *= scalar; return *this; }
         Vec2& operator/=(float scalar) { x /= scalar; y /= scalar; return *this; }
         
-        float Dot(const Vec2& other) const { return x * other.x + y * other.y; }
+        float Dot(const Vec2& other) const {
+            return glm::dot(glm::vec2(*this), glm::vec2(other));
+        }
         
-        float Length() const { return std::sqrt(x * x + y * y); }
-        float LengthSquared() const { return x * x + y * y; }
+        float Length() const {
+            return glm::length(glm::vec2(*this));
+        }
+        
+        float LengthSquared() const { 
+            return x * x + y * y; 
+        }
         
         Vec2 Normalized() const {
-            float len = Length();
-            if (len > 0.0001f)
-                return (*this) / len;
-            return Vec2(0, 0);
+            glm::vec2 result = glm::normalize(glm::vec2(*this));
+            return Vec2(result);
         }
         
         static Vec2 Zero() { return Vec2(0, 0); }
@@ -149,39 +155,30 @@ namespace Lunex {
         static Vec2 Right() { return Vec2(1, 0); }
     };
     
-    // Math helpers
+    // Math helpers - Thin wrappers around GLM functions (inline)
     namespace Math {
         constexpr float PI = 3.14159265358979323846f;
         constexpr float DEG2RAD = PI / 180.0f;
         constexpr float RAD2DEG = 180.0f / PI;
         
-        inline float ToRadians(float degrees) { return degrees * DEG2RAD; }
-        inline float ToDegrees(float radians) { return radians * RAD2DEG; }
+        inline float ToRadians(float degrees) { return glm::radians(degrees); }
+        inline float ToDegrees(float radians) { return glm::degrees(radians); }
+        inline float Clamp(float value, float min, float max) { return glm::clamp(value, min, max); }
+        inline float Lerp(float a, float b, float t) { return glm::mix(a, b, t); }
         
-        inline float Clamp(float value, float min, float max) {
-            if (value < min) return min;
-            if (value > max) return max;
-            return value;
-        }
+        inline float Sin(float angle) { return glm::sin(angle); }
+        inline float Cos(float angle) { return glm::cos(angle); }
+        inline float Tan(float angle) { return glm::tan(angle); }
+        inline float Asin(float value) { return glm::asin(value); }
+        inline float Acos(float value) { return glm::acos(value); }
+        inline float Atan(float value) { return glm::atan(value); }
+        inline float Atan2(float y, float x) { return glm::atan(y, x); }
         
-        inline float Lerp(float a, float b, float t) {
-            return a + (b - a) * t;
-        }
-        
-        inline float Sin(float angle) { return std::sin(angle); }
-        inline float Cos(float angle) { return std::cos(angle); }
-        inline float Tan(float angle) { return std::tan(angle); }
-        inline float Asin(float value) { return std::asin(value); }
-        inline float Acos(float value) { return std::acos(value); }
-        inline float Atan(float value) { return std::atan(value); }
-        inline float Atan2(float y, float x) { return std::atan2(y, x); }
-        
-        inline float Sqrt(float value) { return std::sqrt(value); }
-        inline float Pow(float base, float exp) { return std::pow(base, exp); }
-        inline float Abs(float value) { return std::abs(value); }
-        
-        inline float Min(float a, float b) { return (a < b) ? a : b; }
-        inline float Max(float a, float b) { return (a > b) ? a : b; }
+        inline float Sqrt(float value) { return glm::sqrt(value); }
+        inline float Pow(float base, float exp) { return glm::pow(base, exp); }
+        inline float Abs(float value) { return glm::abs(value); }
+        inline float Min(float a, float b) { return glm::min(a, b); }
+        inline float Max(float a, float b) { return glm::max(a, b); }
     }
 
     // ========================================================================
@@ -226,14 +223,26 @@ namespace Lunex {
         float (*GetMouseX)();
         float (*GetMouseY)();
         
+        // === RIGIDBODY2D COMPONENT ===
+        bool (*HasRigidbody2D)(void* entity);
+        void (*GetLinearVelocity)(void* entity, Vec2* outVelocity);
+        void (*SetLinearVelocity)(void* entity, const Vec2* velocity);
+        void (*ApplyLinearImpulse)(void* entity, const Vec2* impulse, bool wake);
+        void (*ApplyLinearImpulseToCenter)(void* entity, const Vec2* impulse, bool wake);
+        void (*ApplyForce)(void* entity, const Vec2* force, const Vec2* point, bool wake);
+        void (*ApplyForceToCenter)(void* entity, const Vec2* force, bool wake);
+        float (*GetMass)(void* entity);
+        float (*GetGravityScale)(void* entity);
+        void (*SetGravityScale)(void* entity, float scale);
+        
         // === ENTITY HANDLE ===
         void* CurrentEntity;
         
-        // Reservado para expansión futura sin romper ABI
+        // Reservado para expansion futura sin romper ABI
         void* reserved[16];
     };
 
-    // Interfaz base para módulos de script
+    // Interfaz base para modulos de script
     class IScriptModule
     {
     public:
