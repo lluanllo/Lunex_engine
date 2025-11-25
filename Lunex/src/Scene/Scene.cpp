@@ -6,8 +6,12 @@
 #include "Renderer/Renderer2D.h"
 #include "Renderer/Renderer3D.h"
 #include "Renderer/RenderCommand.h"
+#include "Core/Input.h"
+
+#include "Scripting/ScriptingEngine.h"
 
 #include <glm/glm.hpp>
+#include <GLFW/glfw3.h>
 
 #include "Entity.h"
 
@@ -24,9 +28,14 @@ namespace Lunex {
 	}
 
 	Scene::Scene() {
+		// Inicializar el motor de scripting
+		m_ScriptingEngine = std::make_unique<ScriptingEngine>();
+		m_ScriptingEngine->Initialize(this);
 	}
 
 	Scene::~Scene() {
+		// El ScriptingEngine se destruirá automáticamente (unique_ptr)
+		
 		// Box2D v3.x: verificar si el mundo existe antes de destruir
 		if (B2_IS_NON_NULL(m_PhysicsWorld)) {
 			b2DestroyWorld(m_PhysicsWorld);
@@ -111,9 +120,11 @@ namespace Lunex {
 
 	void Scene::OnRuntimeStart() {
 		OnPhysics2DStart();
+		m_ScriptingEngine->OnScriptsStart(m_Registry);
 	}
 
 	void Scene::OnRuntimeStop() {
+		m_ScriptingEngine->OnScriptsStop(m_Registry);
 		OnPhysics2DStop();
 	}
 
@@ -126,6 +137,9 @@ namespace Lunex {
 	}
 
 	void Scene::OnUpdateRuntime(Timestep ts) {
+		// Update scripts con deltaTime real
+		m_ScriptingEngine->OnScriptsUpdate(ts);
+		
 		// Native scripts
 		{
 			m_Registry.view<NativeScriptComponent>().each([=](auto entity, auto& nsc) {
@@ -653,5 +667,11 @@ namespace Lunex {
 
 	template<>
 	void Scene::OnComponentAdded<TextureComponent>(Entity entity, TextureComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<ScriptComponent>(Entity entity, ScriptComponent& component) {
+		// No hacer nada especial al añadir el componente
+		// La compilación y carga se manejará en ScriptingEngine
 	}
 }
