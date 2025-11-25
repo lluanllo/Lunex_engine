@@ -5,6 +5,7 @@
 
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
+#include <box2d/box2d.h>
 #include <filesystem>
 #include <fstream>
 
@@ -186,6 +187,153 @@ namespace Lunex {
 			return Input::GetMouseY();
 		};
 
+		// === RIGIDBODY2D COMPONENT ===
+		m_EngineContext->HasRigidbody2D = [](void* entity) -> bool {
+			if (!entity || !g_CurrentScene) return false;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			return ent.HasComponent<Rigidbody2DComponent>();
+		};
+
+		m_EngineContext->GetLinearVelocity = [](void* entity, Vec2* outVelocity) {
+			if (!entity || !g_CurrentScene || !outVelocity) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					b2Vec2 velocity = b2Body_GetLinearVelocity(bodyId);
+					outVelocity->x = velocity.x;
+					outVelocity->y = velocity.y;
+				}
+			}
+		};
+
+		m_EngineContext->SetLinearVelocity = [](void* entity, const Vec2* velocity) {
+			if (!entity || !g_CurrentScene || !velocity) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					b2Vec2 vel = { velocity->x, velocity->y };
+					b2Body_SetLinearVelocity(bodyId, vel);
+				}
+			}
+		};
+
+		m_EngineContext->ApplyLinearImpulse = [](void* entity, const Vec2* impulse, bool wake) {
+			if (!entity || !g_CurrentScene || !impulse) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					b2Vec2 imp = { impulse->x, impulse->y };
+					b2Vec2 point = b2Body_GetPosition(bodyId);
+					b2Body_ApplyLinearImpulse(bodyId, imp, point, wake);
+				}
+			}
+		};
+
+		m_EngineContext->ApplyLinearImpulseToCenter = [](void* entity, const Vec2* impulse, bool wake) {
+			if (!entity || !g_CurrentScene || !impulse) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					b2Vec2 imp = { impulse->x, impulse->y };
+					b2Vec2 point = b2Body_GetPosition(bodyId);
+					b2Body_ApplyLinearImpulse(bodyId, imp, point, wake);
+				}
+			}
+		};
+
+		m_EngineContext->ApplyForce = [](void* entity, const Vec2* force, const Vec2* point, bool wake) {
+			if (!entity || !g_CurrentScene || !force || !point) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					b2Vec2 f = { force->x, force->y };
+					b2Vec2 p = { point->x, point->y };
+					b2Body_ApplyForce(bodyId, f, p, wake);
+				}
+			}
+		};
+
+		m_EngineContext->ApplyForceToCenter = [](void* entity, const Vec2* force, bool wake) {
+			if (!entity || !g_CurrentScene || !force) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					b2Vec2 f = { force->x, force->y };
+					b2Vec2 point = b2Body_GetPosition(bodyId);
+					b2Body_ApplyForce(bodyId, f, point, wake);
+				}
+			}
+		};
+
+		m_EngineContext->GetMass = [](void* entity) -> float {
+			if (!entity || !g_CurrentScene) return 0.0f;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					return b2Body_GetMass(bodyId);
+				}
+			}
+			return 0.0f;
+		};
+
+		m_EngineContext->GetGravityScale = [](void* entity) -> float {
+			if (!entity || !g_CurrentScene) return 1.0f;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					return b2Body_GetGravityScale(bodyId);
+				}
+			}
+			return 1.0f;
+		};
+
+		m_EngineContext->SetGravityScale = [](void* entity, float scale) {
+			if (!entity || !g_CurrentScene) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody2DComponent>()) {
+				auto& rb2d = ent.GetComponent<Rigidbody2DComponent>();
+				if (rb2d.RuntimeBody) {
+					b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+					b2Body_SetGravityScale(bodyId, scale);
+				}
+			}
+		};
+
 		// CurrentEntity se establecerá cuando se cargue el script
 		m_EngineContext->CurrentEntity = nullptr;
 
@@ -201,48 +349,63 @@ namespace Lunex {
 			auto& scriptComp = view.get<ScriptComponent>(entity);
 			auto& idComp = view.get<IDComponent>(entity);
 
-			if (scriptComp.ScriptPath.empty()) {
-				continue;
-			}
-
-			// Compilar script si es necesario
-			if (scriptComp.AutoCompile) {
-				std::string dllPath;
-				if (CompileScript(scriptComp.ScriptPath, dllPath)) {
-					scriptComp.CompiledDLLPath = dllPath;
-					LNX_LOG_INFO("Script compiled successfully: {0}", dllPath);
-				}
-				else {
-					LNX_LOG_ERROR("Failed to compile script: {0}", scriptComp.ScriptPath);
+			// ===== ITERAR POR TODOS LOS SCRIPTS DE LA ENTIDAD =====
+			for (size_t i = 0; i < scriptComp.GetScriptCount(); i++) {
+				const std::string& scriptPath = scriptComp.GetScriptPath(i);
+				
+				if (scriptPath.empty()) {
 					continue;
 				}
-			}
 
-			// Si no hay DLL compilada, saltar
-			if (scriptComp.CompiledDLLPath.empty()) {
-				LNX_LOG_WARN("No compiled DLL for script: {0}", scriptComp.ScriptPath);
-				continue;
-			}
+				// Compilar script si es necesario
+				std::string dllPath;
+				if (scriptComp.AutoCompile) {
+					if (CompileScript(scriptPath, dllPath)) {
+						// Actualizar DLL path en el componente
+						if (i < scriptComp.CompiledDLLPaths.size()) {
+							scriptComp.CompiledDLLPaths[i] = dllPath;
+						}
+						LNX_LOG_INFO("Script #{0} compiled successfully: {1}", i + 1, dllPath);
+					}
+					else {
+						LNX_LOG_ERROR("Failed to compile script #{0}: {1}", i + 1, scriptPath);
+						continue;
+					}
+				}
 
-			// Cargar script
-			auto plugin = std::make_unique<ScriptPlugin>();
+				// Si no hay DLL compilada, saltar
+				if (i >= scriptComp.CompiledDLLPaths.size() || scriptComp.CompiledDLLPaths[i].empty()) {
+					LNX_LOG_WARN("No compiled DLL for script #{0}: {1}", i + 1, scriptPath);
+					continue;
+				}
 
-			// Establecer CurrentEntity antes de cargar el script
-			auto entityHandle = (entt::entity)entity;
-			m_EngineContext->CurrentEntity = reinterpret_cast<void*>(static_cast<uintptr_t>(entityHandle));
+				// Cargar script
+				auto plugin = std::make_unique<ScriptPlugin>();
 
-			if (plugin->Load(scriptComp.CompiledDLLPath, m_EngineContext.get())) {
-				plugin->OnPlayModeEnter();
-				scriptComp.IsLoaded = true;
-				scriptComp.ScriptPluginInstance = plugin.get();
+				// Establecer CurrentEntity antes de cargar el script
+				auto entityHandle = (entt::entity)entity;
+				m_EngineContext->CurrentEntity = reinterpret_cast<void*>(static_cast<uintptr_t>(entityHandle));
 
-				// Guardar el plugin en el mapa usando el UUID de la entidad
-				m_ScriptInstances[idComp.ID] = std::move(plugin);
+				if (plugin->Load(scriptComp.CompiledDLLPaths[i], m_EngineContext.get())) {
+					plugin->OnPlayModeEnter();
+					
+					// Actualizar estado en el componente
+					if (i < scriptComp.ScriptLoadedStates.size()) {
+						scriptComp.ScriptLoadedStates[i] = true;
+					}
+					if (i < scriptComp.ScriptPluginInstances.size()) {
+						scriptComp.ScriptPluginInstances[i] = plugin.get();
+					}
 
-				LNX_LOG_INFO("Script loaded and started: {0}", scriptComp.CompiledDLLPath);
-			}
-			else {
-				LNX_LOG_ERROR("Failed to load script: {0}", scriptComp.CompiledDLLPath);
+					// Guardar el plugin en el mapa usando UUID + índice
+					uint64_t uniqueKey = ((uint64_t)idComp.ID << 32) | i;
+					m_ScriptInstances[uniqueKey] = std::move(plugin);
+
+					LNX_LOG_INFO("Script #{0} loaded and started: {1}", i + 1, scriptComp.CompiledDLLPaths[i]);
+				}
+				else {
+					LNX_LOG_ERROR("Failed to load script #{0}: {1}", i + 1, scriptComp.CompiledDLLPaths[i]);
+				}
 			}
 		}
 	}
@@ -263,8 +426,14 @@ namespace Lunex {
 		auto view = registry.view<ScriptComponent>();
 		for (auto entity : view) {
 			auto& scriptComp = view.get<ScriptComponent>(entity);
-			scriptComp.IsLoaded = false;
-			scriptComp.ScriptPluginInstance = nullptr;
+			
+			// Limpiar estados de todos los scripts
+			for (size_t i = 0; i < scriptComp.ScriptLoadedStates.size(); i++) {
+				scriptComp.ScriptLoadedStates[i] = false;
+			}
+			for (size_t i = 0; i < scriptComp.ScriptPluginInstances.size(); i++) {
+				scriptComp.ScriptPluginInstances[i] = nullptr;
+			}
 		}
 	}
 
@@ -326,18 +495,34 @@ namespace Lunex {
 					auto& scriptComp = view.get<ScriptComponent>(entity);
 					auto& idComp = view.get<IDComponent>(entity);
 
-					if (scriptComp.CompiledDLLPath == dllPath.string() && scriptComp.IsLoaded) {
-						if (it->first == idComp.ID) {
-							LNX_LOG_INFO("Unloading plugin for entity: {0}", (uint64_t)idComp.ID);
-							it->second->OnPlayModeExit();
-							it->second->Unload();
-							it = m_ScriptInstances.erase(it);
-							scriptComp.IsLoaded = false;
-							scriptComp.ScriptPluginInstance = nullptr;
-							found = true;
-							break;
+					// Buscar en todos los scripts del componente
+					for (size_t i = 0; i < scriptComp.CompiledDLLPaths.size(); i++) {
+						if (scriptComp.CompiledDLLPaths[i] == dllPath.string() && 
+							i < scriptComp.ScriptLoadedStates.size() && 
+							scriptComp.ScriptLoadedStates[i]) {
+							
+							// Construir clave única (UUID + índice)
+							uint64_t uniqueKey = ((uint64_t)idComp.ID << 32) | i;
+							
+							if (it->first == uniqueKey) {
+								LNX_LOG_INFO("Unloading script #{0} for entity: {1}", i + 1, (uint64_t)idComp.ID);
+								it->second->OnPlayModeExit();
+								it->second->Unload();
+								it = m_ScriptInstances.erase(it);
+								
+								// Actualizar estado en el componente
+								scriptComp.ScriptLoadedStates[i] = false;
+								if (i < scriptComp.ScriptPluginInstances.size()) {
+									scriptComp.ScriptPluginInstances[i] = nullptr;
+								}
+								
+								found = true;
+								break;
+							}
 						}
 					}
+					
+					if (found) break;
 				}
 				if (!found) ++it;
 			}

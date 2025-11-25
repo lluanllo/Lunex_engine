@@ -38,13 +38,13 @@ namespace Lunex {
 	}
 
 	void ConsoleTab::Draw() {
-		// Filters bar
+		// ===== FILTERS BAR (FIJA) =====
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 2));
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
 		
 		if (ImGui::BeginChild("##filters", ImVec2(0, 35), true, ImGuiWindowFlags_NoScrollbar)) {
 			// Log level filters
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(1.0f, 0.55f, 0.0f, 0.7f));
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.26f, 0.59f, 0.98f, 0.50f));
 			
 			ImGui::Checkbox("Trace", &m_ShowTrace); ImGui::SameLine();
 			ImGui::Checkbox("Info", &m_ShowInfo); ImGui::SameLine();
@@ -69,8 +69,8 @@ namespace Lunex {
 			
 			ImGui::SameLine();
 			ImGui::SetNextItemWidth(200);
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(1.0f, 0.55f, 0.0f, 0.7f));
-			ImGui::InputTextWithHint("##search", "Search...", m_SearchFilter, IM_ARRAYSIZE(m_SearchFilter));
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.26f, 0.59f, 0.98f, 0.50f));
+			ImGui::InputTextWithHint("##search", "?? Search...", m_SearchFilter, IM_ARRAYSIZE(m_SearchFilter));
 			ImGui::PopStyleColor();
 			
 			ImGui::SameLine();
@@ -86,8 +86,10 @@ namespace Lunex {
 		ImGui::PopStyleColor();
 		ImGui::PopStyleVar();
 
-		// Messages area
+		// ===== MESSAGES AREA CON SCROLL =====
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.08f, 0.08f, 0.08f, 1.0f));
+		
+		// BeginChild SIN especificar altura - tomará todo el espacio disponible
 		if (ImGui::BeginChild("##scrolling", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar)) {
 			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 2));
 			
@@ -218,15 +220,21 @@ namespace Lunex {
 	void ConsolePanel::OnImGuiRender() {
 		ImGui::Begin("Console");
 
+		// ===== TAB BAR PRIMERO (SIEMPRE VISIBLE) =====
 		DrawTabBar();
+		
+		// ===== TOOLBAR =====
 		DrawToolbar();
 
-		// Active tab content
+		// ===== CONTENIDO DEL TAB ACTIVO CON SCROLL =====
 		if (m_ActiveTabIndex >= 0 && m_ActiveTabIndex < m_Tabs.size()) {
-			ImGui::Spacing();
+			// Child con scroll para el contenido de mensajes
+			ImGui::BeginChild("##TabContent", ImVec2(0, -30), false);
 			m_Tabs[m_ActiveTabIndex]->Draw();
+			ImGui::EndChild();
 		}
 
+		// ===== COMMAND INPUT AL FINAL (FIJO) =====
 		ImGui::Separator();
 		DrawCommandInput();
 
@@ -241,7 +249,7 @@ namespace Lunex {
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 4));
 		ImGui::PushStyleColor(ImGuiCol_Tab, ImVec4(0.16f, 0.16f, 0.16f, 1.0f));
 		ImGui::PushStyleColor(ImGuiCol_TabActive, ImVec4(0.24f, 0.24f, 0.24f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_TabHovered, ImVec4(0.90f, 0.50f, 0.10f, 0.4f));
+		ImGui::PushStyleColor(ImGuiCol_TabHovered, ImVec4(0.26f, 0.59f, 0.98f, 0.40f));
 
 		if (ImGui::BeginTabBar("##console_tabs", ImGuiTabBarFlags_Reorderable | ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_FittingPolicyScroll)) {
 			for (int i = 0; i < m_Tabs.size(); i++) {
@@ -298,7 +306,7 @@ namespace Lunex {
 
 	void ConsolePanel::DrawCommandInput() {
 		ImGui::PushItemWidth(-1);
-		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(1.0f, 0.55f, 0.0f, 0.7f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.26f, 0.59f, 0.98f, 0.50f));
 		
 		ImGuiInputTextFlags inputFlags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackHistory | ImGuiInputTextFlags_CallbackCompletion;
 		
@@ -355,7 +363,7 @@ namespace Lunex {
 
 	void ConsolePanel::DrawCommandHelp() {
 		ImGui::Separator();
-		ImGui::TextColored(ImVec4(0.9f, 0.5f, 0.1f, 1.0f), "Available Commands:");
+		ImGui::TextColored(ImVec4(0.26f, 0.59f, 0.98f, 1.0f), "Available Commands:");
 		ImGui::Spacing();
 
 		for (const auto& [name, cmd] : m_Commands) {

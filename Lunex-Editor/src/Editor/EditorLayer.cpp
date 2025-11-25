@@ -318,6 +318,7 @@ namespace Lunex {
 
 		// Render all panels
 		m_SceneHierarchyPanel.OnImGuiRender();
+		m_PropertiesPanel.OnImGuiRender();
 		m_ContentBrowserPanel.OnImGuiRender();
 		m_StatsPanel.OnImGuiRender();
 		m_SettingsPanel.OnImGuiRender();
@@ -327,6 +328,10 @@ namespace Lunex {
 		m_ProjectCreationDialog.OnImGuiRender();
 
 		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
+		
+		// Sincronizar la entidad seleccionada con PropertiesPanel
+		m_PropertiesPanel.SetSelectedEntity(selectedEntity);
+		
 		m_ViewportPanel.OnImGuiRender(m_Framebuffer, m_SceneHierarchyPanel, m_EditorCamera,
 			selectedEntity, m_GizmoType, m_ToolbarPanel,
 			m_SceneState, (bool)m_ActiveScene);
@@ -481,6 +486,7 @@ namespace Lunex {
 		m_ActiveScene = CreateRef<Scene>();
 		m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
+		m_PropertiesPanel.SetContext(m_ActiveScene);
 		m_EditorScenePath = std::filesystem::path();
 	}
 
@@ -505,6 +511,7 @@ namespace Lunex {
 			m_EditorScene = newScene;
 			m_EditorScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 			m_SceneHierarchyPanel.SetContext(m_EditorScene);
+			m_PropertiesPanel.SetContext(m_EditorScene);
 			m_ActiveScene = m_EditorScene;
 			m_EditorScenePath = path;
 		}
@@ -538,6 +545,7 @@ namespace Lunex {
 		m_ActiveScene = Scene::Copy(m_EditorScene);
 		m_ActiveScene->OnRuntimeStart();
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
+		m_PropertiesPanel.SetContext(m_ActiveScene);
 	}
 
 	void EditorLayer::OnSceneSimulate() {
@@ -548,6 +556,7 @@ namespace Lunex {
 		m_ActiveScene = Scene::Copy(m_EditorScene);
 		m_ActiveScene->OnSimulationStart();
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
+		m_PropertiesPanel.SetContext(m_ActiveScene);
 	}
 
 	void EditorLayer::OnSceneStop() {
@@ -561,6 +570,7 @@ namespace Lunex {
 		m_SceneState = SceneState::Edit;
 		m_ActiveScene = m_EditorScene;
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
+		m_PropertiesPanel.SetContext(m_ActiveScene);
 	}
 
 	void EditorLayer::OnDuplicateEntity() {
@@ -734,8 +744,5 @@ namespace Lunex {
 		else {
 			m_MenuBarPanel.SetProjectName("No Project");
 		}
-
-		// Update window title through Application
-		// Application::Get().GetWindow().SetTitle(title);
 	}
 }
