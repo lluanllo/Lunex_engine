@@ -21,16 +21,13 @@ namespace Lunex {
 		void SetSelectedEntity(Entity entity);
 
 	private:
-		template<typename T>
-		void DisplayAddComponentEntry(const std::string& entryName);
-
 		void DrawEntityNode(Entity entity);
-		void DrawComponents(Entity entity);
+
 	private:
 		Ref<Scene> m_Context;
 		Entity m_SelectionContext;
 
-		// Iconos para la jerarqu�a
+		// Iconos para la jerarquía
 		Ref<Texture2D> m_CameraIcon;
 		Ref<Texture2D> m_EntityIcon;
 	};

@@ -2,6 +2,7 @@
 
 #include <Lunex.h>
 #include "../Panels/SceneHierarchyPanel.h"
+#include "../Panels/PropertiesPanel.h"
 #include "../Panels/ContentBrowserPanel.h"
 #include "../Panels/StatsPanel.h"
 #include "../Panels/SettingsPanel.h"
@@ -91,6 +92,7 @@ namespace Lunex {
 			
 			// Panels
 			SceneHierarchyPanel m_SceneHierarchyPanel;
+			PropertiesPanel m_PropertiesPanel;
 			ContentBrowserPanel m_ContentBrowserPanel;
 			StatsPanel m_StatsPanel;
 			SettingsPanel m_SettingsPanel;
