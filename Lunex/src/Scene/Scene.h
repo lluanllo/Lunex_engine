@@ -11,14 +11,9 @@
 #include <unordered_map>
 #include <memory>
 
-// Forward declarations para evitar dependencias circulares
-namespace Lunex {
-	class ScriptPlugin;
-	struct EngineContext;
-}
-
 namespace Lunex {
 	class Entity;
+	class ScriptingEngine; // Forward declaration
 	
 	class Scene {
 		public:
@@ -60,25 +55,18 @@ namespace Lunex {
 			
 			void RenderScene(EditorCamera& camera);
 			
-			// Script system
-			void OnScriptsStart();
-			void OnScriptsStop();
-			void OnScriptsUpdate(float deltaTime);
-			bool CompileScript(const std::string& scriptPath, std::string& outDLLPath);
-			void InitializeEngineContext();
-			
 		private:
 			entt::registry m_Registry;
 			uint32_t m_ViewportWidth = 0, m_ViewportHeight = 0;
 			
 			b2WorldId m_PhysicsWorld = B2_NULL_ID;
 			
-			// Scripting system
-			std::unordered_map<UUID, std::unique_ptr<ScriptPlugin>> m_ScriptInstances;
-			std::unique_ptr<EngineContext> m_EngineContext;
+			// Scripting engine
+			std::unique_ptr<ScriptingEngine> m_ScriptingEngine;
 			
 			friend class Entity;
 			friend class SceneSerializer;
 			friend class SceneHierarchyPanel;
+			friend class ScriptingEngine; // Para acceder al registry
 	};
 }
