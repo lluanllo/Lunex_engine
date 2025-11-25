@@ -371,6 +371,39 @@ namespace Lunex {
 		CircleCollider2DComponent(const CircleCollider2DComponent&) = default;
 	};
 
+	// C++ Script Component - integración con sistema de scripting dinámico
+	struct ScriptComponent {
+		std::string ScriptPath;          // Ruta relativa al script .cpp
+		std::string CompiledDLLPath;     // Ruta a la DLL compilada
+		bool AutoCompile = true;         // Auto-compilar al entrar en Play mode
+		bool IsLoaded = false;           // Estado de carga del script
+		
+		// Runtime data (no serializar)
+		void* ScriptPluginInstance = nullptr;  // Puntero al ScriptPlugin (cast a Lunex::ScriptPlugin*)
+		
+		ScriptComponent() = default;
+		ScriptComponent(const ScriptComponent& other)
+			: ScriptPath(other.ScriptPath)
+			, CompiledDLLPath(other.CompiledDLLPath)
+			, AutoCompile(other.AutoCompile)
+			, IsLoaded(false)
+			, ScriptPluginInstance(nullptr)
+		{
+		}
+		
+		ScriptComponent(const std::string& scriptPath)
+			: ScriptPath(scriptPath)
+			, AutoCompile(true)
+			, IsLoaded(false)
+			, ScriptPluginInstance(nullptr)
+		{
+		}
+		
+		~ScriptComponent() {
+			// Cleanup manejado por Scene
+		}
+	};
+
 	template<typename... Component>
 	struct ComponentGroup
 	{
@@ -380,5 +413,5 @@ namespace Lunex {
 		ComponentGroup<TransformComponent, SpriteRendererComponent,
 		CircleRendererComponent, CameraComponent, NativeScriptComponent,
 		Rigidbody2DComponent, BoxCollider2DComponent, CircleCollider2DComponent,
-		MeshComponent, MaterialComponent, LightComponent, TextureComponent>;
+		MeshComponent, MaterialComponent, LightComponent, TextureComponent, ScriptComponent>;
 }

@@ -302,6 +302,20 @@ namespace Lunex {
 			
 			out << YAML::EndMap; // TextureComponent
 		}
+
+		if (entity.HasComponent<ScriptComponent>()) {
+			out << YAML::Key << "ScriptComponent";
+			out << YAML::BeginMap; // ScriptComponent
+			
+			auto& scriptComponent = entity.GetComponent<ScriptComponent>();
+			out << YAML::Key << "ScriptPath" << YAML::Value << scriptComponent.ScriptPath;
+			out << YAML::Key << "AutoCompile" << YAML::Value << scriptComponent.AutoCompile;
+			
+			// No serializar CompiledDLLPath ni runtime data (IsLoaded, ScriptPluginInstance)
+			// Estos se regenerarán al cargar
+			
+			out << YAML::EndMap; // ScriptComponent
+		}
 		
 		out << YAML::EndMap; // Entity
 	}
@@ -570,6 +584,23 @@ namespace Lunex {
 						texture.SpecularMultiplier = textureComponent["SpecularMultiplier"].as<float>();
 					if (textureComponent["AOMultiplier"])
 						texture.AOMultiplier = textureComponent["AOMultiplier"].as<float>();
+				}
+
+				auto scriptComponent = entity["ScriptComponent"];
+				if (scriptComponent) {
+					auto& script = deserializedEntity.AddComponent<ScriptComponent>();
+					
+					if (scriptComponent["ScriptPath"]) {
+						script.ScriptPath = scriptComponent["ScriptPath"].as<std::string>();
+					}
+					
+					if (scriptComponent["AutoCompile"]) {
+						script.AutoCompile = scriptComponent["AutoCompile"].as<bool>();
+					}
+					
+					// Los datos de runtime se regenerarán al iniciar el play mode
+					script.IsLoaded = false;
+					script.ScriptPluginInstance = nullptr;
 				}
 			}
 		}

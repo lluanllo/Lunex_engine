@@ -292,6 +292,7 @@ namespace Lunex {
 			ImGui::OpenPopup("AddComponent");
 		if (ImGui::BeginPopup("AddComponent")) {
 			DisplayAddComponentEntry<CameraComponent>("Camera");
+			DisplayAddComponentEntry<ScriptComponent>("C++ Script");
 			DisplayAddComponentEntry<SpriteRendererComponent>("Sprite Renderer");
 			DisplayAddComponentEntry<CircleRendererComponent>("Circle Renderer");
 			DisplayAddComponentEntry<MeshComponent>("Mesh Renderer");
@@ -313,6 +314,110 @@ namespace Lunex {
 			component.Rotation = glm::radians(rotation);
 			DrawVec3Control("Scale", component.Scale, 1.0f);
 			});
+
+		DrawComponent<ScriptComponent>("Script", entity, [](auto& component) {
+			ImGui::Text("Script Properties");
+			ImGui::Separator();
+
+			// Script path display
+			ImGui::Text("Script:");
+			ImGui::SameLine();
+			
+			if (component.ScriptPath.empty()) {
+				ImGui::TextDisabled("No script assigned");
+			}
+			else {
+				std::filesystem::path scriptPath(component.ScriptPath);
+				std::string filename = scriptPath.filename().string();
+				
+				// Botón clickeable para abrir en Visual Studio
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.4f, 0.8f, 0.8f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.5f, 0.9f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.35f, 0.7f, 1.0f));
+				
+				if (ImGui::Button(filename.c_str(), ImVec2(200, 0))) {
+					// Abrir script en Visual Studio
+					std::filesystem::path fullPath = std::filesystem::path("assets") / component.ScriptPath;
+					if (std::filesystem::exists(fullPath)) {
+						// Usar comillas dobles para paths con espacios
+						std::string command = "cmd /c start \"\" \"" + fullPath.string() + "\"";
+						system(command.c_str());
+					}
+					else {
+						LNX_LOG_ERROR("Script file not found: {0}", fullPath.string());
+					}
+				}
+				
+				ImGui::PopStyleColor(3);
+				
+				// Tooltip
+				if (ImGui::IsItemHovered()) {
+					ImGui::SetTooltip("Click to open in default editor (Visual Studio)");
+				}
+			}
+
+			// Drag and drop target for script files
+			ImGui::Button("Drop Script Here", ImVec2(200.0f, 30.0f));
+			if (ImGui::BeginDragDropTarget()) {
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+					ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+					
+					// Validate that it's a C++ script
+					std::string ext = data->Extension;
+					if (ext == ".cpp" || ext == ".h") {
+						component.ScriptPath = data->RelativePath;
+						component.IsLoaded = false;
+						LNX_LOG_INFO("Assigned script: {0}", data->RelativePath);
+					}
+					else {
+						LNX_LOG_WARN("File is not a valid C++ script");
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
+
+			// Auto-compile checkbox
+			ImGui::Checkbox("Auto Compile on Play", &component.AutoCompile);
+			if (ImGui::IsItemHovered()) {
+				ImGui::SetTooltip("Automatically compile script when pressing Play button");
+			}
+
+			ImGui::Separator();
+
+			// Script status
+			ImGui::Text("Status:");
+			ImGui::SameLine();
+			if (component.IsLoaded) {
+				ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Loaded");
+			}
+			else if (!component.ScriptPath.empty()) {
+				ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Not Compiled");
+			}
+			else {
+				ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "No Script");
+			}
+
+			// Compiled DLL path info
+			if (!component.CompiledDLLPath.empty()) {
+				ImGui::Text("DLL: %s", component.CompiledDLLPath.c_str());
+			}
+
+			// Manual compile button
+			if (!component.ScriptPath.empty()) {
+				ImGui::Spacing();
+				if (ImGui::Button("Compile Script")) {
+					LNX_LOG_INFO("Manual compile requested for: {0}", component.ScriptPath);
+					// TODO: Trigger compilation
+				}
+				
+				ImGui::SameLine();
+				if (ImGui::Button("Clear Script")) {
+					component.ScriptPath.clear();
+					component.CompiledDLLPath.clear();
+					component.IsLoaded = false;
+				}
+			}
+		});
 
 		DrawComponent<CameraComponent>("Camera", entity, [](auto& component) {
 			auto& camera = component.Camera;

@@ -681,7 +681,7 @@ namespace Lunex {
 					
 					// Imagen con bordes redondeados
 					drawList->AddImageRounded(
-						(ImTextureID)(intptr_t)icon->GetRendererID(),
+						(ImTextureID)(uintptr_t)icon->GetRendererID(),
 						cursorPos,
 						ImVec2(cursorPos.x + iconSize, cursorPos.y + iconSize),
 						ImVec2(0, 1), ImVec2(1, 0),
@@ -830,7 +830,7 @@ namespace Lunex {
 									
 									while (std::getline(ss, line)) {
 										if (line.empty()) continue;
-															
+											
 										std::filesystem::path sourcePath = std::filesystem::path(g_AssetPath) / line;
 										std::filesystem::path destPath = path / sourcePath.filename();
 										
@@ -951,7 +951,29 @@ namespace Lunex {
 								);
 							}
 							m_DirectoryHistory.push_back(path);
-						 m_CurrentDirectory = path;
+							m_CurrentDirectory = path;
+						}
+						else {
+							// Double click en archivo - abrir según el tipo
+							std::string extension = path.extension().string();
+							std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+							
+							// Scripts C++ - abrir en Visual Studio
+							if (extension == ".cpp" || extension == ".h" || extension == ".hpp" || extension == ".c") {
+								std::string command = "cmd /c start \"\" \"" + path.string() + "\"";
+								system(command.c_str());
+								LNX_LOG_INFO("Opening script in editor: {0}", path.filename().string());
+							}
+							// Scenes - cargar en editor (TODO: implementar carga de escena)
+							else if (extension == ".lunex") {
+								LNX_LOG_INFO("Double-clicked scene: {0}", path.filename().string());
+								// TODO: Emit event to load scene in editor
+							}
+							// Otros archivos - abrir con programa por defecto
+							else {
+								std::string command = "cmd /c start \"\" \"" + path.string() + "\"";
+							 system(command.c_str());
+							}
 						}
 					}
 				}
@@ -1208,28 +1230,98 @@ Entities:
 		// Find available name
 		int counter = 1;
 		std::filesystem::path scriptPath;
+		std::string baseName;
 		do {
-			std::string scriptName = "NewScript" + (counter > 1 ? std::to_string(counter) : "") + ".cpp";
+			baseName = "NewScript" + (counter > 1 ? std::to_string(counter) : "");
+			std::string scriptName = baseName + ".cpp";
 			scriptPath = m_CurrentDirectory / scriptName;
 			counter++;
 		} while (std::filesystem::exists(scriptPath));
 		
-		// Create empty script file with template
-		std::string scriptContent = R"(#include "NewScript.h"
+		// Create script file with Lunex scripting template
+		std::string scriptContent = R"(#include "../../Lunex-ScriptCore/src/LunexScriptingAPI.h"
+#include <iostream>
 
-// Called when the script is created
-void OnCreate() {
-    // Initialization code here
-}
+namespace Lunex {
 
-// Called every frame
-void OnUpdate(float deltaTime) {
-    // Update code here
-}
+    class )" + baseName + R"(" : public IScriptModule
+    {
+    public:
+        )" + baseName + R"(() = default;
+        ~)" + baseName + R"(() override = default;
 
-// Called when the script is destroyed
-void OnDestroy() {
-    // Cleanup code here
+        void OnLoad(EngineContext* context) override
+        {
+            m_Context = context;
+            
+            if (m_Context && m_Context->LogInfo)
+            {
+                m_Context->LogInfo("[)" + baseName + R"(] Script loaded!");
+            }
+        }
+
+        void OnUnload() override
+        {
+            if (m_Context && m_Context->LogInfo)
+            {
+                m_Context->LogInfo("[)" + baseName + R"(] Script unloading...");
+            }
+            m_Context = nullptr;
+        }
+
+        void OnUpdate(float deltaTime) override
+        {
+            // Your gameplay logic here
+            // Example: move entities, process input, etc.
+        }
+
+        void OnRender() override
+        {
+            // Optional: custom rendering logic
+        }
+
+        void OnPlayModeEnter() override
+        {
+            if (m_Context && m_Context->LogInfo)
+            {
+                m_Context->LogInfo("[)" + baseName + R"(] Entering Play Mode!");
+            }
+        }
+
+        void OnPlayModeExit() override
+        {
+            if (m_Context && m_Context->LogInfo)
+            {
+                m_Context->LogInfo("[)" + baseName + R"(] Exiting Play Mode!");
+            }
+        }
+
+    private:
+        EngineContext* m_Context = nullptr;
+    };
+
+} // namespace Lunex
+
+// ============================================================================
+// Export required functions for the engine
+// ============================================================================
+
+extern "C"
+{
+    LUNEX_API uint32_t Lunex_GetScriptingAPIVersion()
+    {
+        return Lunex::SCRIPTING_API_VERSION;
+    }
+
+    LUNEX_API Lunex::IScriptModule* Lunex_CreateModule()
+    {
+        return new Lunex::)" + baseName + R"(();
+    }
+
+    LUNEX_API void Lunex_DestroyModule(Lunex::IScriptModule* module)
+    {
+        delete module;
+    }
 }
 )";
 		
@@ -1238,6 +1330,21 @@ void OnDestroy() {
 		scriptFile.close();
 		
 		LNX_LOG_INFO("Created new script: {0}", scriptPath.string());
+		LNX_LOG_INFO("==================================================");
+		LNX_LOG_INFO("? SCRIPT CREATED SUCCESSFULLY!");
+		LNX_LOG_INFO("");
+		LNX_LOG_INFO("Next steps:");
+		LNX_LOG_INFO("1. Drag '{0}' to a Script Component", scriptPath.filename().string());
+		LNX_LOG_INFO("2. Press PLAY - compilation is 100%% automatic!");
+		LNX_LOG_INFO("");
+		LNX_LOG_INFO("The engine will:");
+		LNX_LOG_INFO("  • Auto-detect Visual Studio");
+		LNX_LOG_INFO("  • Auto-configure compiler");
+		LNX_LOG_INFO("  • Auto-compile your script");
+		LNX_LOG_INFO("  • Auto-load the DLL");
+		LNX_LOG_INFO("");
+		LNX_LOG_INFO("DLL output: {0}", (m_CurrentDirectory / "bin").string());
+		LNX_LOG_INFO("==================================================");
 	}
 	
 	void ContentBrowserPanel::DeleteItem(const std::filesystem::path& path) {
