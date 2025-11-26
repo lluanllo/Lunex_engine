@@ -58,6 +58,8 @@ namespace Lunex {
 			
 			const std::string& GetName() { return GetComponent<TagComponent>().Tag; }
 			
+			Scene* GetScene() const { return m_Scene; }
+			
 			bool operator!=(const Entity& other) const {
 				return !(*this == other);
 			}

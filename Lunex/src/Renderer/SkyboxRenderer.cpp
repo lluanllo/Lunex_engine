@@ -263,6 +263,22 @@ namespace Lunex {
 		
 		LoadCubemap(faces);
 	}
+	
+	void SkyboxRenderer::LoadHDR(const std::string& path) {
+		m_Cubemap = OpenGLTextureCube::CreateFromHDR(path);
+		
+		if (m_Cubemap && m_Cubemap->IsLoaded()) {
+			m_Settings.UseCubemap = true;
+			m_Settings.HDRPath = path;
+			LNX_LOG_INFO("HDR skybox loaded successfully: {0}", path);
+		}
+		else {
+			m_Cubemap.reset();
+			m_Settings.UseCubemap = false;
+			m_Settings.HDRPath = "";
+			LNX_LOG_ERROR("Failed to load HDR skybox: {0}", path);
+		}
+	}
 
 	// ============================================================================
 	// RENDERING
@@ -273,6 +289,18 @@ namespace Lunex {
 			return;
 
 		LNX_PROFILE_FUNCTION();
+		
+		// Safety check for shader
+		if (!m_SkyboxShader) {
+			LNX_LOG_ERROR("Skybox shader not initialized!");
+			return;
+		}
+		
+		// Safety check for VAO
+		if (!m_SkyboxVAO) {
+			LNX_LOG_ERROR("Skybox VAO not initialized!");
+			return;
+		}
 
 		// Update sun if time changed (only for procedural)
 		if (!m_Settings.UseCubemap) {
@@ -310,14 +338,16 @@ namespace Lunex {
 		params.SkyTint = m_Settings.SkyTint;
 		params.AtmosphereThickness = m_Settings.AtmosphereThickness;
 		params.GroundEmission = m_Settings.GroundEmission;
-		params._padding1 = 0.0f;
-		params._padding2 = 0.0f;
+		params.HDRExposure = m_Settings.HDRExposure;
+		params.SkyboxRotation = m_Settings.SkyboxRotation;
 		
 		// Upload to GPU
-		m_SkyboxParamsUBO->SetData(&params, sizeof(SkyboxParamsData));
+		if (m_SkyboxParamsUBO) {
+			m_SkyboxParamsUBO->SetData(&params, sizeof(SkyboxParamsData));
+		}
 		
 		// Bind cubemap if using cubemap mode
-		if (m_Settings.UseCubemap && m_Cubemap) {
+		if (m_Settings.UseCubemap && m_Cubemap && m_Cubemap->IsLoaded()) {
 			m_Cubemap->Bind(0);
 		}
 

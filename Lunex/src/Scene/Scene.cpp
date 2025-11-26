@@ -375,6 +375,10 @@ namespace Lunex {
 		}
 		return {};
 	}
+	
+	bool Scene::IsEntityValid(Entity entity) const {
+		return entity && m_Registry.valid(static_cast<entt::entity>(entity));
+	}
 
 	void Scene::OnPhysics2DStart() {
 		// ✅ Box2D v3.x: Crear mundo con b2WorldDef

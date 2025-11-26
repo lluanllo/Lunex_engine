@@ -41,6 +41,9 @@ namespace Lunex {
 			
 			Entity GetPrimaryCameraEntity();
 			
+			// Entity validation
+			bool IsEntityValid(Entity entity) const;
+			
 			template<typename... Components>
 			auto GetAllEntitiesWith() {
 				return m_Registry.view<Components...>();

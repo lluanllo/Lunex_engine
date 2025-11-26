@@ -17,23 +17,27 @@ namespace Lunex {
 	// ============================================================================
 
 	struct SkyboxSettings {
-		bool Enabled = false;
+		bool Enabled = true;
 		bool UseCubemap = false;
 		
-		// Time and Sun
+		// Time and Sun (for procedural)
 		float TimeOfDay = 12.0f;         // 0-24 hours
 		float SunIntensity = 1.0f;
 		
-		// Atmospheric parameters
+		// Atmospheric parameters (for procedural)
 		float Turbidity = 2.0f;          // 1-10 (atmospheric haziness)
 		float RayleighCoefficient = 1.0f;
 		float MieCoefficient = 1.0f;
 		float MieDirectionalG = 0.76f;
 		float AtmosphereThickness = 1.0f;
 		
-		// Ground
+		// Ground (for procedural)
 		glm::vec3 GroundColor = glm::vec3(0.3f, 0.25f, 0.2f);
 		float GroundEmission = 0.1f;
+		
+		// HDR/Cubemap controls
+		float HDRExposure = 1.0f;        // HDR exposure control
+		float SkyboxRotation = 0.0f;     // Rotation in radians
 		
 		// Post-processing
 		float Exposure = 1.0f;
@@ -41,6 +45,9 @@ namespace Lunex {
 		
 		// Sky tint (for artistic control)
 		float SkyTint = 1.0f;
+		
+		// Current HDR path
+		std::string HDRPath = "";
 	};
 
 	class SkyboxRenderer {
@@ -63,6 +70,7 @@ namespace Lunex {
 		// Cubemap management
 		void LoadCubemap(const std::array<std::string, 6>& faces);
 		void LoadDefaultCubemap();
+		void LoadHDR(const std::string& path);
 		void UnloadCubemap();
 
 		// Getters de iluminacion (para integrar con Renderer3D)
@@ -96,7 +104,8 @@ namespace Lunex {
 			float SkyTint;
 			float AtmosphereThickness;
 			float GroundEmission;
-			float _padding1, _padding2;
+			float HDRExposure;
+			float SkyboxRotation;
 		};
 
 	private:

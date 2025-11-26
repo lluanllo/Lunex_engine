@@ -488,6 +488,10 @@ namespace Lunex {
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
 		m_PropertiesPanel.SetContext(m_ActiveScene);
 		m_EditorScenePath = std::filesystem::path();
+		
+		// Reset hovered entity when creating new scene
+		m_HoveredEntity = Entity();
+		m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
 	}
 
 	void EditorLayer::OpenScene() {
@@ -514,6 +518,10 @@ namespace Lunex {
 			m_PropertiesPanel.SetContext(m_EditorScene);
 			m_ActiveScene = m_EditorScene;
 			m_EditorScenePath = path;
+			
+			// Reset hovered entity when loading new scene
+			m_HoveredEntity = Entity();
+			m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
 		}
 	}
 
@@ -571,6 +579,10 @@ namespace Lunex {
 		m_ActiveScene = m_EditorScene;
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
 		m_PropertiesPanel.SetContext(m_ActiveScene);
+		
+		// Reset hovered entity when stopping scene (returning to edit mode)
+		m_HoveredEntity = Entity();
+		m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
 	}
 
 	void EditorLayer::OnDuplicateEntity() {

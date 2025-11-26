@@ -9,9 +9,19 @@ namespace Lunex {
 		ImGui::Begin("Stats");
 
 		std::string name = "None";
-		// Check if entity is valid before accessing components
-		if (m_HoveredEntity && m_HoveredEntity.HasComponent<TagComponent>())
-			name = m_HoveredEntity.GetComponent<TagComponent>().Tag;
+		// Validate entity using Scene's validation method
+		if (m_HoveredEntity) {
+			Scene* scene = m_HoveredEntity.GetScene();
+			if (scene != nullptr && scene->IsEntityValid(m_HoveredEntity)) {
+				if (m_HoveredEntity.HasComponent<TagComponent>()) {
+					name = m_HoveredEntity.GetComponent<TagComponent>().Tag;
+				}
+			}
+			else {
+				// Entity is no longer valid, reset it
+				m_HoveredEntity = Entity();
+			}
+		}
 		ImGui::Text("Hovered Entity: %s", name.c_str());
 
 		ImGui::Separator();
