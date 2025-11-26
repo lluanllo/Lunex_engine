@@ -12,8 +12,10 @@ namespace Lunex {
 		void OnImGuiRender();
 
 		void SetHoveredEntity(Entity entity) { m_HoveredEntity = entity; }
+		void SetRayTracingManager(class RayTracingManager* rtManager) { m_RayTracingManager = rtManager; }
 
 	private:
 		Entity m_HoveredEntity;
+		class RayTracingManager* m_RayTracingManager = nullptr;
 	};
 }

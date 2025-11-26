@@ -93,10 +93,31 @@ namespace Lunex {
 		});
 
 		Lunex::FramebufferSpecification fbSpec;
-		fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
+		fbSpec.Attachments = { 
+			FramebufferTextureFormat::RGBA8,       // Color output (location 0)
+			FramebufferTextureFormat::RED_INTEGER, // Entity ID (location 1)
+			FramebufferTextureFormat::RGBA16F,     // G-Buffer Position (location 2)
+			FramebufferTextureFormat::RGBA16F,     // G-Buffer Normal (location 3)
+			FramebufferTextureFormat::Depth        // Depth
+		};
 		fbSpec.Width = 1280;
 		fbSpec.Height = 720;
 		m_Framebuffer = Framebuffer::Create(fbSpec);
+
+		// ===== INITIALIZE RAY TRACING MANAGER =====
+		m_RayTracingManager.Init(1280, 720);
+		
+		// Configure ray tracing settings
+		RayTracingManager::Settings rtSettings;
+		rtSettings.enabled = false; // Disabled by default
+		rtSettings.shadowBias = 0.001f;
+		rtSettings.shadowSoftness = 1.0f;
+		rtSettings.samplesPerLight = 4;
+		rtSettings.enableDenoiser = true;
+		rtSettings.denoiseRadius = 2.0f;
+		m_RayTracingManager.SetSettings(rtSettings);
+		
+		LNX_LOG_INFO("✓ Ray Tracing Manager initialized");
 
 		// Create initial project
 		ProjectManager::New();
@@ -111,6 +132,9 @@ namespace Lunex {
 		}
 
 		Renderer2D::SetLineWidth(4.0f);
+
+		// Configure stats panel with ray tracing manager
+		m_StatsPanel.SetRayTracingManager(&m_RayTracingManager);
 
 		// Register custom console commands
 		m_ConsolePanel.RegisterCommand("load_scene", "Load a scene file", "load_scene <path>",
@@ -185,6 +209,24 @@ namespace Lunex {
 				m_ConsolePanel.AddLog("Draw Calls: " + std::to_string(stats.DrawCalls), LogLevel::Info, "Performance");
 			});
 
+		// Ray Tracing commands
+		m_ConsolePanel.RegisterCommand("rt_rebuild", "Rebuild BVH for ray tracing", "rt_rebuild",
+			[this](const std::vector<std::string>& args) {
+				m_GeometryDirty = true;
+				m_ConsolePanel.AddLog("Ray tracing BVH marked for rebuild", LogLevel::Info, "RayTracing");
+			});
+
+		m_ConsolePanel.RegisterCommand("rt_stats", "Show ray tracing statistics", "rt_stats",
+			[this](const std::vector<std::string>& args) {
+				auto stats = m_RayTracingManager.GetStats();
+				m_ConsolePanel.AddLog("=== Ray Tracing Statistics ===", LogLevel::Info, "RayTracing");
+				m_ConsolePanel.AddLog("Triangles: " + std::to_string(stats.triangleCount), LogLevel::Info, "RayTracing");
+				m_ConsolePanel.AddLog("BVH Nodes: " + std::to_string(stats.bvhNodeCount), LogLevel::Info, "RayTracing");
+				m_ConsolePanel.AddLog("BVH Build Time: " + std::to_string(stats.bvhBuildTime) + "ms", LogLevel::Info, "RayTracing");
+				m_ConsolePanel.AddLog("Shadow Compute Time: " + std::to_string(stats.shadowComputeTime) + "ms", LogLevel::Info, "RayTracing");
+				m_ConsolePanel.AddLog("Geometry Dirty: " + std::string(stats.geometryDirty ? "Yes" : "No"), LogLevel::Info, "RayTracing");
+			});
+
 		m_ConsolePanel.AddLog("Lunex Editor initialized", LogLevel::Info, "System");
 		m_ConsolePanel.AddLog("Welcome! Type 'help' to see available commands", LogLevel::Info, "System");
 
@@ -214,6 +256,9 @@ namespace Lunex {
 
 			m_EditorCamera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
 			m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
+			
+			// Resize ray tracing manager
+			m_RayTracingManager.Resize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 		}
 
 		// Render
@@ -268,6 +313,33 @@ namespace Lunex {
 
 		OnOverlayRender();
 
+		// ===== COMPUTE RAY TRACING =====
+		if (m_SettingsPanel.GetEnableComputeRayTracing()) {
+			LNX_PROFILE_SCOPE("Compute Ray Tracing");
+			
+			// Update scene geometry (only when dirty)
+			if (m_GeometryDirty) {
+				LNX_LOG_TRACE("Updating scene geometry for ray tracing...");
+				m_RayTracingManager.UpdateSceneGeometry(m_ActiveScene.get());
+				m_GeometryDirty = false;
+				
+				// Log statistics
+				auto stats = m_RayTracingManager.GetStats();
+				LNX_LOG_INFO("Ray Tracing: {0} triangles, {1} BVH nodes, built in {2:.2f}ms",
+							 stats.triangleCount, stats.bvhNodeCount, stats.bvhBuildTime);
+			}
+			
+			// Pass G-Buffer textures from main framebuffer to ray tracing manager
+			uint32_t positionTex = m_Framebuffer->GetColorAttachmentRendererID(2);
+			uint32_t normalTex = m_Framebuffer->GetColorAttachmentRendererID(3);
+			
+			// Compute shadows using external G-Buffer
+			m_RayTracingManager.ComputeShadowsWithGBuffer(m_ActiveScene.get(), positionTex, normalTex);
+		}
+		
+		// Bind shadow texture for rendering (slot 10 matches u_ComputeShadowMap in shader)
+		m_RayTracingManager.BindShadowTexture(10);
+
 		m_Framebuffer->Unbind();
 	}
 
@@ -276,7 +348,7 @@ namespace Lunex {
 
 		static bool dockspaceOpen = true;
 		static bool opt_fullscreen_persistant = true;
-		bool opt_fullscreen = opt_fullscreen_persistant;
+	 bool opt_fullscreen = opt_fullscreen_persistant;
 		static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
 
 		ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
@@ -488,6 +560,7 @@ namespace Lunex {
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
 		m_PropertiesPanel.SetContext(m_ActiveScene);
 		m_EditorScenePath = std::filesystem::path();
+		m_GeometryDirty = true; // Mark for BVH rebuild
 	}
 
 	void EditorLayer::OpenScene() {
@@ -514,6 +587,7 @@ namespace Lunex {
 			m_PropertiesPanel.SetContext(m_EditorScene);
 			m_ActiveScene = m_EditorScene;
 			m_EditorScenePath = path;
+			m_GeometryDirty = true; // Mark for BVH rebuild
 		}
 	}
 

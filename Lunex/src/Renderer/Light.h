@@ -46,12 +46,16 @@ namespace Lunex {
 		void SetCastShadows(bool cast) { m_CastShadows = cast; }
 		bool GetCastShadows() const { return m_CastShadows; }
 
+		// Ray traced shadow properties
+		void SetLightRadius(float radius) { m_LightRadius = glm::max(0.0f, radius); }
+		float GetLightRadius() const { return m_LightRadius; }
+
 		// For shader uniform upload
 		struct LightData {
 			glm::vec4 Position;      // xyz = position, w = type
 			glm::vec4 Direction;     // xyz = direction, w = unused
 			glm::vec4 Color;         // rgb = color, a = intensity
-			glm::vec4 Params;        // x = range, y = innerCone, z = outerCone, w = castShadows
+			glm::vec4 Params;        // x = range, y = innerCone, z = outerCone, w = radius (for soft shadows)
 			glm::vec4 Attenuation;   // xyz = constant/linear/quadratic, w = unused
 		};
 
@@ -61,7 +65,7 @@ namespace Lunex {
 				glm::vec4(direction, 0.0f),
 				glm::vec4(m_Color, m_Intensity),
 				glm::vec4(m_Range, glm::cos(glm::radians(m_InnerConeAngle)), 
-						  glm::cos(glm::radians(m_OuterConeAngle)), m_CastShadows ? 1.0f : 0.0f),
+						  glm::cos(glm::radians(m_OuterConeAngle)), m_LightRadius),
 				glm::vec4(m_Attenuation, 0.0f)
 			};
 		}
@@ -81,6 +85,9 @@ namespace Lunex {
 
 		// Shadows
 		bool m_CastShadows = true;
+		
+		// Ray traced shadows
+		float m_LightRadius = 0.1f; // Physical size of light for soft shadows
 	};
 
 }

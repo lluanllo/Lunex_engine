@@ -15,6 +15,26 @@ namespace Lunex {
 	struct TextureComponent;
 	class Scene;
 
+	// Ray Tracing Settings Structure
+	struct RayTracingSettings {
+		bool EnableRayTracedShadows = true;
+		float ShadowRayBias = 0.001f;
+		float ShadowSoftness = 0.5f;
+		int ShadowSamplesPerLight = 4;
+		
+		float MaxShadowDistance = 100.0f;
+		float ShadowFadeDistance = 10.0f;
+		bool UseContactHardening = true;
+		float ContactHardeningScale = 1.0f;
+		
+		// Ground plane shadow
+		bool EnableGroundPlane = true;
+		float GroundPlaneY = 0.0f;
+		
+		// Debugging
+		bool VisualizeShadowRays = false;
+	};
+
 	class Renderer3D {
 	public:
 		static void Init();
@@ -33,6 +53,11 @@ namespace Lunex {
 		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& color = glm::vec4(1.0f), int entityID = -1);
 		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, MaterialComponent& materialComponent, int entityID = -1);
 		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, MaterialComponent& materialComponent, TextureComponent& textureComponent, int entityID = -1);
+
+		// Ray Tracing Settings API
+		static RayTracingSettings& GetRayTracingSettings();
+		static void SetRayTracingSettings(const RayTracingSettings& settings);
+		static void UpdateRayTracingBuffer();
 
 		struct Statistics {
 			uint32_t DrawCalls = 0;

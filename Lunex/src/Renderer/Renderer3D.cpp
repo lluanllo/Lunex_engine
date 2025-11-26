@@ -53,15 +53,37 @@ namespace Lunex {
 			Light::LightData Lights[16];
 		};
 
+		// Ray Tracing Settings (matches shader layout binding = 6)
+		struct RayTracingSettingsData {
+			int EnableRayTracedShadows;
+			float ShadowRayBias;
+			float ShadowSoftness;
+			int ShadowSamplesPerLight;
+			
+			float MaxShadowDistance;
+			float ShadowFadeDistance;
+			int UseContactHardening;
+			float ContactHardeningScale;
+			
+			int EnableGroundPlane;      // NEW
+			float GroundPlaneY;         // NEW
+			int VisualizeShadowRays;    // NEW
+			float _rtPadding;
+		};
+
 		CameraData CameraBuffer;
 		TransformData TransformBuffer;
 		MaterialUniformData MaterialBuffer;
 		LightsUniformData LightsBuffer;
+		RayTracingSettingsData RayTracingSettingsBuffer;
+		
+		RayTracingSettings RayTracingSettingsPublic; // Public-facing settings
 
 		Ref<UniformBuffer> CameraUniformBuffer;
 		Ref<UniformBuffer> TransformUniformBuffer;
 		Ref<UniformBuffer> MaterialUniformBuffer;
 		Ref<UniformBuffer> LightsUniformBuffer;
+		Ref<UniformBuffer> RayTracingUniformBuffer;
 
 		Ref<Shader> MeshShader;
 
@@ -82,10 +104,42 @@ namespace Lunex {
 		s_Data.TransformUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::TransformData), 1);
 		s_Data.MaterialUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::MaterialUniformData), 2);
 		s_Data.LightsUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::LightsUniformData), 3);
+		s_Data.RayTracingUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::RayTracingSettingsData), 6);
 
 		// Initialize with zero lights
 		s_Data.LightsBuffer.NumLights = 0;
 		s_Data.LightsUniformBuffer->SetData(&s_Data.LightsBuffer, sizeof(Renderer3DData::LightsUniformData));
+
+		// Initialize ray tracing settings with default values
+		s_Data.RayTracingSettingsBuffer.EnableRayTracedShadows = 1;
+		s_Data.RayTracingSettingsBuffer.ShadowRayBias = 0.001f;
+		s_Data.RayTracingSettingsBuffer.ShadowSoftness = 0.5f;
+		s_Data.RayTracingSettingsBuffer.ShadowSamplesPerLight = 4;
+		
+		s_Data.RayTracingSettingsBuffer.MaxShadowDistance = 100.0f;
+		s_Data.RayTracingSettingsBuffer.ShadowFadeDistance = 10.0f;
+		s_Data.RayTracingSettingsBuffer.UseContactHardening = 1;
+		s_Data.RayTracingSettingsBuffer.ContactHardeningScale = 1.0f;
+		
+		s_Data.RayTracingSettingsBuffer.EnableGroundPlane = 1;
+		s_Data.RayTracingSettingsBuffer.GroundPlaneY = 0.0f;
+		s_Data.RayTracingSettingsBuffer.VisualizeShadowRays = 0;
+		s_Data.RayTracingSettingsBuffer._rtPadding = 0.0f;
+
+		s_Data.RayTracingUniformBuffer->SetData(&s_Data.RayTracingSettingsBuffer, sizeof(Renderer3DData::RayTracingSettingsData));
+		
+		// Initialize public settings
+		s_Data.RayTracingSettingsPublic.EnableRayTracedShadows = true;
+		s_Data.RayTracingSettingsPublic.ShadowRayBias = 0.001f;
+		s_Data.RayTracingSettingsPublic.ShadowSoftness = 0.5f;
+		s_Data.RayTracingSettingsPublic.ShadowSamplesPerLight = 4;
+		s_Data.RayTracingSettingsPublic.MaxShadowDistance = 100.0f;
+		s_Data.RayTracingSettingsPublic.ShadowFadeDistance = 10.0f;
+		s_Data.RayTracingSettingsPublic.UseContactHardening = true;
+		s_Data.RayTracingSettingsPublic.ContactHardeningScale = 1.0f;
+		s_Data.RayTracingSettingsPublic.EnableGroundPlane = true;
+		s_Data.RayTracingSettingsPublic.GroundPlaneY = 0.0f;
+		s_Data.RayTracingSettingsPublic.VisualizeShadowRays = false;
 	}
 
 	void Renderer3D::Shutdown() {
@@ -334,5 +388,34 @@ namespace Lunex {
 
 	Renderer3D::Statistics Renderer3D::GetStats() {
 		return s_Data.Stats;
+	}
+
+	RayTracingSettings& Renderer3D::GetRayTracingSettings() {
+		return s_Data.RayTracingSettingsPublic;
+	}
+
+	void Renderer3D::SetRayTracingSettings(const RayTracingSettings& settings) {
+		s_Data.RayTracingSettingsPublic = settings;
+		UpdateRayTracingBuffer();
+	}
+
+	void Renderer3D::UpdateRayTracingBuffer() {
+		// Copy from public settings to GPU buffer
+		s_Data.RayTracingSettingsBuffer.EnableRayTracedShadows = s_Data.RayTracingSettingsPublic.EnableRayTracedShadows ? 1 : 0;
+		s_Data.RayTracingSettingsBuffer.ShadowRayBias = s_Data.RayTracingSettingsPublic.ShadowRayBias;
+		s_Data.RayTracingSettingsBuffer.ShadowSoftness = s_Data.RayTracingSettingsPublic.ShadowSoftness;
+		s_Data.RayTracingSettingsBuffer.ShadowSamplesPerLight = s_Data.RayTracingSettingsPublic.ShadowSamplesPerLight;
+		
+		s_Data.RayTracingSettingsBuffer.MaxShadowDistance = s_Data.RayTracingSettingsPublic.MaxShadowDistance;
+		s_Data.RayTracingSettingsBuffer.ShadowFadeDistance = s_Data.RayTracingSettingsPublic.ShadowFadeDistance;
+		s_Data.RayTracingSettingsBuffer.UseContactHardening = s_Data.RayTracingSettingsPublic.UseContactHardening ? 1 : 0;
+		s_Data.RayTracingSettingsBuffer.ContactHardeningScale = s_Data.RayTracingSettingsPublic.ContactHardeningScale;
+		
+		s_Data.RayTracingSettingsBuffer.EnableGroundPlane = s_Data.RayTracingSettingsPublic.EnableGroundPlane ? 1 : 0;
+		s_Data.RayTracingSettingsBuffer.GroundPlaneY = s_Data.RayTracingSettingsPublic.GroundPlaneY;
+		s_Data.RayTracingSettingsBuffer.VisualizeShadowRays = s_Data.RayTracingSettingsPublic.VisualizeShadowRays ? 1 : 0;
+		
+		// Upload to GPU
+		s_Data.RayTracingUniformBuffer->SetData(&s_Data.RayTracingSettingsBuffer, sizeof(Renderer3DData::RayTracingSettingsData));
 	}
 }

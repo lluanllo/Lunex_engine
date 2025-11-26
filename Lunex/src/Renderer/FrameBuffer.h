@@ -9,10 +9,13 @@ namespace Lunex {
 		
 		// Color
 		RGBA8,
+		RGBA16F,     // For G-Buffer position/normal (high precision)
+		RGB16F,      // Alternative for position/normal
 		RED_INTEGER,
 		
 		// Depth/stencil
 		DEPTH24STENCIL8,
+		DEPTH32F,    // High precision depth for ray tracing
 		
 		// Defaults
 		Depth = DEPTH24STENCIL8

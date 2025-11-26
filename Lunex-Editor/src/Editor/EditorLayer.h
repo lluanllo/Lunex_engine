@@ -13,6 +13,7 @@
 #include "../Panels/ProjectCreationDialog.h"
 
 #include "Renderer/EditorCamera.h"
+#include "Renderer/RayTracingManager.h"
 
 namespace Lunex {
 	class EditorLayer : public Layer {
@@ -104,6 +105,10 @@ namespace Lunex {
 			
 			// Editor resources
 			Ref<Texture2D> m_IconPlay, m_IconSimulate, m_IconStop;
+			
+			// Ray Tracing
+			RayTracingManager m_RayTracingManager;
+			bool m_GeometryDirty = true;
 			
 		private:
 			std::string m_InitialScenePath;

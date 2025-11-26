@@ -57,6 +57,7 @@ namespace Lunex {
 		static bool IsDepthFormat(FramebufferTextureFormat format) {
 			switch (format) {
 				case FramebufferTextureFormat::DEPTH24STENCIL8:  return true;
+				case FramebufferTextureFormat::DEPTH32F:         return true;
 			}
 			
 			return false;
@@ -65,6 +66,8 @@ namespace Lunex {
 		static GLenum LunexFBTextureFormatToGL(FramebufferTextureFormat format) {
 			switch (format)	{
 				case FramebufferTextureFormat::RGBA8:       return GL_RGBA8;
+				case FramebufferTextureFormat::RGBA16F:     return GL_RGBA16F;
+				case FramebufferTextureFormat::RGB16F:      return GL_RGB16F;
 				case FramebufferTextureFormat::RED_INTEGER: return GL_RED_INTEGER;
 			}
 			
@@ -118,6 +121,12 @@ namespace Lunex {
 					case FramebufferTextureFormat::RGBA8:
 						Utils::AttachColorTexture(m_ColorAttachments[i], m_Specification.Samples, GL_RGBA8, GL_RGBA, m_Specification.Width, m_Specification.Height, i);
 						break;
+					case FramebufferTextureFormat::RGBA16F:
+						Utils::AttachColorTexture(m_ColorAttachments[i], m_Specification.Samples, GL_RGBA16F, GL_RGBA, m_Specification.Width, m_Specification.Height, i);
+						break;
+					case FramebufferTextureFormat::RGB16F:
+						Utils::AttachColorTexture(m_ColorAttachments[i], m_Specification.Samples, GL_RGB16F, GL_RGB, m_Specification.Width, m_Specification.Height, i);
+						break;
 					case FramebufferTextureFormat::RED_INTEGER:
 						Utils::AttachColorTexture(m_ColorAttachments[i], m_Specification.Samples, GL_R32I, GL_RED_INTEGER, m_Specification.Width, m_Specification.Height, i);
 						break;
@@ -131,6 +140,9 @@ namespace Lunex {
 			switch (m_DepthAttachmentSpecification.TextureFormat) {
 				case FramebufferTextureFormat::DEPTH24STENCIL8:
 					Utils::AttachDepthTexture(m_DepthAttachment, m_Specification.Samples, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL_ATTACHMENT, m_Specification.Width, m_Specification.Height);
+					break;
+				case FramebufferTextureFormat::DEPTH32F:
+					Utils::AttachDepthTexture(m_DepthAttachment, m_Specification.Samples, GL_DEPTH_COMPONENT32F, GL_DEPTH_ATTACHMENT, m_Specification.Width, m_Specification.Height);
 					break;
 			}
 		}
@@ -161,7 +173,7 @@ namespace Lunex {
 	
 	void OpenGLFramebuffer::Resize(uint32_t width, uint32_t height) {
 		if (width == 0 || height == 0 || width > s_MaxFramebufferSize || height > s_MaxFramebufferSize) {
-			LNX_LOG_WARN("Attempted to rezize framebuffer to {0}, {1}", width, height);
+			LNX_LOG_WARN("Attempted to rezise framebuffer to {0}, {1}", width, height);
 			return;
 		}
 		m_Specification.Width = width;
