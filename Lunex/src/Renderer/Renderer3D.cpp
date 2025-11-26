@@ -14,6 +14,8 @@ namespace Lunex {
 	struct Renderer3DData {
 		struct CameraData {
 			glm::mat4 ViewProjection;
+			glm::mat4 View;
+			glm::mat4 Projection;
 		};
 
 		struct TransformData {
@@ -52,18 +54,33 @@ namespace Lunex {
 			float _padding1, _padding2, _padding3;
 			Light::LightData Lights[16];
 		};
+		
+		struct SkyboxLightingData {
+			glm::vec3 SkyboxAmbient;
+			float SkyboxEnabled;
+			glm::vec3 SkyboxSunDirection;
+			float SkyboxSunIntensity;
+			glm::vec3 SkyboxSunColor;
+			float _skyboxPadding;
+		};
 
 		CameraData CameraBuffer;
 		TransformData TransformBuffer;
 		MaterialUniformData MaterialBuffer;
 		LightsUniformData LightsBuffer;
+		SkyboxLightingData SkyboxLightingBuffer;
 
 		Ref<UniformBuffer> CameraUniformBuffer;
 		Ref<UniformBuffer> TransformUniformBuffer;
 		Ref<UniformBuffer> MaterialUniformBuffer;
 		Ref<UniformBuffer> LightsUniformBuffer;
+		Ref<UniformBuffer> SkyboxLightingUniformBuffer;
 
 		Ref<Shader> MeshShader;
+		
+		// Skybox
+		SkyboxRenderer SkyboxRenderer;
+		glm::mat4 CurrentViewProjection;
 
 		glm::vec3 CameraPosition = { 0.0f, 0.0f, 0.0f };
 
@@ -82,20 +99,37 @@ namespace Lunex {
 		s_Data.TransformUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::TransformData), 1);
 		s_Data.MaterialUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::MaterialUniformData), 2);
 		s_Data.LightsUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::LightsUniformData), 3);
+		s_Data.SkyboxLightingUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::SkyboxLightingData), 5);
 
 		// Initialize with zero lights
 		s_Data.LightsBuffer.NumLights = 0;
 		s_Data.LightsUniformBuffer->SetData(&s_Data.LightsBuffer, sizeof(Renderer3DData::LightsUniformData));
+		
+		// Initialize skybox lighting (disabled by default)
+		s_Data.SkyboxLightingBuffer.SkyboxEnabled = 0.0f;
+		s_Data.SkyboxLightingBuffer.SkyboxAmbient = glm::vec3(0.03f);
+		s_Data.SkyboxLightingBuffer.SkyboxSunDirection = glm::vec3(0.0f, 1.0f, 0.0f);
+		s_Data.SkyboxLightingBuffer.SkyboxSunIntensity = 1.0f;
+		s_Data.SkyboxLightingBuffer.SkyboxSunColor = glm::vec3(1.0f);
+		s_Data.SkyboxLightingUniformBuffer->SetData(&s_Data.SkyboxLightingBuffer, sizeof(Renderer3DData::SkyboxLightingData));
+		
+		// Initialize skybox
+		s_Data.SkyboxRenderer.Init();
 	}
 
 	void Renderer3D::Shutdown() {
 		LNX_PROFILE_FUNCTION();
+		
+		s_Data.SkyboxRenderer.Shutdown();
 	}
 
 	void Renderer3D::BeginScene(const OrthographicCamera& camera) {
 		LNX_PROFILE_FUNCTION();
 
 		s_Data.CameraBuffer.ViewProjection = camera.GetViewProjectionMatrix();
+		s_Data.CameraBuffer.View = camera.GetViewMatrix();
+		s_Data.CameraBuffer.Projection = camera.GetProjectionMatrix();
+		s_Data.CurrentViewProjection = camera.GetViewProjectionMatrix();
 		s_Data.CameraPosition = glm::vec3(0.0f);
 		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(Renderer3DData::CameraData));
 	}
@@ -103,7 +137,13 @@ namespace Lunex {
 	void Renderer3D::BeginScene(const Camera& camera, const glm::mat4& transform) {
 		LNX_PROFILE_FUNCTION();
 
-		s_Data.CameraBuffer.ViewProjection = camera.GetProjection() * glm::inverse(transform);
+		glm::mat4 view = glm::inverse(transform);
+		glm::mat4 projection = camera.GetProjection();
+		
+		s_Data.CameraBuffer.ViewProjection = projection * view;
+		s_Data.CameraBuffer.View = view;
+		s_Data.CameraBuffer.Projection = projection;
+		s_Data.CurrentViewProjection = s_Data.CameraBuffer.ViewProjection;
 		s_Data.CameraPosition = glm::vec3(transform[3]);
 		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(Renderer3DData::CameraData));
 	}
@@ -112,12 +152,35 @@ namespace Lunex {
 		LNX_PROFILE_FUNCTION();
 
 		s_Data.CameraBuffer.ViewProjection = camera.GetViewProjection();
+		s_Data.CameraBuffer.View = camera.GetViewMatrix();
+		s_Data.CameraBuffer.Projection = camera.GetProjection();
+		s_Data.CurrentViewProjection = camera.GetViewProjection();
 		s_Data.CameraPosition = camera.GetPosition();
 		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(Renderer3DData::CameraData));
 	}
 
 	void Renderer3D::EndScene() {
 		LNX_PROFILE_FUNCTION();
+	}
+	
+	void Renderer3D::RenderSkybox() {
+		auto& skybox = s_Data.SkyboxRenderer;
+		auto& settings = skybox.GetSettings();
+		
+		// Update skybox lighting UBO
+		s_Data.SkyboxLightingBuffer.SkyboxEnabled = settings.Enabled ? 1.0f : 0.0f;
+		s_Data.SkyboxLightingBuffer.SkyboxAmbient = skybox.GetAmbientColor();
+		s_Data.SkyboxLightingBuffer.SkyboxSunDirection = skybox.GetSunDirection();
+		s_Data.SkyboxLightingBuffer.SkyboxSunIntensity = settings.SunIntensity;
+		s_Data.SkyboxLightingBuffer.SkyboxSunColor = skybox.GetSunColor();
+		s_Data.SkyboxLightingUniformBuffer->SetData(&s_Data.SkyboxLightingBuffer, sizeof(Renderer3DData::SkyboxLightingData));
+		
+		// Render skybox
+		skybox.RenderSkybox(s_Data.CurrentViewProjection, s_Data.CameraPosition);
+	}
+	
+	SkyboxRenderer& Renderer3D::GetSkyboxRenderer() {
+		return s_Data.SkyboxRenderer;
 	}
 
 	void Renderer3D::UpdateLights(Scene* scene) {

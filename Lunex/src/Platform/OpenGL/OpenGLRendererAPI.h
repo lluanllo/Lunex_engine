@@ -16,5 +16,7 @@ namespace Lunex {
 			
 			virtual void SetLineWidth(float width) override;
 			virtual void SetDepthMask(bool enabled) override;
+			virtual void SetDepthFunc(DepthFunc func) override;
+			virtual void SetCullMode(CullMode mode) override;
 	};
 }

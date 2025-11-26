@@ -12,6 +12,23 @@ namespace Lunex {
 				None = 0, OpenGL = 1
 			};
 			
+			enum class DepthFunc {
+				Less = 0,
+				LessEqual = 1,
+				Equal = 2,
+				Greater = 3,
+				GreaterEqual = 4,
+				Always = 5,
+				Never = 6
+			};
+			
+			enum class CullMode {
+				None = 0,
+				Front = 1,
+				Back = 2,
+				FrontAndBack = 3
+			};
+			
 		public:
 			virtual ~RendererAPI() = default;
 			
@@ -25,6 +42,8 @@ namespace Lunex {
 			
 			virtual void SetLineWidth(float width) = 0;
 			virtual void SetDepthMask(bool enabled) = 0;
+			virtual void SetDepthFunc(DepthFunc func) = 0;
+			virtual void SetCullMode(CullMode mode) = 0;
 			
 			inline static API GetAPI() { return s_API; }
 			

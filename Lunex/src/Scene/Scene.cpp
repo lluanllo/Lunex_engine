@@ -314,6 +314,9 @@ namespace Lunex {
 				}
 			}
 
+			// Render skybox AFTER geometry (uses depth test but not write)
+			Renderer3D::RenderSkybox();
+
 			Renderer3D::EndScene();
 		}
 	}
@@ -594,6 +597,9 @@ namespace Lunex {
 				}
 			}
 		}
+		
+		// Render skybox AFTER geometry (uses depth test but not write)
+		Renderer3D::RenderSkybox();
 
 		Renderer3D::EndScene();
 	}

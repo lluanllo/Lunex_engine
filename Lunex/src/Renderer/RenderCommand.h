@@ -36,6 +36,14 @@ namespace Lunex {
 			static void SetDepthMask(bool enabled) {
 				s_RendererAPI->SetDepthMask(enabled);
 			}
+			
+			static void SetDepthFunc(RendererAPI::DepthFunc func) {
+				s_RendererAPI->SetDepthFunc(func);
+			}
+			
+			static void SetCullMode(RendererAPI::CullMode mode) {
+				s_RendererAPI->SetCullMode(mode);
+			}
 		private:
 			static Scope<RendererAPI> s_RendererAPI;
 	};

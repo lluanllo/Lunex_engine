@@ -11,6 +11,8 @@ layout(location = 5) in int a_EntityID;
 
 layout(std140, binding = 0) uniform Camera {
 	mat4 u_ViewProjection;
+	mat4 u_View;
+	mat4 u_Projection;
 };
 
 layout(std140, binding = 1) uniform Transform {
@@ -88,6 +90,16 @@ layout(std140, binding = 2) uniform Material {
 	float u_RoughnessMultiplier;
 	float u_SpecularMultiplier;
 	float u_AOMultiplier;
+};
+
+// ============ SKYBOX LIGHTING ============
+layout(std140, binding = 5) uniform SkyboxLighting {
+	vec3 u_SkyboxAmbient;
+	float u_SkyboxEnabled;
+	vec3 u_SkyboxSunDirection;
+	float u_SkyboxSunIntensity;
+	vec3 u_SkyboxSunColor;
+	float _skyboxPadding;
 };
 
 // ============ LIGHTING SYSTEM ============
@@ -311,8 +323,21 @@ vec3 CalculateAmbient(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, floa
 	
 	vec3 ambient = (ambientDiffuse + ambientSpecular) * ao;
 	
-	// Scale ambient based on scene (typical AAA value)
-	return ambient * 0.03;
+	// Use skybox ambient if enabled, otherwise use default ambient
+	float ambientScale = 0.03;
+	vec3 ambientColor = vec3(1.0);
+	
+	if (u_SkyboxEnabled > 0.5) {
+		ambientColor = u_SkyboxAmbient;
+		ambientScale = 1.0; // Skybox ambient is already scaled properly
+		
+		// Add simple directional lighting from sun
+		float sunInfluence = max(dot(N, u_SkyboxSunDirection), 0.0);
+		vec3 sunContribution = u_SkyboxSunColor * sunInfluence * u_SkyboxSunIntensity * 0.5;
+		ambient += sunContribution * kD * albedo * ao;
+	}
+	
+	return ambient * ambientColor * ambientScale;
 }
 
 // ============ TONE MAPPING OPTIONS ============

@@ -36,6 +36,11 @@ namespace Lunex {
 		
 		glEnable(GL_DEPTH_TEST);
 		glEnable(GL_LINE_SMOOTH);
+		
+		// Enable face culling by default (back-face culling)
+		glEnable(GL_CULL_FACE);
+		glCullFace(GL_BACK);
+		glFrontFace(GL_CCW); // Counter-clockwise is front-facing
 	}
 	
 	void OpenGLRendererAPI::SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
@@ -67,5 +72,39 @@ namespace Lunex {
 	
 	void OpenGLRendererAPI::SetDepthMask(bool enabled) {
 		glDepthMask(enabled ? GL_TRUE : GL_FALSE);
+	}
+	
+	void OpenGLRendererAPI::SetDepthFunc(DepthFunc func) {
+		GLenum glFunc = GL_LESS;
+		switch (func) {
+			case DepthFunc::Less:          glFunc = GL_LESS; break;
+			case DepthFunc::LessEqual:     glFunc = GL_LEQUAL; break;
+			case DepthFunc::Equal:         glFunc = GL_EQUAL; break;
+			case DepthFunc::Greater:       glFunc = GL_GREATER; break;
+			case DepthFunc::GreaterEqual:  glFunc = GL_GEQUAL; break;
+			case DepthFunc::Always:        glFunc = GL_ALWAYS; break;
+			case DepthFunc::Never:         glFunc = GL_NEVER; break;
+		}
+		glDepthFunc(glFunc);
+	}
+	
+	void OpenGLRendererAPI::SetCullMode(CullMode mode) {
+		switch (mode) {
+			case CullMode::None:
+				glDisable(GL_CULL_FACE);
+				break;
+			case CullMode::Front:
+				glEnable(GL_CULL_FACE);
+				glCullFace(GL_FRONT);
+				break;
+			case CullMode::Back:
+				glEnable(GL_CULL_FACE);
+				glCullFace(GL_BACK);
+				break;
+			case CullMode::FrontAndBack:
+				glEnable(GL_CULL_FACE);
+				glCullFace(GL_FRONT_AND_BACK);
+				break;
+		}
 	}
 }
