@@ -1,6 +1,6 @@
 ﻿workspace "Lunex-Engine"
     architecture "x86_64"
-    startproject "Lunex-Editor"
+    startproject "Lunex-Launcher"
 
     configurations {
         "Debug",
@@ -407,7 +407,11 @@ project "Lunex"
         defines { "LN_DEBUG" }
         runtime "Debug"
         symbols "on"
-        libdirs { "$(SolutionDir)vendor/assimp/lib/Debug" }
+        libdirs 
+        { 
+            "$(SolutionDir)vendor/assimp/lib/Debug",
+            "%{LibraryDir.VulkanSDK}"
+        }
         links
         {
             "%{Library.ShaderC_Debug}",
@@ -424,7 +428,11 @@ project "Lunex"
         defines { "LN_RELEASE" }
         runtime "Release"
         optimize "on"
-        libdirs { "$(SolutionDir)vendor/assimp/lib/Release" }
+        libdirs 
+        { 
+            "$(SolutionDir)vendor/assimp/lib/Release",
+            "%{LibraryDir.VulkanSDK}"
+        }
         links
         {
             "%{Library.ShaderC_Release}",
@@ -441,7 +449,11 @@ project "Lunex"
         defines { "LN_DIST" }
         runtime "Release"
         optimize "on"
-        libdirs { "$(SolutionDir)vendor/assimp/lib/Release" }
+        libdirs 
+        { 
+            "$(SolutionDir)vendor/assimp/lib/Release",
+            "%{LibraryDir.VulkanSDK}"
+        }
         links
         {
             "%{Library.ShaderC_Release}",
@@ -454,6 +466,102 @@ project "Lunex"
             "{COPY} $(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll %{cfg.targetdir}"
         }
 
+-- ============================================================================
+-- LAUNCHER
+-- ============================================================================
+
+project "Lunex-Launcher"
+    location "Lunex-Launcher"
+    kind "WindowedApp"
+    language "C++"
+    cppdialect "C++20"
+    staticruntime "off"
+        
+    targetdir ("bin/" .. outputdir .. "/%{prj.name}")
+    objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
+    debugdir ("$(SolutionDir)/Lunex-Launcher")
+        
+    files
+    {
+        "%{prj.name}/src/**.h",
+        "%{prj.name}/src/**.cpp",
+        "%{prj.name}/src/Panels/**.h",
+        "%{prj.name}/src/Panels/**.cpp"
+    }
+
+    defines
+    {
+        "_CRT_SECURE_NO_WARNINGS",
+        "GLFW_INCLUDE_NONE",
+        "YAML_CPP_STATIC_DEFINE"
+    }
+
+    includedirs
+    {
+        "vendor/spdlog/include",
+        "Lunex/src",
+        "Lunex/src/Core",
+        "%{IncludeDir.GLFW}",
+        "%{IncludeDir.Glad}",
+        "%{IncludeDir.ImGui}",
+        "%{IncludeDir.glm}",
+        "%{IncludeDir.entt}",
+        "%{IncludeDir.yaml_cpp}",
+        "%{IncludeDir.ImGuizmo}",
+        "%{IncludeDir.Assimp}",
+        "%{IncludeDir.Box2D}"
+    }
+
+    links
+    {
+        "Lunex",
+        "yaml-cpp"
+    }
+
+    buildoptions { "/utf-8" }
+
+    filter "system:windows"
+        systemversion "latest"
+        links { "ole32.lib" }
+
+    filter "configurations:Debug"
+        defines { "LN_DEBUG" }
+        runtime "Debug"
+        symbols "on"
+        postbuildcommands
+        {
+            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Debug/assimp-vc143-mtd.dll\" \"%{cfg.targetdir}\"",
+            "{MKDIR} \"%{cfg.targetdir}/assets\"",
+            "{COPYDIR} \"$(SolutionDir)Lunex-Launcher/assets\" \"%{cfg.targetdir}/assets\""
+        }
+
+    filter "configurations:Release"
+        defines { "LN_RELEASE" }
+        runtime "Release"
+        optimize "on"
+        postbuildcommands
+        {
+            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
+            "{MKDIR} \"%{cfg.targetdir}/assets\"",
+            "{COPYDIR} \"$(SolutionDir)Lunex-Launcher/assets\" \"%{cfg.targetdir}/assets\""
+        }
+
+    filter "configurations:Dist"
+        defines { "LN_DIST" }
+        runtime "Release"
+        optimize "on"
+        kind "WindowedApp"
+        postbuildcommands
+        {
+            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
+            "{MKDIR} \"%{cfg.targetdir}/assets\"",
+            "{COPYDIR} \"$(SolutionDir)Lunex-Launcher/assets\" \"%{cfg.targetdir}/assets\""
+        }
+
+-- ============================================================================
+-- SANDBOX
+-- ============================================================================
+
 project "Sandbox"
     location "Sandbox"
     kind "ConsoleApp"
@@ -463,7 +571,7 @@ project "Sandbox"
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
-    debugdir ("$(SolutionDir)")  -- ← CAMBIADO
+    debugdir ("$(SolutionDir)")
 
     files
     {
@@ -482,7 +590,7 @@ project "Sandbox"
         "%{IncludeDir.yaml_cpp}",
         "%{IncludeDir.ImGuizmo}",
         "%{IncludeDir.Assimp}",
-        "%{IncludeDir.Box2D}"  -- ✅ AÑADIDO
+        "%{IncludeDir.Box2D}"
     }
 
     defines
@@ -526,6 +634,10 @@ project "Sandbox"
             "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\""
         }
 
+-- ============================================================================
+-- EDITOR
+-- ============================================================================
+
 project "Lunex-Editor"
     location "Lunex-Editor"
     kind "ConsoleApp"
@@ -535,7 +647,7 @@ project "Lunex-Editor"
         
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
-    debugdir ("$(SolutionDir)/Lunex-Editor")  -- ← CAMBIADO de "%{cfg.targetdir}"
+    debugdir ("$(SolutionDir)/Lunex-Editor")
         
     files
     {
@@ -587,7 +699,6 @@ project "Lunex-Editor"
         postbuildcommands
         {
             "{COPY} \"$(SolutionDir)vendor/assimp/lib/Debug/assimp-vc143-mtd.dll\" \"%{cfg.targetdir}\"",
-            -- ✅ AÑADE ESTOS COMANDOS para copiar assets
             "{MKDIR} \"%{cfg.targetdir}/assets\"",
             "{COPYDIR} \"$(SolutionDir)Lunex-Editor/assets\" \"%{cfg.targetdir}/assets\""
         }
@@ -599,7 +710,6 @@ project "Lunex-Editor"
         postbuildcommands
         {
             "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
-            -- ✅ AÑADE ESTOS COMANDOS
             "{MKDIR} \"%{cfg.targetdir}/assets\"",
             "{COPYDIR} \"$(SolutionDir)Lunex-Editor/assets\" \"%{cfg.targetdir}/assets\""
         }
@@ -611,7 +721,6 @@ project "Lunex-Editor"
         postbuildcommands
         {
             "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
-            -- ✅ AÑADE ESTOS COMANDOS
             "{MKDIR} \"%{cfg.targetdir}/assets\"",
             "{COPYDIR} \"$(SolutionDir)Lunex-Editor/assets\" \"%{cfg.targetdir}/assets\""
         }
