@@ -13,11 +13,14 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
+#include <string>
+#include <vector>
+#include <functional>
 
 namespace Lunex {
 
     // Versión de la API de scripting
-    constexpr uint32_t SCRIPTING_API_VERSION = 1;
+    constexpr uint32_t SCRIPTING_API_VERSION = 2;
 
     // Forward declarations
     class Entity;
@@ -182,7 +185,129 @@ namespace Lunex {
     }
 
     // ========================================================================
-    // SCRIPTING API
+    // REFLECTION SYSTEM - Public Variable Exposure
+    // ========================================================================
+
+    enum class VarType {
+        Float,
+        Int,
+        Bool,
+        Vec2,
+        Vec3,
+        String
+    };
+
+    struct VarMetadata {
+        std::string Name;
+        VarType Type;
+        void* DataPtr;
+        
+        // Range constraints (optional)
+        bool HasRange = false;
+        float MinValue = 0.0f;
+        float MaxValue = 0.0f;
+        
+        // UI hints
+        std::string Tooltip;
+        
+        VarMetadata(const std::string& name, VarType type, void* ptr)
+            : Name(name), Type(type), DataPtr(ptr) {}
+    };
+
+    // ========================================================================
+    // HELPER WRAPPERS - Simplified Script API
+    // ========================================================================
+
+    // Forward declaration
+    struct EngineContext;
+
+    class TransformAPI {
+    public:
+        TransformAPI() : m_Context(nullptr), m_Entity(nullptr) {}
+        TransformAPI(EngineContext* ctx, void* entity) : m_Context(ctx), m_Entity(entity) {}
+        
+        Vec3 GetPosition();
+        void SetPosition(const Vec3& pos);
+        void Translate(const Vec3& delta);
+        
+        Vec3 GetRotation();
+        void SetRotation(const Vec3& rot);
+        void Rotate(const Vec3& delta);
+        
+        Vec3 GetScale();
+        void SetScale(const Vec3& scale);
+        
+    private:
+        EngineContext* m_Context;
+        void* m_Entity;
+    };
+
+    class Rigidbody2DAPI {
+    public:
+        Rigidbody2DAPI() : m_Context(nullptr), m_Entity(nullptr) {}
+        Rigidbody2DAPI(EngineContext* ctx, void* entity) : m_Context(ctx), m_Entity(entity) {}
+        
+        bool Exists();
+        
+        Vec2 GetVelocity();
+        void SetVelocity(const Vec2& vel);
+        void AddVelocity(const Vec2& delta);
+        
+        void ApplyImpulse(const Vec2& impulse);
+        void ApplyForce(const Vec2& force);
+        
+        float GetMass();
+        float GetGravityScale();
+        void SetGravityScale(float scale);
+        
+    private:
+        EngineContext* m_Context;
+        void* m_Entity;
+    };
+
+    class InputAPI {
+    public:
+        InputAPI() : m_Context(nullptr) {}
+        InputAPI(EngineContext* ctx) : m_Context(ctx) {}
+        
+        bool IsKeyPressed(int key);
+        bool IsKeyDown(int key);
+        bool IsKeyReleased(int key);
+        
+        bool IsMousePressed(int button);
+        Vec2 GetMousePosition();
+        
+    private:
+        EngineContext* m_Context;
+    };
+
+    class TimeAPI {
+    public:
+        TimeAPI() : m_Context(nullptr) {}
+        TimeAPI(EngineContext* ctx) : m_Context(ctx) {}
+        
+        float DeltaTime();
+        float GetTime();
+        
+    private:
+        EngineContext* m_Context;
+    };
+
+    class DebugAPI {
+    public:
+        DebugAPI() : m_Context(nullptr) {}
+        DebugAPI(EngineContext* ctx) : m_Context(ctx) {}
+        
+        void Log(const std::string& message);
+        void LogWarning(const std::string& message);
+        void LogError(const std::string& message);
+        
+    private:
+        EngineContext* m_Context;
+    };
+
+    // ========================================================================
+    // SCRIPTING API CONTEXT
     // ========================================================================
 
     // Estructura de contexto del engine que se pasa a los scripts
@@ -242,18 +367,127 @@ namespace Lunex {
         void* reserved[16];
     };
 
-    // Interfaz base para modulos de script
+    // ========================================================================
+    // BASE SCRIPT CLASS - Simplified Interface
+    // ========================================================================
+
     class IScriptModule
     {
     public:
         virtual ~IScriptModule() = default;
 
+        // Engine callbacks (internal use)
         virtual void OnLoad(EngineContext* context) = 0;
         virtual void OnUnload() = 0;
         virtual void OnUpdate(float deltaTime) = 0;
         virtual void OnRender() {}
         virtual void OnPlayModeEnter() {}
         virtual void OnPlayModeExit() {}
+        
+        // Reflection system
+        virtual std::vector<VarMetadata> GetPublicVariables() { return {}; }
+    };
+
+    // ========================================================================
+    // SIMPLIFIED SCRIPT BASE CLASS - Inherit from this!
+    // ========================================================================
+
+    class Script : public IScriptModule {
+    public:
+        virtual ~Script() = default;
+
+        // Internal engine callbacks (don't override these)
+        void OnLoad(EngineContext* ctx) final {
+            m_Context = ctx;
+            
+            // Initialize helper objects
+            transform = TransformAPI(ctx, ctx->CurrentEntity);
+            rigidbody = Rigidbody2DAPI(ctx, ctx->CurrentEntity);
+            input = InputAPI(ctx);
+            time = TimeAPI(ctx);
+            debug = DebugAPI(ctx);
+            
+            // Call user Start
+            Start();
+        }
+        
+        void OnUnload() final {
+            OnDestroy();
+        }
+        
+        void OnUpdate(float deltaTime) final {
+            Update();
+        }
+        
+        void OnPlayModeEnter() final {
+            Start();
+        }
+        
+        void OnPlayModeExit() final {
+            OnDestroy();
+        }
+        
+        std::vector<VarMetadata> GetPublicVariables() final {
+            return m_PublicVariables;
+        }
+
+    protected:
+        // Helper objects (ready to use!)
+        TransformAPI transform;
+        Rigidbody2DAPI rigidbody;
+        InputAPI input;
+        TimeAPI time;
+        DebugAPI debug;
+        
+        // Override these in your script
+        virtual void Start() {}
+        virtual void Update() {}
+        virtual void OnDestroy() {}
+        
+        // Variable registration helpers
+        void RegisterVar(const std::string& name, float* var) {
+            m_PublicVariables.push_back(VarMetadata(name, VarType::Float, var));
+        }
+        
+        void RegisterVar(const std::string& name, int* var) {
+            m_PublicVariables.push_back(VarMetadata(name, VarType::Int, var));
+        }
+        
+        void RegisterVar(const std::string& name, bool* var) {
+            m_PublicVariables.push_back(VarMetadata(name, VarType::Bool, var));
+        }
+        
+        void RegisterVar(const std::string& name, Vec2* var) {
+            m_PublicVariables.push_back(VarMetadata(name, VarType::Vec2, var));
+        }
+        
+        void RegisterVar(const std::string& name, Vec3* var) {
+            m_PublicVariables.push_back(VarMetadata(name, VarType::Vec3, var));
+        }
+        
+        void RegisterVar(const std::string& name, std::string* var) {
+            m_PublicVariables.push_back(VarMetadata(name, VarType::String, var));
+        }
+        
+        // Range-constrained registration
+        void RegisterVarRange(const std::string& name, float* var, float min, float max) {
+            VarMetadata meta(name, VarType::Float, var);
+            meta.HasRange = true;
+            meta.MinValue = min;
+            meta.MaxValue = max;
+            m_PublicVariables.push_back(meta);
+        }
+        
+        // With tooltip
+        void RegisterVarTooltip(const std::string& name, float* var, const std::string& tooltip) {
+            VarMetadata meta(name, VarType::Float, var);
+            meta.Tooltip = tooltip;
+            m_PublicVariables.push_back(meta);
+        }
+
+    private:
+        EngineContext* m_Context = nullptr;
+        std::vector<VarMetadata> m_PublicVariables;
     };
 
 } // namespace Lunex
