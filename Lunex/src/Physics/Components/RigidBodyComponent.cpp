@@ -76,22 +76,47 @@ namespace Lunex {
         // Enable CCD for dynamic objects by default
         if (!material.IsStatic && !material.IsKinematic)
         {
-            if (material.UseCCD || material.Mass > 0.1f)
-            {
-                // Auto-enable CCD for dynamic objects to prevent tunneling
-                float threshold = material.UseCCD ? material.CcdMotionThreshold : 0.5f;
-                float radius = material.UseCCD ? material.CcdSweptSphereRadius : 0.2f;
-                
-                m_RigidBody->setCcdMotionThreshold(threshold);
-                m_RigidBody->setCcdSweptSphereRadius(radius);
+            // ? CRITICAL: Auto-enable CCD for ALL dynamic objects
+            // Heavy objects NEED CCD to prevent tunneling
+            float threshold = material.UseCCD ? material.CcdMotionThreshold : 0.5f;
+            float radius = material.UseCCD ? material.CcdSweptSphereRadius : 0.2f;
+            
+            // ? NEW: Scale CCD parameters based on mass (heavy objects need tighter CCD)
+            if (material.Mass > 10.0f) {
+                threshold *= 0.5f; // Halve threshold for heavy objects (more aggressive CCD)
+                radius *= 1.5f;     // Increase swept sphere radius
             }
+            
+            m_RigidBody->setCcdMotionThreshold(threshold);
+            m_RigidBody->setCcdSweptSphereRadius(radius);
         }
         
         // ? CRITICAL: Improve contact processing
         m_RigidBody->setContactProcessingThreshold(0.0f); // Process all contacts
         
         // ? CRITICAL: Better sleep threshold (prevent premature sleeping)
-        m_RigidBody->setSleepingThresholds(0.5f, 0.5f); // Linear, Angular
+        // Heavy objects should be harder to put to sleep
+        float linearThreshold = material.Mass > 10.0f ? 0.2f : 0.5f;
+        float angularThreshold = material.Mass > 10.0f ? 0.2f : 0.5f;
+        m_RigidBody->setSleepingThresholds(linearThreshold, angularThreshold);
+        
+        // ? CRITICAL: Ensure proper activation state
+        if (!material.IsStatic && !material.IsKinematic)
+        {
+            // Heavy objects should NEVER sleep to prevent tunneling issues
+            if (material.Mass > 10.0f) {
+                m_RigidBody->setActivationState(DISABLE_DEACTIVATION); // Never sleep
+            }
+            m_RigidBody->forceActivationState(ACTIVE_TAG); // Always active initially
+        }
+        
+        // ? CRITICAL: Set collision response flags
+        m_RigidBody->setCollisionFlags(m_RigidBody->getCollisionFlags() & ~btCollisionObject::CF_NO_CONTACT_RESPONSE);
+        
+        // ? NEW: Increase friction for heavy objects to prevent sliding through
+        if (material.Mass > 10.0f) {
+            m_RigidBody->setFriction(std::max(material.Friction, 0.5f)); // Minimum 0.5 friction
+        }
 
         // Add to world
         world->AddRigidBody(m_RigidBody.get(), m_CollisionGroup, m_CollisionMask);

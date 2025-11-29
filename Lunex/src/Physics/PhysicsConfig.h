@@ -14,12 +14,12 @@ namespace Lunex {
         float FixedTimestep = 1.0f / 60.0f;
 
         // Maximum number of sub-steps per frame
-        // ? INCREASED: Higher values = more accurate collisions (prevents tunneling)
-        int MaxSubSteps = 20;
+        // ? INCREASED AGAIN: Ultra-high precision to completely prevent tunneling
+        int MaxSubSteps = 30;
 
         // Solver iterations (higher = more stable constraints and contacts)
-        // ? INCREASED: Better constraint solving = more stable collisions
-        int SolverIterations = 15;
+        // ? INCREASED: Even better constraint solving
+        int SolverIterations = 20;
 
         // Broadphase algorithm configuration
         glm::vec3 WorldAabbMin = glm::vec3(-1000.0f, -1000.0f, -1000.0f);

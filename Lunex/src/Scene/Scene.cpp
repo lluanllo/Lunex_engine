@@ -184,7 +184,7 @@ namespace Lunex {
 			// ✅ CRITICAL FIX: Use proper substeps and fixed timestep
 			// This prevents tunneling and ensures stable physics simulation
 			float fixedTimeStep = 1.0f / 60.0f; // 60 FPS physics
-			int maxSubSteps = 20; // Match PhysicsConfig
+			int maxSubSteps = 30; // ↑ Match updated PhysicsConfig
 			
 			PhysicsCore::Get().GetWorld()->StepSimulation(ts, maxSubSteps, fixedTimeStep);
 
@@ -196,6 +196,20 @@ namespace Lunex {
 
 				if (rb3d.RuntimeBody) {
 					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					
+					// ✅ NEW: Clamp velocity for heavy objects to prevent tunneling
+					if (rb3d.Mass > 10.0f) {
+						glm::vec3 velocity = body->GetLinearVelocity();
+						float speed = glm::length(velocity);
+						
+						// Max speed based on mass (heavier = slower max speed)
+						float maxSpeed = 50.0f / std::sqrt(rb3d.Mass / 10.0f);
+						
+						if (speed > maxSpeed) {
+							glm::vec3 clampedVelocity = glm::normalize(velocity) * maxSpeed;
+							body->SetLinearVelocity(clampedVelocity);
+						}
+					}
 					
 					// Get position and rotation from physics
 					glm::vec3 position = body->GetPosition();
@@ -379,7 +393,7 @@ namespace Lunex {
 		{
 			// ✅ CRITICAL FIX: Use proper substeps and fixed timestep
 			float fixedTimeStep = 1.0f / 60.0f;
-			int maxSubSteps = 20;
+			int maxSubSteps = 30;
 			
 			PhysicsCore::Get().GetWorld()->StepSimulation(ts, maxSubSteps, fixedTimeStep);
 
@@ -391,6 +405,19 @@ namespace Lunex {
 
 				if (rb3d.RuntimeBody) {
 					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					
+					// ✅ NEW: Clamp velocity for heavy objects
+					if (rb3d.Mass > 10.0f) {
+						glm::vec3 velocity = body->GetLinearVelocity();
+						float speed = glm::length(velocity);
+						
+						float maxSpeed = 50.0f / std::sqrt(rb3d.Mass / 10.0f);
+						
+						if (speed > maxSpeed) {
+							glm::vec3 clampedVelocity = glm::normalize(velocity) * maxSpeed;
+							body->SetLinearVelocity(clampedVelocity);
+						}
+					}
 					
 					// Get position and rotation from physics
 					glm::vec3 position = body->GetPosition();

@@ -58,18 +58,32 @@ namespace Lunex {
         solverInfo.m_numIterations = config.SolverIterations;
         solverInfo.m_solverMode = SOLVER_SIMD | SOLVER_USE_WARMSTARTING;
         
-        // ? CRITICAL: Improve contact resolution
-        solverInfo.m_erp = 0.2f;  // Error Reduction Parameter (0.1-0.8, default 0.2)
-        solverInfo.m_erp2 = 0.2f; // ERP for split impulse
-        solverInfo.m_globalCfm = 0.0f; // Constraint Force Mixing (softness)
+        // ? CRITICAL: Improve contact resolution (más agresivo para masas grandes)
+        solverInfo.m_erp = 0.6f;  // ?? Error Reduction Parameter (0.6 = muy agresivo)
+        solverInfo.m_erp2 = 0.6f; // ERP for split impulse
+        solverInfo.m_globalCfm = 0.0f; // Constraint Force Mixing (0 = duro, sin softness)
         
         // ? CRITICAL: Enable split impulse for better penetration recovery
         solverInfo.m_splitImpulse = true;
-        solverInfo.m_splitImpulsePenetrationThreshold = -0.02f; // 2cm penetration threshold
+        solverInfo.m_splitImpulsePenetrationThreshold = -0.05f; // ? de -0.04 a -0.05 (5cm threshold)
+        solverInfo.m_splitImpulseTurnErp = 0.2f; // ? NEW: Turn correction in split impulse
         
         // ? CRITICAL: Linear and angular dampings
-        solverInfo.m_linearSlop = 0.0f; // Reduce allowed penetration
+        solverInfo.m_linearSlop = 0.0f; // Zero allowed penetration
         solverInfo.m_warmstartingFactor = 0.85f; // Warm starting for faster convergence
+        
+        // ? NEW: Contact breaking threshold (cuándo se considera que el contacto terminó)
+        solverInfo.m_restingContactRestitutionThreshold = 0.5f; // m/s
+        
+        // ? NEW: Más pasos de solver para mejor convergencia
+        solverInfo.m_minimumSolverBatchSize = 128; // Batch size mínimo
+        
+        // ? NEW: Friction handling for heavy objects
+        solverInfo.m_frictionERP = 0.5f; // Friction error reduction (default 0.2)
+        solverInfo.m_frictionCFM = 0.0f; // No softness in friction
+        
+        // ? NEW: Maximum error per iteration (prevent explosions with heavy objects)
+        solverInfo.m_maxGyroscopicForce = 100.0f; // Cap gyroscopic forces
     }
 
     void PhysicsWorld::Cleanup()

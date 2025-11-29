@@ -23,6 +23,9 @@ namespace Lunex {
         Cleanup();
         m_ShapeType = ShapeType::Box;
         m_Shape = std::make_unique<btBoxShape>(PhysicsUtils::ToBullet(halfExtents));
+        
+        // ? CRITICAL: Set proper collision margin
+        m_Shape->setMargin(0.04f); // 4cm margin for stable collisions
     }
 
     void ColliderComponent::CreateSphereShape(float radius)
@@ -30,6 +33,9 @@ namespace Lunex {
         Cleanup();
         m_ShapeType = ShapeType::Sphere;
         m_Shape = std::make_unique<btSphereShape>(radius);
+        
+        // ? Spheres already have good margin by default, but set explicitly
+        m_Shape->setMargin(0.04f);
     }
 
     void ColliderComponent::CreateCapsuleShape(float radius, float height)
@@ -38,6 +44,9 @@ namespace Lunex {
         m_ShapeType = ShapeType::Capsule;
         // btCapsuleShape: height is total height (including hemisphere caps)
         m_Shape = std::make_unique<btCapsuleShape>(radius, height);
+        
+        // ? Set margin
+        m_Shape->setMargin(0.04f);
     }
 
     void ColliderComponent::CreateCylinderShape(const glm::vec3& halfExtents)
@@ -45,6 +54,9 @@ namespace Lunex {
         Cleanup();
         m_ShapeType = ShapeType::Cylinder;
         m_Shape = std::make_unique<btCylinderShape>(PhysicsUtils::ToBullet(halfExtents));
+        
+        // ? Set margin
+        m_Shape->setMargin(0.04f);
     }
 
     void ColliderComponent::CreateConeShape(float radius, float height)
@@ -52,6 +64,9 @@ namespace Lunex {
         Cleanup();
         m_ShapeType = ShapeType::Cone;
         m_Shape = std::make_unique<btConeShape>(radius, height);
+        
+        // ? Set margin
+        m_Shape->setMargin(0.04f);
     }
 
     void ColliderComponent::CreateConvexHullShape(const std::vector<glm::vec3>& vertices)
@@ -71,6 +86,9 @@ namespace Lunex {
         
         // Optimize the hull
         convexHull->optimizeConvexHull();
+        
+        // ? Set margin for convex hull
+        convexHull->setMargin(0.04f);
         
         m_Shape = std::move(convexHull);
     }
@@ -109,17 +127,27 @@ namespace Lunex {
 
         // Create BVH triangle mesh shape (static only!)
         bool useQuantizedAabbCompression = true;
-        m_Shape = std::make_unique<btBvhTriangleMeshShape>(
+        auto meshShape = std::make_unique<btBvhTriangleMeshShape>(
             m_TriangleMesh.get(),
             useQuantizedAabbCompression
         );
+        
+        // ? CRITICAL: Triangle meshes need margin too
+        meshShape->setMargin(0.04f);
+        
+        m_Shape = std::move(meshShape);
     }
 
     void ColliderComponent::CreateCompoundShape()
     {
         Cleanup();
         m_ShapeType = ShapeType::Box; // Generic type for compound
-        m_Shape = std::make_unique<btCompoundShape>();
+        auto compound = std::make_unique<btCompoundShape>();
+        
+        // ? Set margin for compound
+        compound->setMargin(0.04f);
+        
+        m_Shape = std::move(compound);
     }
 
     void ColliderComponent::AddChildShape(btCollisionShape* shape, const glm::vec3& position, const glm::quat& rotation)
