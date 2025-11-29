@@ -8,8 +8,12 @@
 
 #include "../Box2D/include/box2d/box2d.h"
 
+#include <unordered_map>
+#include <memory>
+
 namespace Lunex {
 	class Entity;
+	class ScriptingEngine; // Forward declaration
 	
 	class Scene {
 		public:
@@ -50,14 +54,19 @@ namespace Lunex {
 			void OnPhysics2DStop();
 			
 			void RenderScene(EditorCamera& camera);
+			
 		private:
 			entt::registry m_Registry;
 			uint32_t m_ViewportWidth = 0, m_ViewportHeight = 0;
 			
 			b2WorldId m_PhysicsWorld = B2_NULL_ID;
 			
+			// Scripting engine
+			std::unique_ptr<ScriptingEngine> m_ScriptingEngine;
+			
 			friend class Entity;
 			friend class SceneSerializer;
 			friend class SceneHierarchyPanel;
+			friend class ScriptingEngine; // Para acceder al registry
 	};
 }

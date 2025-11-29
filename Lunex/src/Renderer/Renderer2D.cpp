@@ -225,6 +225,10 @@ namespace Lunex {
 		s_Data.LineVertexBufferPtr = s_Data.LineVertexBufferBase;
 		
 		s_Data.TextureSlotIndex = 1;
+		
+		// Clear texture slots (except white texture at slot 0)
+		for (uint32_t i = 1; i < s_Data.MaxTextureSlots; i++)
+			s_Data.TextureSlots[i].reset();
 	}
 	
 	void Renderer2D::Flush() {
@@ -274,8 +278,8 @@ namespace Lunex {
 		
 		s_Data.LineVertexBufferPtr->Position = p1;
 	 s_Data.LineVertexBufferPtr->Color = color;
-		s_Data.LineVertexBufferPtr->EntityID = entityID;
-		s_Data.LineVertexBufferPtr++;
+	 s_Data.LineVertexBufferPtr->EntityID = entityID;
+	 s_Data.LineVertexBufferPtr++;
 		
 		s_Data.LineVertexCount += 2;
 	}
@@ -364,14 +368,24 @@ namespace Lunex {
 		if (s_Data.QuadIndexCount >= Renderer2DData::MaxIndices)
 			NextBatch();
 		
+		// Validate texture
+		if (!texture || !texture->IsLoaded()) {
+			// If texture is invalid, draw as solid color quad instead
+			DrawQuad(transform, tintColor, entityID);
+			return;
+		}
+		
 		float textureIndex = 0.0f;
+		
+		// Search for texture in already bound slots
 		for (uint32_t i = 1; i < s_Data.TextureSlotIndex; i++) {
-			if (*s_Data.TextureSlots[i] == *texture) {
+			if (s_Data.TextureSlots[i] && *s_Data.TextureSlots[i] == *texture) {
 				textureIndex = (float)i;
 				break;
 			}
 		}
 		
+		// If texture not found, add it to a new slot
 		if (textureIndex == 0.0f) {
 			if (s_Data.TextureSlotIndex >= Renderer2DData::MaxTextureSlots)
 				NextBatch();

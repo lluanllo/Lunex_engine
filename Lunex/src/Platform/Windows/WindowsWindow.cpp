@@ -5,6 +5,7 @@
 #include "Events/ApplicationEvent.h"
 #include "Events/KeyEvent.h"
 #include "Events/MouseEvent.h"
+#include "Events/FileDropEvent.h"
 
 #include <glad/glad.h>
 
@@ -127,6 +128,19 @@ namespace Lunex {
 		glfwSetCursorPosCallback(m_Window, [](GLFWwindow* window, double xPos, double yPos) {
 			WindowData& data = *(WindowData*)glfwGetWindowUserPointer(window);
 			MouseMovedEvent event((float)xPos, (float)yPos);
+			data.EventCallback(event);
+		});
+		
+		// File drop callback for drag & drop from Windows Explorer
+		glfwSetDropCallback(m_Window, [](GLFWwindow* window, int count, const char** paths) {
+			WindowData& data = *(WindowData*)glfwGetWindowUserPointer(window);
+			
+			std::vector<std::string> files;
+			for (int i = 0; i < count; i++) {
+				files.push_back(std::string(paths[i]));
+			}
+			
+			FileDropEvent event(files);
 			data.EventCallback(event);
 		});
 	}

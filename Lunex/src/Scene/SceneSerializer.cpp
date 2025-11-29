@@ -302,6 +302,29 @@ namespace Lunex {
 			
 			out << YAML::EndMap; // TextureComponent
 		}
+
+		if (entity.HasComponent<ScriptComponent>()) {
+			out << YAML::Key << "ScriptComponent";
+			out << YAML::BeginMap; // ScriptComponent
+			
+			auto& scriptComponent = entity.GetComponent<ScriptComponent>();
+			
+			// ===== SERIALIZAR MÚLTIPLES SCRIPTS =====
+			out << YAML::Key << "Scripts" << YAML::Value << YAML::BeginSeq;
+			for (size_t i = 0; i < scriptComponent.GetScriptCount(); i++) {
+				out << YAML::BeginMap;
+				out << YAML::Key << "ScriptPath" << YAML::Value << scriptComponent.GetScriptPath(i);
+				out << YAML::EndMap;
+			}
+			out << YAML::EndSeq;
+			
+			out << YAML::Key << "AutoCompile" << YAML::Value << scriptComponent.AutoCompile;
+			
+			// No serializar CompiledDLLPaths ni runtime data (ScriptLoadedStates, ScriptPluginInstances)
+			// Estos se regenerarán al cargar
+			
+			out << YAML::EndMap; // ScriptComponent
+		}
 		
 		out << YAML::EndMap; // Entity
 	}
@@ -570,6 +593,38 @@ namespace Lunex {
 						texture.SpecularMultiplier = textureComponent["SpecularMultiplier"].as<float>();
 					if (textureComponent["AOMultiplier"])
 						texture.AOMultiplier = textureComponent["AOMultiplier"].as<float>();
+				}
+
+				auto scriptComponent = entity["ScriptComponent"];
+				if (scriptComponent) {
+					auto& script = deserializedEntity.AddComponent<ScriptComponent>();
+					
+					// ===== DESERIALIZAR MÚLTIPLES SCRIPTS =====
+					if (scriptComponent["Scripts"] && scriptComponent["Scripts"].IsSequence()) {
+						// Nuevo formato (múltiples scripts)
+						for (auto scriptNode : scriptComponent["Scripts"]) {
+							if (scriptNode["ScriptPath"]) {
+								std::string scriptPath = scriptNode["ScriptPath"].as<std::string>();
+								if (!scriptPath.empty()) {
+									script.AddScript(scriptPath);
+								}
+							}
+						}
+					}
+					else if (scriptComponent["ScriptPath"]) {
+						// Formato antiguo (compatibilidad hacia atrás - un solo script)
+						std::string scriptPath = scriptComponent["ScriptPath"].as<std::string>();
+						if (!scriptPath.empty()) {
+							script.AddScript(scriptPath);
+						}
+					}
+					
+					if (scriptComponent["AutoCompile"]) {
+						script.AutoCompile = scriptComponent["AutoCompile"].as<bool>();
+					}
+					
+					// Los datos de runtime se regenerarán al iniciar el play mode
+					// ScriptLoadedStates y ScriptPluginInstances ya están inicializados por AddScript()
 				}
 			}
 		}

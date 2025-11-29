@@ -284,6 +284,50 @@ filter "configurations:Release"
 group ""
 
 -- ============================================================================
+-- SCRIPTING CORE
+-- ============================================================================
+
+project "Lunex-ScriptCore"
+    location "Lunex-ScriptCore"
+    kind "StaticLib"
+    language "C++"
+    cppdialect "C++20"
+    staticruntime "off"
+
+    targetdir ("bin/" .. outputdir .. "/%{prj.name}")
+    objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
+
+    files
+    {
+        "%{prj.name}/src/**.h",
+        "%{prj.name}/src/**.cpp"
+    }
+
+    includedirs
+    {
+        "%{prj.name}/src",
+        "Lunex/src",
+        "vendor/spdlog/include",
+        "%{IncludeDir.glm}"
+    }
+
+    filter "system:windows"
+        systemversion "latest"
+        buildoptions { "/utf-8" }
+
+    filter "configurations:Debug"
+        runtime "Debug"
+        symbols "on"
+
+    filter "configurations:Release"
+        runtime "Release"
+        optimize "on"
+
+    filter "configurations:Dist"
+        runtime "Release"
+        optimize "on"
+
+-- ============================================================================
 -- MAIN PROJECTS
 -- ============================================================================
 
@@ -337,7 +381,8 @@ project "Lunex"
         "%{IncludeDir.yaml_cpp}",
         "%{IncludeDir.ImGuizmo}",
         "%{IncludeDir.Assimp}",
-        "%{IncludeDir.VulkanSDK}"
+        "%{IncludeDir.VulkanSDK}",
+        "Lunex-ScriptCore/src"
     }
 
     links
@@ -347,6 +392,7 @@ project "Lunex"
         "Glad",
         "ImGui",
         "yaml-cpp",
+        "Lunex-ScriptCore",
         "opengl32.lib"
     }
 
@@ -515,7 +561,6 @@ project "Lunex-Editor"
         "vendor/ImGuiLib",
         "%{IncludeDir.glm}",
         "%{IncludeDir.entt}",
-        "%{IncludeDir.yaml_cpp}",
         "%{IncludeDir.Assimp}",
         "%{IncludeDir.ImGuizmo}"
     }
@@ -570,3 +615,12 @@ project "Lunex-Editor"
             "{MKDIR} \"%{cfg.targetdir}/assets\"",
             "{COPYDIR} \"$(SolutionDir)Lunex-Editor/assets\" \"%{cfg.targetdir}/assets\""
         }
+
+-- ============================================================================
+-- SCRIPT PROJECTS (Plugins dinámicos)
+-- ============================================================================
+group "Scripts"
+
+-- include "Scripts/ExampleScript"  -- Comentado temporalmente si no existe
+
+group ""

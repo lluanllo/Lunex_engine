@@ -253,8 +253,12 @@ namespace Lunex {
 
 		void LoadIcon() {
 			IconTexture = Texture2D::Create("Resources/Icons/EntityIcons/LightIcon.png");
-			if (!IconTexture) {
-				LNX_LOG_WARN("Failed to load Light Icon");
+			if (!IconTexture || !IconTexture->IsLoaded()) {
+				LNX_LOG_ERROR("Failed to load Light Icon from Resources/Icons/EntityIcons/LightIcon.png");
+				LNX_LOG_ERROR("  -> Check that the file exists at this path");
+			}
+			else {
+				LNX_LOG_INFO("Light Icon loaded successfully: {0}x{1}", IconTexture->GetWidth(), IconTexture->GetHeight());
 			}
 		}
 
@@ -282,9 +286,29 @@ namespace Lunex {
 		SceneCamera Camera;
 		bool Primary = true;
 		bool FixedAspectRatio = false;
+		Ref<Texture2D> IconTexture;
 
-		CameraComponent() = default;
-		CameraComponent(const CameraComponent&) = default;
+		CameraComponent() {
+			LoadIcon();
+		}
+		
+		CameraComponent(const CameraComponent& other)
+			: Camera(other.Camera),
+			  Primary(other.Primary),
+			  FixedAspectRatio(other.FixedAspectRatio),
+			  IconTexture(other.IconTexture) {
+		}
+
+		void LoadIcon() {
+			IconTexture = Texture2D::Create("Resources/Icons/HierarchyPanel/CameraIcon.png");
+			if (!IconTexture || !IconTexture->IsLoaded()) {
+				LNX_LOG_ERROR("Failed to load Camera Icon from Resources/Icons/HierarchyPanel/CameraIcon.png");
+				LNX_LOG_ERROR("  -> Check that the file exists at this path");
+			}
+			else {
+				LNX_LOG_INFO("Camera Icon loaded successfully: {0}x{1}", IconTexture->GetWidth(), IconTexture->GetHeight());
+			}
+		}
 	};
 
 	class ScriptableEntity;
@@ -347,6 +371,85 @@ namespace Lunex {
 		CircleCollider2DComponent(const CircleCollider2DComponent&) = default;
 	};
 
+	// C++ Script Component - integración con sistema de scripting dinámico
+	// SOPORTA MÚLTIPLES SCRIPTS POR ENTIDAD
+	struct ScriptComponent {
+		// Lista de scripts asociados a esta entidad
+		std::vector<std::string> ScriptPaths;          // Rutas relativas a scripts .cpp
+		std::vector<std::string> CompiledDLLPaths;     // Rutas a DLLs compiladas
+		std::vector<bool> ScriptLoadedStates;          // Estado de carga de cada script
+		
+		bool AutoCompile = true;         // Auto-compilar al entrar en Play mode
+		
+		// Runtime data (no serializar) - un plugin por script
+		std::vector<void*> ScriptPluginInstances;  // Punteros a ScriptPlugin*
+		
+		ScriptComponent() = default;
+		
+		ScriptComponent(const ScriptComponent& other)
+			: ScriptPaths(other.ScriptPaths)
+			, CompiledDLLPaths(other.CompiledDLLPaths)
+			, ScriptLoadedStates(other.ScriptPaths.size(), false)
+			, AutoCompile(other.AutoCompile)
+		{
+		}
+		
+		ScriptComponent(const std::string& scriptPath)
+			: AutoCompile(true)
+		{
+			AddScript(scriptPath);
+		}
+		
+		~ScriptComponent() {
+			// Cleanup manejado por Scene
+		}
+		
+		// ===== API PARA GESTIÓN DE SCRIPTS =====
+		
+		void AddScript(const std::string& scriptPath) {
+			ScriptPaths.push_back(scriptPath);
+			CompiledDLLPaths.push_back("");
+			ScriptLoadedStates.push_back(false);
+			ScriptPluginInstances.push_back(nullptr);
+		}
+		
+		void RemoveScript(size_t index) {
+			if (index < ScriptPaths.size()) {
+				ScriptPaths.erase(ScriptPaths.begin() + index);
+				CompiledDLLPaths.erase(CompiledDLLPaths.begin() + index);
+				ScriptLoadedStates.erase(ScriptLoadedStates.begin() + index);
+				ScriptPluginInstances.erase(ScriptPluginInstances.begin() + index);
+			}
+		}
+		
+		size_t GetScriptCount() const {
+			return ScriptPaths.size();
+		}
+		
+		bool IsScriptLoaded(size_t index) const {
+			return index < ScriptLoadedStates.size() && ScriptLoadedStates[index];
+		}
+		
+		const std::string& GetScriptPath(size_t index) const {
+			static std::string empty;
+			return (index < ScriptPaths.size()) ? ScriptPaths[index] : empty;
+		}
+		
+		// Compatibilidad con código legacy (usa el primer script)
+		std::string GetLegacyScriptPath() const {
+			return ScriptPaths.empty() ? "" : ScriptPaths[0];
+		}
+		
+		void SetLegacyScriptPath(const std::string& path) {
+			if (ScriptPaths.empty()) {
+				AddScript(path);
+			} else {
+				ScriptPaths[0] = path;
+				ScriptLoadedStates[0] = false;
+			}
+		}
+	};
+
 	template<typename... Component>
 	struct ComponentGroup
 	{
@@ -356,5 +459,5 @@ namespace Lunex {
 		ComponentGroup<TransformComponent, SpriteRendererComponent,
 		CircleRendererComponent, CameraComponent, NativeScriptComponent,
 		Rigidbody2DComponent, BoxCollider2DComponent, CircleCollider2DComponent,
-		MeshComponent, MaterialComponent, LightComponent, TextureComponent>;
+		MeshComponent, MaterialComponent, LightComponent, TextureComponent, ScriptComponent>;
 }
