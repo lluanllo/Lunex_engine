@@ -9,6 +9,7 @@
 #include "Core/Input.h"
 
 #include "Scripting/ScriptingEngine.h"
+#include "Physics/Physics.h"
 
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
@@ -120,19 +121,23 @@ namespace Lunex {
 
 	void Scene::OnRuntimeStart() {
 		OnPhysics2DStart();
+		OnPhysics3DStart();
 		m_ScriptingEngine->OnScriptsStart(m_Registry);
 	}
 
 	void Scene::OnRuntimeStop() {
 		m_ScriptingEngine->OnScriptsStop(m_Registry);
+		OnPhysics3DStop();
 		OnPhysics2DStop();
 	}
 
 	void Scene::OnSimulationStart() {
 		OnPhysics2DStart();
+		OnPhysics3DStart();
 	}
 
 	void Scene::OnSimulationStop() {
+		OnPhysics3DStop();
 		OnPhysics2DStop();
 	}
 
@@ -673,5 +678,127 @@ namespace Lunex {
 	void Scene::OnComponentAdded<ScriptComponent>(Entity entity, ScriptComponent& component) {
 		// No hacer nada especial al añadir el componente
 		// La compilación y carga se manejará en ScriptingEngine
+	}
+
+	// ========================================
+	// 3D PHYSICS (Bullet3)
+	// ========================================
+
+	void Scene::OnPhysics3DStart() {
+		// Initialize Bullet physics
+		PhysicsConfig config;
+		config.Gravity = glm::vec3(0.0f, -9.81f, 0.0f);
+		config.FixedTimestep = 1.0f / 60.0f;
+		PhysicsCore::Get().Initialize(config);
+		
+		// Create rigid bodies for all entities with Rigidbody3DComponent
+		auto view = m_Registry.view<TransformComponent, Rigidbody3DComponent>();
+		for (auto e : view) {
+			auto& transform = view.get<TransformComponent>(e);
+			auto& rb3d = view.get<Rigidbody3DComponent>(e);
+			
+			// Determine collider type
+			ColliderComponent* collider = new ColliderComponent();
+			
+			if (m_Registry.all_of<BoxCollider3DComponent>(e)) {
+				auto& bc3d = m_Registry.get<BoxCollider3DComponent>(e);
+				collider->CreateBoxShape(bc3d.HalfExtents);
+				collider->SetOffset(bc3d.Offset);
+			}
+			else if (m_Registry.all_of<SphereCollider3DComponent>(e)) {
+				auto& sc3d = m_Registry.get<SphereCollider3DComponent>(e);
+				collider->CreateSphereShape(sc3d.Radius);
+				collider->SetOffset(sc3d.Offset);
+			}
+			else if (m_Registry.all_of<CapsuleCollider3DComponent>(e)) {
+				auto& cc3d = m_Registry.get<CapsuleCollider3DComponent>(e);
+				collider->CreateCapsuleShape(cc3d.Radius, cc3d.Height);
+				collider->SetOffset(cc3d.Offset);
+			}
+			else {
+				// Default box collider
+				collider->CreateBoxShape(glm::vec3(0.5f));
+			}
+			
+			rb3d.RuntimeCollider = collider;
+			
+			// Create rigid body
+			PhysicsMaterial material;
+			material.Mass = rb3d.Mass;
+			material.Friction = rb3d.Friction;
+			material.Restitution = rb3d.Restitution;
+			material.LinearDamping = rb3d.LinearDamping;
+			material.AngularDamping = rb3d.AngularDamping;
+			material.IsStatic = (rb3d.Type == Rigidbody3DComponent::BodyType::Static);
+			material.IsKinematic = (rb3d.Type == Rigidbody3DComponent::BodyType::Kinematic);
+			material.IsTrigger = rb3d.IsTrigger;
+			material.UseCCD = rb3d.UseCCD;
+			material.CcdMotionThreshold = rb3d.CcdMotionThreshold;
+			material.CcdSweptSphereRadius = rb3d.CcdSweptSphereRadius;
+			
+			glm::quat rotation = glm::quat(transform.Rotation);
+			
+			RigidBodyComponent* body = new RigidBodyComponent();
+			body->Create(
+				PhysicsCore::Get().GetWorld(),
+				collider,
+				material,
+				transform.Translation,
+				rotation
+			);
+			
+			// Apply constraints
+			body->SetLinearFactor(rb3d.LinearFactor);
+			body->SetAngularFactor(rb3d.AngularFactor);
+			
+			// Store user pointer for collision callbacks
+			body->GetRigidBody()->setUserPointer(reinterpret_cast<void*>(static_cast<intptr_t>(e)));
+			
+			rb3d.RuntimeBody = body;
+		}
+	}
+
+	void Scene::OnPhysics3DStop() {
+		// Destroy all rigid bodies
+		auto view = m_Registry.view<Rigidbody3DComponent>();
+		for (auto e : view) {
+			auto& rb3d = view.get<Rigidbody3DComponent>(e);
+			
+			if (rb3d.RuntimeBody) {
+				RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+				body->Destroy(PhysicsCore::Get().GetWorld());
+				delete body;
+				rb3d.RuntimeBody = nullptr;
+			}
+			
+			if (rb3d.RuntimeCollider) {
+				delete static_cast<ColliderComponent*>(rb3d.RuntimeCollider);
+				rb3d.RuntimeCollider = nullptr;
+			}
+		}
+		
+		// Shutdown physics
+		PhysicsCore::Get().Shutdown();
+	}
+
+	// Template specializations for 3D physics components
+	template<>
+	void Scene::OnComponentAdded<Rigidbody3DComponent>(Entity entity, Rigidbody3DComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<BoxCollider3DComponent>(Entity entity, BoxCollider3DComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<SphereCollider3DComponent>(Entity entity, SphereCollider3DComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<CapsuleCollider3DComponent>(Entity entity, CapsuleCollider3DComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<MeshCollider3DComponent>(Entity entity, MeshCollider3DComponent& component) {
 	}
 }

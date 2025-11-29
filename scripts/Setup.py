@@ -14,7 +14,7 @@ CheckPython.ValidatePackages()
 
 import Vulkan
 
-print("\n[2/6] Clonando/actualizando submodulos...")  # ✅ Cambio a 2/6
+print("\n[2/7] Clonando/actualizando submodulos...")
 result = subprocess.call(["git", "submodule", "update", "--init", "--recursive"])
 
 if result != 0:
@@ -29,42 +29,46 @@ if result != 0:
     
     # Intentar actualizar de nuevo
     result = subprocess.call(["git", "submodule", "update", "--init", "--recursive"])
-    
-    if result != 0:
-        print("\n" + "!"*60)
-        print("ERROR: No se pudieron clonar los submódulos automáticamente.")
-        print("Intentando clonar manualmente...")
-        print("!"*60)
+
+# ✅ Lista completa de submódulos (para clonar manualmente si no están en .gitmodules)
+print("\n[3/7] Verificando dependencias adicionales...")
+submodules = [
+    ("vendor/GLFW", "https://github.com/glfw/glfw.git", "master"),
+    ("vendor/ImGuiLib", "https://github.com/ocornut/imgui.git", "docking"),
+    ("vendor/glm", "https://github.com/g-truc/glm.git", "master"),
+    ("vendor/ImGuizmo", "https://github.com/CedricGuillemet/ImGuizmo.git", "master"),
+    ("vendor/yaml-cpp", "https://github.com/jbeder/yaml-cpp.git", "master"),
+    ("vendor/Box2D", "https://github.com/erincatto/box2d.git", "main"),
+    ("vendor/assimp", "https://github.com/assimp/assimp.git", "master"),
+    ("vendor/Bullet3", "https://github.com/bulletphysics/bullet3.git", "master"),
+]
+
+# Verificar y clonar submódulos faltantes
+for path, url, branch in submodules:
+    # Verificar si el directorio existe y contiene archivos
+    if not os.path.exists(path) or not os.listdir(path):
+        print(f"\n⚠ {path} no encontrado o vacío, clonando...")
         
-        # ✅ Añadir Box2D a la lista de submódulos
-        submodules = [
-            ("vendor/GLFW", "https://github.com/glfw/glfw.git", "master"),
-            ("vendor/ImGuiLib", "https://github.com/ocornut/imgui.git", "docking"),
-            ("vendor/glm", "https://github.com/g-truc/glm.git", "master"),
-            ("vendor/ImGuizmo", "https://github.com/CedricGuillemet/ImGuizmo.git", "master"),
-            ("vendor/yaml-cpp", "https://github.com/jbeder/yaml-cpp.git", "master"),
-            ("vendor/Box2D", "https://github.com/erincatto/box2d.git", "main"),  # ✅ Añadido Box2D (nota: usa 'main' en lugar de 'master')
-            ("vendor/assimp", "https://github.com/assimp/assimp.git", "master"),  # ✅ Añadido Assimp
-        ]
+        # Si existe pero está vacío, eliminarlo
+        if os.path.exists(path):
+            import shutil
+            try:
+                shutil.rmtree(path)
+            except Exception as e:
+                print(f"  Error al eliminar directorio vacío: {e}")
         
-        for path, url, branch in submodules:
-            if os.path.exists(path):
-                print(f"\nLimpiando {path}...")
-                import shutil
-                try:
-                    shutil.rmtree(path)
-                except Exception as e:
-                    print(f"  Error al eliminar: {e}")
-            
-            print(f"\nClonando {path}...")
-            result = subprocess.call(["git", "clone", "--depth", "1", "-b", branch, url, path])
-            if result == 0:
-                print(f"  ✓ {path} clonado correctamente")
-            else:
-                print(f"  ✗ Error al clonar {path}")
+        # Clonar el repositorio
+        print(f"  Clonando {path} desde {url}...")
+        result = subprocess.call(["git", "clone", "--depth", "1", "-b", branch, url, path])
+        if result == 0:
+            print(f"  ✓ {path} clonado correctamente")
+        else:
+            print(f"  ✗ Error al clonar {path}")
+    else:
+        print(f"  ✓ {path} ya existe")
 
 # Verificar que los submódulos se clonaron correctamente
-print("\nVerificando submódulos...")
+print("\n[4/7] Verificando integridad de submódulos...")
 missing_submodules = []
 required_files = {
     "vendor/GLFW/include/GLFW/glfw3.h": "GLFW",
@@ -73,7 +77,8 @@ required_files = {
     "vendor/ImGuizmo/ImGuizmo.h": "ImGuizmo",
     "vendor/yaml-cpp/include/yaml-cpp/yaml.h": "yaml-cpp",
     "vendor/Box2D/include/box2d/box2d.h": "Box2D",
-    "vendor/assimp/include/assimp/Importer.hpp": "Assimp",  # ✅ Añadido Assimp
+    "vendor/assimp/include/assimp/Importer.hpp": "Assimp",
+    "vendor/Bullet3/src/btBulletDynamicsCommon.h": "Bullet3",
 }
 
 all_ok = True
@@ -91,14 +96,14 @@ if not all_ok:
     print("Archivos faltantes:")
     for item in missing_submodules:
         print(f"  - {item}")
-    print("\nIntenta clonar el repositorio de nuevo con:")
-    print("  git clone --recursive https://github.com/lluanllo/Lunex_engine.git")  # ✅ Corrección del nombre del repo
+    print("\nIntenta ejecutar Setup.bat de nuevo o clonar manualmente:")
+    print("  git clone --recursive https://github.com/lluanllo/Lunex_engine.git")
     print("!"*60)
     input("\nPresiona Enter para continuar de todos modos...")
 else:
     print("\n✓ Todos los submódulos están correctos")
 
-print("\n[3/6] Configurando Assimp...")
+print("\n[5/7] Configurando Assimp...")
 # Configurar Assimp
 assimp_config = "vendor/assimp/include/assimp/config.h"
 if not os.path.exists(assimp_config):
@@ -120,13 +125,13 @@ if not os.path.exists(assimp_config):
 else:
     print("  ✓ Assimp ya configurado")
 
-print("\n[4/6] Verificando Vulkan SDK...")  # ✅ Cambio a 3/6
+print("\n[6/7] Verificando Vulkan SDK...")
 vulkanInstalled = Vulkan.CheckVulkanSDK()
 if vulkanInstalled:
     # Solo verificar, no intentar descargar
     Vulkan.CheckVulkanSDKDebugLibs()
 
-print("\n[5/6] Generando archivos de proyecto con Premake...")  # ✅ Cambio a 4/6
+print("\n[7/7] Generando archivos de proyecto con Premake...")
 if os.name == 'nt':  # Windows
     premake_path = "vendor/bin/premake/premake5.exe"
     if not os.path.exists(premake_path):
@@ -142,21 +147,18 @@ if os.name == 'nt':  # Windows
 else:
     subprocess.call(["vendor/bin/premake/premake5", "gmake2"])
 
-print("\n[6/6] Verificación final...")
-print("✓ Box2D integrado correctamente")
-print("✓ Assimp integrado correctamente")
-
 print("\n" + "="*60)
 print("✓ Setup completado correctamente!")
 print("="*60)
+print("\nVerificación final:")
+print("  ✓ Box2D - Motor de física 2D")
+print("  ✓ Bullet3 - Motor de física 3D")
+print("  ✓ Assimp - Carga de modelos 3D")
+print("  ✓ GLFW - Manejo de ventanas")
+print("  ✓ ImGui - Interfaz de usuario")
+print("  ✓ Vulkan SDK - Compilación de shaders SPIR-V")
 print("\nSiguientes pasos:")
 print("  1. Abre 'Lunex-Engine.sln' en Visual Studio")
 print("  2. Selecciona la configuración 'Debug' o 'Release'")
 print("  3. Compila el proyecto (Ctrl+Shift+B)")
-print("\nBibliotecas integradas:")
-print("  ✓ GLFW - Manejo de ventanas")
-print("  ✓ ImGui - Interfaz de usuario")
-print("  ✓ Box2D - Motor de física 2D")
-print("  ✓ Assimp - Carga de modelos 3D")
-print("  ✓ Vulkan SDK - Compilación de shaders SPIR-V")
 print("="*60)
