@@ -438,8 +438,9 @@ namespace Lunex {
 			Renderer2D::BeginScene(m_EditorCamera);
 		}
 
+		// Draw 2D Physics Colliders (Red)
 		if (m_SettingsPanel.GetShowPhysicsColliders()) {
-			// Box Colliders
+			// Box Colliders 2D
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, BoxCollider2DComponent>();
 				for (auto entity : view) {
@@ -452,11 +453,11 @@ namespace Lunex {
 						* glm::rotate(glm::mat4(1.0f), tc.Rotation.z, glm::vec3(0.0f, 0.0f, 1.0f))
 						* glm::scale(glm::mat4(1.0f), scale);
 
-					Renderer2D::DrawRect(transform, glm::vec4(0, 1, 0, 1));
+					Renderer2D::DrawRect(transform, glm::vec4(1, 0, 0, 1)); // Red for 2D
 				}
 			}
 
-			// Circle Colliders
+			// Circle Colliders 2D
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, CircleCollider2DComponent>();
 				for (auto entity : view) {
@@ -468,7 +469,61 @@ namespace Lunex {
 					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
 						* glm::scale(glm::mat4(1.0f), scale);
 
-					Renderer2D::DrawCircle(transform, glm::vec4(0, 1, 0, 1), 0.01f);
+					Renderer2D::DrawCircle(transform, glm::vec4(1, 0, 0, 1), 0.01f); // Red for 2D
+				}
+			}
+		}
+
+		// Draw 3D Physics Colliders (Green)
+		if (m_SettingsPanel.GetShowPhysics3DColliders()) {
+			// Box Colliders 3D
+			{
+				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, BoxCollider3DComponent>();
+				for (auto entity : view) {
+					auto [tc, bc3d] = view.get<TransformComponent, BoxCollider3DComponent>(entity);
+
+					glm::vec3 translation = tc.Translation + bc3d.Offset;
+					glm::vec3 scale = tc.Scale * (bc3d.HalfExtents * 2.0f); // HalfExtents → Full size
+
+					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
+						* glm::toMat4(glm::quat(tc.Rotation))
+						* glm::scale(glm::mat4(1.0f), scale);
+
+					Renderer2D::DrawRect(transform, glm::vec4(0, 1, 0, 1)); // Green for 3D
+				}
+			}
+
+			// Sphere Colliders 3D
+			{
+				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, SphereCollider3DComponent>();
+				for (auto entity : view) {
+					auto [tc, sc3d] = view.get<TransformComponent, SphereCollider3DComponent>(entity);
+
+					glm::vec3 translation = tc.Translation + sc3d.Offset;
+					glm::vec3 scale = tc.Scale * glm::vec3(sc3d.Radius * 2.0f);
+
+					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
+						* glm::scale(glm::mat4(1.0f), scale);
+
+					Renderer2D::DrawCircle(transform, glm::vec4(0, 1, 0, 1), 0.01f); // Green for 3D
+				}
+			}
+
+			// Capsule Colliders 3D (approximated as circle + rects)
+			{
+				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, CapsuleCollider3DComponent>();
+				for (auto entity : view) {
+					auto [tc, cc3d] = view.get<TransformComponent, CapsuleCollider3DComponent>(entity);
+
+					glm::vec3 translation = tc.Translation + cc3d.Offset;
+					glm::vec3 scale = tc.Scale * glm::vec3(cc3d.Radius * 2.0f, cc3d.Height, cc3d.Radius * 2.0f);
+
+					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
+						* glm::toMat4(glm::quat(tc.Rotation))
+						* glm::scale(glm::mat4(1.0f), scale);
+
+					// Draw capsule as elongated circle (approximation)
+					Renderer2D::DrawRect(transform, glm::vec4(0, 1, 0, 1)); // Green for 3D
 				}
 			}
 		}

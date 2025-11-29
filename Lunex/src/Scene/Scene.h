@@ -53,6 +53,9 @@ namespace Lunex {
 			void OnPhysics2DStart();
 			void OnPhysics2DStop();
 			
+			void OnPhysics3DStart();
+			void OnPhysics3DStop();
+			
 			void RenderScene(EditorCamera& camera);
 			
 		private:
