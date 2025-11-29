@@ -157,7 +157,7 @@ namespace Lunex {
 				});
 		}
 
-		// Physics
+		// Physics 2D
 		{
 			// ✅ Box2D v3.x: Step con firma actualizada
 			b2World_Step(m_PhysicsWorld, ts, 4);
@@ -176,6 +176,31 @@ namespace Lunex {
 				transform.Translation.x = position.x;
 				transform.Translation.y = position.y;
 				transform.Rotation.z = b2Rot_GetAngle(rotation);
+			}
+		}
+
+		// Physics 3D
+		{
+			// Step Bullet physics simulation
+			PhysicsCore::Get().GetWorld()->StepSimulation(ts);
+
+			// Retrieve transforms from Bullet
+			auto view = m_Registry.view<TransformComponent, Rigidbody3DComponent>();
+			for (auto e : view) {
+				auto& transform = view.get<TransformComponent>(e);
+				auto& rb3d = view.get<Rigidbody3DComponent>(e);
+
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					
+					// Get position and rotation from physics
+					glm::vec3 position = body->GetPosition();
+					glm::quat rotation = body->GetRotation();
+
+					// Update transform
+					transform.Translation = position;
+					transform.Rotation = glm::eulerAngles(rotation);
+				}
 			}
 		}
 
@@ -324,7 +349,7 @@ namespace Lunex {
 	}
 
 	void Scene::OnUpdateSimulation(Timestep ts, EditorCamera& camera) {
-		// Physics
+		// Physics 2D
 		{
 			// ✅ Box2D v3.x: Step con firma actualizada
 			b2World_Step(m_PhysicsWorld, ts, 4);
@@ -343,6 +368,31 @@ namespace Lunex {
 				transform.Translation.x = position.x;
 				transform.Translation.y = position.y;
 				transform.Rotation.z = b2Rot_GetAngle(rotation);
+			}
+		}
+
+		// Physics 3D
+		{
+			// Step Bullet physics simulation
+			PhysicsCore::Get().GetWorld()->StepSimulation(ts);
+
+			// Retrieve transforms from Bullet
+			auto view = m_Registry.view<TransformComponent, Rigidbody3DComponent>();
+			for (auto e : view) {
+				auto& transform = view.get<TransformComponent>(e);
+				auto& rb3d = view.get<Rigidbody3DComponent>(e);
+
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					
+					// Get position and rotation from physics
+					glm::vec3 position = body->GetPosition();
+					glm::quat rotation = body->GetRotation();
+
+					// Update transform
+					transform.Translation = position;
+					transform.Rotation = glm::eulerAngles(rotation);
+				}
 			}
 		}
 

@@ -282,11 +282,11 @@ project "Box2D"
         runtime "Release"
         optimize "on"
 
--- Bullet3 Project
+-- Bullet3 Project (actually compiles Bullet2 - the stable version)
 project "Bullet3"
     kind "StaticLib"
     language "C++"
-    cppdialect "C++17"
+    cppdialect "C++20"
     staticruntime "off"
     warnings "off"
 
@@ -299,9 +299,10 @@ project "Bullet3"
         "vendor/Bullet3/src/BulletCollision/**.h",
         "vendor/Bullet3/src/BulletDynamics/**.cpp",
         "vendor/Bullet3/src/BulletDynamics/**.h",
+        "vendor/Bullet3/src/BulletSoftBody/**.cpp",
+        "vendor/Bullet3/src/BulletSoftBody/**.h",
         "vendor/Bullet3/src/LinearMath/**.cpp",
-        "vendor/Bullet3/src/LinearMath/**.h",
-        "vendor/Bullet3/src/btBulletDynamicsCommon.h"
+        "vendor/Bullet3/src/LinearMath/**.h"
     }
 
     includedirs
@@ -311,7 +312,6 @@ project "Bullet3"
 
     defines
     {
-        "BT_USE_DOUBLE_PRECISION=0",
         "_CRT_SECURE_NO_WARNINGS"
     }
 
@@ -321,17 +321,14 @@ project "Bullet3"
     filter "configurations:Debug"
         runtime "Debug"
         symbols "on"
-        optimize "off"
 
     filter "configurations:Release"
         runtime "Release"
         optimize "speed"
-        linktimeoptimization "on"
 
     filter "configurations:Dist"
         runtime "Release"
         optimize "speed"
-        linktimeoptimization "on"
 
 group ""
 
@@ -677,12 +674,3 @@ project "Lunex-Editor"
             "{MKDIR} \"%{cfg.targetdir}/assets\"",
             "{COPYDIR} \"$(SolutionDir)Lunex-Editor/assets\" \"%{cfg.targetdir}/assets\""
         }
-
--- ============================================================================
--- SCRIPT PROJECTS (Plugins dinámicos)
--- ============================================================================
-group "Scripts"
-
--- include "Scripts/ExampleScript"  -- Comentado temporalmente si no existe
-
-group ""
