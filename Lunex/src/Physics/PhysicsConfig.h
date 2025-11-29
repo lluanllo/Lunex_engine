@@ -14,11 +14,12 @@ namespace Lunex {
         float FixedTimestep = 1.0f / 60.0f;
 
         // Maximum number of sub-steps per frame
-        // Higher values = more accurate but slower
-        int MaxSubSteps = 10;
+        // ? INCREASED: Higher values = more accurate collisions (prevents tunneling)
+        int MaxSubSteps = 20;
 
-        // Solver iterations (higher = more stable but slower)
-        int SolverIterations = 10;
+        // Solver iterations (higher = more stable constraints and contacts)
+        // ? INCREASED: Better constraint solving = more stable collisions
+        int SolverIterations = 15;
 
         // Broadphase algorithm configuration
         glm::vec3 WorldAabbMin = glm::vec3(-1000.0f, -1000.0f, -1000.0f);
@@ -26,8 +27,9 @@ namespace Lunex {
         int MaxProxies = 32766;
 
         // CCD (Continuous Collision Detection) thresholds
-        float DefaultCcdMotionThreshold = 0.0f;
-        float DefaultCcdSweptSphereRadius = 0.0f;
+        // ? ENABLED: Default CCD for fast-moving objects
+        float DefaultCcdMotionThreshold = 0.5f;   // Enable CCD for objects moving > 0.5m per frame
+        float DefaultCcdSweptSphereRadius = 0.2f; // Swept sphere radius for CCD
 
         // Debug rendering
         bool EnableDebugDraw = false;

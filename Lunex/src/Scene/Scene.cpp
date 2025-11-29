@@ -181,8 +181,12 @@ namespace Lunex {
 
 		// Physics 3D
 		{
-			// Step Bullet physics simulation
-			PhysicsCore::Get().GetWorld()->StepSimulation(ts);
+			// ✅ CRITICAL FIX: Use proper substeps and fixed timestep
+			// This prevents tunneling and ensures stable physics simulation
+			float fixedTimeStep = 1.0f / 60.0f; // 60 FPS physics
+			int maxSubSteps = 20; // Match PhysicsConfig
+			
+			PhysicsCore::Get().GetWorld()->StepSimulation(ts, maxSubSteps, fixedTimeStep);
 
 			// Retrieve transforms from Bullet
 			auto view = m_Registry.view<TransformComponent, Rigidbody3DComponent>();
@@ -373,8 +377,11 @@ namespace Lunex {
 
 		// Physics 3D
 		{
-			// Step Bullet physics simulation
-			PhysicsCore::Get().GetWorld()->StepSimulation(ts);
+			// ✅ CRITICAL FIX: Use proper substeps and fixed timestep
+			float fixedTimeStep = 1.0f / 60.0f;
+			int maxSubSteps = 20;
+			
+			PhysicsCore::Get().GetWorld()->StepSimulation(ts, maxSubSteps, fixedTimeStep);
 
 			// Retrieve transforms from Bullet
 			auto view = m_Registry.view<TransformComponent, Rigidbody3DComponent>();
@@ -747,27 +754,34 @@ namespace Lunex {
 			auto& transform = view.get<TransformComponent>(e);
 			auto& rb3d = view.get<Rigidbody3DComponent>(e);
 			
-			// Determine collider type
+			// Determine collider type and apply scale
 			ColliderComponent* collider = new ColliderComponent();
 			
 			if (m_Registry.all_of<BoxCollider3DComponent>(e)) {
 				auto& bc3d = m_Registry.get<BoxCollider3DComponent>(e);
-				collider->CreateBoxShape(bc3d.HalfExtents);
+				// ✅ Apply scale to half extents
+				glm::vec3 scaledHalfExtents = bc3d.HalfExtents * transform.Scale;
+				collider->CreateBoxShape(scaledHalfExtents);
 				collider->SetOffset(bc3d.Offset);
 			}
 			else if (m_Registry.all_of<SphereCollider3DComponent>(e)) {
 				auto& sc3d = m_Registry.get<SphereCollider3DComponent>(e);
-				collider->CreateSphereShape(sc3d.Radius);
+				// ✅ Apply uniform scale (use max component for sphere)
+				float scaledRadius = sc3d.Radius * std::max({transform.Scale.x, transform.Scale.y, transform.Scale.z});
+				collider->CreateSphereShape(scaledRadius);
 				collider->SetOffset(sc3d.Offset);
 			}
 			else if (m_Registry.all_of<CapsuleCollider3DComponent>(e)) {
 				auto& cc3d = m_Registry.get<CapsuleCollider3DComponent>(e);
-				collider->CreateCapsuleShape(cc3d.Radius, cc3d.Height);
+				// ✅ Apply scale to radius and height
+				float scaledRadius = cc3d.Radius * std::max(transform.Scale.x, transform.Scale.z);
+				float scaledHeight = cc3d.Height * transform.Scale.y;
+				collider->CreateCapsuleShape(scaledRadius, scaledHeight);
 				collider->SetOffset(cc3d.Offset);
 			}
 			else {
 				// Default box collider
-				collider->CreateBoxShape(glm::vec3(0.5f));
+				collider->CreateBoxShape(glm::vec3(0.5f) * transform.Scale);
 			}
 			
 			rb3d.RuntimeCollider = collider;

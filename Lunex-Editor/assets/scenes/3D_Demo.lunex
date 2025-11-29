@@ -1,5 +1,15 @@
 Scene: Untitled
 Entities:
+  - Entity: 9944629485272958566
+    TagComponent:
+      Tag: Sprite
+    TransformComponent:
+      Translation: [0, 0, 0]
+      Rotation: [0, 0, 0]
+      Scale: [1, 1, 1]
+    SpriteRendererComponent:
+      Color: [1, 1, 1, 1]
+      TilingFactor: 1
   - Entity: 9518115995368225141
     TagComponent:
       Tag: Cube
@@ -7,10 +17,22 @@ Entities:
       Translation: [1.0013427, 3.9123, 0]
       Rotation: [0, 0, 0]
       Scale: [1, 1, 1]
-    MeshComponent:
-      Type: 0
-      FilePath: ""
-      Color: [1, 1, 1, 1]
+    Rigidbody3DComponent:
+      BodyType: 1
+      Mass: 1
+      Friction: 0.5
+      Restitution: 0.3
+      LinearDamping: 0.04
+      AngularDamping: 0.05
+      LinearFactor: [1, 1, 1]
+      AngularFactor: [1, 1, 1]
+      UseCCD: false
+      CcdMotionThreshold: 0
+      CcdSweptSphereRadius: 0
+      IsTrigger: false
+    BoxCollider3DComponent:
+      HalfExtents: [0.5, 0.5, 0.5]
+      Offset: [0, 0, 0]
     MaterialComponent:
       Color: [1, 1, 1, 1]
       Metallic: 0
@@ -73,10 +95,22 @@ Entities:
       Translation: [2.208992, -0.50825596, -0.027296007]
       Rotation: [0, 0, 0]
       Scale: [5.3699994, 5.3699994, 5.3699994]
-    MeshComponent:
-      Type: 2
-      FilePath: ""
-      Color: [1, 1, 1, 1]
+    Rigidbody3DComponent:
+      BodyType: 0
+      Mass: 1
+      Friction: 0.5
+      Restitution: 0.3
+      LinearDamping: 0.04
+      AngularDamping: 0.05
+      LinearFactor: [1, 1, 1]
+      AngularFactor: [1, 1, 1]
+      UseCCD: false
+      CcdMotionThreshold: 0
+      CcdSweptSphereRadius: 0
+      IsTrigger: false
+    BoxCollider3DComponent:
+      HalfExtents: [0.5, 0.06, 0.5]
+      Offset: [0, 0, 0]
     MaterialComponent:
       Color: [1, 1, 1, 1]
       Metallic: 1
@@ -103,10 +137,6 @@ Entities:
       Translation: [2.5637429, -0.40621978, 0]
       Rotation: [-1.5707964, 0, 0]
       Scale: [0.00875, 0.008749541, 0.008749541]
-    MeshComponent:
-      Type: 4
-      FilePath: assets\3DAssets\tek_turret_RIG.FBX
-      Color: [0.3928264, 0.58344567, 0.6725664, 1]
     MaterialComponent:
       Color: [0.19500352, 0.605604, 0.7345133, 1]
       Metallic: 1
@@ -133,10 +163,6 @@ Entities:
       Translation: [-1.844847, -0.47767046, -0.031797796]
       Rotation: [0, 0, 0]
       Scale: [1, 1, 1]
-    MeshComponent:
-      Type: 4
-      FilePath: assets\3DAssets\tekFloor.obj
-      Color: [1, 1, 1, 1]
     MaterialComponent:
       Color: [1, 1, 1, 1]
       Metallic: 0

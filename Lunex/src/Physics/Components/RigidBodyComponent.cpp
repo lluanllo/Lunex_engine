@@ -69,12 +69,29 @@ namespace Lunex {
             m_RigidBody->setCollisionFlags(m_RigidBody->getCollisionFlags() | btCollisionObject::CF_NO_CONTACT_RESPONSE);
         }
 
-        // CCD
-        if (material.UseCCD)
+        // ========================================
+        // ? IMPROVED CCD CONFIGURATION
+        // ========================================
+        
+        // Enable CCD for dynamic objects by default
+        if (!material.IsStatic && !material.IsKinematic)
         {
-            m_RigidBody->setCcdMotionThreshold(material.CcdMotionThreshold);
-            m_RigidBody->setCcdSweptSphereRadius(material.CcdSweptSphereRadius);
+            if (material.UseCCD || material.Mass > 0.1f)
+            {
+                // Auto-enable CCD for dynamic objects to prevent tunneling
+                float threshold = material.UseCCD ? material.CcdMotionThreshold : 0.5f;
+                float radius = material.UseCCD ? material.CcdSweptSphereRadius : 0.2f;
+                
+                m_RigidBody->setCcdMotionThreshold(threshold);
+                m_RigidBody->setCcdSweptSphereRadius(radius);
+            }
         }
+        
+        // ? CRITICAL: Improve contact processing
+        m_RigidBody->setContactProcessingThreshold(0.0f); // Process all contacts
+        
+        // ? CRITICAL: Better sleep threshold (prevent premature sleeping)
+        m_RigidBody->setSleepingThresholds(0.5f, 0.5f); // Linear, Angular
 
         // Add to world
         world->AddRigidBody(m_RigidBody.get(), m_CollisionGroup, m_CollisionMask);

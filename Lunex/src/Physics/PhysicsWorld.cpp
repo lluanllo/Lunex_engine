@@ -46,9 +46,30 @@ namespace Lunex {
             m_CollisionConfiguration.get()
         );
 
-        // Configure world
+        // ========================================
+        // ? IMPROVED PHYSICS CONFIGURATION
+        // ========================================
+        
+        // Configure gravity
         m_DynamicsWorld->setGravity(PhysicsUtils::ToBullet(config.Gravity));
-        m_DynamicsWorld->getSolverInfo().m_numIterations = config.SolverIterations;
+        
+        // Configure solver (more iterations = better stability)
+        btContactSolverInfo& solverInfo = m_DynamicsWorld->getSolverInfo();
+        solverInfo.m_numIterations = config.SolverIterations;
+        solverInfo.m_solverMode = SOLVER_SIMD | SOLVER_USE_WARMSTARTING;
+        
+        // ? CRITICAL: Improve contact resolution
+        solverInfo.m_erp = 0.2f;  // Error Reduction Parameter (0.1-0.8, default 0.2)
+        solverInfo.m_erp2 = 0.2f; // ERP for split impulse
+        solverInfo.m_globalCfm = 0.0f; // Constraint Force Mixing (softness)
+        
+        // ? CRITICAL: Enable split impulse for better penetration recovery
+        solverInfo.m_splitImpulse = true;
+        solverInfo.m_splitImpulsePenetrationThreshold = -0.02f; // 2cm penetration threshold
+        
+        // ? CRITICAL: Linear and angular dampings
+        solverInfo.m_linearSlop = 0.0f; // Reduce allowed penetration
+        solverInfo.m_warmstartingFactor = 0.85f; // Warm starting for faster convergence
     }
 
     void PhysicsWorld::Cleanup()
