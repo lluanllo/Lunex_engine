@@ -1,5 +1,6 @@
 #include "stpch.h"
 #include "InputManager.h"
+#include "InputConfig.h"
 #include "Log/Log.h"
 #include "Project/Project.h"
 #include "Project/ProjectManager.h"
@@ -17,13 +18,27 @@ namespace Lunex {
 		// Register default actions
 		RegisterDefaultActions();
 
-		// Try to load from active project
-		if (!LoadBindingsFromProject()) {
-			LNX_LOG_INFO("No project bindings found, using defaults");
+		// ? Load from GLOBAL editor config (assets/InputConfigs/EditorInputBindings.yaml)
+		// This file is committed to the repository with sensible defaults
+		if (!LoadBindings()) {
+			LNX_LOG_ERROR("Failed to load global input bindings!");
+			LNX_LOG_ERROR("Make sure assets/InputConfigs/EditorInputBindings.yaml exists");
+			// Use hardcoded defaults as emergency fallback
 			ResetToDefaults();
 		}
 
 		m_Initialized = true;
+		
+		// ? DEBUG: Print all loaded bindings
+		LNX_LOG_INFO("=== LOADED INPUT BINDINGS ===");
+		for (const auto& [binding, actionName] : m_KeyMap.GetAllBindings()) {
+			LNX_LOG_INFO("  Key {0} + Mods {1} -> {2}", 
+				static_cast<int>(binding.Key), 
+				static_cast<int>(binding.Modifiers), 
+				actionName);
+		}
+		LNX_LOG_INFO("=== END BINDINGS ({0} total) ===", m_KeyMap.GetBindingCount());
+		
 		LNX_LOG_INFO("InputManager initialized with {0} actions and {1} bindings",
 			ActionRegistry::Get().GetActionCount(), m_KeyMap.GetBindingCount());
 	}
@@ -34,8 +49,8 @@ namespace Lunex {
 
 		LNX_LOG_INFO("Shutting down InputManager...");
 
-		// Save current bindings to project
-		SaveBindingsToProject();
+		// ? Save to GLOBAL config on shutdown
+		SaveBindings();
 
 		// Clear states
 		m_ActionStates.clear();
@@ -66,11 +81,15 @@ namespace Lunex {
 
 	void InputManager::OnKeyPressed(KeyCode key, uint8_t modifiers) {
 		auto actionName = m_KeyMap.GetActionFor(key, modifiers);
-		if (!actionName)
+		if (!actionName) {
 			return;
+		}
 
 		// Get or create action state
 		ActionState& state = m_ActionStates[*actionName];
+		
+		// ? Update WasPressed BEFORE setting IsPressed so JustPressed() works correctly
+		state.WasPressed = state.IsPressed;
 		state.IsPressed = true;
 
 		// Execute action
@@ -84,6 +103,9 @@ namespace Lunex {
 
 		// Update action state
 		ActionState& state = m_ActionStates[*actionName];
+		
+		// ? FIX: Update WasPressed BEFORE setting IsPressed
+		state.WasPressed = state.IsPressed;
 		state.IsPressed = false;
 
 		// Execute Released context actions
@@ -116,7 +138,7 @@ namespace Lunex {
 		m_KeyMap.Clear();
 		m_ActionStates.clear();
 
-		// Create default bindings directly in memory
+		// Camera Controls - WASD QE for movement
 		m_KeyMap.Bind(Key::W, KeyModifiers::None, "Camera.MoveForward");
 		m_KeyMap.Bind(Key::S, KeyModifiers::None, "Camera.MoveBackward");
 		m_KeyMap.Bind(Key::A, KeyModifiers::None, "Camera.MoveLeft");
@@ -124,20 +146,20 @@ namespace Lunex {
 		m_KeyMap.Bind(Key::Q, KeyModifiers::None, "Camera.MoveDown");
 		m_KeyMap.Bind(Key::E, KeyModifiers::None, "Camera.MoveUp");
 
-		// Editor Operations
+		// Editor Operations - Ctrl+Key
 		m_KeyMap.Bind(Key::S, KeyModifiers::Ctrl, "Editor.SaveScene");
 		m_KeyMap.Bind(Key::O, KeyModifiers::Ctrl, "Editor.OpenScene");
 		m_KeyMap.Bind(Key::N, KeyModifiers::Ctrl, "Editor.NewScene");
 		m_KeyMap.Bind(Key::P, KeyModifiers::Ctrl, "Editor.PlayScene");
 		m_KeyMap.Bind(Key::D, KeyModifiers::Ctrl, "Editor.DuplicateEntity");
 
-		// Gizmo Operations
-		m_KeyMap.Bind(Key::Q, KeyModifiers::None, "Gizmo.None");
-		m_KeyMap.Bind(Key::W, KeyModifiers::None, "Gizmo.Translate");
-		m_KeyMap.Bind(Key::E, KeyModifiers::None, "Gizmo.Rotate");
-		m_KeyMap.Bind(Key::R, KeyModifiers::None, "Gizmo.Scale");
+		// Gizmo Operations - Number keys ONLY (no conflicts with camera!)
+		m_KeyMap.Bind(Key::D1, KeyModifiers::None, "Gizmo.None");
+		m_KeyMap.Bind(Key::D2, KeyModifiers::None, "Gizmo.Translate");
+		m_KeyMap.Bind(Key::D3, KeyModifiers::None, "Gizmo.Rotate");
+		m_KeyMap.Bind(Key::D4, KeyModifiers::None, "Gizmo.Scale");
 
-		// Debug
+		// Debug - Function keys
 		m_KeyMap.Bind(Key::F1, KeyModifiers::None, "Debug.ToggleStats");
 		m_KeyMap.Bind(Key::F2, KeyModifiers::None, "Debug.ToggleColliders");
 		m_KeyMap.Bind(Key::GraveAccent, KeyModifiers::None, "Debug.ToggleConsole");
@@ -145,8 +167,8 @@ namespace Lunex {
 		// Preferences
 		m_KeyMap.Bind(Key::K, KeyModifiers::Ctrl, "Preferences.InputSettings");
 
-		// Save to project
-		SaveBindingsToProject();
+		// ? Save to GLOBAL config
+		SaveBindings();
 
 		LNX_LOG_INFO("Reset to {0} default bindings", m_KeyMap.GetBindingCount());
 	}
@@ -301,60 +323,42 @@ namespace Lunex {
 		LNX_LOG_INFO("Registered {0} default actions", registry.GetActionCount());
 	}
 
-	bool InputManager::LoadBindingsFromProject() {
-		auto project = ProjectManager::GetActiveProject();
-		if (!project) {
-			LNX_LOG_WARN("No active project to load bindings from");
-			return false;
+	// ? Global save/load functions (editor-wide, not per-project)
+	bool InputManager::SaveBindings() {
+		std::filesystem::path configPath = InputConfig::GetEditorConfigPath();
+		
+		// Ensure directory exists
+		std::filesystem::path configDir = configPath.parent_path();
+		if (!std::filesystem::exists(configDir)) {
+			std::filesystem::create_directories(configDir);
 		}
 
-		const auto& bindings = project->GetConfig().InputBindings;
-		if (bindings.empty()) {
-			LNX_LOG_INFO("No input bindings in project, using defaults");
+		if (InputConfig::Save(m_KeyMap, configPath)) {
+			LNX_LOG_INFO("Saved {0} global input bindings to: {1}", m_KeyMap.GetBindingCount(), configPath.string());
+			return true;
+		}
+		
+		LNX_LOG_ERROR("Failed to save global input bindings");
+		return false;
+	}
+
+	bool InputManager::LoadBindings() {
+		std::filesystem::path configPath = InputConfig::GetEditorConfigPath();
+		
+		if (!std::filesystem::exists(configPath)) {
+			LNX_LOG_WARN("No global input bindings found at: {0}", configPath.string());
 			return false;
 		}
 
 		m_KeyMap.Clear();
 		m_ActionStates.clear();
 
-		int loadedCount = 0;
-		for (const auto& entry : bindings) {
-			if (m_KeyMap.Bind(static_cast<KeyCode>(entry.KeyCode), 
-			                  static_cast<uint8_t>(entry.Modifiers), 
-			                  entry.ActionName)) {
-				loadedCount++;
-			}
-		}
-
-		LNX_LOG_INFO("Loaded {0} input bindings from project", loadedCount);
-		return true;
-	}
-
-	bool InputManager::SaveBindingsToProject() {
-		auto project = ProjectManager::GetActiveProject();
-		if (!project) {
-			LNX_LOG_WARN("No active project to save bindings to");
-			return false;
-		}
-
-		auto& projectBindings = project->GetConfig().InputBindings;
-		projectBindings.clear();
-
-		for (const auto& [binding, actionName] : m_KeyMap.GetAllBindings()) {
-			InputBindingEntry entry;
-			entry.KeyCode = static_cast<int>(binding.Key);
-			entry.Modifiers = static_cast<int>(binding.Modifiers);
-			entry.ActionName = actionName;
-			projectBindings.push_back(entry);
-		}
-
-		// Save the project to persist bindings
-		if (ProjectManager::SaveActive(project->GetProjectPath())) {
-			LNX_LOG_INFO("Saved {0} input bindings to project", projectBindings.size());
+		if (InputConfig::Load(m_KeyMap, configPath)) {
+			LNX_LOG_INFO("Loaded {0} global input bindings from: {1}", m_KeyMap.GetBindingCount(), configPath.string());
 			return true;
 		}
 
-		LNX_LOG_ERROR("Failed to save project with input bindings");
+		LNX_LOG_ERROR("Failed to load global input bindings");
 		return false;
 	}
 

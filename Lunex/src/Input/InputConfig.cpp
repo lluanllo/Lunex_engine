@@ -94,55 +94,14 @@ namespace Lunex {
 		}
 	}
 
-	bool InputConfig::CreateDefault(const std::filesystem::path& filepath) {
-		// Create directory if it doesn't exist
-		std::filesystem::path directory = filepath.parent_path();
-		if (!directory.empty() && !std::filesystem::exists(directory)) {
-			try {
-				std::filesystem::create_directories(directory);
-			}
-			catch (const std::exception& e) {
-				LNX_LOG_ERROR("Failed to create directory {0}: {1}", directory.string(), e.what());
-				return false;
-			}
-		}
-
-		KeyMap defaultMap;
-
-		// Editor Camera Controls
-		defaultMap.Bind(Key::W, KeyModifiers::None, "Camera.MoveForward");
-		defaultMap.Bind(Key::S, KeyModifiers::None, "Camera.MoveBackward");
-		defaultMap.Bind(Key::A, KeyModifiers::None, "Camera.MoveLeft");
-		defaultMap.Bind(Key::D, KeyModifiers::None, "Camera.MoveRight");
-		defaultMap.Bind(Key::Q, KeyModifiers::None, "Camera.MoveDown");
-		defaultMap.Bind(Key::E, KeyModifiers::None, "Camera.MoveUp");
-
-		// Editor Operations
-		defaultMap.Bind(Key::S, KeyModifiers::Ctrl, "Editor.SaveScene");
-		defaultMap.Bind(Key::O, KeyModifiers::Ctrl, "Editor.OpenScene");
-		defaultMap.Bind(Key::N, KeyModifiers::Ctrl, "Editor.NewScene");
-		defaultMap.Bind(Key::P, KeyModifiers::Ctrl, "Editor.PlayScene");
-		defaultMap.Bind(Key::D, KeyModifiers::Ctrl, "Editor.DuplicateEntity");
-
-		// Gizmo Operations
-		defaultMap.Bind(Key::Q, KeyModifiers::None, "Gizmo.None");
-		defaultMap.Bind(Key::W, KeyModifiers::None, "Gizmo.Translate");
-		defaultMap.Bind(Key::E, KeyModifiers::None, "Gizmo.Rotate");
-		defaultMap.Bind(Key::R, KeyModifiers::None, "Gizmo.Scale");
-
-		// Debug
-		defaultMap.Bind(Key::F1, KeyModifiers::None, "Debug.ToggleStats");
-		defaultMap.Bind(Key::F2, KeyModifiers::None, "Debug.ToggleColliders");
-		defaultMap.Bind(Key::GraveAccent, KeyModifiers::None, "Debug.ToggleConsole");
-		
-		// Preferences
-		defaultMap.Bind(Key::K, KeyModifiers::Ctrl, "Preferences.InputSettings");
-
-		return Save(defaultMap, filepath);
-	}
-
 	std::filesystem::path InputConfig::GetDefaultConfigPath() {
 		return "Config/InputBindings.yaml";
+	}
+
+	std::filesystem::path InputConfig::GetEditorConfigPath() {
+		// ? Global config in editor's assets/InputConfigs directory
+		// This persists across all projects and is version-controlled
+		return "assets/InputConfigs/EditorInputBindings.yaml";
 	}
 
 	bool InputConfig::IsCompatible(const std::filesystem::path& filepath) {

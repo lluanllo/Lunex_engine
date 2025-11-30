@@ -30,6 +30,7 @@ namespace Lunex {
 			
 		private:
 			bool OnKeyPressed(KeyPressedEvent& e);
+			bool OnKeyReleased(KeyReleasedEvent& e);
 			bool OnMouseButtonPressed(MouseButtonPressedEvent& e);
 			
 			void OnOverlayRender();

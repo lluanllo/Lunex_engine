@@ -72,17 +72,17 @@ namespace Lunex {
 		ActionRegistry& GetRegistry() { return ActionRegistry::Get(); }
 
 		/**
-		 * Load bindings from active project config
+		 * Save bindings to global editor config (assets/InputConfigs)
 		 */
-		bool LoadBindingsFromProject();
+		bool SaveBindings();
 
 		/**
-		 * Save bindings to active project config
+		 * Load bindings from global editor config (assets/InputConfigs)
 		 */
-		bool SaveBindingsToProject();
+		bool LoadBindings();
 
 		/**
-		 * Reset to default bindings
+		 * Reset to default bindings (uses ResetToDefaults then saves)
 		 */
 		void ResetToDefaults();
 

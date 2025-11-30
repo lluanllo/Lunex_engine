@@ -26,15 +26,17 @@ namespace Lunex {
 		}
 
 		/**
-		 * Register a new action
+		 * Register a new action or override existing one
 		 * @param name Unique action identifier
 		 * @param action Action instance (takes ownership)
-		 * @return true if registered, false if name already exists
+		 * @return true if registered/overridden successfully
 		 */
 		bool Register(const std::string& name, Ref<Action> action) {
-			if (m_Actions.find(name) != m_Actions.end()) {
-				LNX_LOG_WARN("Action '{0}' already registered", name);
-				return false;
+			auto it = m_Actions.find(name);
+			if (it != m_Actions.end()) {
+				LNX_LOG_INFO("Overriding action: {0}", name);
+				it->second = action;  // Replace existing action
+				return true;
 			}
 
 			m_Actions[name] = action;

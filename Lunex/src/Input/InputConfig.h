@@ -1,54 +1,41 @@
 #pragma once
 
 #include "Core/Core.h"
-#include "KeyBinding.h"
 #include "KeyMap.h"
 #include <filesystem>
 
 namespace Lunex {
 
 	/**
-	 * InputConfig - Serialization for key bindings
+	 * InputConfig - Serialization for input bindings
 	 * 
-	 * Saves/loads user key bindings to/from YAML files.
-	 * 
-	 * File format example:
-	 * ```yaml
-	 * version: 1
-	 * profile: "Default"
-	 * bindings:
-	 *   - key: W
-	 *     modifiers: 0
-	 *     action: MoveForward
-	 *   - key: S
-	 *     modifiers: Ctrl
-	 *     action: SaveScene
-	 * ```
+	 * Saves/loads key bindings to/from YAML files.
+	 * Supports versioning and validation.
 	 */
 	class InputConfig {
 	public:
 		/**
-		 * Save bindings to YAML file
+		 * Save key bindings to file
 		 */
 		static bool Save(const KeyMap& keyMap, const std::filesystem::path& filepath);
 
 		/**
-		 * Load bindings from YAML file
+		 * Load key bindings from file
 		 */
 		static bool Load(KeyMap& keyMap, const std::filesystem::path& filepath);
 
 		/**
-		 * Create default bindings file
-		 */
-		static bool CreateDefault(const std::filesystem::path& filepath);
-
-		/**
-		 * Get default config file path
+		 * Get default config path (relative to project) - DEPRECATED
 		 */
 		static std::filesystem::path GetDefaultConfigPath();
 
 		/**
-		 * Validate config file version
+		 * Get global editor config path (in editor assets/InputConfigs)
+		 */
+		static std::filesystem::path GetEditorConfigPath();
+
+		/**
+		 * Check if config file is compatible
 		 */
 		static bool IsCompatible(const std::filesystem::path& filepath);
 	};

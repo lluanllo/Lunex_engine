@@ -4,6 +4,7 @@
 #include "Core/Input.h"
 #include "Core/KeyCodes.h"
 #include "Core/MouseButtonCodes.h"
+#include "Input/InputManager.h"
 
 #include <glfw/glfw3.h>
 
@@ -55,6 +56,10 @@ namespace Lunex {
 	}
 	
 	void EditorCamera::OnUpdate(Timestep ts) {
+		// Use InputManager for better remappable controls
+		auto& inputMgr = InputManager::Get();
+		
+		// Alt + Mouse for camera controls (original behavior)
 		if (Input::IsKeyPressed(Key::LeftAlt)) {
 			const glm::vec2& mouse{ Input::GetMouseX(), Input::GetMouseY() };
 			glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.003f;
@@ -66,6 +71,28 @@ namespace Lunex {
 				MouseRotate(delta);
 			else if (Input::IsMouseButtonPressed(Mouse::ButtonRight))
 				MouseZoom(delta.y);
+		}
+		
+		// NEW: WASDQE for camera movement (remappable through InputManager)
+		float moveSpeed = 5.0f * ts; // 5 units per second
+		
+		if (inputMgr.IsActionPressed("Camera.MoveForward")) {
+			m_FocalPoint += GetForwardDirection() * moveSpeed;
+		}
+		if (inputMgr.IsActionPressed("Camera.MoveBackward")) {
+			m_FocalPoint -= GetForwardDirection() * moveSpeed;
+		}
+		if (inputMgr.IsActionPressed("Camera.MoveLeft")) {
+			m_FocalPoint -= GetRightDirection() * moveSpeed;
+		}
+		if (inputMgr.IsActionPressed("Camera.MoveRight")) {
+			m_FocalPoint += GetRightDirection() * moveSpeed;
+		}
+		if (inputMgr.IsActionPressed("Camera.MoveUp")) {
+			m_FocalPoint += GetUpDirection() * moveSpeed;
+		}
+		if (inputMgr.IsActionPressed("Camera.MoveDown")) {
+			m_FocalPoint -= GetUpDirection() * moveSpeed;
 		}
 		
 		UpdateView();

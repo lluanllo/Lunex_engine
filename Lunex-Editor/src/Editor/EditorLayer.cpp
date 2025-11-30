@@ -15,7 +15,7 @@
 
 #include "Math/Math.h"
 
-// ✅ NEW: Input System
+// ✅ Input System
 #include "Input/InputManager.h"
 
 namespace Lunex {
@@ -281,6 +281,17 @@ namespace Lunex {
 			"Toggle stats panel"
 		));
 		
+		registry.Register("Debug.ToggleColliders", CreateRef<FunctionAction>(
+			"Debug.ToggleColliders", ActionContext::Pressed,
+			[this](const ActionState&) { 
+				// Toggle both 2D and 3D colliders
+				bool current = m_SettingsPanel.GetShowPhysicsColliders();
+				m_SettingsPanel.SetShowPhysicsColliders(!current);
+				m_SettingsPanel.SetShowPhysics3DColliders(!current);
+			},
+			"Toggle collider visualization"
+		));
+		
 		registry.Register("Debug.ToggleConsole", CreateRef<FunctionAction>(
 			"Debug.ToggleConsole", ActionContext::Pressed,
 			[this](const ActionState&) { m_ConsolePanel.Toggle(); },
@@ -456,6 +467,7 @@ namespace Lunex {
 
 		EventDispatcher dispatcher(e);
 		dispatcher.Dispatch<KeyPressedEvent>(LNX_BIND_EVENT_FN(EditorLayer::OnKeyPressed));
+		dispatcher.Dispatch<KeyReleasedEvent>(LNX_BIND_EVENT_FN(EditorLayer::OnKeyReleased));
 		dispatcher.Dispatch<MouseButtonPressedEvent>(LNX_BIND_EVENT_FN(EditorLayer::OnMouseButtonPressed));
 	}
 
@@ -463,7 +475,7 @@ namespace Lunex {
 		if (e.GetRepeatCount() > 0)
 			return false;
 
-		// ✅ NEW: Convert to KeyModifiers format
+		// Convert to KeyModifiers format
 		uint8_t modifiers = KeyModifiers::None;
 		if (Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl))
 			modifiers |= KeyModifiers::Ctrl;
@@ -472,8 +484,24 @@ namespace Lunex {
 		if (Input::IsKeyPressed(Key::LeftAlt) || Input::IsKeyPressed(Key::RightAlt))
 			modifiers |= KeyModifiers::Alt;
 
-		// ✅ NEW: Process through InputManager
+		// Process through InputManager
 		InputManager::Get().OnKeyPressed(static_cast<KeyCode>(e.GetKeyCode()), modifiers);
+
+		return false;
+	}
+	
+	bool EditorLayer::OnKeyReleased(KeyReleasedEvent& e) {
+		// Convert to KeyModifiers format
+		uint8_t modifiers = KeyModifiers::None;
+		if (Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl))
+			modifiers |= KeyModifiers::Ctrl;
+		if (Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift))
+			modifiers |= KeyModifiers::Shift;
+		if (Input::IsKeyPressed(Key::LeftAlt) || Input::IsKeyPressed(Key::RightAlt))
+			modifiers |= KeyModifiers::Alt;
+
+		// Process through InputManager
+		InputManager::Get().OnKeyReleased(static_cast<KeyCode>(e.GetKeyCode()), modifiers);
 
 		return false;
 	}
@@ -588,7 +616,7 @@ namespace Lunex {
 			}
 		}
 
-		// ✅ Draw selected entity outline - FUNCIONA PARA 2D Y 3D
+		// Draw selected entity outline
 		if (Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity()) {
 			const TransformComponent& transform = selectedEntity.GetComponent<TransformComponent>();
 			Renderer2D::DrawRect(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
@@ -769,6 +797,7 @@ namespace Lunex {
 
 		// Update Content Browser to show project assets
 		m_ContentBrowserPanel.SetRootDirectory(project->GetAssetDirectory());
+
 
 		// Load start scene if specified
 		auto& config = project->GetConfig();

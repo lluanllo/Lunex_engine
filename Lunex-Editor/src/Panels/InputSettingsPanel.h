@@ -11,10 +11,10 @@ namespace Lunex {
 	 * InputSettingsPanel - ImGui panel for remapping input bindings
 	 * 
 	 * Features:
-	 * - Visual key binding list
-	 * - Live remapping with key capture
+	 * - Visual key binding list with inline remapping
+	 * - Click on key to remap (shows "..." during capture)
 	 * - Search/filter actions
-	 * - Save/Load profiles
+	 * - Save/Load bindings
 	 * - Reset to defaults
 	 */
 	class InputSettingsPanel {
@@ -31,12 +31,11 @@ namespace Lunex {
 
 	private:
 		void RenderActionList();
-		void RenderRemapDialog();
 		void RenderConfirmDialog();
 
 		void BeginRemap(const std::string& actionName);
 		void CancelRemap();
-		void ApplyRemap();
+		void ApplyRemap(const std::string& actionName, KeyCode key, uint8_t modifiers);
 
 		void ResetToDefaults();
 		void SaveBindings();
@@ -47,22 +46,15 @@ namespace Lunex {
 	private:
 		bool m_Open = false;
 		
-		// Remap state
+		// Remap state (inline capture)
 		bool m_IsRemapping = false;
 		std::string m_RemapActionName;
-		KeyCode m_CapturedKey = Key::Space;
-		uint8_t m_CapturedModifiers = KeyModifiers::None;
 
 		// Confirm dialog
 		bool m_ShowConfirmReset = false;
 
 		// Search filter
 		char m_SearchBuffer[256] = "";
-
-		// UI constants
-		static constexpr float ACTION_COLUMN_WIDTH = 250.0f;
-		static constexpr float BINDING_COLUMN_WIDTH = 150.0f;
-		static constexpr float BUTTON_WIDTH = 80.0f;
 	};
 
 } // namespace Lunex
