@@ -166,4 +166,5 @@ Entities:
 		
 		LNX_LOG_INFO("Default scene created: {0}", scenePath.string());
 	}
-}
+
+} // namespace Lunex

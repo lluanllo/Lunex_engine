@@ -15,6 +15,9 @@
 
 #include "Math/Math.h"
 
+// ✅ Input System
+#include "Input/InputManager.h"
+
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
 
@@ -28,6 +31,10 @@ namespace Lunex {
 
 	void EditorLayer::OnAttach() {
 		LNX_PROFILE_FUNCTION();
+		
+		// ✅ NEW: Initialize Input System
+		InputManager::Get().Initialize();
+		RegisterEditorActions();
 		
 		// Cargar iconos de toolbar con logs de depuración
 		LNX_LOG_INFO("Loading toolbar icons...");
@@ -86,6 +93,8 @@ namespace Lunex {
 		m_MenuBarPanel.SetOnSaveSceneAsCallback([this]() { SaveSceneAs(); });
 		
 		m_MenuBarPanel.SetOnExitCallback([this]() { Application::Get().Close(); });
+		
+		m_MenuBarPanel.SetOnOpenInputSettingsCallback([this]() { m_InputSettingsPanel.Open(); });
 
 		// Configure project creation dialog
 		m_ProjectCreationDialog.SetOnCreateCallback([this](const std::string& name, const std::filesystem::path& location) {
@@ -193,10 +202,117 @@ namespace Lunex {
 
 	void EditorLayer::OnDetach() {
 		LNX_PROFILE_FUNCTION();
+		
+		// ✅ NEW: Shutdown Input System
+		InputManager::Get().Shutdown();
+	}
+	
+	// ========================================
+	// REGISTER EDITOR ACTIONS
+	// ========================================
+	
+	void EditorLayer::RegisterEditorActions() {
+		LNX_LOG_INFO("Registering editor actions...");
+		
+		auto& registry = ActionRegistry::Get();
+		
+		// Override default actions with actual editor functionality
+		
+		// Scene operations
+		registry.Register("Editor.SaveScene", CreateRef<FunctionAction>(
+			"Editor.SaveScene", ActionContext::Pressed,
+			[this](const ActionState&) { SaveScene(); },
+			"Save current scene", true
+		));
+		
+		registry.Register("Editor.OpenScene", CreateRef<FunctionAction>(
+			"Editor.OpenScene", ActionContext::Pressed,
+			[this](const ActionState&) { OpenScene(); },
+			"Open scene", true
+		));
+		
+		registry.Register("Editor.NewScene", CreateRef<FunctionAction>(
+			"Editor.NewScene", ActionContext::Pressed,
+			[this](const ActionState&) { NewScene(); },
+			"Create new scene", true
+		));
+		
+		registry.Register("Editor.PlayScene", CreateRef<FunctionAction>(
+			"Editor.PlayScene", ActionContext::Pressed,
+			[this](const ActionState&) { OnScenePlay(); },
+			"Play scene", true
+		));
+		
+		registry.Register("Editor.DuplicateEntity", CreateRef<FunctionAction>(
+			"Editor.DuplicateEntity", ActionContext::Pressed,
+			[this](const ActionState&) { OnDuplicateEntity(); },
+			"Duplicate selected entity", true
+		));
+		
+		// Gizmo operations
+		registry.Register("Gizmo.None", CreateRef<FunctionAction>(
+			"Gizmo.None", ActionContext::Pressed,
+			[this](const ActionState&) { if (!ImGuizmo::IsUsing()) m_GizmoType = -1; },
+			"Deselect gizmo", false
+		));
+		
+		registry.Register("Gizmo.Translate", CreateRef<FunctionAction>(
+			"Gizmo.Translate", ActionContext::Pressed,
+			[this](const ActionState&) { if (!ImGuizmo::IsUsing()) m_GizmoType = ImGuizmo::OPERATION::TRANSLATE; },
+			"Translate gizmo", false
+		));
+		
+		registry.Register("Gizmo.Rotate", CreateRef<FunctionAction>(
+			"Gizmo.Rotate", ActionContext::Pressed,
+			[this](const ActionState&) { if (!ImGuizmo::IsUsing()) m_GizmoType = ImGuizmo::OPERATION::ROTATE; },
+			"Rotate gizmo", false
+		));
+		
+		registry.Register("Gizmo.Scale", CreateRef<FunctionAction>(
+			"Gizmo.Scale", ActionContext::Pressed,
+			[this](const ActionState&) { if (!ImGuizmo::IsUsing()) m_GizmoType = ImGuizmo::OPERATION::SCALE; },
+			"Scale gizmo", false
+		));
+		
+		// Debug commands
+		registry.Register("Debug.ToggleStats", CreateRef<FunctionAction>(
+			"Debug.ToggleStats", ActionContext::Pressed,
+			[this](const ActionState&) { m_StatsPanel.Toggle(); },
+			"Toggle stats panel"
+		));
+		
+		registry.Register("Debug.ToggleColliders", CreateRef<FunctionAction>(
+			"Debug.ToggleColliders", ActionContext::Pressed,
+			[this](const ActionState&) { 
+				// Toggle both 2D and 3D colliders
+				bool current = m_SettingsPanel.GetShowPhysicsColliders();
+				m_SettingsPanel.SetShowPhysicsColliders(!current);
+				m_SettingsPanel.SetShowPhysics3DColliders(!current);
+			},
+			"Toggle collider visualization"
+		));
+		
+		registry.Register("Debug.ToggleConsole", CreateRef<FunctionAction>(
+			"Debug.ToggleConsole", ActionContext::Pressed,
+			[this](const ActionState&) { m_ConsolePanel.Toggle(); },
+			"Toggle console panel"
+		));
+		
+		// Preferences
+		registry.Register("Preferences.InputSettings", CreateRef<FunctionAction>(
+			"Preferences.InputSettings", ActionContext::Pressed,
+			[this](const ActionState&) { m_InputSettingsPanel.Open(); },
+			"Open input settings", true
+		));
+		
+		LNX_LOG_INFO("Registered {0} editor actions", registry.GetActionCount());
 	}
 
 	void EditorLayer::OnUpdate(Lunex::Timestep ts) {
 		LNX_PROFILE_FUNCTION();
+		
+		// ✅ NEW: Update Input System
+		InputManager::Get().Update(ts);
 
 		// Get viewport size from ViewportPanel
 		m_ViewportSize = m_ViewportPanel.GetViewportSize();
@@ -323,6 +439,7 @@ namespace Lunex {
 		m_StatsPanel.OnImGuiRender();
 		m_SettingsPanel.OnImGuiRender();
 		m_ConsolePanel.OnImGuiRender();
+		m_InputSettingsPanel.OnImGuiRender(); // ✅ NEW: Input settings panel
 
 		// Render dialogs (on top)
 		m_ProjectCreationDialog.OnImGuiRender();
@@ -350,6 +467,7 @@ namespace Lunex {
 
 		EventDispatcher dispatcher(e);
 		dispatcher.Dispatch<KeyPressedEvent>(LNX_BIND_EVENT_FN(EditorLayer::OnKeyPressed));
+		dispatcher.Dispatch<KeyReleasedEvent>(LNX_BIND_EVENT_FN(EditorLayer::OnKeyReleased));
 		dispatcher.Dispatch<MouseButtonPressedEvent>(LNX_BIND_EVENT_FN(EditorLayer::OnMouseButtonPressed));
 	}
 
@@ -357,63 +475,33 @@ namespace Lunex {
 		if (e.GetRepeatCount() > 0)
 			return false;
 
-		bool control = Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl);
-		bool shift = Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift);
-		bool alt = Input::IsKeyPressed(Key::LeftAlt) || Input::IsKeyPressed(Key::RightAlt);
+		// Convert to KeyModifiers format
+		uint8_t modifiers = KeyModifiers::None;
+		if (Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl))
+			modifiers |= KeyModifiers::Ctrl;
+		if (Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift))
+			modifiers |= KeyModifiers::Shift;
+		if (Input::IsKeyPressed(Key::LeftAlt) || Input::IsKeyPressed(Key::RightAlt))
+			modifiers |= KeyModifiers::Alt;
 
-		switch (e.GetKeyCode()) {
-		// Project shortcuts
-		case Key::N: {
-			if (control && shift)
-				NewProject();
-			else if (control)
-				NewScene();
-			break;
-		}
-		case Key::O: {
-			if (control && shift)
-				OpenProject();
-			else if (control)
-				OpenScene();
-			break;
-		}
-		case Key::S: {
-			if (control && shift)
-				SaveProject();
-			else if (control && alt)
-				SaveSceneAs();
-			else if (control)
-				SaveScene();
-			break;
-		}
-		// Entity operations
-		case Key::D: {
-			if (control)
-				OnDuplicateEntity();
-			break;
-		}
-		// Gizmo modes
-		case Key::Q: {
-			if (!ImGuizmo::IsUsing())
-				m_GizmoType = -1;
-			break;
-		}
-		case Key::W: {
-			if (!ImGuizmo::IsUsing())
-				m_GizmoType = ImGuizmo::OPERATION::TRANSLATE;
-			break;
-		}
-		case Key::E: {
-			if (!ImGuizmo::IsUsing())
-				m_GizmoType = ImGuizmo::OPERATION::ROTATE;
-			break;
-		}
-		case Key::R: {
-			if (!ImGuizmo::IsUsing())
-				m_GizmoType = ImGuizmo::OPERATION::SCALE;
-			break;
-		}
-		}
+		// Process through InputManager
+		InputManager::Get().OnKeyPressed(static_cast<KeyCode>(e.GetKeyCode()), modifiers);
+
+		return false;
+	}
+	
+	bool EditorLayer::OnKeyReleased(KeyReleasedEvent& e) {
+		// Convert to KeyModifiers format
+		uint8_t modifiers = KeyModifiers::None;
+		if (Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl))
+			modifiers |= KeyModifiers::Ctrl;
+		if (Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift))
+			modifiers |= KeyModifiers::Shift;
+		if (Input::IsKeyPressed(Key::LeftAlt) || Input::IsKeyPressed(Key::RightAlt))
+			modifiers |= KeyModifiers::Alt;
+
+		// Process through InputManager
+		InputManager::Get().OnKeyReleased(static_cast<KeyCode>(e.GetKeyCode()), modifiers);
 
 		return false;
 	}
@@ -528,7 +616,7 @@ namespace Lunex {
 			}
 		}
 
-		// ✅ Draw selected entity outline - FUNCIONA PARA 2D Y 3D
+		// Draw selected entity outline
 		if (Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity()) {
 			const TransformComponent& transform = selectedEntity.GetComponent<TransformComponent>();
 			Renderer2D::DrawRect(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
@@ -580,7 +668,7 @@ namespace Lunex {
 	}
 
 	void EditorLayer::SaveSceneAs() {
-		std::string filepath = FileDialogs::SaveFile("Luenx Scene (*.lunex)\0*.lunex\0");
+		std::string filepath = FileDialogs::SaveFile("Lunex Scene (*.lunex)\0*.lunex\0");
 		if (!filepath.empty()) {
 			SerializeScene(m_ActiveScene, filepath);
 			m_EditorScenePath = filepath;
@@ -639,7 +727,7 @@ namespace Lunex {
 
 	// ============================================================================
 	// PROJECT MANAGEMENT
-	// ============================================================================
+	// ===========================================================================
 
 	void EditorLayer::NewProject() {
 		// Open project creation dialog
@@ -709,6 +797,7 @@ namespace Lunex {
 
 		// Update Content Browser to show project assets
 		m_ContentBrowserPanel.SetRootDirectory(project->GetAssetDirectory());
+
 
 		// Load start scene if specified
 		auto& config = project->GetConfig();
@@ -800,4 +889,5 @@ namespace Lunex {
 			m_MenuBarPanel.SetProjectName("No Project");
 		}
 	}
+
 }

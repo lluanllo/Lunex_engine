@@ -1,0 +1,60 @@
+version: 1
+profile: Default
+bindings:
+  - key: 83
+    modifiers: 0
+    action: Camera.MoveBackward
+  - key: 65
+    modifiers: 0
+    action: Camera.MoveLeft
+  - key: 81
+    modifiers: 0
+    action: Camera.MoveDown
+  - key: 49
+    modifiers: 0
+    action: Gizmo.None
+  - key: 68
+    modifiers: 0
+    action: Camera.MoveRight
+  - key: 69
+    modifiers: 0
+    action: Camera.MoveUp
+  - key: 50
+    modifiers: 0
+    action: Gizmo.Translate
+  - key: 68
+    modifiers: 1
+    action: Editor.DuplicateEntity
+  - key: 51
+    modifiers: 0
+    action: Gizmo.Rotate
+  - key: 52
+    modifiers: 0
+    action: Gizmo.Scale
+  - key: 83
+    modifiers: 1
+    action: Editor.SaveScene
+  - key: 79
+    modifiers: 1
+    action: Editor.OpenScene
+  - key: 78
+    modifiers: 1
+    action: Editor.NewScene
+  - key: 80
+    modifiers: 1
+    action: Editor.PlayScene
+  - key: 290
+    modifiers: 0
+    action: Debug.ToggleStats
+  - key: 291
+    modifiers: 0
+    action: Debug.ToggleColliders
+  - key: 96
+    modifiers: 0
+    action: Debug.ToggleConsole
+  - key: 75
+    modifiers: 1
+    action: Preferences.InputSettings
+  - key: 87
+    modifiers: 0
+    action: Camera.MoveForward

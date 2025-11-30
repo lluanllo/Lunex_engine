@@ -5,7 +5,10 @@
 
 namespace Lunex {
 	void StatsPanel::OnImGuiRender() {
-		ImGui::Begin("Stats");
+		if (!m_IsOpen)
+			return;
+			
+		ImGui::Begin("Stats", &m_IsOpen);
 
 		std::string name = "None";
 		if (m_HoveredEntity)
