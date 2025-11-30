@@ -101,6 +101,11 @@ namespace Lunex {
 			void RegisterCommand(const std::string& name, const std::string& description, const std::string& usage, CommandCallback callback);
 			void ExecuteCommand(const std::string& commandLine);
 			
+			// Visibility
+			void Toggle() { m_IsOpen = !m_IsOpen; }
+			bool IsOpen() const { return m_IsOpen; }
+			void SetOpen(bool open) { m_IsOpen = open; }
+			
 			// Static instance for global access
 			static ConsolePanel& Get();
 			
@@ -120,6 +125,7 @@ namespace Lunex {
 			// UI state
 			bool m_ReclaimFocus = false;
 			bool m_ShowCommandHelp = false;
+			bool m_IsOpen = true;
 			
 			void DrawTabBar();
 			void DrawToolbar();

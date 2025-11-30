@@ -11,6 +11,7 @@
 #include "../Panels/ConsolePanel.h"
 #include "../Panels/MenuBarPanel.h"
 #include "../Panels/ProjectCreationDialog.h"
+#include "../Panels/InputSettingsPanel.h"
 
 #include "Renderer/EditorCamera.h"
 
@@ -32,6 +33,11 @@ namespace Lunex {
 			bool OnMouseButtonPressed(MouseButtonPressedEvent& e);
 			
 			void OnOverlayRender();
+			
+			// ========================================
+			// Input Actions Registration
+			// ========================================
+			void RegisterEditorActions();
 			
 			// Project management
 			void NewProject();
@@ -101,6 +107,7 @@ namespace Lunex {
 			ConsolePanel m_ConsolePanel;
 			MenuBarPanel m_MenuBarPanel;
 			ProjectCreationDialog m_ProjectCreationDialog;
+			InputSettingsPanel m_InputSettingsPanel;
 			
 			// Editor resources
 			Ref<Texture2D> m_IconPlay, m_IconSimulate, m_IconStop;
