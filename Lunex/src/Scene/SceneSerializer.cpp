@@ -239,6 +239,76 @@ namespace Lunex {
 			out << YAML::EndMap; // CircleCollider2DComponent
 		}
 
+		// ========================================
+		// 3D PHYSICS COMPONENTS
+		// ========================================
+
+		if (entity.HasComponent<Rigidbody3DComponent>()) {
+			out << YAML::Key << "Rigidbody3DComponent";
+			out << YAML::BeginMap; // Rigidbody3DComponent
+			
+			auto& rb3d = entity.GetComponent<Rigidbody3DComponent>();
+			out << YAML::Key << "BodyType" << YAML::Value << (int)rb3d.Type;
+			out << YAML::Key << "Mass" << YAML::Value << rb3d.Mass;
+			out << YAML::Key << "Friction" << YAML::Value << rb3d.Friction;
+			out << YAML::Key << "Restitution" << YAML::Value << rb3d.Restitution;
+			out << YAML::Key << "LinearDamping" << YAML::Value << rb3d.LinearDamping;
+			out << YAML::Key << "AngularDamping" << YAML::Value << rb3d.AngularDamping;
+			out << YAML::Key << "LinearFactor" << YAML::Value << rb3d.LinearFactor;
+			out << YAML::Key << "AngularFactor" << YAML::Value << rb3d.AngularFactor;
+			out << YAML::Key << "UseCCD" << YAML::Value << rb3d.UseCCD;
+			out << YAML::Key << "CcdMotionThreshold" << YAML::Value << rb3d.CcdMotionThreshold;
+			out << YAML::Key << "CcdSweptSphereRadius" << YAML::Value << rb3d.CcdSweptSphereRadius;
+			out << YAML::Key << "IsTrigger" << YAML::Value << rb3d.IsTrigger;
+			
+			out << YAML::EndMap; // Rigidbody3DComponent
+		}
+
+		if (entity.HasComponent<BoxCollider3DComponent>()) {
+			out << YAML::Key << "BoxCollider3DComponent";
+			out << YAML::BeginMap; // BoxCollider3DComponent
+			
+			auto& bc3d = entity.GetComponent<BoxCollider3DComponent>();
+			out << YAML::Key << "HalfExtents" << YAML::Value << bc3d.HalfExtents;
+			out << YAML::Key << "Offset" << YAML::Value << bc3d.Offset;
+			
+			out << YAML::EndMap; // BoxCollider3DComponent
+		}
+
+		if (entity.HasComponent<SphereCollider3DComponent>()) {
+			out << YAML::Key << "SphereCollider3DComponent";
+			out << YAML::BeginMap; // SphereCollider3DComponent
+			
+			auto& sc3d = entity.GetComponent<SphereCollider3DComponent>();
+			out << YAML::Key << "Radius" << YAML::Value << sc3d.Radius;
+			out << YAML::Key << "Offset" << YAML::Value << sc3d.Offset;
+			
+			out << YAML::EndMap; // SphereCollider3DComponent
+		}
+
+		if (entity.HasComponent<CapsuleCollider3DComponent>()) {
+			out << YAML::Key << "CapsuleCollider3DComponent";
+			out << YAML::BeginMap; // CapsuleCollider3DComponent
+			
+			auto& cc3d = entity.GetComponent<CapsuleCollider3DComponent>();
+			out << YAML::Key << "Radius" << YAML::Value << cc3d.Radius;
+			out << YAML::Key << "Height" << YAML::Value << cc3d.Height;
+			out << YAML::Key << "Offset" << YAML::Value << cc3d.Offset;
+			
+			out << YAML::EndMap; // CapsuleCollider3DComponent
+		}
+
+		if (entity.HasComponent<MeshCollider3DComponent>()) {
+			out << YAML::Key << "MeshCollider3DComponent";
+			out << YAML::BeginMap; // MeshCollider3DComponent
+			
+			auto& mc3d = entity.GetComponent<MeshCollider3DComponent>();
+			out << YAML::Key << "Type" << YAML::Value << (int)mc3d.Type;
+			out << YAML::Key << "UseEntityMesh" << YAML::Value << mc3d.UseEntityMesh;
+			
+			out << YAML::EndMap; // MeshCollider3DComponent
+		}
+
 		if (entity.HasComponent<MeshComponent>()) {
 			out << YAML::Key << "MeshComponent";
 			out << YAML::BeginMap; // MeshComponent
@@ -470,6 +540,56 @@ namespace Lunex {
 					cc2d.Friction = circleCollider2DComponent["Friction"].as<float>();
 					cc2d.Restitution = circleCollider2DComponent["Restitution"].as<float>();
 					cc2d.RestitutionThreshold = circleCollider2DComponent["RestitutionThreshold"].as<float>();
+				}
+
+				// ========================================
+				// 3D PHYSICS COMPONENTS
+				// ========================================
+
+				auto rigidbody3DComponent = entity["Rigidbody3DComponent"];
+				if (rigidbody3DComponent) {
+					auto& rb3d = deserializedEntity.AddComponent<Rigidbody3DComponent>();
+					rb3d.Type = (Rigidbody3DComponent::BodyType)rigidbody3DComponent["BodyType"].as<int>();
+					rb3d.Mass = rigidbody3DComponent["Mass"].as<float>();
+					rb3d.Friction = rigidbody3DComponent["Friction"].as<float>();
+					rb3d.Restitution = rigidbody3DComponent["Restitution"].as<float>();
+					rb3d.LinearDamping = rigidbody3DComponent["LinearDamping"].as<float>();
+					rb3d.AngularDamping = rigidbody3DComponent["AngularDamping"].as<float>();
+					rb3d.LinearFactor = rigidbody3DComponent["LinearFactor"].as<glm::vec3>();
+					rb3d.AngularFactor = rigidbody3DComponent["AngularFactor"].as<glm::vec3>();
+					rb3d.UseCCD = rigidbody3DComponent["UseCCD"].as<bool>();
+					rb3d.CcdMotionThreshold = rigidbody3DComponent["CcdMotionThreshold"].as<float>();
+					rb3d.CcdSweptSphereRadius = rigidbody3DComponent["CcdSweptSphereRadius"].as<float>();
+					rb3d.IsTrigger = rigidbody3DComponent["IsTrigger"].as<bool>();
+				}
+
+				auto boxCollider3DComponent = entity["BoxCollider3DComponent"];
+				if (boxCollider3DComponent) {
+					auto& bc3d = deserializedEntity.AddComponent<BoxCollider3DComponent>();
+					bc3d.HalfExtents = boxCollider3DComponent["HalfExtents"].as<glm::vec3>();
+					bc3d.Offset = boxCollider3DComponent["Offset"].as<glm::vec3>();
+				}
+
+				auto sphereCollider3DComponent = entity["SphereCollider3DComponent"];
+				if (sphereCollider3DComponent) {
+					auto& sc3d = deserializedEntity.AddComponent<SphereCollider3DComponent>();
+					sc3d.Radius = sphereCollider3DComponent["Radius"].as<float>();
+					sc3d.Offset = sphereCollider3DComponent["Offset"].as<glm::vec3>();
+				}
+
+				auto capsuleCollider3DComponent = entity["CapsuleCollider3DComponent"];
+				if (capsuleCollider3DComponent) {
+					auto& cc3d = deserializedEntity.AddComponent<CapsuleCollider3DComponent>();
+					cc3d.Radius = capsuleCollider3DComponent["Radius"].as<float>();
+					cc3d.Height = capsuleCollider3DComponent["Height"].as<float>();
+					cc3d.Offset = capsuleCollider3DComponent["Offset"].as<glm::vec3>();
+				}
+
+				auto meshCollider3DComponent = entity["MeshCollider3DComponent"];
+				if (meshCollider3DComponent) {
+					auto& mc3d = deserializedEntity.AddComponent<MeshCollider3DComponent>();
+					mc3d.Type = (MeshCollider3DComponent::CollisionType)meshCollider3DComponent["Type"].as<int>();
+					mc3d.UseEntityMesh = meshCollider3DComponent["UseEntityMesh"].as<bool>();
 				}
 
 				auto meshComponent = entity["MeshComponent"];

@@ -47,6 +47,9 @@ namespace Lunex {
 	}
 	
 	void ContentBrowserPanel::OnImGuiRender() {
+		// ===== KEYBOARD SHORTCUTS =====
+		HandleKeyboardShortcuts();
+		
 		// ===== ESTILO PROFESIONAL OSCURO (como Unreal Engine) =====
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.12f, 0.13f, 1.0f));        // Fondo principal
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.12f, 0.13f, 1.0f));         // Child backgrounds
@@ -1495,5 +1498,283 @@ extern "C"
 				AddToSelection(items[i]);
 			}
 		}
+	}
+	
+	// ============================================================================
+	// KEYBOARD SHORTCUTS HANDLER
+	// ============================================================================
+	
+	void ContentBrowserPanel::HandleKeyboardShortcuts() {
+		ImGuiIO& io = ImGui::GetIO();
+		
+		// Delete key - Delete selected items
+		if (ImGui::IsKeyPressed(ImGuiKey_Delete) && !m_SelectedItems.empty()) {
+			for (const auto& selectedPath : m_SelectedItems) {
+				DeleteItem(std::filesystem::path(selectedPath));
+			}
+			ClearSelection();
+		}
+		
+		// Ctrl+C - Copy
+		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C) && !m_SelectedItems.empty()) {
+			CopySelectedItems();
+		}
+		
+		// Ctrl+X - Cut
+		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_X) && !m_SelectedItems.empty()) {
+			CutSelectedItems();
+		}
+		
+		// Ctrl+V - Paste
+		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V) && CanPaste()) {
+			PasteItems();
+		}
+		
+		// Ctrl+A - Select All
+		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A)) {
+			SelectAll();
+		}
+		
+		// Ctrl+D - Duplicate
+		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && m_SelectedItems.size() == 1) {
+			DuplicateItem(std::filesystem::path(*m_SelectedItems.begin()));
+		}
+		
+		// F2 - Rename
+		if (ImGui::IsKeyPressed(ImGuiKey_F2) && m_SelectedItems.size() == 1) {
+			m_ItemToRename = std::filesystem::path(*m_SelectedItems.begin());
+			strncpy_s(m_NewItemName, sizeof(m_NewItemName), 
+				m_ItemToRename.filename().string().c_str(), _TRUNCATE);
+			m_ShowRenameDialog = true;
+		}
+		
+		// Alt + Left Arrow - Back
+		if (io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_LeftArrow) && m_HistoryIndex > 0) {
+			m_HistoryIndex--;
+			m_CurrentDirectory = m_DirectoryHistory[m_HistoryIndex];
+		}
+		
+		// Alt + Right Arrow - Forward
+		if (io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_RightArrow) && 
+			m_HistoryIndex < (int)m_DirectoryHistory.size() - 1) {
+			m_HistoryIndex++;
+			m_CurrentDirectory = m_DirectoryHistory[m_HistoryIndex];
+		}
+		
+		// Alt + Up Arrow - Parent directory
+		if (io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+			NavigateToParent();
+		}
+		
+		// Escape - Clear selection
+		if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+			ClearSelection();
+		}
+	}
+	
+	// ============================================================================
+	// CLIPBOARD OPERATIONS
+	// ============================================================================
+	
+	void ContentBrowserPanel::CopySelectedItems() {
+		m_ClipboardOperation = ClipboardOperation::Copy;
+		m_ClipboardItems.clear();
+		
+		for (const auto& selectedPath : m_SelectedItems) {
+			m_ClipboardItems.push_back(std::filesystem::path(selectedPath));
+		}
+		
+		LNX_LOG_INFO("Copied {0} item(s) to clipboard", m_ClipboardItems.size());
+	}
+	
+	void ContentBrowserPanel::CutSelectedItems() {
+		m_ClipboardOperation = ClipboardOperation::Cut;
+		m_ClipboardItems.clear();
+		
+		for (const auto& selectedPath : m_SelectedItems) {
+			m_ClipboardItems.push_back(std::filesystem::path(selectedPath));
+		}
+		
+		LNX_LOG_INFO("Cut {0} item(s) to clipboard", m_ClipboardItems.size());
+	}
+	
+	void ContentBrowserPanel::PasteItems() {
+		if (!CanPaste()) return;
+		
+		for (const auto& sourcePath : m_ClipboardItems) {
+			try {
+				std::filesystem::path destPath = m_CurrentDirectory / sourcePath.filename();
+				
+				// Handle name conflicts
+				if (std::filesystem::exists(destPath)) {
+					std::string baseName = sourcePath.stem().string();
+					std::string extension = sourcePath.extension().string();
+					int counter = 1;
+					
+					do {
+						std::string newName = baseName + " (" + std::to_string(counter) + ")" + extension;
+						destPath = m_CurrentDirectory / newName;
+						counter++;
+					} while (std::filesystem::exists(destPath));
+				}
+				
+				if (m_ClipboardOperation == ClipboardOperation::Copy) {
+					if (std::filesystem::is_directory(sourcePath)) {
+						std::filesystem::copy(sourcePath, destPath, 
+							std::filesystem::copy_options::recursive);
+					} else {
+						std::filesystem::copy_file(sourcePath, destPath);
+					}
+					LNX_LOG_INFO("Copied {0} to {1}", sourcePath.filename().string(), 
+						destPath.filename().string());
+				}
+				else if (m_ClipboardOperation == ClipboardOperation::Cut) {
+					std::filesystem::rename(sourcePath, destPath);
+					LNX_LOG_INFO("Moved {0} to {1}", sourcePath.filename().string(), 
+						destPath.filename().string());
+				}
+			}
+			catch (const std::exception& e) {
+				LNX_LOG_ERROR("Failed to paste {0}: {1}", sourcePath.filename().string(), e.what());
+			}
+		}
+		
+		// Clear clipboard after cut operation
+		if (m_ClipboardOperation == ClipboardOperation::Cut) {
+			m_ClipboardItems.clear();
+			m_ClipboardOperation = ClipboardOperation::None;
+		}
+		
+		ClearSelection();
+	}
+	
+	bool ContentBrowserPanel::CanPaste() const {
+		return !m_ClipboardItems.empty() && m_ClipboardOperation != ClipboardOperation::None;
+	}
+	
+	// ============================================================================
+	// FILE OPERATIONS
+	// ============================================================================
+	
+	void ContentBrowserPanel::DuplicateItem(const std::filesystem::path& path) {
+		try {
+			std::string baseName = path.stem().string();
+			std::string extension = path.extension().string();
+			std::filesystem::path destPath;
+			int counter = 1;
+			
+			do {
+				std::string newName = baseName + " - Copy";
+				if (counter > 1) {
+					newName += " (" + std::to_string(counter) + ")";
+				}
+				newName += extension;
+				destPath = path.parent_path() / newName;
+				counter++;
+			} while (std::filesystem::exists(destPath));
+			
+			if (std::filesystem::is_directory(path)) {
+				std::filesystem::copy(path, destPath, std::filesystem::copy_options::recursive);
+			} else {
+				std::filesystem::copy_file(path, destPath);
+			}
+			
+			LNX_LOG_INFO("Duplicated {0} as {1}", path.filename().string(), 
+				destPath.filename().string());
+		}
+		catch (const std::exception& e) {
+			LNX_LOG_ERROR("Failed to duplicate {0}: {1}", path.filename().string(), e.what());
+		}
+	}
+	
+	// ============================================================================
+	// NAVIGATION
+	// ============================================================================
+	
+	void ContentBrowserPanel::NavigateToParent() {
+		if (m_CurrentDirectory == m_BaseDirectory) return;
+		
+		std::filesystem::path parentPath = m_CurrentDirectory.parent_path();
+		NavigateToDirectory(parentPath);
+	}
+	
+	void ContentBrowserPanel::NavigateToDirectory(const std::filesystem::path& directory) {
+		if (m_CurrentDirectory == directory) return;
+		
+		m_HistoryIndex++;
+		if (m_HistoryIndex < (int)m_DirectoryHistory.size()) {
+			m_DirectoryHistory.erase(
+				m_DirectoryHistory.begin() + m_HistoryIndex,
+				m_DirectoryHistory.end()
+			);
+		}
+		m_DirectoryHistory.push_back(directory);
+		m_CurrentDirectory = directory;
+		ClearSelection();
+	}
+	
+	// ============================================================================
+	// SELECTION
+	// ============================================================================
+	
+	void ContentBrowserPanel::SelectAll() {
+		ClearSelection();
+		
+		for (auto& entry : std::filesystem::directory_iterator(m_CurrentDirectory)) {
+			// Apply search filter
+			std::string searchQuery = m_SearchBuffer;
+			if (!searchQuery.empty()) {
+				std::string filenameLower = entry.path().filename().string();
+				std::transform(filenameLower.begin(), filenameLower.end(), 
+					filenameLower.begin(), ::tolower);
+				std::transform(searchQuery.begin(), searchQuery.end(), 
+					searchQuery.begin(), ::tolower);
+				
+				if (filenameLower.find(searchQuery) == std::string::npos) {
+					continue;
+				}
+			}
+			
+			AddToSelection(entry.path());
+		}
+		
+		LNX_LOG_INFO("Selected all {0} items", m_SelectedItems.size());
+	}
+	
+	// ============================================================================
+	// UTILITIES
+	// ============================================================================
+	
+	std::string ContentBrowserPanel::GetFileSizeString(uintmax_t size) {
+		const char* units[] = { "B", "KB", "MB", "GB", "TB" };
+		int unitIndex = 0;
+		double displaySize = (double)size;
+		
+		while (displaySize >= 1024.0 && unitIndex < 4) {
+			displaySize /= 1024.0;
+			unitIndex++;
+		}
+		
+		char buffer[64];
+		if (unitIndex == 0) {
+			snprintf(buffer, sizeof(buffer), "%d %s", (int)displaySize, units[unitIndex]);
+		} else {
+			snprintf(buffer, sizeof(buffer), "%.2f %s", displaySize, units[unitIndex]);
+		}
+		
+		return std::string(buffer);
+	}
+	
+	std::string ContentBrowserPanel::GetLastModifiedString(const std::filesystem::path& path) {
+		auto ftime = std::filesystem::last_write_time(path);
+		auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+			ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now()
+		);
+		std::time_t cftime = std::chrono::system_clock::to_time_t(sctp);
+		
+		char buffer[64];
+		std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M", std::localtime(&cftime));
+		
+		return std::string(buffer);
 	}
 }

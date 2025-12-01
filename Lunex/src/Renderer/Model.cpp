@@ -3,6 +3,11 @@
 
 #include "Log/Log.h"
 
+// Assimp includes (moved from header to avoid conflicts with Bullet3)
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 

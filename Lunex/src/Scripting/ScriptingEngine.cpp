@@ -614,6 +614,7 @@ namespace Lunex {
 		std::filesystem::path scriptCoreInclude;
 		std::filesystem::path lunexInclude;
 		std::filesystem::path spdlogInclude;
+		std::filesystem::path glmInclude;
 
 		std::filesystem::path searchDir = scriptDir;
 		for (int i = 0; i < 10; i++) {
@@ -622,6 +623,7 @@ namespace Lunex {
 				scriptCoreInclude = candidate;
 				lunexInclude = searchDir / "Lunex" / "src";
 				spdlogInclude = searchDir / "vendor" / "spdlog" / "include";
+				glmInclude = searchDir / "vendor" / "glm" / "glm.hpp"; // Buscar glm.hpp específicamente
 				break;
 			}
 			searchDir = searchDir.parent_path();
@@ -661,13 +663,53 @@ namespace Lunex {
 		std::string includes =
 			" /I\"" + scriptCoreInclude.string() + "\"" +
 			" /I\"" + lunexInclude.string() + "\"" +
-			" /I\"" + spdlogInclude.string() + "\"";
+			" /I\"" + spdlogInclude.string() + "\"" +
+			" /I\"" + glmInclude.string() + "\"";
+
+		// Verificar que GLM existe
+		if (!std::filesystem::exists(glmInclude)) {
+			LNX_LOG_ERROR("GLM not found at: {0}", glmInclude.string());
+			LNX_LOG_ERROR("Searching for GLM in parent directories...");
+			
+			// Buscar GLM más arriba
+			std::filesystem::path searchGlm = scriptDir;
+			bool foundGlm = false;
+			for (int i = 0; i < 10; i++) {
+				std::filesystem::path glmCandidate = searchGlm / "vendor" / "glm";
+				if (std::filesystem::exists(glmCandidate)) {
+					glmInclude = glmCandidate;
+					LNX_LOG_INFO("Found GLM at: {0}", glmInclude.string());
+					foundGlm = true;
+					break;
+				}
+				searchGlm = searchGlm.parent_path();
+			}
+			
+			if (!foundGlm) {
+				LNX_LOG_ERROR("Could not find GLM library!");
+				return false;
+			}
+			
+			// Reconstruir includes con el nuevo path de GLM
+			includes =
+				" /I\"" + scriptCoreInclude.string() + "\"" +
+				" /I\"" + lunexInclude.string() + "\"" +
+				" /I\"" + spdlogInclude.string() + "\"" +
+				" /I\"" + glmInclude.string() + "\"";
+		}
 
 		std::string outputDll = "/Fe:\"" + dllPath.string() + "\"";
 		std::string outputObj = "/Fo:\"" + objDir.string() + "\\\\\"";
+		
+		// Include LunexScriptingAPI.cpp for helper class implementations
+		std::filesystem::path apiCppPath = scriptCoreInclude / "LunexScriptingAPI.cpp";
 
 		batFile << "cl.exe " << compilerFlags << includes;
-		batFile << " \"" << fullScriptPath.string() << "\"";
+		batFile << " \"" << fullScriptPath.string() + "\"";
+		// Add LunexScriptingAPI.cpp to compile and link
+		if (std::filesystem::exists(apiCppPath)) {
+			batFile << " \"" << apiCppPath.string() << "\"";
+		}
 		batFile << " " << outputDll << " " << outputObj << " 2>&1\n";
 		batFile << "exit /b %errorlevel%\n";
 

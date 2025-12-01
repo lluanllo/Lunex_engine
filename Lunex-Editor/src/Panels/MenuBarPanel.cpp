@@ -77,6 +77,21 @@ namespace Lunex {
 				ImGui::EndMenu();
 			}
 			
+			// Preferences Menu
+			if (ImGui::BeginMenu("Preferences")) {
+				if (ImGui::MenuItem("?? Input Settings", "Ctrl+K")) {
+					if (m_OnOpenInputSettings) m_OnOpenInputSettings();
+				}
+				ImGui::Separator();
+				if (ImGui::MenuItem("?? Editor Settings", nullptr, false, false)) {
+					// TODO: Implement editor settings
+				}
+				if (ImGui::MenuItem("?? Theme", nullptr, false, false)) {
+					// TODO: Implement theme selection
+				}
+				ImGui::EndMenu();
+			}
+			
 			// Help Menu
 			if (ImGui::BeginMenu("Help")) {
 				if (ImGui::MenuItem("Documentation")) {}

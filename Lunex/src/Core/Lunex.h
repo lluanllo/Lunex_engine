@@ -1,4 +1,3 @@
-
 //---Lunex Core----------
 #include "Application.h"
 #include "Layer.h"
@@ -24,6 +23,10 @@
 #include "Scene/ScriptableEntity.h"
 #include "Scene/Components.h"
 //-----------------------
+
+//---Lunex Physics-------
+#include "Physics/Physics.h"
+//--------------------------
 
 //---Lunex Renderer------
 #include "Renderer/Renderer.h"

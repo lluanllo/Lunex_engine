@@ -1,6 +1,6 @@
 ﻿workspace "Lunex-Engine"
     architecture "x86_64"
-    startproject "Lunex-Launcher"
+    startproject "Lunex-Editor"
 
     configurations {
         "Debug",
@@ -28,6 +28,7 @@ IncludeDir["yaml_cpp"]  = "vendor/yaml-cpp/include"
 IncludeDir["Box2D"]     = "vendor/Box2D/include" 
 IncludeDir["ImGuizmo"]  = "vendor/ImGuizmo"
 IncludeDir["Assimp"]    = "vendor/assimp/include"
+IncludeDir["Bullet3"]   = "vendor/Bullet3/src"
 IncludeDir["Lunex"]     = "Lunex/src"
 IncludeDir["VulkanSDK"] = "%{VULKAN_SDK}/Include"
 
@@ -255,31 +256,79 @@ project "Box2D"
 
     files
     {
-    "vendor/Box2D/src/**.h",
-  "vendor/Box2D/src/**.c",
-  "vendor/Box2D/include/**.h"
+        "vendor/Box2D/src/**.h",
+        "vendor/Box2D/src/**.c",
+        "vendor/Box2D/include/**.h"
     }
 
     includedirs
     {
-     "vendor/Box2D/include",
-    "vendor/Box2D/src"
+        "vendor/Box2D/include",
+        "vendor/Box2D/src"
     }
 
     filter "system:windows"
         systemversion "latest"
 
     filter "configurations:Debug"
-   runtime "Debug"
-      symbols "on"
+        runtime "Debug"
+        symbols "on"
 
-filter "configurations:Release"
+    filter "configurations:Release"
         runtime "Release"
         optimize "on"
 
     filter "configurations:Dist"
         runtime "Release"
         optimize "on"
+
+-- Bullet3 Project (actually compiles Bullet2 - the stable version)
+project "Bullet3"
+    kind "StaticLib"
+    language "C++"
+    cppdialect "C++20"
+    staticruntime "off"
+    warnings "off"
+
+    targetdir ("bin/" .. outputdir .. "/%{prj.name}")
+    objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
+
+    files
+    {
+        "vendor/Bullet3/src/BulletCollision/**.cpp",
+        "vendor/Bullet3/src/BulletCollision/**.h",
+        "vendor/Bullet3/src/BulletDynamics/**.cpp",
+        "vendor/Bullet3/src/BulletDynamics/**.h",
+        "vendor/Bullet3/src/BulletSoftBody/**.cpp",
+        "vendor/Bullet3/src/BulletSoftBody/**.h",
+        "vendor/Bullet3/src/LinearMath/**.cpp",
+        "vendor/Bullet3/src/LinearMath/**.h"
+    }
+
+    includedirs
+    {
+        "vendor/Bullet3/src"
+    }
+
+    defines
+    {
+        "_CRT_SECURE_NO_WARNINGS"
+    }
+
+    filter "system:windows"
+        systemversion "latest"
+
+    filter "configurations:Debug"
+        runtime "Debug"
+        symbols "on"
+
+    filter "configurations:Release"
+        runtime "Release"
+        optimize "speed"
+
+    filter "configurations:Dist"
+        runtime "Release"
+        optimize "speed"
 
 group ""
 
@@ -372,6 +421,7 @@ project "Lunex"
         "%{prj.name}/src",
         "vendor/spdlog/include",
         "%{IncludeDir.Box2D}",
+        "%{IncludeDir.Bullet3}",
         "%{IncludeDir.GLFW}",
         "%{IncludeDir.Glad}",
         "%{IncludeDir.ImGui}",
@@ -388,6 +438,7 @@ project "Lunex"
     links
     {
         "Box2D",
+        "Bullet3",
         "GLFW",
         "Glad",
         "ImGui",
@@ -398,6 +449,12 @@ project "Lunex"
 
     filter "files:vendor/ImGuizmo/**.cpp"
         flags { "NoPCH" }
+    
+    filter "files:vendor/Bullet3/**.cpp"
+        flags { "NoPCH" }
+
+    filter "files:%{prj.name}/src/Physics/**.cpp"
+        flags { "NoPCH" }
 
     filter "system:windows"
         systemversion "latest"
@@ -407,11 +464,7 @@ project "Lunex"
         defines { "LN_DEBUG" }
         runtime "Debug"
         symbols "on"
-        libdirs 
-        { 
-            "$(SolutionDir)vendor/assimp/lib/Debug",
-            "%{LibraryDir.VulkanSDK}"
-        }
+        libdirs { "$(SolutionDir)vendor/assimp/lib/Debug" }
         links
         {
             "%{Library.ShaderC_Debug}",
@@ -428,11 +481,7 @@ project "Lunex"
         defines { "LN_RELEASE" }
         runtime "Release"
         optimize "on"
-        libdirs 
-        { 
-            "$(SolutionDir)vendor/assimp/lib/Release",
-            "%{LibraryDir.VulkanSDK}"
-        }
+        libdirs { "$(SolutionDir)vendor/assimp/lib/Release" }
         links
         {
             "%{Library.ShaderC_Release}",
@@ -449,11 +498,7 @@ project "Lunex"
         defines { "LN_DIST" }
         runtime "Release"
         optimize "on"
-        libdirs 
-        { 
-            "$(SolutionDir)vendor/assimp/lib/Release",
-            "%{LibraryDir.VulkanSDK}"
-        }
+        libdirs { "$(SolutionDir)vendor/assimp/lib/Release" }
         links
         {
             "%{Library.ShaderC_Release}",
@@ -465,102 +510,6 @@ project "Lunex"
         {
             "{COPY} $(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll %{cfg.targetdir}"
         }
-
--- ============================================================================
--- LAUNCHER
--- ============================================================================
-
-project "Lunex-Launcher"
-    location "Lunex-Launcher"
-    kind "WindowedApp"
-    language "C++"
-    cppdialect "C++20"
-    staticruntime "off"
-        
-    targetdir ("bin/" .. outputdir .. "/%{prj.name}")
-    objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
-    debugdir ("$(SolutionDir)/Lunex-Launcher")
-        
-    files
-    {
-        "%{prj.name}/src/**.h",
-        "%{prj.name}/src/**.cpp",
-        "%{prj.name}/src/Panels/**.h",
-        "%{prj.name}/src/Panels/**.cpp"
-    }
-
-    defines
-    {
-        "_CRT_SECURE_NO_WARNINGS",
-        "GLFW_INCLUDE_NONE",
-        "YAML_CPP_STATIC_DEFINE"
-    }
-
-    includedirs
-    {
-        "vendor/spdlog/include",
-        "Lunex/src",
-        "Lunex/src/Core",
-        "%{IncludeDir.GLFW}",
-        "%{IncludeDir.Glad}",
-        "%{IncludeDir.ImGui}",
-        "%{IncludeDir.glm}",
-        "%{IncludeDir.entt}",
-        "%{IncludeDir.yaml_cpp}",
-        "%{IncludeDir.ImGuizmo}",
-        "%{IncludeDir.Assimp}",
-        "%{IncludeDir.Box2D}"
-    }
-
-    links
-    {
-        "Lunex",
-        "yaml-cpp"
-    }
-
-    buildoptions { "/utf-8" }
-
-    filter "system:windows"
-        systemversion "latest"
-        links { "ole32.lib" }
-
-    filter "configurations:Debug"
-        defines { "LN_DEBUG" }
-        runtime "Debug"
-        symbols "on"
-        postbuildcommands
-        {
-            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Debug/assimp-vc143-mtd.dll\" \"%{cfg.targetdir}\"",
-            "{MKDIR} \"%{cfg.targetdir}/assets\"",
-            "{COPYDIR} \"$(SolutionDir)Lunex-Launcher/assets\" \"%{cfg.targetdir}/assets\""
-        }
-
-    filter "configurations:Release"
-        defines { "LN_RELEASE" }
-        runtime "Release"
-        optimize "on"
-        postbuildcommands
-        {
-            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
-            "{MKDIR} \"%{cfg.targetdir}/assets\"",
-            "{COPYDIR} \"$(SolutionDir)Lunex-Launcher/assets\" \"%{cfg.targetdir}/assets\""
-        }
-
-    filter "configurations:Dist"
-        defines { "LN_DIST" }
-        runtime "Release"
-        optimize "on"
-        kind "WindowedApp"
-        postbuildcommands
-        {
-            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
-            "{MKDIR} \"%{cfg.targetdir}/assets\"",
-            "{COPYDIR} \"$(SolutionDir)Lunex-Launcher/assets\" \"%{cfg.targetdir}/assets\""
-        }
-
--- ============================================================================
--- SANDBOX
--- ============================================================================
 
 project "Sandbox"
     location "Sandbox"
@@ -571,7 +520,7 @@ project "Sandbox"
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
-    debugdir ("$(SolutionDir)")
+    debugdir ("$(SolutionDir)")  -- ← CAMBIADO
 
     files
     {
@@ -590,7 +539,8 @@ project "Sandbox"
         "%{IncludeDir.yaml_cpp}",
         "%{IncludeDir.ImGuizmo}",
         "%{IncludeDir.Assimp}",
-        "%{IncludeDir.Box2D}"
+        "%{IncludeDir.Box2D}",
+        "%{IncludeDir.Bullet3}"
     }
 
     defines
@@ -634,10 +584,6 @@ project "Sandbox"
             "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\""
         }
 
--- ============================================================================
--- EDITOR
--- ============================================================================
-
 project "Lunex-Editor"
     location "Lunex-Editor"
     kind "ConsoleApp"
@@ -647,7 +593,7 @@ project "Lunex-Editor"
         
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
-    debugdir ("$(SolutionDir)/Lunex-Editor")
+    debugdir ("$(SolutionDir)/Lunex-Editor")  -- ← CAMBIADO de "%{cfg.targetdir}"
         
     files
     {
@@ -674,7 +620,8 @@ project "Lunex-Editor"
         "%{IncludeDir.glm}",
         "%{IncludeDir.entt}",
         "%{IncludeDir.Assimp}",
-        "%{IncludeDir.ImGuizmo}"
+        "%{IncludeDir.ImGuizmo}",
+        "%{IncludeDir.Bullet3}"
     }
 
     defines
@@ -699,6 +646,7 @@ project "Lunex-Editor"
         postbuildcommands
         {
             "{COPY} \"$(SolutionDir)vendor/assimp/lib/Debug/assimp-vc143-mtd.dll\" \"%{cfg.targetdir}\"",
+            -- ✅ AÑADE ESTOS COMANDOS para copiar assets
             "{MKDIR} \"%{cfg.targetdir}/assets\"",
             "{COPYDIR} \"$(SolutionDir)Lunex-Editor/assets\" \"%{cfg.targetdir}/assets\""
         }
@@ -710,6 +658,7 @@ project "Lunex-Editor"
         postbuildcommands
         {
             "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
+            -- ✅ AÑADE ESTOS COMANDOS
             "{MKDIR} \"%{cfg.targetdir}/assets\"",
             "{COPYDIR} \"$(SolutionDir)Lunex-Editor/assets\" \"%{cfg.targetdir}/assets\""
         }
@@ -721,15 +670,7 @@ project "Lunex-Editor"
         postbuildcommands
         {
             "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
+            -- ✅ AÑADE ESTOS COMANDOS
             "{MKDIR} \"%{cfg.targetdir}/assets\"",
             "{COPYDIR} \"$(SolutionDir)Lunex-Editor/assets\" \"%{cfg.targetdir}/assets\""
         }
-
--- ============================================================================
--- SCRIPT PROJECTS (Plugins dinámicos)
--- ============================================================================
-group "Scripts"
-
--- include "Scripts/ExampleScript"  -- Comentado temporalmente si no existe
-
-group ""

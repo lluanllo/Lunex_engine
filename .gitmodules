@@ -39,3 +39,9 @@
 	url = https://github.com/assimp/assimp.git
 	branch = master
 	ignore = dirty
+
+[submodule "vendor/bullet3"]
+	path = vendor/bullet3
+	url = https://github.com/bulletphysics/bullet3.git
+	branch = master
+	ignore = dirty

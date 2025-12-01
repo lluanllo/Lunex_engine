@@ -32,6 +32,18 @@ namespace Lunex {
 		out << YAML::Key << "VSync" << YAML::Value << config.VSync;
 		out << YAML::EndMap;
 		
+		// ? NEW: Serialize Input Bindings
+		out << YAML::Key << "InputBindings" << YAML::Value;
+		out << YAML::BeginSeq;
+		for (const auto& binding : config.InputBindings) {
+			out << YAML::BeginMap;
+			out << YAML::Key << "Key" << YAML::Value << binding.KeyCode;
+			out << YAML::Key << "Modifiers" << YAML::Value << binding.Modifiers;
+			out << YAML::Key << "Action" << YAML::Value << binding.ActionName;
+			out << YAML::EndMap;
+		}
+		out << YAML::EndSeq;
+		
 		out << YAML::EndMap;
 		out << YAML::EndMap;
 		
@@ -69,6 +81,20 @@ namespace Lunex {
 			m_Project->m_Config.Width = settings["Width"].as<uint32_t>();
 			m_Project->m_Config.Height = settings["Height"].as<uint32_t>();
 			m_Project->m_Config.VSync = settings["VSync"].as<bool>();
+		}
+		
+		// ? NEW: Deserialize Input Bindings
+		auto inputBindings = projectNode["InputBindings"];
+		if (inputBindings) {
+			m_Project->m_Config.InputBindings.clear();
+			for (const auto& bindingNode : inputBindings) {
+				InputBindingEntry entry;
+				entry.KeyCode = bindingNode["Key"].as<int>();
+				entry.Modifiers = bindingNode["Modifiers"].as<int>();
+				entry.ActionName = bindingNode["Action"].as<std::string>();
+				m_Project->m_Config.InputBindings.push_back(entry);
+			}
+			LNX_LOG_INFO("Loaded {0} input bindings from project", m_Project->m_Config.InputBindings.size());
 		}
 		
 		LNX_LOG_INFO("Project loaded: {0}", m_Project->m_Config.Name);

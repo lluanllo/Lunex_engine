@@ -3,8 +3,19 @@
 #include "Core/Core.h"
 #include <string>
 #include <filesystem>
+#include <vector>
 
 namespace Lunex {
+	
+	/**
+	 * InputBindingEntry - Stores a single key binding for serialization
+	 */
+	struct InputBindingEntry {
+		int KeyCode = 0;
+		int Modifiers = 0;
+		std::string ActionName;
+	};
+	
 	struct ProjectConfig {
 		std::string Name = "Untitled";
 		
@@ -16,6 +27,9 @@ namespace Lunex {
 		uint32_t Width = 1280;
 		uint32_t Height = 720;
 		bool VSync = true;
+		
+		// ? NEW: Input Bindings
+		std::vector<InputBindingEntry> InputBindings;
 		
 		// Serialization version
 		uint32_t Version = 1;

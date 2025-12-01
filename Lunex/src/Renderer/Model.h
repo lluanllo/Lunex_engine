@@ -3,12 +3,15 @@
 #include "Core/Core.h"
 #include "Mesh.h"
 
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
-
 #include <string>
 #include <vector>
+
+// Forward declarations to avoid including Assimp headers (conflicts with Bullet3's NodeArray)
+struct aiNode;
+struct aiScene;
+struct aiMesh;
+struct aiMaterial;
+enum aiTextureType : int;
 
 namespace Lunex {
 

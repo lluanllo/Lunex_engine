@@ -371,6 +371,83 @@ namespace Lunex {
 		CircleCollider2DComponent(const CircleCollider2DComponent&) = default;
 	};
 
+	// ========================================
+	// 3D PHYSICS COMPONENTS (Bullet3)
+	// ========================================
+
+	struct Rigidbody3DComponent {
+		enum class BodyType { Static = 0, Dynamic, Kinematic };
+		BodyType Type = BodyType::Dynamic;
+		
+		// Physics properties
+		float Mass = 1.0f;
+		float Friction = 0.5f;
+		float Restitution = 0.3f;
+		float LinearDamping = 0.04f;
+		float AngularDamping = 0.05f;
+		
+		// Constraints
+		glm::vec3 LinearFactor = { 1.0f, 1.0f, 1.0f };  // Lock axes (0 = locked, 1 = free)
+		glm::vec3 AngularFactor = { 1.0f, 1.0f, 1.0f }; // Lock rotation axes
+		
+		// CCD (Continuous Collision Detection) for fast moving objects
+		bool UseCCD = false;
+		float CcdMotionThreshold = 0.0f;
+		float CcdSweptSphereRadius = 0.0f;
+		
+		// Collision filtering
+		bool IsTrigger = false;
+		int CollisionGroup = 1;
+		int CollisionMask = -1; // All groups by default
+		
+		// Runtime data (not serialized)
+		void* RuntimeBody = nullptr;
+		void* RuntimeCollider = nullptr;
+		
+		Rigidbody3DComponent() = default;
+		Rigidbody3DComponent(const Rigidbody3DComponent&) = default;
+	};
+
+	struct BoxCollider3DComponent {
+		glm::vec3 HalfExtents = { 0.5f, 0.5f, 0.5f };
+		glm::vec3 Offset = { 0.0f, 0.0f, 0.0f };
+		
+		BoxCollider3DComponent() = default;
+		BoxCollider3DComponent(const BoxCollider3DComponent&) = default;
+	};
+
+	struct SphereCollider3DComponent {
+		float Radius = 0.5f;
+		glm::vec3 Offset = { 0.0f, 0.0f, 0.0f };
+		
+		SphereCollider3DComponent() = default;
+		SphereCollider3DComponent(const SphereCollider3DComponent&) = default;
+	};
+
+	struct CapsuleCollider3DComponent {
+		float Radius = 0.5f;
+		float Height = 2.0f;
+		glm::vec3 Offset = { 0.0f, 0.0f, 0.0f };
+		
+		CapsuleCollider3DComponent() = default;
+		CapsuleCollider3DComponent(const CapsuleCollider3DComponent&) = default;
+	};
+
+	struct MeshCollider3DComponent {
+		enum class CollisionType { Convex, Concave };
+		CollisionType Type = CollisionType::Convex;
+		
+		// For custom meshes
+		std::vector<glm::vec3> Vertices;
+		std::vector<uint32_t> Indices;
+		
+		// Will use entity's MeshComponent if available
+		bool UseEntityMesh = true;
+		
+		MeshCollider3DComponent() = default;
+		MeshCollider3DComponent(const MeshCollider3DComponent&) = default;
+	};
+
 	// C++ Script Component - integración con sistema de scripting dinámico
 	// SOPORTA MÚLTIPLES SCRIPTS POR ENTIDAD
 	struct ScriptComponent {
@@ -459,5 +536,7 @@ namespace Lunex {
 		ComponentGroup<TransformComponent, SpriteRendererComponent,
 		CircleRendererComponent, CameraComponent, NativeScriptComponent,
 		Rigidbody2DComponent, BoxCollider2DComponent, CircleCollider2DComponent,
+		Rigidbody3DComponent, BoxCollider3DComponent, SphereCollider3DComponent, 
+		CapsuleCollider3DComponent, MeshCollider3DComponent,
 		MeshComponent, MaterialComponent, LightComponent, TextureComponent, ScriptComponent>;
 }
