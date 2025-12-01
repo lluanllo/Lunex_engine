@@ -1,4 +1,4 @@
-#include "stpch.h"
+﻿#include "stpch.h"
 #include "Renderer2D.h"
 
 #include "VertexArray.h"
@@ -488,6 +488,91 @@ namespace Lunex {
 		
 		// Draw as textured quad
 		DrawQuad(transform, texture, 1.0f, glm::vec4(1.0f), entityID);
+	}
+	
+	void Renderer2D::DrawCameraFrustum(const glm::mat4& projection, const glm::mat4& view, const glm::vec4& color, int entityID) {
+		LNX_PROFILE_FUNCTION();
+		
+		// ========================================
+		// LIMIT FAR PLANE DISTANCE (avoid infinite extension)
+		// ========================================
+		
+		// Extract camera position from view matrix
+		glm::mat4 invView = glm::inverse(view);
+		glm::vec3 cameraPos = glm::vec3(invView[3]);
+		
+		// Calculate forward direction
+		glm::vec3 forward = -glm::vec3(invView[2]); // Camera looks down -Z
+		
+		// Limit far plane distance (like in the reference image)
+		const float maxFrustumDepth = 1.0f; // ✅ Adjustable frustum depth
+		
+		// Calculate inverse view-projection matrix to transform NDC corners to world space
+		glm::mat4 invViewProj = glm::inverse(projection * view);
+		
+		// Define frustum corners in NDC space (Normalized Device Coordinates)
+		// Near plane corners (z = -1 in NDC)
+		glm::vec4 nearCorners[4] = {
+			{ -1.0f, -1.0f, -1.0f, 1.0f },  // Bottom-left
+			{  1.0f, -1.0f, -1.0f, 1.0f },  // Bottom-right
+			{  1.0f,  1.0f, -1.0f, 1.0f },  // Top-right
+			{ -1.0f,  1.0f, -1.0f, 1.0f }   // Top-left
+		};
+		
+		// Far plane corners (z = 1 in NDC) - but we'll clamp these
+		glm::vec4 farCorners[4] = {
+			{ -1.0f, -1.0f, 1.0f, 1.0f },   // Bottom-left
+			{  1.0f, -1.0f, 1.0f, 1.0f },   // Bottom-right
+			{  1.0f,  1.0f, 1.0f, 1.0f },   // Top-right
+			{ -1.0f,  1.0f, 1.0f, 1.0f }    // Top-left
+		};
+		
+		// Transform corners to world space
+		glm::vec3 nearWorld[4];
+		glm::vec3 farWorld[4];
+		
+		for (int i = 0; i < 4; i++) {
+			// Transform near corners
+			glm::vec4 worldNear = invViewProj * nearCorners[i];
+			worldNear /= worldNear.w;  // Perspective divide
+			nearWorld[i] = glm::vec3(worldNear);
+			
+			// Transform far corners
+			glm::vec4 worldFar = invViewProj * farCorners[i];
+			worldFar /= worldFar.w;  // Perspective divide
+			
+			// ✅ CLAMP FAR PLANE: Limit distance from camera
+			glm::vec3 farPos = glm::vec3(worldFar);
+			glm::vec3 direction = glm::normalize(farPos - cameraPos);
+			float distance = glm::length(farPos - cameraPos);
+			
+			if (distance > maxFrustumDepth) {
+				farPos = cameraPos + direction * maxFrustumDepth;
+			}
+			
+			farWorld[i] = farPos;
+		}
+		
+		// ✅ USE BLACK COLOR with thin lines
+		glm::vec4 blackColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+		
+		// Draw near plane rectangle
+		DrawLine(nearWorld[0], nearWorld[1], blackColor, entityID);  // Bottom
+		DrawLine(nearWorld[1], nearWorld[2], blackColor, entityID);  // Right
+		DrawLine(nearWorld[2], nearWorld[3], blackColor, entityID);  // Top
+		DrawLine(nearWorld[3], nearWorld[0], blackColor, entityID);  // Left
+		
+		// Draw far plane rectangle
+		DrawLine(farWorld[0], farWorld[1], blackColor, entityID);  // Bottom
+		DrawLine(farWorld[1], farWorld[2], blackColor, entityID);  // Right
+		DrawLine(farWorld[2], farWorld[3], blackColor, entityID);  // Top
+		DrawLine(farWorld[3], farWorld[0], blackColor, entityID);  // Left
+		
+		// Draw connecting lines between near and far planes
+		DrawLine(nearWorld[0], farWorld[0], blackColor, entityID);  // Bottom-left
+		DrawLine(nearWorld[1], farWorld[1], blackColor, entityID);  // Bottom-right
+		DrawLine(nearWorld[2], farWorld[2], blackColor, entityID);  // Top-right
+		DrawLine(nearWorld[3], farWorld[3], blackColor, entityID);  // Top-left
 	}
 	
 	float Renderer2D::GetLineWidth() {

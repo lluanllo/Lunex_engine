@@ -586,7 +586,7 @@ namespace Lunex {
 		// End current batch before rendering billboards to avoid texture slot conflicts
 		Renderer2D::EndScene();
 		
-		// Start fresh batch for billboards
+		// Start fresh batch for billboards and frustums
 		Renderer2D::BeginScene(camera);
 
 		// Render billboards (lights and cameras) sorted by distance
@@ -652,6 +652,34 @@ namespace Lunex {
 		
 		// Re-enable depth writing
 		RenderCommand::SetDepthMask(true);
+		
+		// ========================================
+		// DRAW CAMERA FRUSTUMS (Editor only)
+		// ========================================
+		
+		// ✅ Save current line width and set thin lines for frustums
+		float previousLineWidth = Renderer2D::GetLineWidth();
+		Renderer2D::SetLineWidth(1.0f);  // Thin lines (like in reference image)
+		
+		{
+			auto view = m_Registry.view<TransformComponent, CameraComponent>();
+			for (auto entity : view) {
+				auto [transform, cameraComp] = view.get<TransformComponent, CameraComponent>(entity);
+				
+				// Get camera projection and view matrices
+				glm::mat4 cameraProjection = cameraComp.Camera.GetProjection();
+				glm::mat4 cameraView = glm::inverse(transform.GetTransform());
+				
+				// ✅ Always use black color (ignored in DrawCameraFrustum since it uses hardcoded black)
+				glm::vec4 frustumColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+				
+				// Draw the frustum
+				Renderer2D::DrawCameraFrustum(cameraProjection, cameraView, frustumColor, (int)entity);
+			}
+		}
+		
+		// ✅ Restore previous line width
+		Renderer2D::SetLineWidth(previousLineWidth);
 
 		Renderer2D::EndScene();
 

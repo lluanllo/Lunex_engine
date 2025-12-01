@@ -48,6 +48,9 @@ namespace Lunex  {
 			static void DrawBillboard(const glm::vec3& position, const Ref<Texture2D>& texture, 
 									  const glm::vec3& cameraPosition, float size = 0.5f, int entityID = -1);
 			
+			// Camera Frustum Gizmo
+			static void DrawCameraFrustum(const glm::mat4& projection, const glm::mat4& view, const glm::vec4& color = glm::vec4(1.0f, 0.8f, 0.2f, 1.0f), int entityID = -1);
+			
 			static float GetLineWidth();
 			static void SetLineWidth(float width);
 			
