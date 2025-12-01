@@ -27,21 +27,25 @@ namespace Lunex {
 		const std::set<Entity>& GetSelectedEntities() const { return m_SelectedEntities; }
 		bool IsEntitySelected(Entity entity) const;
 		
+		// ========================================
+		// PUBLIC API FOR GLOBAL SHORTCUTS
+		// ========================================
+		void SelectAll();
+		void ClearSelection();
+		void DeleteSelectedEntities();
+		void DuplicateSelectedEntities();
+		void RenameSelectedEntity();
+		
 	private:
 		void DrawEntityNode(Entity entity);
 		void RenderTopBar();
-		void HandleKeyboardShortcuts();
 		
 		// Selection operations
 		void SelectEntity(Entity entity, bool clearPrevious = true);
 		void ToggleEntitySelection(Entity entity);
-		void ClearSelection();
-		void SelectAll();
-		void DeleteSelectedEntities();
 		
 		// Entity operations
 		void DuplicateEntity(Entity entity);
-		void DuplicateSelectedEntities();
 		void RenameEntity(Entity entity);
 		
 		// Sorting

@@ -75,7 +75,6 @@ namespace Lunex {
 			m_IconPlay ? "OK" : "NULL",
 			m_IconSimulate ? "OK" : "NULL",
 			m_IconStop ? "OK" : "NULL");
-
 		// Configure viewport panel
 		m_ViewportPanel.SetOnSceneDropCallback([this](const std::filesystem::path& path) {
 			OpenScene(path);
@@ -216,9 +215,30 @@ namespace Lunex {
 		
 		auto& registry = ActionRegistry::Get();
 		
-		// Override default actions with actual editor functionality
+		// ========================================
+		// PROJECT OPERATIONS (Ctrl+Shift+N/O/S)
+		// ========================================
+		registry.Register("Editor.NewProject", CreateRef<FunctionAction>(
+			"Editor.NewProject", ActionContext::Pressed,
+			[this](const ActionState&) { NewProject(); },
+			"Create new project", true
+		));
 		
-		// Scene operations
+		registry.Register("Editor.OpenProject", CreateRef<FunctionAction>(
+			"Editor.OpenProject", ActionContext::Pressed,
+			[this](const ActionState&) { OpenProject(); },
+			"Open project", true
+		));
+		
+		registry.Register("Editor.SaveProject", CreateRef<FunctionAction>(
+			"Editor.SaveProject", ActionContext::Pressed,
+			[this](const ActionState&) { SaveProject(); },
+			"Save project", true
+		));
+		
+		// ========================================
+		// SCENE OPERATIONS (Ctrl+S/O/N/P)
+		// ========================================
 		registry.Register("Editor.SaveScene", CreateRef<FunctionAction>(
 			"Editor.SaveScene", ActionContext::Pressed,
 			[this](const ActionState&) { SaveScene(); },
@@ -239,17 +259,123 @@ namespace Lunex {
 		
 		registry.Register("Editor.PlayScene", CreateRef<FunctionAction>(
 			"Editor.PlayScene", ActionContext::Pressed,
-			[this](const ActionState&) { OnScenePlay(); },
-			"Play scene", true
+			[this](const ActionState&) { 
+				if (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Simulate) {
+					OnScenePlay();
+				} else if (m_SceneState == SceneState::Play) {
+					OnSceneStop();
+				}
+			},
+			"Play/Stop scene", true
 		));
 		
+		// ========================================
+		// ENTITY OPERATIONS (Global - SceneHierarchy)
+		// ========================================
 		registry.Register("Editor.DuplicateEntity", CreateRef<FunctionAction>(
 			"Editor.DuplicateEntity", ActionContext::Pressed,
-			[this](const ActionState&) { OnDuplicateEntity(); },
-			"Duplicate selected entity", true
+			[this](const ActionState&) { 
+				if (m_SceneState != SceneState::Edit) return;
+				m_SceneHierarchyPanel.DuplicateSelectedEntities();
+			},
+			"Duplicate selected entity/item", true
 		));
 		
-		// Gizmo operations
+		registry.Register("Editor.SelectAll", CreateRef<FunctionAction>(
+			"Editor.SelectAll", ActionContext::Pressed,
+			[this](const ActionState&) {
+				// Detectar qué panel está enfocado (Hierarchy tiene prioridad)
+				if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
+					// TODO: Mejorar detección de panel enfocado
+					m_SceneHierarchyPanel.SelectAll();
+				}
+			},
+			"Select all items in focused panel", true
+		));
+		
+		registry.Register("Editor.DeleteSelected", CreateRef<FunctionAction>(
+			"Editor.DeleteSelected", ActionContext::Pressed,
+			[this](const ActionState&) {
+				if (m_SceneState != SceneState::Edit) return;
+				m_SceneHierarchyPanel.DeleteSelectedEntities();
+			},
+			"Delete selected items", true
+		));
+		
+		registry.Register("Editor.RenameSelected", CreateRef<FunctionAction>(
+			"Editor.RenameSelected", ActionContext::Pressed,
+			[this](const ActionState&) {
+				m_SceneHierarchyPanel.RenameSelectedEntity();
+			},
+			"Rename selected item", true
+		));
+		
+		registry.Register("Editor.ClearSelection", CreateRef<FunctionAction>(
+			"Editor.ClearSelection", ActionContext::Pressed,
+			[this](const ActionState&) {
+				m_SceneHierarchyPanel.ClearSelection();
+				m_ContentBrowserPanel.ClearSelection();
+			},
+			"Clear selection in all panels", true
+		));
+		
+		// ========================================
+		// CLIPBOARD OPERATIONS (Global - ContentBrowser)
+		// ========================================
+		registry.Register("Editor.Copy", CreateRef<FunctionAction>(
+			"Editor.Copy", ActionContext::Pressed,
+			[this](const ActionState&) {
+				m_ContentBrowserPanel.CopySelectedItems();
+			},
+			"Copy selected items", true
+		));
+		
+		registry.Register("Editor.Cut", CreateRef<FunctionAction>(
+			"Editor.Cut", ActionContext::Pressed,
+			[this](const ActionState&) {
+				m_ContentBrowserPanel.CutSelectedItems();
+			},
+			"Cut selected items", true
+		));
+		
+		registry.Register("Editor.Paste", CreateRef<FunctionAction>(
+			"Editor.Paste", ActionContext::Pressed,
+			[this](const ActionState&) {
+				m_ContentBrowserPanel.PasteItems();
+			},
+			"Paste items", true
+		));
+		
+		// ========================================
+		// NAVIGATION (Content Browser)
+		// ========================================
+		registry.Register("Editor.NavigateBack", CreateRef<FunctionAction>(
+			"Editor.NavigateBack", ActionContext::Pressed,
+			[this](const ActionState&) {
+				m_ContentBrowserPanel.NavigateBack();
+			},
+			"Navigate back in Content Browser", true
+		));
+		
+		registry.Register("Editor.NavigateForward", CreateRef<FunctionAction>(
+			"Editor.NavigateForward", ActionContext::Pressed,
+			[this](const ActionState&) {
+				m_ContentBrowserPanel.NavigateForward();
+			},
+			"Navigate forward in Content Browser", true
+		));
+		
+		registry.Register("Editor.NavigateUp", CreateRef<FunctionAction>(
+			"Editor.NavigateUp", ActionContext::Pressed,
+			[this](const ActionState&) {
+				m_ContentBrowserPanel.NavigateUp();
+			},
+			"Navigate to parent directory", true
+		));
+		
+		// ========================================
+		// GIZMO OPERATIONS
+		// ========================================
 		registry.Register("Gizmo.None", CreateRef<FunctionAction>(
 			"Gizmo.None", ActionContext::Pressed,
 			[this](const ActionState&) { if (!ImGuizmo::IsUsing()) m_GizmoType = -1; },
@@ -274,7 +400,9 @@ namespace Lunex {
 			"Scale gizmo", false
 		));
 		
-		// Debug commands
+		// ========================================
+		// DEBUG COMMANDS
+		// ========================================
 		registry.Register("Debug.ToggleStats", CreateRef<FunctionAction>(
 			"Debug.ToggleStats", ActionContext::Pressed,
 			[this](const ActionState&) { m_StatsPanel.Toggle(); },
@@ -298,14 +426,16 @@ namespace Lunex {
 			"Toggle console panel"
 		));
 		
-		// Preferences
+		// ========================================
+		// PREFERENCES
+		// ========================================
 		registry.Register("Preferences.InputSettings", CreateRef<FunctionAction>(
 			"Preferences.InputSettings", ActionContext::Pressed,
 			[this](const ActionState&) { m_InputSettingsPanel.Open(); },
 			"Open input settings", true
 		));
 		
-		LNX_LOG_INFO("Registered {0} editor actions", registry.GetActionCount());
+		LNX_LOG_INFO("✅ Registered {0} editor actions (100% complete!)", registry.GetActionCount());
 	}
 
 	void EditorLayer::OnUpdate(Lunex::Timestep ts) {

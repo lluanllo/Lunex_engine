@@ -38,8 +38,7 @@ namespace Lunex {
 	}
 
 	void SceneHierarchyPanel::OnImGuiRender() {
-		// Handle keyboard shortcuts first
-		HandleKeyboardShortcuts();
+		// ✅ REMOVED: HandleKeyboardShortcuts() - ahora es global vía InputManager
 		
 		// ===== ESTILO PROFESIONAL (BLENDER/UNREAL) =====
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.11f, 0.11f, 0.12f, 1.0f));
@@ -421,46 +420,6 @@ namespace Lunex {
 	// ============================================================================
 	// KEYBOARD SHORTCUTS
 	// ============================================================================
-	void SceneHierarchyPanel::HandleKeyboardShortcuts() {
-		if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))
-			return;
-			
-		ImGuiIO& io = ImGui::GetIO();
-		
-		// Ctrl+N - New entity
-		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_N)) {
-			m_Context->CreateEntity("Empty Entity");
-		}
-		
-		// Ctrl+D - Duplicate
-		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !m_SelectedEntities.empty()) {
-			DuplicateSelectedEntities();
-		}
-		
-		// Delete - Delete selected
-		if (ImGui::IsKeyPressed(ImGuiKey_Delete) && !m_SelectedEntities.empty()) {
-			DeleteSelectedEntities();
-		}
-		
-		// F2 - Rename
-		if (ImGui::IsKeyPressed(ImGuiKey_F2) && m_SelectionContext) {
-			RenameEntity(m_SelectionContext);
-		}
-		
-		// Ctrl+A - Select all
-		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A)) {
-			SelectAll();
-		}
-		
-		// Escape - Clear selection or cancel rename
-		if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-			if (m_IsRenaming) {
-				m_IsRenaming = false;
-			} else {
-				ClearSelection();
-			}
-		}
-	}
 	
 	// ============================================================================
 	// SELECTION OPERATIONS
@@ -589,6 +548,12 @@ namespace Lunex {
 		
 		auto& tag = entity.GetComponent<TagComponent>().Tag;
 		strncpy_s(m_RenameBuffer, sizeof(m_RenameBuffer), tag.c_str(), _TRUNCATE);
+	}
+	
+	void SceneHierarchyPanel::RenameSelectedEntity() {
+		if (m_SelectionContext) {
+			RenameEntity(m_SelectionContext);
+		}
 	}
 	
 	// ============================================================================

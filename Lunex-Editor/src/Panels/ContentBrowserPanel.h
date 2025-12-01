@@ -34,6 +34,21 @@ namespace Lunex {
 		void SetRootDirectory(const std::filesystem::path& directory);
 
 		const std::filesystem::path& GetCurrentDirectory() const { return m_CurrentDirectory; }
+		
+		// ========================================
+		// PUBLIC API FOR GLOBAL SHORTCUTS
+		// ========================================
+		void SelectAll();
+		void ClearSelection();
+		void DeleteSelectedItems();
+		void DuplicateSelectedItem();
+		void RenameSelectedItem();
+		void CopySelectedItems();
+		void CutSelectedItems();
+		void PasteItems();
+		void NavigateBack();
+		void NavigateForward();
+		void NavigateUp();
 
 	private:
 		// Rendering
@@ -57,9 +72,6 @@ namespace Lunex {
 		void ImportFilesToFolder(const std::vector<std::string>& files, const std::filesystem::path& targetFolder);
 
 		// Clipboard operations
-		void CopySelectedItems();
-		void CutSelectedItems();
-		void PasteItems();
 		bool CanPaste() const;
 
 		// Navigation
@@ -68,15 +80,10 @@ namespace Lunex {
 
 		// Selection
 		bool IsSelected(const std::filesystem::path& path) const;
-		void ClearSelection();
 		void AddToSelection(const std::filesystem::path& path);
 		void RemoveFromSelection(const std::filesystem::path& path);
 		void ToggleSelection(const std::filesystem::path& path);
 		void SelectRange(const std::filesystem::path& from, const std::filesystem::path& to);
-		void SelectAll();
-
-		// Keyboard shortcuts
-		void HandleKeyboardShortcuts();
 
 		// Utilities
 		std::string GetFileSizeString(uintmax_t size);
