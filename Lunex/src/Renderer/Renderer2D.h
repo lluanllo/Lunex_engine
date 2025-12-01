@@ -51,6 +51,13 @@ namespace Lunex  {
 			// Camera Frustum Gizmo
 			static void DrawCameraFrustum(const glm::mat4& projection, const glm::mat4& view, const glm::vec4& color = glm::vec4(1.0f, 0.8f, 0.2f, 1.0f), int entityID = -1);
 			
+			// ========================================
+			// LIGHT GIZMOS
+			// ========================================
+			static void DrawPointLightGizmo(const glm::vec3& position, float radius, const glm::vec4& color = glm::vec4(1.0f, 0.8f, 0.2f, 1.0f), int entityID = -1);
+			static void DrawDirectionalLightGizmo(const glm::vec3& position, const glm::vec3& direction, const glm::vec4& color = glm::vec4(1.0f, 0.8f, 0.2f, 1.0f), int entityID = -1);
+			static void DrawSpotLightGizmo(const glm::vec3& position, const glm::vec3& direction, float range, float outerConeAngle, const glm::vec4& color = glm::vec4(1.0f, 0.8f, 0.2f, 1.0f), int entityID = -1);
+			
 			static float GetLineWidth();
 			static void SetLineWidth(float width);
 			

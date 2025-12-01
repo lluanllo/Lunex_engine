@@ -659,7 +659,7 @@ namespace Lunex {
 		
 		// ✅ Save current line width and set thin lines for frustums
 		float previousLineWidth = Renderer2D::GetLineWidth();
-		Renderer2D::SetLineWidth(1.0f);  // Thin lines (like in reference image)
+		Renderer2D::SetLineWidth(0.15f);  // Ultra-thin lines that stay thin at any distance
 		
 		{
 			auto view = m_Registry.view<TransformComponent, CameraComponent>();
@@ -675,6 +675,45 @@ namespace Lunex {
 				
 				// Draw the frustum
 				Renderer2D::DrawCameraFrustum(cameraProjection, cameraView, frustumColor, (int)entity);
+			}
+		}
+		
+		// ========================================
+		// DRAW LIGHT GIZMOS (Editor only)
+		// ========================================
+		
+		{
+			auto view = m_Registry.view<TransformComponent, LightComponent>();
+			for (auto entity : view) {
+				auto [transform, light] = view.get<TransformComponent, LightComponent>(entity);
+				
+				// Use black color for gizmos
+				glm::vec4 gizmoColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+				
+				// Calculate light direction (forward vector from transform)
+				glm::mat4 transformMatrix = transform.GetTransform();
+				glm::vec3 forward = -glm::normalize(glm::vec3(transformMatrix[2]));  // -Z axis
+				
+				// Draw gizmo based on light type
+				switch (light.GetType()) {
+					case LightType::Point: {
+						// Draw sphere showing radius of influence
+						Renderer2D::DrawPointLightGizmo(transform.Translation, light.GetRange(), gizmoColor, (int)entity);
+						break;
+					}
+					
+					case LightType::Directional: {
+						// Draw arrow showing direction
+						Renderer2D::DrawDirectionalLightGizmo(transform.Translation, forward, gizmoColor, (int)entity);
+						break;
+					}
+					
+					case LightType::Spot: {
+						// Draw cone showing direction, range, and angle
+						Renderer2D::DrawSpotLightGizmo(transform.Translation, forward, light.GetRange(), light.GetOuterConeAngle(), gizmoColor, (int)entity);
+						break;
+					}
+				}
 			}
 		}
 		

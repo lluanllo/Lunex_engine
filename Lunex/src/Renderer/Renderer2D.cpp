@@ -575,6 +575,154 @@ namespace Lunex {
 		DrawLine(nearWorld[3], farWorld[3], blackColor, entityID);  // Top-left
 	}
 	
+	// ========================================
+	// LIGHT GIZMOS IMPLEMENTATION
+	// ========================================
+	
+	void Renderer2D::DrawPointLightGizmo(const glm::vec3& position, float radius, const glm::vec4& color, int entityID) {
+		LNX_PROFILE_FUNCTION();
+		
+		// Draw 3 circles (XY, XZ, YZ planes) to represent sphere
+		const int segments = 32;
+		const float angleStep = glm::two_pi<float>() / segments;
+		
+		// XY plane circle (around Z axis)
+		for (int i = 0; i < segments; i++) {
+			float angle1 = i * angleStep;
+			float angle2 = (i + 1) * angleStep;
+			
+			glm::vec3 p1 = position + glm::vec3(
+				glm::cos(angle1) * radius,
+				glm::sin(angle1) * radius,
+				0.0f
+			);
+			glm::vec3 p2 = position + glm::vec3(
+				glm::cos(angle2) * radius,
+				glm::sin(angle2) * radius,
+				0.0f
+			);
+			
+			DrawLine(p1, p2, color, entityID);
+		}
+		
+		// XZ plane circle (around Y axis)
+		for (int i = 0; i < segments; i++) {
+			float angle1 = i * angleStep;
+			float angle2 = (i + 1) * angleStep;
+			
+			glm::vec3 p1 = position + glm::vec3(
+				glm::cos(angle1) * radius,
+				0.0f,
+				glm::sin(angle1) * radius
+			);
+			glm::vec3 p2 = position + glm::vec3(
+				glm::cos(angle2) * radius,
+				0.0f,
+				glm::sin(angle2) * radius
+			);
+			
+			DrawLine(p1, p2, color, entityID);
+		}
+		
+		// YZ plane circle (around X axis)
+		for (int i = 0; i < segments; i++) {
+			float angle1 = i * angleStep;
+			float angle2 = (i + 1) * angleStep;
+			
+			glm::vec3 p1 = position + glm::vec3(
+				0.0f,
+				glm::cos(angle1) * radius,
+				glm::sin(angle1) * radius
+			);
+			glm::vec3 p2 = position + glm::vec3(
+				0.0f,
+				glm::cos(angle2) * radius,
+				glm::sin(angle2) * radius
+			);
+			
+			DrawLine(p1, p2, color, entityID);
+		}
+	}
+	
+	void Renderer2D::DrawDirectionalLightGizmo(const glm::vec3& position, const glm::vec3& direction, const glm::vec4& color, int entityID) {
+		LNX_PROFILE_FUNCTION();
+		
+		// Draw arrow showing direction
+		const float arrowLength = 2.0f;
+		const float arrowHeadSize = 0.3f;
+		
+		glm::vec3 dir = glm::normalize(direction);
+		glm::vec3 endPoint = position + dir * arrowLength;
+		
+		// Main arrow line
+		DrawLine(position, endPoint, color, entityID);
+		
+		// Arrow head (cone-like)
+		// Calculate perpendicular vectors for arrow head
+		glm::vec3 up = glm::abs(dir.y) < 0.9f ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
+		glm::vec3 right = glm::normalize(glm::cross(up, dir));
+		up = glm::normalize(glm::cross(dir, right));
+		
+		// Arrow head base position
+		glm::vec3 headBase = endPoint - dir * arrowHeadSize;
+		
+		// Draw 4 lines from tip to base in a cone shape
+		const int headSegments = 8;
+		for (int i = 0; i < headSegments; i++) {
+			float angle = (i / (float)headSegments) * glm::two_pi<float>();
+			float x = glm::cos(angle) * arrowHeadSize * 0.5f;
+			float y = glm::sin(angle) * arrowHeadSize * 0.5f;
+			
+			glm::vec3 headPoint = headBase + right * x + up * y;
+			DrawLine(endPoint, headPoint, color, entityID);
+			
+			// Connect to next point to form cone base
+			float nextAngle = ((i + 1) / (float)headSegments) * glm::two_pi<float>();
+			float nextX = glm::cos(nextAngle) * arrowHeadSize * 0.5f;
+			float nextY = glm::sin(nextAngle) * arrowHeadSize * 0.5f;
+			glm::vec3 nextHeadPoint = headBase + right * nextX + up * nextY;
+			
+			DrawLine(headPoint, nextHeadPoint, color, entityID);
+		}
+	}
+	
+	void Renderer2D::DrawSpotLightGizmo(const glm::vec3& position, const glm::vec3& direction, float range, float outerConeAngle, const glm::vec4& color, int entityID) {
+		LNX_PROFILE_FUNCTION();
+		
+		glm::vec3 dir = glm::normalize(direction);
+		
+		// Calculate cone dimensions
+		float coneRadius = glm::tan(glm::radians(outerConeAngle)) * range;
+		glm::vec3 coneEnd = position + dir * range;
+		
+		// Calculate perpendicular vectors for cone base
+		glm::vec3 up = glm::abs(dir.y) < 0.9f ? glm::vec3(0.0f, 1.0f, 0.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
+		glm::vec3 right = glm::normalize(glm::cross(up, dir));
+		up = glm::normalize(glm::cross(dir, right));
+		
+		// Draw cone outline
+		const int segments = 16;
+		const float angleStep = glm::two_pi<float>() / segments;
+		
+		// Draw base circle
+		for (int i = 0; i < segments; i++) {
+			float angle1 = i * angleStep;
+			float angle2 = (i + 1) * angleStep;
+			
+			glm::vec3 p1 = coneEnd + right * (glm::cos(angle1) * coneRadius) + up * (glm::sin(angle1) * coneRadius);
+			glm::vec3 p2 = coneEnd + right * (glm::cos(angle2) * coneRadius) + up * (glm::sin(angle2) * coneRadius);
+			
+			DrawLine(p1, p2, color, entityID);
+		}
+		
+		// Draw lines from apex to base (8 lines for clarity)
+		for (int i = 0; i < 8; i++) {
+			float angle = (i / 8.0f) * glm::two_pi<float>();
+			glm::vec3 basePoint = coneEnd + right * (glm::cos(angle) * coneRadius) + up * (glm::sin(angle) * coneRadius);
+			DrawLine(position, basePoint, color, entityID);
+		}
+	}
+	
 	float Renderer2D::GetLineWidth() {
 		return s_Data.LineWidth;
 	}
