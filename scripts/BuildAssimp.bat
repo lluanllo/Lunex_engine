@@ -30,6 +30,13 @@ if not exist "CMakeLists.txt" (
     exit /b 1
 )
 
+REM Limpiar cache anterior de CMake si existe (necesario al cambiar de version de VS)
+if exist "build\CMakeCache.txt" (
+    echo Limpiando cache de CMake anterior...
+    del /Q "build\CMakeCache.txt" 2>nul
+    rmdir /S /Q "build\CMakeFiles" 2>nul
+)
+
 REM Crear directorio de build
 if not exist "build" mkdir build
 cd build
@@ -37,7 +44,7 @@ cd build
 echo.
 echo Configurando con CMake (esto puede tardar unos minutos)...
 cmake .. ^
-    -G "Visual Studio 17 2022" ^
+    -G "Visual Studio 18 2026" ^
     -A x64 ^
 -DCMAKE_BUILD_TYPE=Release ^
     -DASSIMP_BUILD_TESTS=OFF ^
@@ -58,7 +65,7 @@ if errorlevel 1 (
     echo.
     echo Posibles soluciones:
     echo   1. Verifica que CMake este instalado correctamente
-    echo   2. Verifica que Visual Studio 2022 este instalado
+    echo   2. Verifica que Visual Studio 2026 este instalado
     echo   3. Ejecuta: git submodule update --init --recursive
     cd ..\..\..
     pause
@@ -106,45 +113,45 @@ echo.
 echo Buscando archivos compilados...
 
 REM Para Debug
-if exist "build\bin\Debug\assimp-vc143-mtd.dll" (
-    copy /Y "build\bin\Debug\assimp-vc143-mtd.dll" "lib\Debug\"
-    echo   OK Copiado: assimp-vc143-mtd.dll (Debug)
+if exist "build\bin\Debug\assimp-vc145-mtd.dll" (
+    copy /Y "build\bin\Debug\assimp-vc145-mtd.dll" "lib\Debug\"
+    echo   OK Copiado: assimp-vc145-mtd.dll (Debug)
 ) else if exist "build\bin\Debug\assimp.dll" (
-    copy /Y "build\bin\Debug\assimp.dll" "lib\Debug\assimp-vc143-mtd.dll"
-    echo   OK Copiado: assimp.dll como assimp-vc143-mtd.dll (Debug)
+    copy /Y "build\bin\Debug\assimp.dll" "lib\Debug\assimp-vc145-mtd.dll"
+    echo   OK Copiado: assimp.dll como assimp-vc145-mtd.dll (Debug)
 ) else (
-    echo   ! No se encontro assimp-vc143-mtd.dll en build\bin\Debug\
+    echo   ! No se encontro assimp-vc145-mtd.dll en build\bin\Debug\
 )
 
-if exist "build\lib\Debug\assimp-vc143-mtd.lib" (
-    copy /Y "build\lib\Debug\assimp-vc143-mtd.lib" "lib\Debug\"
-    echo   OK Copiado: assimp-vc143-mtd.lib (Debug)
+if exist "build\lib\Debug\assimp-vc145-mtd.lib" (
+    copy /Y "build\lib\Debug\assimp-vc145-mtd.lib" "lib\Debug\"
+    echo   OK Copiado: assimp-vc145-mtd.lib (Debug)
 ) else if exist "build\lib\Debug\assimp.lib" (
-    copy /Y "build\lib\Debug\assimp.lib" "lib\Debug\assimp-vc143-mtd.lib"
-    echo   OK Copiado: assimp.lib como assimp-vc143-mtd.lib (Debug)
+    copy /Y "build\lib\Debug\assimp.lib" "lib\Debug\assimp-vc145-mtd.lib"
+    echo   OK Copiado: assimp.lib como assimp-vc145-mtd.lib (Debug)
 ) else (
-    echo   ! No se encontro assimp-vc143-mtd.lib en build\lib\Debug\
+    echo   ! No se encontro assimp-vc145-mtd.lib en build\lib\Debug\
 )
 
 REM Para Release
-if exist "build\bin\Release\assimp-vc143-mt.dll" (
-  copy /Y "build\bin\Release\assimp-vc143-mt.dll" "lib\Release\"
-    echo   OK Copiado: assimp-vc143-mt.dll (Release)
+if exist "build\bin\Release\assimp-vc145-mt.dll" (
+  copy /Y "build\bin\Release\assimp-vc145-mt.dll" "lib\Release\"
+    echo   OK Copiado: assimp-vc145-mt.dll (Release)
 ) else if exist "build\bin\Release\assimp.dll" (
-  copy /Y "build\bin\Release\assimp.dll" "lib\Release\assimp-vc143-mt.dll"
-    echo   OK Copiado: assimp.dll como assimp-vc143-mt.dll (Release)
+  copy /Y "build\bin\Release\assimp.dll" "lib\Release\assimp-vc145-mt.dll"
+    echo   OK Copiado: assimp.dll como assimp-vc145-mt.dll (Release)
 ) else (
-    echo   ! No se encontro assimp-vc143-mt.dll en build\bin\Release\
+    echo   ! No se encontro assimp-vc145-mt.dll en build\bin\Release\
 )
 
-if exist "build\lib\Release\assimp-vc143-mt.lib" (
-    copy /Y "build\lib\Release\assimp-vc143-mt.lib" "lib\Release\"
-    echo   OK Copiado: assimp-vc143-mt.lib (Release)
+if exist "build\lib\Release\assimp-vc145-mt.lib" (
+    copy /Y "build\lib\Release\assimp-vc145-mt.lib" "lib\Release\"
+    echo   OK Copiado: assimp-vc145-mt.lib (Release)
 ) else if exist "build\lib\Release\assimp.lib" (
-    copy /Y "build\lib\Release\assimp.lib" "lib\Release\assimp-vc143-mt.lib"
-    echo   OK Copiado: assimp.lib como assimp-vc143-mt.lib (Release)
+    copy /Y "build\lib\Release\assimp.lib" "lib\Release\assimp-vc145-mt.lib"
+    echo   OK Copiado: assimp.lib como assimp-vc145-mt.lib (Release)
 ) else (
-    echo   ! No se encontro assimp-vc143-mt.lib en build\lib\Release\
+    echo   ! No se encontro assimp-vc145-mt.lib en build\lib\Release\
 )
 
 cd ..\..
@@ -163,7 +170,7 @@ echo.
 echo Ubicacion: vendor\assimp\lib\
 echo.
 echo Siguiente paso:
-echo   1. Ejecuta: vendor\bin\premake\premake5.exe vs2022
+echo   1. Ejecuta: vendor\bin\premake\premake5.exe vs2026
 echo   2. Abre Lunex-Engine.sln y compila
 echo.
 pause

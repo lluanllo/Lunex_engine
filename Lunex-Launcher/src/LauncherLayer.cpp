@@ -1,10 +1,12 @@
 #include "LauncherLayer.h"
 #include "LauncherConfig.h"
+#include "Core/VersionManager.h"
 #include <imgui.h>
 #include <filesystem>
 #include <windows.h>
 #include <fstream>
 #include <yaml-cpp/yaml.h>
+#include <commdlg.h>
 
 namespace Lunex {
 
@@ -15,8 +17,9 @@ namespace Lunex {
 
 	void LauncherLayer::OnAttach()
 	{
-		// Initialize config manager
+		// Initialize systems
 		LauncherConfigManager::Init();
+		VersionManager::Init();
 		
 		// TODO: Cargar logo y textures si existen
 		// m_LogoTexture = Texture2D::Create("assets/textures/logo.png");
@@ -30,6 +33,10 @@ namespace Lunex {
 				OnProjectCreated(name, path);
 			}
 		);
+		
+		// Check for updates and prerequisites
+		CheckForUpdates();
+		CheckPrerequisites();
 		
 		// If no recent projects, add some defaults (for testing)
 		if (m_RecentProjects.empty())
@@ -45,6 +52,14 @@ namespace Lunex {
 
 	void LauncherLayer::OnUpdate(Timestep ts)
 	{
+		// Check if editor process is running and capture logs
+		if (m_EditorProcess && m_EditorProcess->IsRunning()) {
+			std::string line;
+			while (m_EditorProcess->ReadStdoutLine(line)) {
+				m_EditorLogs.push_back(line);
+				LNX_LOG_INFO("[Editor] {0}", line);
+			}
+		}
 	}
 
 	void LauncherLayer::OnImGuiRender()
@@ -77,12 +92,24 @@ namespace Lunex {
 					Application::Get().Close();
 				ImGui::EndMenu();
 			}
+			
+			if (ImGui::BeginMenu("View"))
+			{
+				ImGui::MenuItem("System Info", nullptr, &m_ShowSystemInfo);
+				ImGui::MenuItem("Logs", nullptr, &m_ShowLogs);
+				ImGui::EndMenu();
+			}
 
 			if (ImGui::BeginMenu("Help"))
 			{
+				if (ImGui::MenuItem("Check for Updates"))
+				{
+					CheckForUpdates();
+				}
+				ImGui::Separator();
 				if (ImGui::MenuItem("About"))
 				{
-					// TODO: Show about dialog
+					m_ShowAboutDialog = true;
 				}
 				ImGui::EndMenu();
 			}
@@ -92,11 +119,33 @@ namespace Lunex {
 		// Main Content
 		ImGui::Begin("Lunex Engine Launcher");
 
-		// Header
+		// Header with version
 		ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
 		ImGui::Text("LUNEX ENGINE");
 		ImGui::PopFont();
+		ImGui::SameLine();
+		ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "v%s", VersionManager::GetCurrentVersion().ToString().c_str());
+		
 		ImGui::Text("Game Engine Launcher");
+		
+		// Show update notification
+		if (m_UpdateAvailable) {
+			ImGui::SameLine();
+			ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "Update Available!");
+		}
+		
+		// Show missing prerequisites warning
+		if (!m_MissingPrerequisites.empty()) {
+			ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Warning: Missing Prerequisites!");
+			if (ImGui::IsItemHovered()) {
+				ImGui::BeginTooltip();
+				for (const auto& prereq : m_MissingPrerequisites) {
+					ImGui::Text("- %s", prereq.c_str());
+				}
+				ImGui::EndTooltip();
+			}
+		}
+		
 		ImGui::Separator();
 		ImGui::Spacing();
 
@@ -111,6 +160,15 @@ namespace Lunex {
 			LaunchEditor();
 		}
 		ImGui::PopStyleColor(3);
+
+		ImGui::SameLine();
+		ImGui::Dummy(ImVec2(20, 0));
+		ImGui::SameLine();
+		
+		if (ImGui::Button("Launch with Logs", buttonSize))
+		{
+			LaunchEditorWithLogs();
+		}
 
 		ImGui::SameLine();
 		ImGui::Dummy(ImVec2(20, 0));
@@ -170,6 +228,34 @@ namespace Lunex {
 		// Options Panel
 		ShowOptionsPanel();
 		
+		// System Info Panel
+		if (m_ShowSystemInfo) {
+			ShowSystemInfoPanel();
+		}
+		
+		// Logs Panel
+		if (m_ShowLogs) {
+			ImGui::Begin("Editor Logs", &m_ShowLogs);
+			
+			if (ImGui::Button("Clear")) {
+				m_EditorLogs.clear();
+			}
+			
+			ImGui::Separator();
+			
+			ImGui::BeginChild("LogsScrolling");
+			for (const auto& log : m_EditorLogs) {
+				ImGui::TextUnformatted(log.c_str());
+			}
+			
+			// Auto-scroll
+			if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+				ImGui::SetScrollHereY(1.0f);
+			
+			ImGui::EndChild();
+			ImGui::End();
+		}
+		
 		// Project Creation Dialog
 		m_ProjectCreationDialog.OnImGuiRender();
 
@@ -215,42 +301,66 @@ namespace Lunex {
 
 		LNX_LOG_INFO("Editor found at: {0}", editorPath.string());
 
-		// Launch the editor
-		STARTUPINFOA si;
-		PROCESS_INFORMATION pi;
-		ZeroMemory(&si, sizeof(si));
-		si.cb = sizeof(si);
-		ZeroMemory(&pi, sizeof(pi));
-
-		std::string cmdLine = "\"" + editorPath.string() + "\"";
-		if (!m_SelectedProject.empty())
-		{
-			cmdLine += " \"" + m_SelectedProject + "\"";
+		// Build arguments
+		std::vector<std::string> args;
+		if (!m_SelectedProject.empty()) {
+			args.push_back(m_SelectedProject);
 			LauncherConfigManager::AddRecentProject(m_SelectedProject);
 		}
 
-		if (CreateProcessA(
-			NULL,
-			const_cast<char*>(cmdLine.c_str()),
-			NULL,
-			NULL,
-			FALSE,
-			0,
-			NULL,
-			NULL,
-			&si,
-			&pi))
-		{
+		// Launch using Process class
+		m_EditorProcess = std::make_unique<Process>();
+		if (m_EditorProcess->Launch(editorPath.string(), args)) {
 			LNX_LOG_INFO("Editor launched successfully!");
-			CloseHandle(pi.hProcess);
-			CloseHandle(pi.hThread);
-			
 			// Close launcher after launching editor
 			Application::Get().Close();
+		} else {
+			LNX_LOG_ERROR("Failed to launch editor");
+			m_EditorProcess.reset();
 		}
-		else
+	}
+	
+	void LauncherLayer::LaunchEditorWithLogs()
+	{
+		LNX_LOG_INFO(" launching Lunex Editor with log capture...");
+
+		// Get the path to the editor executable
+		std::filesystem::path launcherPath = std::filesystem::current_path();
+		std::filesystem::path editorPath;
+
+		#ifdef LN_DEBUG
+			editorPath = launcherPath.parent_path() / "Lunex-Editor" / "Lunex-Editor.exe";
+			if (!std::filesystem::exists(editorPath))
+				editorPath = launcherPath / "Lunex-Editor.exe";
+		#else
+			editorPath = launcherPath.parent_path() / "Lunex-Editor" / "Lunex-Editor.exe";
+			if (!std::filesystem::exists(editorPath))
+				editorPath = launcherPath / "Lunex-Editor.exe";
+		#endif
+
+		if (!std::filesystem::exists(editorPath))
 		{
-			LNX_LOG_ERROR("Failed to launch editor. Error code: {0}", GetLastError());
+			LNX_LOG_ERROR("Editor executable not found at: {0}", editorPath.string());
+			return;
+		}
+
+		// Build arguments
+		std::vector<std::string> args;
+		if (!m_SelectedProject.empty()) {
+			args.push_back(m_SelectedProject);
+			LauncherConfigManager::AddRecentProject(m_SelectedProject);
+		}
+
+		// Launch with log capture
+		m_EditorProcess = std::make_unique<Process>();
+		m_EditorLogs.clear();
+		m_ShowLogs = true;
+		
+		if (m_EditorProcess->LaunchWithCapture(editorPath.string(), args)) {
+			LNX_LOG_INFO("Editor launched with log capture!");
+		} else {
+			LNX_LOG_ERROR("Failed to launch editor");
+			m_EditorProcess.reset();
 		}
 	}
 
@@ -264,7 +374,7 @@ namespace Lunex {
 		ImGui::Begin("Engine Info");
 		
 		ImGui::Text("Lunex Engine");
-		ImGui::Text("Version: 1.0.0");
+		ImGui::Text("Version: %s", VersionManager::GetCurrentVersion().ToString().c_str());
 		ImGui::Separator();
 		
 		ImGui::Text("Renderer: OpenGL");
@@ -292,6 +402,33 @@ namespace Lunex {
 			LauncherConfigManager::ClearRecentProjects();
 			m_RecentProjects.clear();
 			m_SelectedProject.clear();
+		}
+		
+		ImGui::End();
+	}
+	
+	void LauncherLayer::ShowSystemInfoPanel()
+	{
+		ImGui::Begin("System Information", &m_ShowSystemInfo);
+		
+		ImGui::Text("Prerequisites Check:");
+		ImGui::Separator();
+		
+		if (m_MissingPrerequisites.empty()) {
+			ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "All prerequisites met!");
+		} else {
+			ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "Missing Prerequisites:");
+			for (const auto& prereq : m_MissingPrerequisites) {
+				ImGui::BulletText("%s", prereq.c_str());
+			}
+		}
+		
+		ImGui::Spacing();
+		ImGui::Separator();
+		ImGui::Spacing();
+		
+		if (ImGui::Button("Refresh")) {
+			CheckPrerequisites();
 		}
 		
 		ImGui::End();
@@ -449,6 +586,29 @@ Entities:
 			
 		} catch (const std::exception& e) {
 			LNX_LOG_ERROR("Failed to create project: {0}", e.what());
+		}
+	}
+	
+	void LauncherLayer::CheckForUpdates()
+	{
+		m_UpdateAvailable = VersionManager::IsUpdateAvailable();
+		if (m_UpdateAvailable) {
+			LNX_LOG_INFO("Update available! Latest version: {0}", VersionManager::GetLatestVersion().ToString());
+		} else {
+			LNX_LOG_INFO("You are running the latest version");
+		}
+	}
+	
+	void LauncherLayer::CheckPrerequisites()
+	{
+		m_MissingPrerequisites = VersionManager::GetMissingPrerequisites();
+		if (m_MissingPrerequisites.empty()) {
+			LNX_LOG_INFO("All prerequisites met!");
+		} else {
+			LNX_LOG_WARN("Missing prerequisites:");
+			for (const auto& prereq : m_MissingPrerequisites) {
+				LNX_LOG_WARN("  - {0}", prereq);
+			}
 		}
 	}
 }
