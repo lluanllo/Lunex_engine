@@ -563,7 +563,7 @@ project "Sandbox"
         symbols "on"
         postbuildcommands
         {
-            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Debug/assimp-vc143-mtd.dll\" \"%{cfg.targetdir}\""
+            "copy /Y \"$(SolutionDir)vendor\\assimp\\lib\\Debug\\assimp-vc143-mtd.dll\" \"%{cfg.targetdir}\"",
         }
 
     filter "configurations:Release"
@@ -572,7 +572,7 @@ project "Sandbox"
         optimize "on"
         postbuildcommands
         {
-            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\""
+            "copy /Y \"$(SolutionDir)vendor\\assimp\\lib\\Release\\assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
         }
 
     filter "configurations:Dist"
@@ -581,7 +581,7 @@ project "Sandbox"
         optimize "on"
         postbuildcommands
         {
-            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\""
+            "copy /Y \"$(SolutionDir)vendor\\assimp\\lib\\Release\\assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
         }
 
 project "Lunex-Editor"
@@ -645,10 +645,12 @@ project "Lunex-Editor"
         symbols "on"
         postbuildcommands
         {
-            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Debug/assimp-vc143-mtd.dll\" \"%{cfg.targetdir}\"",
+            "copy /Y \"$(SolutionDir)vendor\\assimp\\lib\\Debug\\assimp-vc143-mtd.dll\" \"%{cfg.targetdir}\"",
             -- ✅ AÑADE ESTOS COMANDOS para copiar assets
-            "{MKDIR} \"%{cfg.targetdir}/assets\"",
-            "{COPYDIR} \"$(SolutionDir)Lunex-Editor/assets\" \"%{cfg.targetdir}/assets\""
+            "if not exist \"%{cfg.targetdir}\\assets\" mkdir \"%{cfg.targetdir}\\assets\"",
+            "if not exist \"%{cfg.targetdir}\\assets\\shaders\" mkdir \"%{cfg.targetdir}\\assets\\shaders\"",
+            "if exist \"$(SolutionDir)Lunex-Editor\\assets\" xcopy /E /Y /I \"$(SolutionDir)Lunex-Editor\\assets\" \"%{cfg.targetdir}\\assets\" > nul",
+            "xcopy /E /Y /I \"$(SolutionDir)Lunex-Editor\\assets\\shaders\" \"%{cfg.targetdir}\\assets\\shaders\" > nul"
         }
 
     filter "configurations:Release"
@@ -657,10 +659,12 @@ project "Lunex-Editor"
         optimize "on"
         postbuildcommands
         {
-            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
+            "copy /Y \"$(SolutionDir)vendor\\assimp\\lib\\Release\\assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
             -- ✅ AÑADE ESTOS COMANDOS
-            "{MKDIR} \"%{cfg.targetdir}/assets\"",
-            "{COPYDIR} \"$(SolutionDir)Lunex-Editor/assets\" \"%{cfg.targetdir}/assets\""
+            "if not exist \"%{cfg.targetdir}\\assets\" mkdir \"%{cfg.targetdir}\\assets\"",
+            "if not exist \"%{cfg.targetdir}\\assets\\shaders\" mkdir \"%{cfg.targetdir}\\assets\\shaders\"",
+            "if exist \"$(SolutionDir)Lunex-Editor\\assets\" xcopy /E /Y /I \"$(SolutionDir)Lunex-Editor\\assets\" \"%{cfg.targetdir}\\assets\" > nul",
+            "xcopy /E /Y /I \"$(SolutionDir)Lunex-Editor\\assets\\shaders\" \"%{cfg.targetdir}\\assets\\shaders\" > nul"
         }
 
     filter "configurations:Dist"
@@ -669,10 +673,12 @@ project "Lunex-Editor"
         optimize "on"
         postbuildcommands
         {
-            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
+            "copy /Y \"$(SolutionDir)vendor\\assimp\\lib\\Release\\assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
             -- ✅ AÑADE ESTOS COMANDOS
-            "{MKDIR} \"%{cfg.targetdir}/assets\"",
-            "{COPYDIR} \"$(SolutionDir)Lunex-Editor/assets\" \"%{cfg.targetdir}/assets\""
+            "if not exist \"%{cfg.targetdir}\\assets\" mkdir \"%{cfg.targetdir}\\assets\"",
+            "if not exist \"%{cfg.targetdir}\\assets\\shaders\" mkdir \"%{cfg.targetdir}\\assets\\shaders\"",
+            "if exist \"$(SolutionDir)Lunex-Editor\\assets\" xcopy /E /Y /I \"$(SolutionDir)Lunex-Editor\\assets\" \"%{cfg.targetdir}\\assets\" > nul",
+            "xcopy /E /Y /I \"$(SolutionDir)Lunex-Editor\\assets\\shaders\" \"%{cfg.targetdir}\\assets\\shaders\" > nul"
         }
 
 -- ============================================================================
@@ -737,6 +743,7 @@ project "Lunex-Launcher"
         systemversion "latest"
         links { "ole32.lib" }
         libdirs { "%{LibraryDir.VulkanSDK}" }
+        linkoptions { "/ENTRY:mainCRTStartup" }
 
     filter "configurations:Debug"
         defines { "LN_DEBUG" }
@@ -745,9 +752,11 @@ project "Lunex-Launcher"
         links { "%{Library.Vulkan}" }
         postbuildcommands
         {
-            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Debug/assimp-vc143-mtd.dll\" \"%{cfg.targetdir}\"",
-            "{MKDIR} \"%{cfg.targetdir}/assets\"",
-            "{COPYDIR} \"$(SolutionDir)Lunex-Launcher/assets\" \"%{cfg.targetdir}/assets\""
+            "copy /Y \"$(SolutionDir)vendor\\assimp\\lib\\Debug\\assimp-vc143-mtd.dll\" \"$(SolutionDir)bin\\Debug-windows-x86_64\\Lunex-Launcher\\\"",
+            "if not exist \"$(SolutionDir)bin\\Debug-windows-x86_64\\Lunex-Launcher\\assets\" mkdir \"$(SolutionDir)bin\\Debug-windows-x86_64\\Lunex-Launcher\\assets\"",
+            "if not exist \"$(SolutionDir)bin\\Debug-windows-x86_64\\Lunex-Launcher\\assets\\shaders\" mkdir \"$(SolutionDir)bin\\Debug-windows-x86_64\\Lunex-Launcher\\assets\\shaders\"",
+            "if exist \"$(SolutionDir)Lunex-Launcher\\assets\" xcopy /E /Y /I /Q \"$(SolutionDir)Lunex-Launcher\\assets\\*\" \"$(SolutionDir)bin\\Debug-windows-x86_64\\Lunex-Launcher\\assets\\\" > nul 2>&1",
+            "xcopy /E /Y /I /Q \"$(SolutionDir)Lunex-Editor\\assets\\shaders\\*\" \"$(SolutionDir)bin\\Debug-windows-x86_64\\Lunex-Launcher\\assets\\shaders\\\" > nul 2>&1"
         }
 
     filter "configurations:Release"
@@ -757,9 +766,11 @@ project "Lunex-Launcher"
         links { "%{Library.Vulkan}" }
         postbuildcommands
         {
-            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
-            "{MKDIR} \"%{cfg.targetdir}/assets\"",
-            "{COPYDIR} \"$(SolutionDir)Lunex-Launcher/assets\" \"%{cfg.targetdir}/assets\""
+            "copy /Y \"$(SolutionDir)vendor\\assimp\\lib\\Release\\assimp-vc143-mt.dll\" \"$(SolutionDir)bin\\Release-windows-x86_64\\Lunex-Launcher\\\"",
+            "if not exist \"$(SolutionDir)bin\\Release-windows-x86_64\\Lunex-Launcher\\assets\" mkdir \"$(SolutionDir)bin\\Release-windows-x86_64\\Lunex-Launcher\\assets\"",
+            "if not exist \"$(SolutionDir)bin\\Release-windows-x86_64\\Lunex-Launcher\\assets\\shaders\" mkdir \"$(SolutionDir)bin\\Release-windows-x86_64\\Lunex-Launcher\\assets\\shaders\"",
+            "if exist \"$(SolutionDir)Lunex-Launcher\\assets\" xcopy /E /Y /I /Q \"$(SolutionDir)Lunex-Launcher\\assets\\*\" \"$(SolutionDir)bin\\Release-windows-x86_64\\Lunex-Launcher\\assets\\\" > nul 2>&1",
+            "xcopy /E /Y /I /Q \"$(SolutionDir)Lunex-Editor\\assets\\shaders\\*\" \"$(SolutionDir)bin\\Release-windows-x86_64\\Lunex-Launcher\\assets\\shaders\\\" > nul 2>&1"
         }
 
     filter "configurations:Dist"
@@ -770,7 +781,9 @@ project "Lunex-Launcher"
         links { "%{Library.Vulkan}" }
         postbuildcommands
         {
-            "{COPY} \"$(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll\" \"%{cfg.targetdir}\"",
-            "{MKDIR} \"%{cfg.targetdir}/assets\"",
-            "{COPYDIR} \"$(SolutionDir)Lunex-Launcher/assets\" \"%{cfg.targetdir}/assets\""
+            "copy /Y \"$(SolutionDir)vendor\\assimp\\lib\\Release\\assimp-vc143-mt.dll\" \"$(SolutionDir)bin\\Dist-windows-x86_64\\Lunex-Launcher\\\"",
+            "if not exist \"$(SolutionDir)bin\\Dist-windows-x86_64\\Lunex-Launcher\\assets\" mkdir \"$(SolutionDir)bin\\Dist-windows-x86_64\\Lunex-Launcher\\assets\"",
+            "if not exist \"$(SolutionDir)bin\\Dist-windows-x86_64\\Lunex-Launcher\\assets\\shaders\" mkdir \"$(SolutionDir)bin\\Dist-windows-x86_64\\Lunex-Launcher\\assets\\shaders\"",
+            "if exist \"$(SolutionDir)Lunex-Launcher\\assets\" xcopy /E /Y /I /Q \"$(SolutionDir)Lunex-Launcher\\assets\\*\" \"$(SolutionDir)bin\\Dist-windows-x86_64\\Lunex-Launcher\\assets\\\" > nul 2>&1",
+            "xcopy /E /Y /I /Q \"$(SolutionDir)Lunex-Editor\\assets\\shaders\\*\" \"$(SolutionDir)bin\\Dist-windows-x86_64\\Lunex-Launcher\\assets\\shaders\\\" > nul 2>&1"
         }
