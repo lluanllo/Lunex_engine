@@ -748,9 +748,14 @@ namespace Lunex {
 	}
 
 	bool EditorLayer::OnMouseButtonPressed(MouseButtonPressedEvent& e) {
+		// ✅ PREVENT SELECTION when fly camera is active (right click held)
+		if (m_EditorCamera.IsFlyCameraActive()) {
+			return false; // Don't process clicks while flying
+		}
+		
 		// ✅ MULTI-SELECTION RAY PICKING (Blender-style)
 		if (e.GetMouseButton() == Mouse::ButtonLeft) {
-			if (m_ViewportPanel.IsViewportHovered() && !ImGuizmo::IsOver() && !Input::IsKeyPressed(Key::LeftAlt)) {
+			if (m_ViewportPanel.IsViewportHovered() && !ImGuizmo::IsOver()) {
 				// ✅ Use Input system for modifier detection
 				bool shiftPressed = Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift);
 				bool ctrlPressed = Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl);

@@ -33,6 +33,8 @@ namespace Lunex {
 			float GetPitch() const { return m_Pitch; }
 			float GetYaw() const { return m_Yaw; }
 			
+			bool IsFlyCameraActive() const { return m_IsFlyCameraActive; }
+			
 		private:
 			void UpdateProjection();
 			void UpdateView();
@@ -62,5 +64,7 @@ namespace Lunex {
 			float m_Pitch = 0.0f, m_Yaw = 0.0f;
 			
 			float m_ViewportWidth = 1280, m_ViewportHeight = 720;
+			
+			bool m_IsFlyCameraActive = false;
 	};
 }
