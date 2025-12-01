@@ -7,6 +7,7 @@
 #include "Scene/Scene.h"
 #include "SceneHierarchyPanel.h"
 #include "ToolbarPanel.h"
+#include "GizmoSettingsPanel.h"
 #include <glm/glm.hpp>
 #include <functional>
 #include <filesystem>
@@ -19,7 +20,8 @@ namespace Lunex {
 
 		void OnImGuiRender(Ref<Framebuffer> framebuffer, SceneHierarchyPanel& hierarchyPanel, 
 						   const EditorCamera& editorCamera, Entity selectedEntity, int gizmoType,
-						   ToolbarPanel& toolbarPanel, SceneState sceneState, bool toolbarEnabled);
+						   ToolbarPanel& toolbarPanel, GizmoSettingsPanel& gizmoSettingsPanel,
+						   SceneState sceneState, bool toolbarEnabled);
 
 		bool IsViewportFocused() const { return m_ViewportFocused; }
 		bool IsViewportHovered() const { return m_ViewportHovered; }
@@ -38,5 +40,11 @@ namespace Lunex {
 		glm::vec2 m_ViewportBounds[2];
 
 		std::function<void(const std::filesystem::path&)> m_OnSceneDropCallback;
+		
+		// ? State tracking for proper delta calculations
+		glm::vec3 m_PreviousPivotPosition = glm::vec3(0.0f);
+		glm::vec3 m_PreviousPivotRotation = glm::vec3(0.0f);
+		glm::vec3 m_PreviousPivotScale = glm::vec3(1.0f);
+		bool m_GizmoWasUsing = false;
 	};
 }

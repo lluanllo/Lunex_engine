@@ -495,6 +495,14 @@ namespace Lunex {
 		ClearSelection();
 	}
 	
+	void SceneHierarchyPanel::AddEntityToSelection(Entity entity) {
+		if (entity) {
+			m_SelectedEntities.insert(entity);
+			m_SelectionContext = entity;
+			m_LastSelectedEntity = entity;
+		}
+	}
+	
 	// ============================================================================
 	// ENTITY OPERATIONS
 	// ============================================================================
@@ -716,5 +724,62 @@ namespace Lunex {
 		}
 		
 		return entities;
+	}
+	
+	// ============================================================================
+	// PIVOT POINT CALCULATIONS (Blender-style)
+	// ============================================================================	
+	
+	glm::vec3 SceneHierarchyPanel::CalculateMedianPoint() const {
+		if (m_SelectedEntities.empty())
+			return glm::vec3(0.0f);
+		
+		glm::vec3 sum(0.0f);
+		int count = 0;
+		
+		for (auto entity : m_SelectedEntities) {
+			if (entity.HasComponent<TransformComponent>()) {
+				sum += entity.GetComponent<TransformComponent>().Translation;
+				count++;
+			}
+		}
+		
+		return count > 0 ? sum / static_cast<float>(count) : glm::vec3(0.0f);
+	}
+	
+	glm::vec3 SceneHierarchyPanel::CalculateActiveElementPosition() const {
+		// Return position of last selected entity (active element)
+		// Create non-const copy to access members
+		Entity activeEntity = m_LastSelectedEntity;
+		
+		if (activeEntity && activeEntity.HasComponent<TransformComponent>()) {
+			return activeEntity.GetComponent<TransformComponent>().Translation;
+		}
+		
+		// Fallback to median point if no active element
+		return CalculateMedianPoint();
+	}
+	
+	glm::vec3 SceneHierarchyPanel::CalculateBoundingBoxCenter() const {
+		if (m_SelectedEntities.empty())
+			return glm::vec3(0.0f);
+		
+		glm::vec3 min(FLT_MAX);
+		glm::vec3 max(-FLT_MAX);
+		
+		for (auto entity : m_SelectedEntities) {
+			if (entity.HasComponent<TransformComponent>()) {
+				const auto& transform = entity.GetComponent<TransformComponent>();
+				glm::vec3 pos = transform.Translation;
+				
+				// Simple bounding box (could be improved with actual mesh bounds)
+				glm::vec3 halfExtents = transform.Scale * 0.5f;
+				
+				min = glm::min(min, pos - halfExtents);
+				max = glm::max(max, pos + halfExtents);
+			}
+		}
+		
+		return (min + max) * 0.5f;
 	}
 }

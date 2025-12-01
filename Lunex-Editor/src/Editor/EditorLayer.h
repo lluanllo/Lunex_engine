@@ -12,6 +12,7 @@
 #include "../Panels/MenuBarPanel.h"
 #include "../Panels/ProjectCreationDialog.h"
 #include "../Panels/InputSettingsPanel.h"
+#include "../Panels/GizmoSettingsPanel.h"
 
 #include "Renderer/EditorCamera.h"
 
@@ -109,6 +110,7 @@ namespace Lunex {
 			MenuBarPanel m_MenuBarPanel;
 			ProjectCreationDialog m_ProjectCreationDialog;
 			InputSettingsPanel m_InputSettingsPanel;
+			GizmoSettingsPanel m_GizmoSettingsPanel;
 			
 			// Editor resources
 			Ref<Texture2D> m_IconPlay, m_IconSimulate, m_IconStop;

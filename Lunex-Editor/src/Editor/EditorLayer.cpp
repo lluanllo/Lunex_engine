@@ -75,6 +75,62 @@ namespace Lunex {
 			m_IconPlay ? "OK" : "NULL",
 			m_IconSimulate ? "OK" : "NULL",
 			m_IconStop ? "OK" : "NULL");
+		
+		// ========================================
+		// LOAD GIZMO SETTINGS ICONS
+		// ========================================
+		LNX_LOG_INFO("Loading gizmo settings icons...");
+		
+		// Pivot Point Icons
+		Ref<Texture2D> iconMedianPoint = Texture2D::Create("Resources/Icons/GizmoSettings/MedianPointIcon.png");
+		if (iconMedianPoint) {
+			m_GizmoSettingsPanel.SetMedianPointIcon(iconMedianPoint);
+			LNX_LOG_INFO("✓ MedianPointIcon loaded successfully");
+		} else {
+			LNX_LOG_WARN("Failed to load MedianPointIcon.png - using fallback emoji");
+		}
+		
+		Ref<Texture2D> iconActiveElement = Texture2D::Create("Resources/Icons/GizmoSettings/ActiveElementIcon.png");
+		if (iconActiveElement) {
+			m_GizmoSettingsPanel.SetActiveElementIcon(iconActiveElement);
+			LNX_LOG_INFO("✓ ActiveElementIcon loaded successfully");
+		} else {
+			LNX_LOG_WARN("Failed to load ActiveElementIcon.png - using fallback emoji");
+		}
+		
+		Ref<Texture2D> iconIndividualOrigins = Texture2D::Create("Resources/Icons/GizmoSettings/IndividualOriginsIcon.png");
+		if (iconIndividualOrigins) {
+			m_GizmoSettingsPanel.SetIndividualOriginsIcon(iconIndividualOrigins);
+			LNX_LOG_INFO("✓ IndividualOriginsIcon loaded successfully");
+		} else {
+			LNX_LOG_WARN("Failed to load IndividualOriginsIcon.png - using fallback emoji");
+		}
+		
+		Ref<Texture2D> iconBoundingBox = Texture2D::Create("Resources/Icons/GizmoSettings/BoundingBoxIcon.png");
+		if (iconBoundingBox) {
+			m_GizmoSettingsPanel.SetBoundingBoxIcon(iconBoundingBox);
+			LNX_LOG_INFO("✓ BoundingBoxIcon loaded successfully");
+		} else {
+			LNX_LOG_WARN("Failed to load BoundingBoxIcon.png - using fallback emoji");
+		}
+		
+		// Orientation Icons
+		Ref<Texture2D> iconGlobal = Texture2D::Create("Resources/Icons/GizmoSettings/GlobalOrientationIcon.png");
+		if (iconGlobal) {
+			m_GizmoSettingsPanel.SetGlobalIcon(iconGlobal);
+			LNX_LOG_INFO("✓ GlobalOrientationIcon loaded successfully");
+		} else {
+			LNX_LOG_WARN("Failed to load GlobalOrientationIcon.png - using fallback emoji");
+		}
+		
+		Ref<Texture2D> iconLocal = Texture2D::Create("Resources/Icons/GizmoSettings/LocalOrientationIcon.png");
+		if (iconLocal) {
+			m_GizmoSettingsPanel.SetLocalIcon(iconLocal);
+			LNX_LOG_INFO("✓ LocalOrientationIcon loaded successfully");
+		} else {
+			LNX_LOG_WARN("Failed to load LocalOrientationIcon.png - using fallback emoji");
+		}
+		
 		// Configure viewport panel
 		m_ViewportPanel.SetOnSceneDropCallback([this](const std::filesystem::path& path) {
 			OpenScene(path);
@@ -625,8 +681,18 @@ namespace Lunex {
 		m_PropertiesPanel.SetSelectedEntity(selectedEntity);
 		
 		m_ViewportPanel.OnImGuiRender(m_Framebuffer, m_SceneHierarchyPanel, m_EditorCamera,
-			selectedEntity, m_GizmoType, m_ToolbarPanel,
+			selectedEntity, m_GizmoType, m_ToolbarPanel, m_GizmoSettingsPanel,
 			m_SceneState, (bool)m_ActiveScene);
+		
+		// ========================================
+		// RENDER GIZMO SETTINGS PANEL (overlay on viewport)
+		// ========================================
+		bool toolbarEnabled = m_SceneState == SceneState::Edit && m_ActiveScene;
+		m_GizmoSettingsPanel.OnImGuiRender(
+			glm::vec2(m_ViewportBounds[0].x, m_ViewportBounds[0].y),
+			glm::vec2(m_ViewportSize.x, m_ViewportSize.y),
+			toolbarEnabled
+		);
 
 		ImGui::End();
 	}
@@ -682,10 +748,52 @@ namespace Lunex {
 	}
 
 	bool EditorLayer::OnMouseButtonPressed(MouseButtonPressedEvent& e) {
-		// ✅ LÓGICA DE SELECCIÓN - Funciona para 2D Y 3D automáticamente
+		// ✅ MULTI-SELECTION RAY PICKING (Blender-style)
 		if (e.GetMouseButton() == Mouse::ButtonLeft) {
-			if (m_ViewportPanel.IsViewportHovered() && !ImGuizmo::IsOver() && !Input::IsKeyPressed(Key::LeftAlt))
-				m_SceneHierarchyPanel.SetSelectedEntity(m_HoveredEntity);
+			if (m_ViewportPanel.IsViewportHovered() && !ImGuizmo::IsOver() && !Input::IsKeyPressed(Key::LeftAlt)) {
+				// ✅ Use Input system for modifier detection
+				bool shiftPressed = Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift);
+				bool ctrlPressed = Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl);
+				
+				if (m_HoveredEntity) {
+					if (shiftPressed) {
+						// Shift+Click: Add to selection (Blender-style)
+						const auto& selectedEntities = m_SceneHierarchyPanel.GetSelectedEntities();
+						
+						if (selectedEntities.empty()) {
+							// No selection yet, just select this entity
+							m_SceneHierarchyPanel.SetSelectedEntity(m_HoveredEntity);
+							LNX_LOG_INFO("Selected first entity");
+						}
+						else if (m_SceneHierarchyPanel.IsEntitySelected(m_HoveredEntity)) {
+							// Already selected, do nothing (keep selection)
+							LNX_LOG_INFO("Entity already in selection");
+						}
+						else {
+							// Add clicked entity to selection
+							m_SceneHierarchyPanel.AddEntityToSelection(m_HoveredEntity);
+							LNX_LOG_INFO("Added entity to multi-selection ({0} selected)", selectedEntities.size() + 1);
+						}
+					}
+					else if (ctrlPressed) {
+						// Ctrl+Click: Toggle selection (Blender-style)
+						m_SceneHierarchyPanel.ToggleEntitySelection(m_HoveredEntity);
+						LNX_LOG_INFO("Toggled entity selection");
+					}
+					else {
+						// Normal click: Select only this entity (clear previous)
+						m_SceneHierarchyPanel.SetSelectedEntity(m_HoveredEntity);
+					}
+				}
+				else {
+					// Clicked on empty space
+					if (!shiftPressed && !ctrlPressed) {
+						// Clear selection if no modifiers
+						m_SceneHierarchyPanel.ClearSelection();
+						LNX_LOG_INFO("Cleared selection");
+					}
+				}
+			}
 		}
 		return false;
 	}
@@ -706,8 +814,8 @@ namespace Lunex {
 			// Box Colliders 2D
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, BoxCollider2DComponent>();
-				for (auto entity : view) {
-					auto [tc, bc2d] = view.get<TransformComponent, BoxCollider2DComponent>(entity);
+				for (auto entityID : view) {
+					auto [tc, bc2d] = view.get<TransformComponent, BoxCollider2DComponent>(entityID);
 
 					glm::vec3 translation = tc.Translation + glm::vec3(bc2d.Offset, 0.001f);
 					glm::vec3 scale = tc.Scale * glm::vec3(bc2d.Size * 2.0f, 1.0f);
@@ -723,8 +831,8 @@ namespace Lunex {
 			// Circle Colliders 2D
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, CircleCollider2DComponent>();
-				for (auto entity : view) {
-					auto [tc, cc2d] = view.get<TransformComponent, CircleCollider2DComponent>(entity);
+				for (auto entityID : view) {
+					auto [tc, cc2d] = view.get<TransformComponent, CircleCollider2DComponent>(entityID);
 
 					glm::vec3 translation = tc.Translation + glm::vec3(cc2d.Offset, 0.001f);
 					glm::vec3 scale = tc.Scale * glm::vec3(cc2d.Radius * 2.0f);
@@ -742,8 +850,8 @@ namespace Lunex {
 			// Box Colliders 3D
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, BoxCollider3DComponent>();
-				for (auto entity : view) {
-					auto [tc, bc3d] = view.get<TransformComponent, BoxCollider3DComponent>(entity);
+				for (auto entityID : view) {
+					auto [tc, bc3d] = view.get<TransformComponent, BoxCollider3DComponent>(entityID);
 
 					glm::vec3 translation = tc.Translation + bc3d.Offset;
 					glm::vec3 scale = tc.Scale * (bc3d.HalfExtents * 2.0f); // HalfExtents → Full size
@@ -759,8 +867,8 @@ namespace Lunex {
 			// Sphere Colliders 3D
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, SphereCollider3DComponent>();
-				for (auto entity : view) {
-					auto [tc, sc3d] = view.get<TransformComponent, SphereCollider3DComponent>(entity);
+				for (auto entityID : view) {
+					auto [tc, sc3d] = view.get<TransformComponent, SphereCollider3DComponent>(entityID);
 
 					glm::vec3 translation = tc.Translation + sc3d.Offset;
 					glm::vec3 scale = tc.Scale * glm::vec3(sc3d.Radius * 2.0f);
@@ -775,8 +883,8 @@ namespace Lunex {
 			// Capsule Colliders 3D (approximated as circle + rects)
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, CapsuleCollider3DComponent>();
-				for (auto entity : view) {
-					auto [tc, cc3d] = view.get<TransformComponent, CapsuleCollider3DComponent>(entity);
+				for (auto entityID : view) {
+					auto [tc, cc3d] = view.get<TransformComponent, CapsuleCollider3DComponent>(entityID);
 
 					glm::vec3 translation = tc.Translation + cc3d.Offset;
 					glm::vec3 scale = tc.Scale * glm::vec3(cc3d.Radius * 2.0f, cc3d.Height, cc3d.Radius * 2.0f);
