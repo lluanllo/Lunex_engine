@@ -49,6 +49,9 @@ namespace Lunex {
 		void NavigateBack();
 		void NavigateForward();
 		void NavigateUp();
+		
+		// Selection queries
+		bool HasSelection() const { return !m_SelectedItems.empty(); }
 
 	private:
 		// Rendering

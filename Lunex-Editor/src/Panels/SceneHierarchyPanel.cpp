@@ -158,7 +158,7 @@ namespace Lunex {
 		
 		// Multi-selection support
 		if (IsEntitySelected(entity)) {
-			flags |= ImGuiTreeNodeFlags_Selected;
+		flags |= ImGuiTreeNodeFlags_Selected;
 		}
 
 		// Determinar icono según componentes (priority order)
@@ -503,31 +503,154 @@ namespace Lunex {
 			return;
 			
 		auto& tag = entity.GetComponent<TagComponent>().Tag;
-		std::string newName = tag + " - Copy";
 		
+		// ========================================
+		// GENERATE UNIQUE NAME (Windows style)
+		// ========================================
+		std::string baseName = tag;
+		std::string newName;
+		
+		// Remove existing " (X)" suffix to get clean base name
+		size_t lastParen = baseName.rfind(" (");
+		if (lastParen != std::string::npos) {
+			std::string afterParen = baseName.substr(lastParen + 2);
+			// Check if it's a number followed by )
+			if (!afterParen.empty() && afterParen.back() == ')') {
+				std::string numStr = afterParen.substr(0, afterParen.size() - 1);
+				bool isNumber = !numStr.empty() && std::all_of(numStr.begin(), numStr.end(), ::isdigit);
+				if (isNumber) {
+					baseName = baseName.substr(0, lastParen);
+				}
+			}
+		}
+		
+		// Find unique name with counter (Windows style: Name (1), Name (2), ...)
+		int counter = 1;
+		bool nameExists = true;
+		
+		while (nameExists) {
+			newName = baseName + " (" + std::to_string(counter) + ")";
+			
+			// Check if name already exists in scene
+			nameExists = false;
+			auto view = m_Context->m_Registry.view<TagComponent>();
+			for (auto entityID : view) {
+				Entity e{ entityID, m_Context.get() };
+				if (e.GetComponent<TagComponent>().Tag == newName) {
+					nameExists = true;
+					break;
+				}
+			}
+			
+			counter++;
+		}
+		
+		// ========================================
+		// CREATE NEW ENTITY WITH UNIQUE NAME
+		// ========================================
 		Entity newEntity = m_Context->CreateEntity(newName);
 		
-		// Copy Transform
+		// ========================================
+		// COPY TRANSFORM (Always present)
+		// ========================================
 		if (entity.HasComponent<TransformComponent>()) {
 			newEntity.GetComponent<TransformComponent>() = entity.GetComponent<TransformComponent>();
 		}
 		
-		// Copy other components (simplified - should use proper component copying)
-		if (entity.HasComponent<CameraComponent>()) {
+		// ========================================
+		// COPY RENDERING COMPONENTS
+		// ========================================
+		if (entity.HasComponent<CameraComponent>() && !newEntity.HasComponent<CameraComponent>()) {
 			newEntity.AddComponent<CameraComponent>(entity.GetComponent<CameraComponent>());
 		}
-		if (entity.HasComponent<SpriteRendererComponent>()) {
+		
+		if (entity.HasComponent<SpriteRendererComponent>() && !newEntity.HasComponent<SpriteRendererComponent>()) {
 			newEntity.AddComponent<SpriteRendererComponent>(entity.GetComponent<SpriteRendererComponent>());
 		}
-		if (entity.HasComponent<MeshComponent>()) {
+		
+		if (entity.HasComponent<CircleRendererComponent>() && !newEntity.HasComponent<CircleRendererComponent>()) {
+			newEntity.AddComponent<CircleRendererComponent>(entity.GetComponent<CircleRendererComponent>());
+		}
+		
+		if (entity.HasComponent<MeshComponent>() && !newEntity.HasComponent<MeshComponent>()) {
 			newEntity.AddComponent<MeshComponent>(entity.GetComponent<MeshComponent>());
 		}
-		if (entity.HasComponent<LightComponent>()) {
+		
+		if (entity.HasComponent<LightComponent>() && !newEntity.HasComponent<LightComponent>()) {
 			newEntity.AddComponent<LightComponent>(entity.GetComponent<LightComponent>());
 		}
 		
+		// ========================================
+		// COPY MATERIAL & TEXTURE (Check if already exists!)
+		// MeshComponent might auto-create MaterialComponent
+		// ========================================
+		if (entity.HasComponent<MaterialComponent>()) {
+			if (newEntity.HasComponent<MaterialComponent>()) {
+				// Already exists, just copy the data
+				newEntity.GetComponent<MaterialComponent>() = entity.GetComponent<MaterialComponent>();
+			} else {
+				// Doesn't exist, add it
+				newEntity.AddComponent<MaterialComponent>(entity.GetComponent<MaterialComponent>());
+			}
+		}
+		
+		if (entity.HasComponent<TextureComponent>()) {
+			if (newEntity.HasComponent<TextureComponent>()) {
+				// Already exists, just copy the data
+				newEntity.GetComponent<TextureComponent>() = entity.GetComponent<TextureComponent>();
+			} else {
+				// Doesn't exist, add it
+				newEntity.AddComponent<TextureComponent>(entity.GetComponent<TextureComponent>());
+			}
+		}
+		
+		// ========================================
+		// COPY PHYSICS 2D COMPONENTS
+		// ========================================
+		if (entity.HasComponent<Rigidbody2DComponent>() && !newEntity.HasComponent<Rigidbody2DComponent>()) {
+			newEntity.AddComponent<Rigidbody2DComponent>(entity.GetComponent<Rigidbody2DComponent>());
+		}
+		
+		if (entity.HasComponent<BoxCollider2DComponent>() && !newEntity.HasComponent<BoxCollider2DComponent>()) {
+			newEntity.AddComponent<BoxCollider2DComponent>(entity.GetComponent<BoxCollider2DComponent>());
+		}
+		
+		if (entity.HasComponent<CircleCollider2DComponent>() && !newEntity.HasComponent<CircleCollider2DComponent>()) {
+			newEntity.AddComponent<CircleCollider2DComponent>(entity.GetComponent<CircleCollider2DComponent>());
+		}
+		
+		// ========================================
+		// COPY PHYSICS 3D COMPONENTS
+		// ========================================
+		if (entity.HasComponent<Rigidbody3DComponent>() && !newEntity.HasComponent<Rigidbody3DComponent>()) {
+			newEntity.AddComponent<Rigidbody3DComponent>(entity.GetComponent<Rigidbody3DComponent>());
+		}
+		
+		if (entity.HasComponent<BoxCollider3DComponent>() && !newEntity.HasComponent<BoxCollider3DComponent>()) {
+			newEntity.AddComponent<BoxCollider3DComponent>(entity.GetComponent<BoxCollider3DComponent>());
+		}
+		
+		if (entity.HasComponent<SphereCollider3DComponent>() && !newEntity.HasComponent<SphereCollider3DComponent>()) {
+			newEntity.AddComponent<SphereCollider3DComponent>(entity.GetComponent<SphereCollider3DComponent>());
+		}
+		
+		if (entity.HasComponent<CapsuleCollider3DComponent>() && !newEntity.HasComponent<CapsuleCollider3DComponent>()) {
+			newEntity.AddComponent<CapsuleCollider3DComponent>(entity.GetComponent<CapsuleCollider3DComponent>());
+		}
+		
+		if (entity.HasComponent<MeshCollider3DComponent>() && !newEntity.HasComponent<MeshCollider3DComponent>()) {
+			newEntity.AddComponent<MeshCollider3DComponent>(entity.GetComponent<MeshCollider3DComponent>());
+		}
+		
+		// ========================================
+		// COPY SCRIPTING COMPONENT
+		// ========================================
+		if (entity.HasComponent<ScriptComponent>() && !newEntity.HasComponent<ScriptComponent>()) {
+			newEntity.AddComponent<ScriptComponent>(entity.GetComponent<ScriptComponent>());
+		}
+		
 		SelectEntity(newEntity);
-		LNX_LOG_INFO("Duplicated entity: {0}", tag);
+		LNX_LOG_INFO("Duplicated entity: {0} -> {1}", tag, newName);
 	}
 	
 	void SceneHierarchyPanel::DuplicateSelectedEntities() {

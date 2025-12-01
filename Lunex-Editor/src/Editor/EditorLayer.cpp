@@ -297,9 +297,54 @@ namespace Lunex {
 			"Editor.DeleteSelected", ActionContext::Pressed,
 			[this](const ActionState&) {
 				if (m_SceneState != SceneState::Edit) return;
-				m_SceneHierarchyPanel.DeleteSelectedEntities();
+				
+				// ========================================
+				// CONTEXT-AWARE DELETE (Smart detection)
+				// ========================================
+				// Check which panel is focused and delete accordingly
+				
+				// Get focused window name
+				ImGuiWindow* window = ImGui::GetCurrentContext()->NavWindow;
+				const char* focusedWindow = window ? window->Name : nullptr;
+				
+				// Priority 1: Content Browser (if has selection and is focused)
+				if (focusedWindow && 
+					(strcmp(focusedWindow, "Content Browser") == 0 || 
+					 strstr(focusedWindow, "Content Browser") != nullptr)) {
+					// Content Browser is focused - delete files/folders
+					m_ContentBrowserPanel.DeleteSelectedItems();
+					LNX_LOG_INFO("Context-aware delete: Content Browser items");
+					return;
+				}
+				
+				// Priority 2: Scene Hierarchy (if has selection and is focused)
+				if (focusedWindow && 
+					(strcmp(focusedWindow, "Scene Hierarchy") == 0 || 
+					 strstr(focusedWindow, "Scene Hierarchy") != nullptr)) {
+					// Scene Hierarchy is focused - delete entities
+					m_SceneHierarchyPanel.DeleteSelectedEntities();
+					LNX_LOG_INFO("Context-aware delete: Scene entities");
+					return;
+				}
+				
+				// Priority 3: If Content Browser has selections (fallback)
+				if (m_ContentBrowserPanel.HasSelection()) {
+					m_ContentBrowserPanel.DeleteSelectedItems();
+					LNX_LOG_INFO("Context-aware delete: Content Browser items (fallback)");
+					return;
+				}
+				
+				// Priority 4: If Scene Hierarchy has selections (fallback)
+				if (!m_SceneHierarchyPanel.GetSelectedEntities().empty()) {
+					m_SceneHierarchyPanel.DeleteSelectedEntities();
+					LNX_LOG_INFO("Context-aware delete: Scene entities (fallback)");
+					return;
+				}
+				
+				// No selections in either panel
+				LNX_LOG_WARN("Delete pressed but no items selected in any panel");
 			},
-			"Delete selected items", true
+			"Delete selected items (context-aware)", true
 		));
 		
 		registry.Register("Editor.RenameSelected", CreateRef<FunctionAction>(
