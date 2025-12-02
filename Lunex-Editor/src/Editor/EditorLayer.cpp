@@ -681,7 +681,7 @@ namespace Lunex {
 		m_PropertiesPanel.SetSelectedEntity(selectedEntity);
 		
 		m_ViewportPanel.OnImGuiRender(m_Framebuffer, m_SceneHierarchyPanel, m_EditorCamera,
-			selectedEntity, m_GizmoType, m_ToolbarPanel, m_GizmoSettingsPanel,
+			selectedEntity, m_GizmoType, m_ToolbarPanel,
 			m_SceneState, (bool)m_ActiveScene);
 		
 		// ========================================
