@@ -224,11 +224,8 @@ namespace Lunex {
 		s_Data.LineVertexCount = 0;
 		s_Data.LineVertexBufferPtr = s_Data.LineVertexBufferBase;
 		
-		s_Data.TextureSlotIndex = 1;
-		
-		// Clear texture slots (except white texture at slot 0)
-		for (uint32_t i = 1; i < s_Data.MaxTextureSlots; i++)
-			s_Data.TextureSlots[i].reset();
+		s_Data.TextureSlotIndex = 1; // keep white texture at slot 0, do NOT clear other slots here (Hazel style)
+		// (Previously cleared texture slots each batch causing unnecessary rebinding and potential ordering artifacts)
 	}
 	
 	void Renderer2D::Flush() {
@@ -486,7 +483,7 @@ namespace Lunex {
 		transform[2] = glm::vec4(toCamera, 0.0f);
 		transform[3] = glm::vec4(position, 1.0f);
 		
-		// Draw as textured quad
+		// Draw as textured quad with neutral tint (no color modulation)
 		DrawQuad(transform, texture, 1.0f, glm::vec4(1.0f), entityID);
 	}
 	
