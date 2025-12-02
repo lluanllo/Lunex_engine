@@ -892,29 +892,155 @@ namespace Lunex {
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
 		});
 
-		// Material Component
+		// Material Component - NUEVO SISTEMA
 		DrawComponent<MaterialComponent>("✨ Material", entity, [&](auto& component) {
+			// ========== MATERIAL ASSET SECTION ==========
+			SectionHeader("📦", "Material Asset");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+			
+			// Material Asset Card
+			ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
+			ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+			ImGui::BeginChild("##MaterialAssetCard", ImVec2(-1, 150.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+			
+			if (component.Instance && component.Instance->GetBaseAsset()) {
+				auto asset = component.Instance->GetBaseAsset();
+				
+				// Header row
+				ImGui::BeginGroup();
+				
+				// Preview thumbnail (placeholder por ahora)
+				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_BG_MEDIUM);
+				ImGui::Button("##preview", ImVec2(70, 70));
+				ImGui::PopStyleColor();
+				
+				// TODO: Cuando esté MaterialPreviewRenderer:
+				// if (component.PreviewThumbnail) {
+				//     ImGui::Image((void*)(intptr_t)component.PreviewThumbnail->GetRendererID(), 
+				//                  ImVec2(70, 70), ImVec2(0, 1), ImVec2(1, 0));
+				// }
+				
+				ImGui::EndGroup();
+				ImGui::SameLine();
+				
+				// Material info
+				ImGui::BeginGroup();
+				
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HEADER);
+				ImGui::Text("🎨 %s", component.GetMaterialName().c_str());
+				ImGui::PopStyleColor();
+				
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+				if (!component.GetAssetPath().empty()) {
+					std::filesystem::path matPath(component.GetAssetPath());
+					ImGui::Text("📁 %s", matPath.filename().string().c_str());
+				} else {
+					ImGui::Text("📁 Default Material");
+				}
+				ImGui::PopStyleColor();
+				
+				ImGui::Spacing();
+				
+				// Local overrides indicator
+				if (component.HasLocalOverrides()) {
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_WARNING);
+					ImGui::Text("⚙️ Has local overrides");
+					ImGui::PopStyleColor();
+				} else {
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
+					ImGui::Text("✓ Using base asset");
+					ImGui::PopStyleColor();
+				}
+				
+				ImGui::EndGroup();
+				
+				ImGui::Spacing();
+				ImGui::Separator();
+				ImGui::Spacing();
+				
+				// Action buttons
+				ImGui::BeginGroup();
+				
+				// Open in Editor button
+				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_ACCENT);
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.36f, 0.69f, 1.0f, 1.0f));
+				if (ImGui::Button("🖊️ Edit Material", ImVec2(140, 0))) {
+					// TODO: Abrir MaterialEditorPanel
+					// m_MaterialEditorPanel->OpenMaterial(asset);
+					LNX_LOG_INFO("Open Material Editor: {0}", component.GetMaterialName());
+				}
+				ImGui::PopStyleColor(2);
+				
+				ImGui::SameLine();
+				
+				// Reset overrides button (solo si hay overrides)
+				if (component.HasLocalOverrides()) {
+					ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_WARNING);
+					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.7f, 0.3f, 1.0f));
+					if (ImGui::Button("🔄 Reset Overrides", ImVec2(140, 0))) {
+						component.ResetOverrides();
+					}
+					ImGui::PopStyleColor(2);
+				}
+				
+				ImGui::EndGroup();
+			}
+			else {
+				// No material assigned
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+				ImGui::TextWrapped("No material assigned. Drop a .lumat file here.");
+				ImGui::PopStyleColor();
+			}
+			
+			ImGui::EndChild();
+			ImGui::PopStyleVar();
+			ImGui::PopStyleColor();
+			
+			// Drag & Drop for .lumat files
+			if (ImGui::BeginDragDropTarget()) {
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+					ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+					std::string ext = data->Extension;
+					if (ext == ".lumat") {
+						component.SetMaterialAsset(data->FilePath);
+						LNX_LOG_INFO("Material assigned: {0}", data->FilePath);
+					}
+					else {
+						LNX_LOG_WARN("Only .lumat files are valid materials");
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
+			
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+			
+			// ========== PBR PROPERTIES (con override support) ==========
 			SectionHeader("🎨", "Surface Properties");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
+			
+			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+			ImGui::TextWrapped("💡 Tip: Changes here create local overrides. Use 'Reset Overrides' to revert.");
+			ImGui::PopStyleColor();
+			ImGui::Spacing();
 
-			glm::vec4 color = component.GetColor();
+			glm::vec4 color = component.GetAlbedo();
 			if (PropertyColor4("Base Color", color)) {
-				component.SetColor(color);
+				component.SetAlbedo(color, true); // asOverride = true
 			}
 
 			float metallic = component.GetMetallic();
 			if (PropertySlider("Metallic", &metallic, 0.0f, 1.0f, "%.2f", "0 = Dielectric, 1 = Metal")) {
-				component.SetMetallic(metallic);
+				component.SetMetallic(metallic, true);
 			}
 
 			float roughness = component.GetRoughness();
 			if (PropertySlider("Roughness", &roughness, 0.0f, 1.0f, "%.2f", "0 = Smooth, 1 = Rough")) {
-				component.SetRoughness(roughness);
+				component.SetRoughness(roughness, true);
 			}
 
 			float specular = component.GetSpecular();
 			if (PropertySlider("Specular", &specular, 0.0f, 1.0f)) {
-				component.SetSpecular(specular);
+				component.SetSpecular(specular, true);
 			}
 			
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
@@ -924,447 +1050,74 @@ namespace Lunex {
 
 			glm::vec3 emissionColor = component.GetEmissionColor();
 			if (PropertyColor("Color", emissionColor)) {
-				component.SetEmissionColor(emissionColor);
+				component.SetEmissionColor(emissionColor, true);
 			}
 
 			float emissionIntensity = component.GetEmissionIntensity();
 			if (PropertyDrag("Intensity", &emissionIntensity, 0.1f, 0.0f, 100.0f)) {
-				component.SetEmissionIntensity(emissionIntensity);
+				component.SetEmissionIntensity(emissionIntensity, true);
 			}
 			
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
 			
-			// Texture Maps (if TextureComponent exists)
-			if (entity.HasComponent<TextureComponent>()) {
-				auto& texComp = entity.GetComponent<TextureComponent>();
+			// ========== TEXTURE MAPS INFO (desde MaterialAsset) ==========
+			if (component.Instance && component.Instance->GetBaseAsset()) {
+				auto asset = component.Instance->GetBaseAsset();
 				
-				SectionHeader("🖼️", "Texture Maps");
-				ImGui::Indent(UIStyle::INDENT_SIZE);
-				
-				// Helper lambda for texture slots
-				auto DrawTextureSlot = [&](const char* label, const char* icon, Ref<Texture2D>& texture, std::string& path,
-					auto loadFunc, float* multiplier = nullptr) {
+				if (asset->HasAnyTexture()) {
+					SectionHeader("🖼️", "Texture Maps");
+					ImGui::Indent(UIStyle::INDENT_SIZE);
 					
-					ImGui::PushID(label);
-					
-					ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
-					ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
-					ImGui::BeginChild(("##Tex" + std::string(label)).c_str(), ImVec2(-1, multiplier ? 130.0f : 120.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-					
-					ImGui::BeginGroup();
-					
-					// Thumbnail
-					if (texture && texture->IsLoaded()) {
-						ImGui::Image(
-							(void*)(intptr_t)texture->GetRendererID(),
-							ImVec2(55, 55),
-							ImVec2(0, 1), ImVec2(1, 0)
-						);
-					}
-					else {
-						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.20f, 1.0f));
-						ImGui::Button("##empty", ImVec2(55, 55));
-						ImGui::PopStyleColor();
-					}
-					
-					// Drag & Drop
-					if (ImGui::BeginDragDropTarget()) {
-						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
-							ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
-							std::string ext = data->Extension;
-							if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" || ext == ".hdr") {
-								loadFunc(texComp, data->FilePath);
-							}
-						}
-						ImGui::EndDragDropTarget();
-					}
-					
-					ImGui::EndGroup();
-					ImGui::SameLine();
-					
-					// Info
-					ImGui::BeginGroup();
-					
-					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HEADER);
-					ImGui::Text("%s %s", icon, label);
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+					ImGui::TextWrapped("Textures are managed in the Material Asset. Open the Material Editor to modify them.");
 					ImGui::PopStyleColor();
 					
-					if (texture && texture->IsLoaded()) {
-						std::filesystem::path texPath(path);
-						ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-						ImGui::TextWrapped("%s", texPath.filename().string().c_str());
-						ImGui::Text("%dx%d", texture->GetWidth(), texture->GetHeight());
-						ImGui::PopStyleColor();
-						
-						if (multiplier) {
-							ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-							ImGui::SetNextItemWidth(100.0f);
-							ImGui::SliderFloat("##mult", multiplier, 0.0f, 2.0f, "×%.2f");
-							ImGui::PopStyleColor();
-						}
-						
-						ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
-						ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
-						if (ImGui::Button("Remove", ImVec2(70, 0))) {
-							texture.reset();
-							path.clear();
-						}
-						ImGui::PopStyleColor(2);
-					}
-					else {
-						ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-						ImGui::TextWrapped("Drop texture here");
-						ImGui::PopStyleColor();
-					}
-					
-					ImGui::EndGroup();
-					
-					ImGui::EndChild();
-					ImGui::PopStyleVar();
-					ImGui::PopStyleColor();
 					ImGui::Spacing();
-					ImGui::PopID();
-				};
-
-				DrawTextureSlot("Albedo", "🎨", texComp.AlbedoMap, texComp.AlbedoPath,
-					[](TextureComponent& tc, const std::string& path) { tc.LoadAlbedo(path); });
-
-				DrawTextureSlot("Normal", "🧭", texComp.NormalMap, texComp.NormalPath,
-					[](TextureComponent& tc, const std::string& path) { tc.LoadNormal(path); });
-
-				DrawTextureSlot("Metallic", "⚙️", texComp.MetallicMap, texComp.MetallicPath,
-					[](TextureComponent& tc, const std::string& path) { tc.LoadMetallic(path); },
-					&texComp.MetallicMultiplier);
-
-				DrawTextureSlot("Roughness", "🔧", texComp.RoughnessMap, texComp.RoughnessPath,
-					[](TextureComponent& tc, const std::string& path) { tc.LoadRoughness(path); },
-					&texComp.RoughnessMultiplier);
-
-				DrawTextureSlot("Specular", "💎", texComp.SpecularMap, texComp.SpecularPath,
-					[](TextureComponent& tc, const std::string& path) { tc.LoadSpecular(path); },
-					&texComp.SpecularMultiplier);
-
-				DrawTextureSlot("Emission", "💡", texComp.EmissionMap, texComp.EmissionPath,
-					[](TextureComponent& tc, const std::string& path) { tc.LoadEmission(path); });
-
-				DrawTextureSlot("AO", "🌑", texComp.AOMap, texComp.AOPath,
-					[](TextureComponent& tc, const std::string& path) { tc.LoadAO(path); },
-					&texComp.AOMultiplier);
-				
-				ImGui::Unindent(UIStyle::INDENT_SIZE);
+					
+					// Lista de texturas cargadas
+					if (asset->HasAlbedoMap()) ImGui::BulletText("🎨 Albedo Map");
+					if (asset->HasNormalMap()) ImGui::BulletText("🧭 Normal Map");
+					if (asset->HasMetallicMap()) ImGui::BulletText("⚙️ Metallic Map");
+					if (asset->HasRoughnessMap()) ImGui::BulletText("🔧 Roughness Map");
+					if (asset->HasSpecularMap()) ImGui::BulletText("💎 Specular Map");
+					if (asset->HasEmissionMap()) ImGui::BulletText("💡 Emission Map");
+					if (asset->HasAOMap()) ImGui::BulletText("🌑 AO Map");
+					
+					ImGui::Unindent(UIStyle::INDENT_SIZE);
+				}
 			}
-			else {
+			
+			// ========== DEPRECATED: TextureComponent warning ==========
+			if (entity.HasComponent<TextureComponent>()) {
 				ImGui::Spacing();
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-				ImGui::TextWrapped("💡 Add 'Textures Mapper' component to use texture maps");
-				ImGui::PopStyleColor();
-			}
-		});
-
-		// Light Component
-		DrawComponent<LightComponent>("💡 Light", entity, [](auto& component) {
-			SectionHeader("🔦", "Type");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			const char* lightTypes[] = { "Directional", "Point", "Spot" };
-			int currentType = (int)component.GetType();
-
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Light Type");
-			ImGui::NextColumn();
-			ImGui::SetNextItemWidth(-1);
-			if (ImGui::Combo("##Type", &currentType, lightTypes, IM_ARRAYSIZE(lightTypes))) {
-				component.SetType((LightType)currentType);
-			}
-			ImGui::Columns(1);
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-
-			SectionHeader("🎨", "Basic Properties");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-
-			glm::vec3 color = component.GetColor();
-			if (PropertyColor("Color", color)) {
-				component.SetColor(color);
-			}
-
-			float intensity = component.GetIntensity();
-			if (PropertyDrag("Intensity", &intensity, 0.1f, 0.0f, 100.0f)) {
-				component.SetIntensity(intensity);
-			}
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-
-			if (component.GetType() == LightType::Point || component.GetType() == LightType::Spot) {
-				SectionHeader("📏", "Attenuation");
-				ImGui::Indent(UIStyle::INDENT_SIZE);
-
-				float range = component.GetRange();
-				if (PropertyDrag("Range", &range, 0.1f, 0.0f, 100.0f)) {
-					component.SetRange(range);
-				}
-
-				glm::vec3 attenuation = component.GetAttenuation();
-				ImGui::Columns(2, nullptr, false);
-				ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-				PropertyLabel("Attenuation", "Constant, Linear, Quadratic");
-				ImGui::NextColumn();
-				ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-				ImGui::SetNextItemWidth(-1);
-				if (ImGui::DragFloat3("##Attenuation", glm::value_ptr(attenuation), 0.001f, 0.0f, 10.0f)) {
-					component.SetAttenuation(attenuation);
-				}
-				ImGui::PopStyleColor();
-				ImGui::Columns(1);
+				ImGui::Separator();
+				ImGui::Spacing();
 				
-				ImGui::Unindent(UIStyle::INDENT_SIZE);
-			}
-
-			if (component.GetType() == LightType::Spot) {
-				SectionHeader("🔦", "Spot Properties");
-				ImGui::Indent(UIStyle::INDENT_SIZE);
-
-				float innerAngle = component.GetInnerConeAngle();
-				if (PropertySlider("Inner Cone", &innerAngle, 0.0f, 90.0f, "%.1f°")) {
-					component.SetInnerConeAngle(innerAngle);
-				}
-
-				float outerAngle = component.GetOuterConeAngle();
-				if (PropertySlider("Outer Cone", &outerAngle, 0.0f, 90.0f, "%.1f°")) {
-					component.SetOuterConeAngle(outerAngle);
-				}
+				ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.3f, 0.2f, 0.1f, 0.5f));
+				ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+				ImGui::BeginChild("##DeprecatedWarning", ImVec2(-1, 80.0f), true);
 				
-				ImGui::Unindent(UIStyle::INDENT_SIZE);
-			}
-
-			SectionHeader("🌑", "Shadows");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-
-			bool castShadows = component.GetCastShadows();
-			if (PropertyCheckbox("Cast Shadows", &castShadows)) {
-				component.SetCastShadows(castShadows);
-			}
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
-
-		// Rigidbody 3D Component
-		DrawComponent<Rigidbody3DComponent>("🎲 Rigidbody 3D", entity, [](auto& component) {
-			SectionHeader("🔧", "Body Configuration");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			const char* bodyTypeStrings[] = { "Static", "Dynamic", "Kinematic" };
-			const char* currentBodyTypeString = bodyTypeStrings[(int)component.Type];
-			
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Type", "Defines how the body responds to physics");
-			ImGui::NextColumn();
-			ImGui::SetNextItemWidth(-1);
-			if (ImGui::BeginCombo("##BodyType", currentBodyTypeString)) {
-				for (int i = 0; i < 3; i++) {
-					bool isSelected = ((int)component.Type == i);
-					if (ImGui::Selectable(bodyTypeStrings[i], isSelected)) {
-						component.Type = (Rigidbody3DComponent::BodyType)i;
-					}
-					if (isSelected)
-						ImGui::SetItemDefaultFocus();
-				}
-				ImGui::EndCombo();
-			}
-			ImGui::Columns(1);
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-			
-			SectionHeader("⚗️", "Physics Properties");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			PropertyDrag("Mass", &component.Mass, 0.1f, 0.01f, 1000.0f, "%.2f", "Body mass in kg");
-			PropertyDrag("Linear Damping", &component.LinearDamping, 0.01f, 0.0f, 1.0f, "%.3f", "Air resistance for linear motion");
-			PropertyDrag("Angular Damping", &component.AngularDamping, 0.01f, 0.0f, 1.0f, "%.3f", "Air resistance for rotation");
-			PropertyDrag("Friction", &component.Friction, 0.01f, 0.0f, 1.0f, "%.2f", "Surface friction coefficient");
-			PropertyDrag("Restitution", &component.Restitution, 0.01f, 0.0f, 1.0f, "%.2f", "Bounciness (0 = no bounce, 1 = perfect)");
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-			
-			SectionHeader("🔒", "Constraints");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Linear Factor", "Lock linear movement axes");
-			ImGui::NextColumn();
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-			ImGui::SetNextItemWidth(-1);
-			ImGui::DragFloat3("##LinearFactor", glm::value_ptr(component.LinearFactor), 0.1f, 0.0f, 1.0f);
-			ImGui::PopStyleColor();
-			ImGui::Columns(1);
-			
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Angular Factor", "Lock rotation axes");
-			ImGui::NextColumn();
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-			ImGui::SetNextItemWidth(-1);
-			ImGui::DragFloat3("##AngularFactor", glm::value_ptr(component.AngularFactor), 0.1f, 0.0f, 1.0f);
-			ImGui::PopStyleColor();
-			ImGui::Columns(1);
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-			
-			SectionHeader("⚡", "Advanced");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			PropertyCheckbox("Is Trigger", &component.IsTrigger, "No collision response, only events");
-			PropertyCheckbox("Use CCD", &component.UseCCD, "Continuous Collision Detection for fast objects");
-			
-			if (component.UseCCD) {
-				PropertyDrag("CCD Motion Threshold", &component.CcdMotionThreshold, 0.01f, 0.0f, 1.0f);
-				PropertyDrag("CCD Swept Sphere Radius", &component.CcdSweptSphereRadius, 0.01f, 0.0f, 1.0f);
-			}
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
-
-		// Box Collider 3D Component
-		DrawComponent<BoxCollider3DComponent>("📦 Box Collider 3D", entity, [](auto& component) {
-			SectionHeader("📐", "Shape");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Half Extents", "Half size in each axis");
-			ImGui::NextColumn();
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-			ImGui::SetNextItemWidth(-1);
-			ImGui::DragFloat3("##HalfExtents", glm::value_ptr(component.HalfExtents), 0.01f, 0.01f, 100.0f);
-			ImGui::PopStyleColor();
-			ImGui::Columns(1);
-			
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Offset");
-			ImGui::NextColumn();
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-			ImGui::SetNextItemWidth(-1);
-			ImGui::DragFloat3("##Offset", glm::value_ptr(component.Offset), 0.01f);
-			ImGui::PopStyleColor();
-			ImGui::Columns(1);
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
-
-		// Sphere Collider 3D Component
-		DrawComponent<SphereCollider3DComponent>("🌐 Sphere Collider 3D", entity, [](auto& component) {
-			SectionHeader("📐", "Shape");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			PropertyDrag("Radius", &component.Radius, 0.01f, 0.01f, 100.0f);
-			
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Offset");
-			ImGui::NextColumn();
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-			ImGui::SetNextItemWidth(-1);
-			ImGui::DragFloat3("##Offset", glm::value_ptr(component.Offset), 0.01f);
-			ImGui::PopStyleColor();
-			ImGui::Columns(1);
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
-
-		// Capsule Collider 3D Component
-		DrawComponent<CapsuleCollider3DComponent>("💊 Capsule Collider 3D", entity, [](auto& component) {
-			SectionHeader("📐", "Shape");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			PropertyDrag("Radius", &component.Radius, 0.01f, 0.01f, 100.0f);
-			PropertyDrag("Height", &component.Height, 0.01f, 0.01f, 100.0f, "%.2f", "Total height including caps");
-			
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Offset");
-			ImGui::NextColumn();
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-			ImGui::SetNextItemWidth(-1);
-			ImGui::DragFloat3("##Offset", glm::value_ptr(component.Offset), 0.01f);
-			ImGui::PopStyleColor();
-			ImGui::Columns(1);
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
-
-		// Mesh Collider 3D Component
-		DrawComponent<MeshCollider3DComponent>("🗿 Mesh Collider 3D", entity, [](auto& component) {
-			SectionHeader("🎲", "Mesh");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			const char* collisionTypes[] = { "Convex", "Concave" };
-			int currentType = (int)component.Type;
-
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Type", "Convex = fast, dynamic. Concave = slow, static only");
-			ImGui::NextColumn();
-			ImGui::SetNextItemWidth(-1);
-			if (ImGui::Combo("##CollisionType", &currentType, collisionTypes, IM_ARRAYSIZE(collisionTypes))) {
-				component.Type = (MeshCollider3DComponent::CollisionType)currentType;
-			}
-			ImGui::Columns(1);
-			
-			PropertyCheckbox("Use Entity Mesh", &component.UseEntityMesh, "Automatically use the entity's MeshComponent");
-			
-			ImGui::Spacing();
-			
-			ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
-			ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
-			ImGui::BeginChild("##MeshColliderInfo", ImVec2(-1, 90.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-			
-			if (component.UseEntityMesh) {
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
-				ImGui::TextWrapped("✓ Using MeshComponent geometry");
-				ImGui::PopStyleColor();
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-				ImGui::TextWrapped("Collision shape will be generated from the entity's mesh at runtime.");
-				ImGui::PopStyleColor();
-			}
-			else if (!component.Vertices.empty()) {
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_ACCENT);
-				ImGui::Text("🗿 Custom Mesh Data");
-				ImGui::PopStyleColor();
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-				ImGui::Text("Vertices: %zu", component.Vertices.size());
-				ImGui::Text("Indices: %zu", component.Indices.size());
-				ImGui::Text("Triangles: %zu", component.Indices.size() / 3);
-				ImGui::PopStyleColor();
-			}
-			else {
 				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_WARNING);
-				ImGui::TextWrapped("⚠ No mesh data available");
+				ImGui::Text("⚠️ DEPRECATED: TextureComponent Detected");
 				ImGui::PopStyleColor();
+				
 				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-				ImGui::TextWrapped("Enable 'Use Entity Mesh' or provide custom vertices.");
+				ImGui::TextWrapped("TextureComponent is deprecated. Migrate textures to MaterialAsset and remove this component.");
+				ImGui::PopStyleColor();
+				
+				ImGui::Spacing();
+				
+				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
+				if (ImGui::Button("Remove TextureComponent", ImVec2(-1, 0))) {
+					entity.RemoveComponent<TextureComponent>();
+					LNX_LOG_INFO("TextureComponent removed. Migrate textures to MaterialAsset.");
+				}
+				ImGui::PopStyleColor();
+				
+				ImGui::EndChild();
+				ImGui::PopStyleVar();
 				ImGui::PopStyleColor();
 			}
-			
-			ImGui::EndChild();
-			ImGui::PopStyleVar();
-			ImGui::PopStyleColor();
-			
-			ImGui::Spacing();
-			
-			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-			if (component.Type == MeshCollider3DComponent::CollisionType::Convex) {
-				ImGui::TextWrapped("💡 Tip: Convex colliders are fast and work with dynamic objects.");
-			}
-			else {
-				ImGui::TextWrapped("💡 Tip: Concave colliders are slower and can only be used with static objects.");
-			}
-			ImGui::PopStyleColor();
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
 		});
 	}
 
