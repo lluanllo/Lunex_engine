@@ -1,11 +1,11 @@
-#version 330 core
+#version 450 core
 
 #ifdef VERTEX
 
 layout(location = 0) in vec2 a_Position;
 layout(location = 1) in vec2 a_TexCoord;
 
-out vec2 v_TexCoord;
+layout(location = 0) out vec2 v_TexCoord;
 
 void main() {
     v_TexCoord = a_TexCoord;
@@ -14,11 +14,11 @@ void main() {
 
 #elif defined(FRAGMENT)
 
-in vec2 v_TexCoord;
-out vec4 FragColor;
+layout(location = 0) in vec2 v_TexCoord;
+layout(location = 0) out vec4 FragColor;
 
-uniform sampler2D u_BlurredMask;
-uniform sampler2D u_OriginalMask;
+layout(binding = 0) uniform sampler2D u_BlurredMask;
+layout(binding = 1) uniform sampler2D u_OriginalMask;
 
 void main() {
     float blurred = texture(u_BlurredMask, v_TexCoord).r;

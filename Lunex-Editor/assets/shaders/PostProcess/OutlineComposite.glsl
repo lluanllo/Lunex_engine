@@ -31,7 +31,6 @@ void main() {
     // Read edge intensity from mask
     float edge = texture(u_EdgeMask, v_TexCoord).r;
     
-    // ? DEBUG: Visualize edge directly (remove discard for now)
     // Output outline color modulated by edge intensity
     // Alpha blending will composite this on top of existing scene
     FragColor = vec4(u_OutlineColor.rgb, edge * u_OutlineColor.a);

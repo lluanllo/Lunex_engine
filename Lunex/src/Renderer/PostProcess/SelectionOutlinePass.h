@@ -62,6 +62,10 @@ namespace Lunex {
 		// ? NEW: UBOs for mask rendering
 		Ref<UniformBuffer> m_CameraUBO;
 		Ref<UniformBuffer> m_TransformUBO;
+		
+		// ? NEW: UBOs for blur and composite
+		Ref<UniformBuffer> m_BlurParamsUBO;
+		Ref<UniformBuffer> m_CompositeParamsUBO;
 
 		// State
 		std::vector<Entity> m_SelectedEntities;

@@ -1,11 +1,11 @@
-#version 330 core
+#version 450 core
 
 #ifdef VERTEX
 
 layout(location = 0) in vec2 a_Position;
 layout(location = 1) in vec2 a_TexCoord;
 
-out vec2 v_TexCoord;
+layout(location = 0) out vec2 v_TexCoord;
 
 void main() {
     v_TexCoord = a_TexCoord;
@@ -14,13 +14,19 @@ void main() {
 
 #elif defined(FRAGMENT)
 
-in vec2 v_TexCoord;
-out vec4 FragColor;
+layout(location = 0) in vec2 v_TexCoord;
+layout(location = 0) out vec4 FragColor;
 
-uniform sampler2D u_Texture;
-uniform vec2 u_Direction;    // (1,0) horizontal, (0,1) vertical
-uniform float u_BlurRadius;  // Kernel size
-uniform vec2 u_TexelSize;    // 1.0 / textureSize
+layout(binding = 0) uniform sampler2D u_Texture;
+
+layout(std140, binding = 1) uniform BlurParams {
+    vec2 u_Direction;    // (1,0) horizontal, (0,1) vertical
+    float u_BlurRadius;  // Kernel size
+    float _padding1;
+    vec2 u_TexelSize;    // 1.0 / textureSize
+    float _padding2;
+    float _padding3;
+};
 
 void main() {
     vec4 result = vec4(0.0);

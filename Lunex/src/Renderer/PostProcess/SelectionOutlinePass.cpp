@@ -48,6 +48,10 @@ namespace Lunex {
 		// ? NEW: Create UBOs for mask rendering (same bindings as main renderer)
 		m_CameraUBO = UniformBuffer::Create(sizeof(glm::mat4), 0);
 		m_TransformUBO = UniformBuffer::Create(sizeof(glm::mat4), 1);
+		
+		// ? NEW: Create UBOs for blur and composite
+		m_BlurParamsUBO = UniformBuffer::Create(sizeof(BlurParamsData), 1);
+		m_CompositeParamsUBO = UniformBuffer::Create(sizeof(CompositeParamsData), 1);
 
 		CreateFramebuffers();
 		CreateFullscreenQuad();
@@ -204,6 +208,19 @@ namespace Lunex {
 	void SelectionOutlinePass::RenderBlurPass() {
 		glDisable(GL_DEPTH_TEST);
 
+		// Prepare blur parameters struct
+		struct BlurParamsData {
+			glm::vec2 Direction;
+			float BlurRadius;
+			float _padding1;
+			glm::vec2 TexelSize;
+			float _padding2;
+			float _padding3;
+		} blurParams;
+		
+		blurParams.BlurRadius = m_Settings.BlurRadius;
+		blurParams.TexelSize = glm::vec2(1.0f / m_Width, 1.0f / m_Height);
+
 		// Horizontal blur pass
 		{
 			m_BlurFBO_A->Bind();
@@ -211,10 +228,10 @@ namespace Lunex {
 
 			m_BlurShader->Bind();
 			
-			// ? Fix: Use correct method names (capital S)
-			m_BlurShader->SetFloat2("u_Direction", glm::vec2(1.0f, 0.0f));
-			m_BlurShader->SetFloat("u_BlurRadius", m_Settings.BlurRadius);
-			m_BlurShader->SetFloat2("u_TexelSize", glm::vec2(1.0f / m_Width, 1.0f / m_Height));
+			// ? Use UBO for blur parameters
+			blurParams.Direction = glm::vec2(1.0f, 0.0f);
+			m_BlurParamsUBO->SetData(&blurParams, sizeof(BlurParamsData));
+			
 			m_BlurShader->SetInt("u_Texture", 0);
 
 			glActiveTexture(GL_TEXTURE0);
@@ -232,9 +249,11 @@ namespace Lunex {
 			glClear(GL_COLOR_BUFFER_BIT);
 
 			m_BlurShader->Bind();
-			m_BlurShader->SetFloat2("u_Direction", glm::vec2(0.0f, 1.0f));
-			m_BlurShader->SetFloat("u_BlurRadius", m_Settings.BlurRadius);
-			m_BlurShader->SetFloat2("u_TexelSize", glm::vec2(1.0f / m_Width, 1.0f / m_Height));
+			
+			// ? Use UBO for blur parameters
+			blurParams.Direction = glm::vec2(0.0f, 1.0f);
+			m_BlurParamsUBO->SetData(&blurParams, sizeof(BlurParamsData));
+			
 			m_BlurShader->SetInt("u_Texture", 0);
 
 			glActiveTexture(GL_TEXTURE0);
@@ -272,9 +291,6 @@ namespace Lunex {
 	}
 
 	void SelectionOutlinePass::RenderCompositePass(const PostProcessContext& ctx) {
-		// ? FIX: We cannot read and write to the same FBO simultaneously
-		// We need to blit the scene first, then draw outline on top
-		
 		// Disable depth test for post-processing
 		glDisable(GL_DEPTH_TEST);
 		
@@ -287,15 +303,21 @@ namespace Lunex {
 
 		m_CompositeShader->Bind();
 		
-		// IMPORTANT: Since OutputFBO already contains the scene, we:
-		// 1. Read the edge mask from m_EdgeFBO (texture unit 1)
-		// 2. Draw a fullscreen quad with the outline color modulated by edge mask
-		// 3. Blend it on top of the existing scene in OutputFBO
+		// ? Use UBO for composite parameters
+		struct CompositeParamsData {
+			glm::vec4 OutlineColor;
+			int BlendMode;
+			int DepthTest;
+			float _padding1;
+			float _padding2;
+		} compositeParams;
 		
-		m_CompositeShader->SetInt("u_EdgeMask", 0);  // Edge mask is all we need now
-		m_CompositeShader->SetFloat4("u_OutlineColor", m_Settings.OutlineColor);
-		m_CompositeShader->SetInt("u_BlendMode", m_Settings.BlendMode);
-		m_CompositeShader->SetInt("u_DepthTest", m_Settings.DepthTest ? 1 : 0);
+		compositeParams.OutlineColor = m_Settings.OutlineColor;
+		compositeParams.BlendMode = m_Settings.BlendMode;
+		compositeParams.DepthTest = m_Settings.DepthTest ? 1 : 0;
+		m_CompositeParamsUBO->SetData(&compositeParams, sizeof(CompositeParamsData));
+		
+		m_CompositeShader->SetInt("u_EdgeMask", 0);
 
 		// Bind edge mask texture
 		glActiveTexture(GL_TEXTURE0);
