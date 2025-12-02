@@ -5,6 +5,7 @@
 #include "Core/KeyCodes.h"
 #include "Core/MouseButtonCodes.h"
 #include "Input/InputManager.h"
+#include "Core/Application.h"
 
 #include <glfw/glfw3.h>
 
@@ -25,9 +26,7 @@ namespace Lunex {
 	}
 	
 	void EditorCamera::UpdateView() {
-		// m_Yaw = m_Pitch = 0.0f; // Lock the camera's rotation
-		m_Position = CalculatePosition();
-		
+		// First-person camera: position is directly the camera position, no focal point
 		glm::quat orientation = GetOrientation();
 		m_ViewMatrix = glm::translate(glm::mat4(1.0f), m_Position) * glm::toMat4(orientation);
 		m_ViewMatrix = glm::inverse(m_ViewMatrix);
@@ -44,7 +43,7 @@ namespace Lunex {
 	}
 	
 	float EditorCamera::RotationSpeed() const {
-		return 0.8f;
+		return 0.3f; // Reduced for smoother first-person rotation
 	}
 	
 	float EditorCamera::ZoomSpeed() const {
@@ -59,40 +58,80 @@ namespace Lunex {
 		// Use InputManager for better remappable controls
 		auto& inputMgr = InputManager::Get();
 		
-		// Alt + Mouse for camera controls (original behavior)
-		if (Input::IsKeyPressed(Key::LeftAlt)) {
+		// Get GLFW window for cursor control
+		GLFWwindow* window = static_cast<GLFWwindow*>(Application::Get().GetWindow().GetNativeWindow());
+		
+		// ========================================
+		// UNREAL ENGINE STYLE FLY CAMERA
+		// ========================================
+		
+		bool wasFlyCameraActive = m_IsFlyCameraActive;
+		m_IsFlyCameraActive = Input::IsMouseButtonPressed(Mouse::ButtonRight);
+		
+		// Activate fly camera mode
+		if (m_IsFlyCameraActive && !wasFlyCameraActive) {
+			// Just activated - hide cursor and store initial position
+			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+			m_InitialMousePosition = { Input::GetMouseX(), Input::GetMouseY() };
+		}
+		// Deactivate fly camera mode
+		else if (!m_IsFlyCameraActive && wasFlyCameraActive) {
+			// Just deactivated - show cursor
+			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+		}
+		
+		// ========================================
+		// ONLY process input when fly camera is ACTIVE
+		// ========================================
+		if (m_IsFlyCameraActive) {
+			// Fly camera rotation
 			const glm::vec2& mouse{ Input::GetMouseX(), Input::GetMouseY() };
 			glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.003f;
 			m_InitialMousePosition = mouse;
 			
-			if (Input::IsMouseButtonPressed(Mouse::ButtonMiddle))
-				MousePan(delta);
-			else if (Input::IsMouseButtonPressed(Mouse::ButtonLeft))
-				MouseRotate(delta);
-			else if (Input::IsMouseButtonPressed(Mouse::ButtonRight))
-				MouseZoom(delta.y);
+			MouseRotate(delta);
+			
+			// ========================================
+			// WASDQE KEYBOARD MOVEMENT
+			// ========================================
+			float moveSpeed = 5.0f * ts; // 5 units per second
+			
+			// Boost speed with Shift
+			if (Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift)) {
+				moveSpeed *= 3.0f; // 3x faster
+			}
+			
+			// Move camera position directly (first-person style)
+			if (Input::IsKeyPressed(Key::W)) {
+				m_Position += GetForwardDirection() * moveSpeed;
+			}
+			if (Input::IsKeyPressed(Key::S)) {
+				m_Position -= GetForwardDirection() * moveSpeed;
+			}
+			if (Input::IsKeyPressed(Key::A)) {
+				m_Position -= GetRightDirection() * moveSpeed;
+			}
+			if (Input::IsKeyPressed(Key::D)) {
+				m_Position += GetRightDirection() * moveSpeed;
+			}
+			if (Input::IsKeyPressed(Key::E)) {
+				m_Position += GetUpDirection() * moveSpeed;
+			}
+			if (Input::IsKeyPressed(Key::Q)) {
+				m_Position -= GetUpDirection() * moveSpeed;
+			}
 		}
-		
-		// NEW: WASDQE for camera movement (remappable through InputManager)
-		float moveSpeed = 5.0f * ts; // 5 units per second
-		
-		if (inputMgr.IsActionPressed("Camera.MoveForward")) {
-			m_FocalPoint += GetForwardDirection() * moveSpeed;
+		// Middle Mouse Button: Pan camera (only when NOT in fly mode)
+		else if (Input::IsMouseButtonPressed(Mouse::ButtonMiddle)) {
+			const glm::vec2& mouse{ Input::GetMouseX(), Input::GetMouseY() };
+			glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.003f;
+			m_InitialMousePosition = mouse;
+			
+			MousePan(delta);
 		}
-		if (inputMgr.IsActionPressed("Camera.MoveBackward")) {
-			m_FocalPoint -= GetForwardDirection() * moveSpeed;
-		}
-		if (inputMgr.IsActionPressed("Camera.MoveLeft")) {
-			m_FocalPoint -= GetRightDirection() * moveSpeed;
-		}
-		if (inputMgr.IsActionPressed("Camera.MoveRight")) {
-			m_FocalPoint += GetRightDirection() * moveSpeed;
-		}
-		if (inputMgr.IsActionPressed("Camera.MoveUp")) {
-			m_FocalPoint += GetUpDirection() * moveSpeed;
-		}
-		if (inputMgr.IsActionPressed("Camera.MoveDown")) {
-			m_FocalPoint -= GetUpDirection() * moveSpeed;
+		else {
+			// Reset mouse position when not dragging
+			m_InitialMousePosition = { Input::GetMouseX(), Input::GetMouseY() };
 		}
 		
 		UpdateView();
@@ -104,30 +143,35 @@ namespace Lunex {
 	}
 	
 	bool EditorCamera::OnMouseScroll(MouseScrolledEvent& e) {
-		float delta = e.GetYOffset() * 0.1f;
-		MouseZoom(delta);
+		// Zoom by moving camera forward/backward
+		float delta = e.GetYOffset();
+		float moveSpeed = 2.0f; // Adjust zoom speed
+		
+		m_Position += GetForwardDirection() * delta * moveSpeed;
+		
 		UpdateView();
 		return false;
 	}
 	
 	void EditorCamera::MousePan(const glm::vec2& delta) {
 		auto [xSpeed, ySpeed] = PanSpeed();
-		m_FocalPoint += -GetRightDirection() * delta.x * xSpeed * m_Distance;
-		m_FocalPoint += GetUpDirection() * delta.y * ySpeed * m_Distance;
+		// Pan the camera position directly
+		m_Position += -GetRightDirection() * delta.x * xSpeed * 10.0f;
+		m_Position += GetUpDirection() * delta.y * ySpeed * 10.0f;
 	}
 	
 	void EditorCamera::MouseRotate(const glm::vec2& delta) {
-		float yawSign = GetUpDirection().y < 0 ? -1.0f : 1.0f;
-		m_Yaw += yawSign * delta.x * RotationSpeed();
+		// First-person rotation (no gimbal lock protection for smoother feel)
+		m_Yaw += delta.x * RotationSpeed();
 		m_Pitch += delta.y * RotationSpeed();
+		
+		// Clamp pitch to avoid flipping
+		m_Pitch = glm::clamp(m_Pitch, -89.0f, 89.0f);
 	}
 	
 	void EditorCamera::MouseZoom(float delta) {
-		m_Distance -= delta * ZoomSpeed();
-		if (m_Distance < 1.0f) {
-			m_FocalPoint += GetForwardDirection();
-			m_Distance = 1.0f;
-		}
+		// Zoom by moving forward/backward
+		m_Position += GetForwardDirection() * delta * 5.0f;
 	}
 	
 	glm::vec3 EditorCamera::GetUpDirection() const {
@@ -143,7 +187,8 @@ namespace Lunex {
 	}
 	
 	glm::vec3 EditorCamera::CalculatePosition() const {
-		return m_FocalPoint - GetForwardDirection() * m_Distance;
+		// First-person camera: position is the camera position itself
+		return m_Position;
 	}
 	
 	glm::quat EditorCamera::GetOrientation() const {

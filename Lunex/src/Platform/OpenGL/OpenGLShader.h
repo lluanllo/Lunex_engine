@@ -11,6 +11,10 @@ namespace Lunex {
 		public:
 			OpenGLShader(const std::string& filepath);
 			OpenGLShader(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc);
+			
+			// ? NEW: Compute shader constructor
+			OpenGLShader(const std::string& filepath, bool isCompute);
+			
 			virtual ~OpenGLShader();
 			
 			virtual void Bind() const override;
@@ -26,6 +30,13 @@ namespace Lunex {
 			virtual void SetMat4(const std::string& name, const glm::mat4& value) override;
 			
 			virtual const std::string& GetName() const override { return m_Name; }
+			
+			// ========================================
+			// COMPUTE SHADER IMPLEMENTATION
+			// ========================================
+			virtual void DispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) override;
+			virtual void GetComputeWorkGroupSize(uint32_t& sizeX, uint32_t& sizeY, uint32_t& sizeZ) const override;
+			virtual bool IsComputeShader() const override { return m_IsCompute; }
 			
 			void UploadUniformInt(const std::string& name, int value);
 			void UploadUniformIntArray(const std::string& name, int* values, uint32_t count);
@@ -51,6 +62,8 @@ namespace Lunex {
 			uint32_t m_RendererID;
 			std::string m_FilePath;
 			std::string m_Name;
+			
+			bool m_IsCompute = false; // ? NEW: Track if this is a compute shader
 			
 			std::unordered_map<GLenum, std::vector<uint32_t>> m_VulkanSPIRV;
 			std::unordered_map<GLenum, std::vector<uint32_t>> m_OpenGLSPIRV;

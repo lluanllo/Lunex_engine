@@ -90,8 +90,8 @@ layout(std140, binding = 2) uniform Material {
 	float u_AOMultiplier;
 };
 
-// ============ LIGHTING SYSTEM ============
-#define MAX_LIGHTS 16
+// ============ LIGHTING SYSTEM (SSBO) ============
+#define MAX_LIGHTS 10000
 
 struct LightData {
 	vec4 Position;
@@ -101,12 +101,12 @@ struct LightData {
 	vec4 Attenuation;
 };
 
-layout(std140, binding = 3) uniform Lights {
+layout(std430, binding = 3) buffer Lights {
 	int u_NumLights;
 	float _padding3;
 	float _padding4;
 	float _padding5;
-	LightData u_Lights[MAX_LIGHTS];
+	LightData u_Lights[];
 };
 
 // ============ TEXTURE SAMPLERS ============
@@ -217,7 +217,10 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 	vec3 Lo = vec3(0.0);
 	float NdotV = max(dot(N, V), 0.0);
 	
-	for (int i = 0; i < min(u_NumLights, MAX_LIGHTS); i++) {
+	// Clamp to actual light count for safety
+	int lightCount = min(u_NumLights, MAX_LIGHTS);
+	
+	for (int i = 0; i < lightCount; i++) {
 		LightData light = u_Lights[i];
 		int lightType = int(light.Position.w);
 		
@@ -278,12 +281,9 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 		vec3 kS = F;
 		vec3 kD = (1.0 - kS) * (1.0 - metallic);
 		
-		// Use Burley diffuse for better quality (optional: switch to Lambert for performance)
+		// Use Burley diffuse for better quality
 		float diffuseFactor = Fd_Burley(NdotV, NdotL, LdotH, roughness);
 		vec3 diffuse = kD * albedo * diffuseFactor;
-		
-		// Alternative: Simple Lambert
-		// vec3 diffuse = kD * DiffuseLambert(albedo);
 		
 		// Accumulate lighting
 		radiance *= attenuation;

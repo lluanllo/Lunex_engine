@@ -20,6 +20,8 @@ namespace Lunex {
 				return GL_VERTEX_SHADER;
 			if (type == "fragment" || type == "pixel")
 				return GL_FRAGMENT_SHADER;
+			if (type == "compute")
+				return GL_COMPUTE_SHADER;
 			
 			LNX_CORE_ASSERT(false, "Unknown shader type!");
 			return 0;
@@ -29,6 +31,7 @@ namespace Lunex {
 			switch (stage) {
 				case GL_VERTEX_SHADER:   return shaderc_glsl_vertex_shader;
 				case GL_FRAGMENT_SHADER: return shaderc_glsl_fragment_shader;
+				case GL_COMPUTE_SHADER:  return shaderc_glsl_compute_shader;
 			}
 			LNX_CORE_ASSERT(false);
 			return (shaderc_shader_kind)0;
@@ -38,6 +41,7 @@ namespace Lunex {
 			switch (stage) {
 				case GL_VERTEX_SHADER:   return "GL_VERTEX_SHADER";
 				case GL_FRAGMENT_SHADER: return "GL_FRAGMENT_SHADER";
+				case GL_COMPUTE_SHADER:  return "GL_COMPUTE_SHADER";
 			}
 			LNX_CORE_ASSERT(false);
 			return nullptr;
@@ -58,6 +62,7 @@ namespace Lunex {
 			switch (stage) {
 				case GL_VERTEX_SHADER:    return ".cached_opengl.vert";
 				case GL_FRAGMENT_SHADER:  return ".cached_opengl.frag";
+				case GL_COMPUTE_SHADER:   return ".cached_opengl.comp";
 			}
 			LNX_CORE_ASSERT(false);
 			return "";
@@ -67,6 +72,7 @@ namespace Lunex {
 			switch (stage) {
 				case GL_VERTEX_SHADER:    return ".cached_vulkan.vert";
 				case GL_FRAGMENT_SHADER:  return ".cached_vulkan.frag";
+				case GL_COMPUTE_SHADER:   return ".cached_vulkan.comp";
 			}
 			LNX_CORE_ASSERT(false);
 			return "";
@@ -152,6 +158,69 @@ namespace Lunex {
 		CompileOrGetVulkanBinaries(sources);
 		CompileOrGetOpenGLBinaries();
 		CreateProgram();
+	}
+	
+	// ========================================
+	// COMPUTE SHADER CONSTRUCTOR
+	// ========================================
+	OpenGLShader::OpenGLShader(const std::string& filepath, bool isCompute)
+		: m_FilePath(filepath), m_IsCompute(true)
+	{
+		LNX_PROFILE_FUNCTION();
+		
+		Utils::CreateCacheDirectoryIfNeeded();
+		
+		std::string source = ReadFile(filepath);
+		
+		if (source.empty()) {
+			LNX_LOG_ERROR("Compute shader source file is empty: {0}", filepath);
+			LNX_CORE_ASSERT(false, "Empty shader source");
+		}
+		
+		// Verificar que el archivo tenga #version
+		if (source.find("#version") == std::string::npos) {
+			LNX_LOG_ERROR("Compute shader file missing #version directive: {0}", filepath);
+			LNX_CORE_ASSERT(false, "Shader missing #version");
+		}
+		
+		std::unordered_map<GLenum, std::string> shaderSources;
+		
+		// Insertar define para compute shader
+		std::string computeSource = InsertDefineAfterVersion(source, "#define COMPUTE");
+		
+		if (computeSource.find("#define COMPUTE") == std::string::npos) {
+			LNX_LOG_ERROR("Failed to insert COMPUTE define");
+			LNX_CORE_ASSERT(false);
+		}
+		
+		shaderSources[GL_COMPUTE_SHADER] = computeSource;
+		
+		LNX_LOG_TRACE("Compute shader preview:\n{0}", computeSource.substr(0, 300));
+		
+		{
+			Timer timer;
+			
+			try {
+				CompileOrGetVulkanBinaries(shaderSources);
+				CompileOrGetOpenGLBinaries();
+				CreateProgram();
+				
+				LNX_LOG_WARN("Compute shader creation took {0} ms", timer.ElapsedMillis());
+			}
+			catch (const std::exception& e) {
+				LNX_LOG_ERROR("Compute shader creation failed: {0}", e.what());
+				LNX_CORE_ASSERT(false, "Compute shader compilation failed");
+			}
+		}
+		
+		// Extract name from filepath
+		auto lastSlash = filepath.find_last_of("/\\");
+		lastSlash = lastSlash == std::string::npos ? 0 : lastSlash + 1;
+		auto lastDot = filepath.rfind('.');
+		auto count = lastDot == std::string::npos ? filepath.size() - lastSlash : lastDot - lastSlash;
+		m_Name = filepath.substr(lastSlash, count);
+		
+		LNX_LOG_INFO("Compute shader '{0}' created successfully", m_Name);
 	}
 	
 	OpenGLShader::~OpenGLShader() {
@@ -518,7 +587,6 @@ namespace Lunex {
 			}
 		}
 	}
-	// Añade esto en OpenGLShader.cpp después de CompileOrGetOpenGLBinaries()
 	
 	void OpenGLShader::CreateProgram() {
 		GLuint program = glCreateProgram();
@@ -666,5 +734,49 @@ namespace Lunex {
 	void OpenGLShader::UploadUniformMat4(const std::string& name, const glm::mat4& matrix) {
 		GLint location = glGetUniformLocation(m_RendererID, name.c_str());
 		glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(matrix));
+	}
+	
+	// ========================================
+	// COMPUTE SHADER IMPLEMENTATION
+	// ========================================
+	
+	void OpenGLShader::DispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) {
+		LNX_PROFILE_FUNCTION();
+		
+		if (!m_IsCompute) {
+			LNX_LOG_ERROR("DispatchCompute called on non-compute shader: {0}", m_Name);
+			return;
+		}
+		
+		// Bind the shader first
+		Bind();
+		
+		// Dispatch compute work groups
+		glDispatchCompute(numGroupsX, numGroupsY, numGroupsZ);
+		
+		// Memory barrier to ensure compute writes are visible
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		
+		LNX_LOG_TRACE("Dispatched compute shader '{0}' with groups: [{1}, {2}, {3}]", 
+			m_Name, numGroupsX, numGroupsY, numGroupsZ);
+	}
+	
+	void OpenGLShader::GetComputeWorkGroupSize(uint32_t& sizeX, uint32_t& sizeY, uint32_t& sizeZ) const {
+		if (!m_IsCompute) {
+			LNX_LOG_ERROR("GetComputeWorkGroupSize called on non-compute shader: {0}", m_Name);
+			sizeX = sizeY = sizeZ = 0;
+			return;
+		}
+		
+		// Query the work group size from the shader program
+		GLint workGroupSize[3];
+		glGetProgramiv(m_RendererID, GL_COMPUTE_WORK_GROUP_SIZE, workGroupSize);
+		
+		sizeX = static_cast<uint32_t>(workGroupSize[0]);
+		sizeY = static_cast<uint32_t>(workGroupSize[1]);
+		sizeZ = static_cast<uint32_t>(workGroupSize[2]);
+		
+		LNX_LOG_TRACE("Compute shader '{0}' work group size: [{1}, {2}, {3}]", 
+			m_Name, sizeX, sizeY, sizeZ);
 	}
 }

@@ -28,6 +28,19 @@ namespace Lunex {
 		return nullptr;
 	}
 	
+	// ========================================
+	// COMPUTE SHADER FACTORY
+	// ========================================
+	Ref<Shader> Shader::CreateCompute(const std::string& filepath) {
+		switch (Renderer::GetAPI()) {
+			case RendererAPI::API::None:    LNX_CORE_ASSERT(false, "RendererAPI::None is currently not supported!");
+			case RendererAPI::API::OpenGL:  return std::make_shared<OpenGLShader>(filepath, true); // true = compute shader
+		}
+		
+		LNX_CORE_ASSERT(false, "Unknown RendererAPI!");
+		return nullptr;
+	}
+	
 	void ShaderLibrary::Add(const Ref<Shader>& shader) {
 		auto& name = shader->GetName();
 		Add(name, shader);

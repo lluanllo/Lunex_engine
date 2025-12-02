@@ -4,33 +4,42 @@ bindings:
   - key: 83
     modifiers: 0
     action: Camera.MoveBackward
-  - key: 65
-    modifiers: 0
-    action: Camera.MoveLeft
-  - key: 81
-    modifiers: 0
-    action: Camera.MoveDown
   - key: 49
     modifiers: 0
     action: Gizmo.None
+  - key: 81
+    modifiers: 0
+    action: Camera.MoveDown
+  - key: 65
+    modifiers: 0
+    action: Camera.MoveLeft
   - key: 68
     modifiers: 0
     action: Camera.MoveRight
+  - key: 79
+    modifiers: 3
+    action: Editor.OpenProject
   - key: 69
     modifiers: 0
     action: Camera.MoveUp
-  - key: 50
-    modifiers: 0
-    action: Gizmo.Translate
   - key: 68
     modifiers: 1
     action: Editor.DuplicateEntity
+  - key: 50
+    modifiers: 0
+    action: Gizmo.Translate
   - key: 51
     modifiers: 0
     action: Gizmo.Rotate
+  - key: 78
+    modifiers: 3
+    action: Editor.NewProject
   - key: 52
     modifiers: 0
     action: Gizmo.Scale
+  - key: 83
+    modifiers: 3
+    action: Editor.SaveProject
   - key: 83
     modifiers: 1
     action: Editor.SaveScene
@@ -43,15 +52,45 @@ bindings:
   - key: 80
     modifiers: 1
     action: Editor.PlayScene
-  - key: 290
+  - key: 65
+    modifiers: 1
+    action: Editor.SelectAll
+  - key: 261
     modifiers: 0
-    action: Debug.ToggleStats
+    action: Editor.DeleteSelected
   - key: 291
     modifiers: 0
-    action: Debug.ToggleColliders
+    action: Editor.RenameSelected
+  - key: 256
+    modifiers: 0
+    action: Editor.ClearSelection
+  - key: 262
+    modifiers: 4
+    action: Editor.NavigateForward
+  - key: 67
+    modifiers: 1
+    action: Editor.Copy
+  - key: 88
+    modifiers: 1
+    action: Editor.Cut
   - key: 96
     modifiers: 0
     action: Debug.ToggleConsole
+  - key: 86
+    modifiers: 1
+    action: Editor.Paste
+  - key: 263
+    modifiers: 4
+    action: Editor.NavigateBack
+  - key: 265
+    modifiers: 4
+    action: Editor.NavigateUp
+  - key: 290
+    modifiers: 0
+    action: Debug.ToggleStats
+  - key: 292
+    modifiers: 0
+    action: Debug.ToggleColliders
   - key: 75
     modifiers: 1
     action: Preferences.InputSettings
