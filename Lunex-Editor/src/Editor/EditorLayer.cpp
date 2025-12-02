@@ -150,6 +150,7 @@ namespace Lunex {
 		m_MenuBarPanel.SetOnExitCallback([this]() { Application::Get().Close(); });
 		
 		m_MenuBarPanel.SetOnOpenInputSettingsCallback([this]() { m_InputSettingsPanel.Open(); });
+		m_MenuBarPanel.SetOnOpenOutlineSettingsCallback([this]() { m_OutlineSettingsPanel.Show(); });
 
 		// Configure project creation dialog
 		m_ProjectCreationDialog.SetOnCreateCallback([this](const std::string& name, const std::filesystem::path& location) {
@@ -161,6 +162,13 @@ namespace Lunex {
 		fbSpec.Width = 1280;
 		fbSpec.Height = 720;
 		m_Framebuffer = Framebuffer::Create(fbSpec);
+		
+		// ✅ NEW: Initialize post-processing outline pass
+		m_OutlinePass = CreateRef<SelectionOutlinePass>();
+		m_OutlinePass->Init(1280, 720);
+		
+		// Configure outline settings panel
+		m_OutlineSettingsPanel.SetOutlinePass(m_OutlinePass);
 
 		// Create initial project
 		ProjectManager::New();
@@ -536,6 +544,12 @@ namespace Lunex {
 			"Open input settings", true
 		));
 		
+		registry.Register("Preferences.OutlineSettings", CreateRef<FunctionAction>(
+			"Preferences.OutlineSettings", ActionContext::Pressed,
+			[this](const ActionState&) { m_OutlineSettingsPanel.Toggle(); },
+			"Toggle outline settings", true
+		));
+		
 		LNX_LOG_INFO("✅ Registered {0} editor actions (100% complete!)", registry.GetActionCount());
 	}
 
@@ -561,11 +575,16 @@ namespace Lunex {
 
 			m_EditorCamera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
 			m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
+			
+			// ✅ NEW: Resize outline pass
+			if (m_OutlinePass) {
+				m_OutlinePass->Resize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
+			}
 		}
 
 		// Render
 		Renderer2D::ResetStats();
-		Renderer3D::ResetStats();  // ✅ AÑADIDO: Reset stats del 3D también
+		Renderer3D::ResetStats();
 
 		m_Framebuffer->Bind();
 		RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
@@ -614,6 +633,24 @@ namespace Lunex {
 		m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
 
 		OnOverlayRender();
+		
+		// ✅ NEW: Render outline using post-processing (Editor mode only)
+		if (m_SceneState == SceneState::Edit && !m_SceneHierarchyPanel.GetSelectedEntities().empty() && m_OutlinePass) {
+			// Set up post-process context
+			PostProcessContext ctx;
+			ctx.InputFBO = m_Framebuffer;
+			ctx.OutputFBO = m_Framebuffer;
+			ctx.Camera = &m_EditorCamera;
+			ctx.ActiveScene = m_ActiveScene.get();
+			ctx.Width = (uint32_t)m_ViewportSize.x;
+			ctx.Height = (uint32_t)m_ViewportSize.y;
+			
+			// Update selected entities
+			m_OutlinePass->SetSelectedEntities(m_SceneHierarchyPanel.GetSelectedEntities());
+			
+			// Execute outline rendering
+			m_OutlinePass->Execute(ctx);
+		}
 
 		m_Framebuffer->Unbind();
 	}
@@ -673,6 +710,7 @@ namespace Lunex {
 		m_SettingsPanel.OnImGuiRender();
 		m_ConsolePanel.OnImGuiRender();
 		m_InputSettingsPanel.OnImGuiRender(); // ✅ NEW: Input settings panel
+		m_OutlineSettingsPanel.OnImGuiRender(); // ✅ NEW: Outline settings panel
 
 		// Render dialogs (on top)
 		m_ProjectCreationDialog.OnImGuiRender();
@@ -821,8 +859,8 @@ namespace Lunex {
 			// Box Colliders 2D
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, BoxCollider2DComponent>();
-				for (auto entityID : view) {
-					auto [tc, bc2d] = view.get<TransformComponent, BoxCollider2DComponent>(entityID);
+				for (auto entity : view) {
+					auto [tc, bc2d] = view.get<TransformComponent, BoxCollider2DComponent>(entity);
 
 					glm::vec3 translation = tc.Translation + glm::vec3(bc2d.Offset, 0.001f);
 					glm::vec3 scale = tc.Scale * glm::vec3(bc2d.Size * 2.0f, 1.0f);
@@ -838,8 +876,8 @@ namespace Lunex {
 			// Circle Colliders 2D
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, CircleCollider2DComponent>();
-				for (auto entityID : view) {
-					auto [tc, cc2d] = view.get<TransformComponent, CircleCollider2DComponent>(entityID);
+				for (auto entity : view) {
+					auto [tc, cc2d] = view.get<TransformComponent, CircleCollider2DComponent>(entity);
 
 					glm::vec3 translation = tc.Translation + glm::vec3(cc2d.Offset, 0.001f);
 					glm::vec3 scale = tc.Scale * glm::vec3(cc2d.Radius * 2.0f);
@@ -857,8 +895,8 @@ namespace Lunex {
 			// Box Colliders 3D
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, BoxCollider3DComponent>();
-				for (auto entityID : view) {
-					auto [tc, bc3d] = view.get<TransformComponent, BoxCollider3DComponent>(entityID);
+				for (auto entity : view) {
+					auto [tc, bc3d] = view.get<TransformComponent, BoxCollider3DComponent>(entity);
 
 					glm::vec3 translation = tc.Translation + bc3d.Offset;
 					glm::vec3 scale = tc.Scale * (bc3d.HalfExtents * 2.0f); // HalfExtents → Full size
@@ -874,8 +912,8 @@ namespace Lunex {
 			// Sphere Colliders 3D
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, SphereCollider3DComponent>();
-				for (auto entityID : view) {
-					auto [tc, sc3d] = view.get<TransformComponent, SphereCollider3DComponent>(entityID);
+				for (auto entity : view) {
+					auto [tc, sc3d] = view.get<TransformComponent, SphereCollider3DComponent>(entity);
 
 					glm::vec3 translation = tc.Translation + sc3d.Offset;
 					glm::vec3 scale = tc.Scale * glm::vec3(sc3d.Radius * 2.0f);
@@ -890,8 +928,8 @@ namespace Lunex {
 			// Capsule Colliders 3D (approximated as circle + rects)
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, CapsuleCollider3DComponent>();
-				for (auto entityID : view) {
-					auto [tc, cc3d] = view.get<TransformComponent, CapsuleCollider3DComponent>(entityID);
+				for (auto entity : view) {
+					auto [tc, cc3d] = view.get<TransformComponent, CapsuleCollider3DComponent>(entity);
 
 					glm::vec3 translation = tc.Translation + cc3d.Offset;
 					glm::vec3 scale = tc.Scale * glm::vec3(cc3d.Radius * 2.0f, cc3d.Height, cc3d.Radius * 2.0f);
@@ -906,10 +944,13 @@ namespace Lunex {
 			}
 		}
 
-		// Draw selected entity outline
+		// Draw selected entity outline (2D only - 3D uses wireframe)
 		if (Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity()) {
-			const TransformComponent& transform = selectedEntity.GetComponent<TransformComponent>();
-			Renderer2D::DrawRect(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+			// Only draw 2D rect outline if entity does NOT have MeshComponent (is 2D entity)
+			if (!selectedEntity.HasComponent<MeshComponent>()) {
+				const TransformComponent& transform = selectedEntity.GetComponent<TransformComponent>();
+				Renderer2D::DrawRect(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+			}
 		}
 
 		Renderer2D::EndScene();

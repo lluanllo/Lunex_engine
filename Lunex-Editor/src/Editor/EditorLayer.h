@@ -13,8 +13,10 @@
 #include "../Panels/ProjectCreationDialog.h"
 #include "../Panels/InputSettingsPanel.h"
 #include "../Panels/GizmoSettingsPanel.h"
+#include "../Panels/OutlineSettingsPanel.h"
 
 #include "Renderer/EditorCamera.h"
+#include "Renderer/PostProcess/SelectionOutlinePass.h"
 
 namespace Lunex {
 	class EditorLayer : public Layer {
@@ -75,6 +77,8 @@ namespace Lunex {
 			Ref<Shader> m_FlatColorShader;
 			Ref<Framebuffer> m_Framebuffer;
 			
+			Ref<SelectionOutlinePass> m_OutlinePass;
+			
 			Ref<Scene> m_ActiveScene;
 			Ref<Scene> m_EditorScene;
 			std::filesystem::path m_EditorScenePath;
@@ -111,6 +115,7 @@ namespace Lunex {
 			ProjectCreationDialog m_ProjectCreationDialog;
 			InputSettingsPanel m_InputSettingsPanel;
 			GizmoSettingsPanel m_GizmoSettingsPanel;
+			OutlineSettingsPanel m_OutlineSettingsPanel;
 			
 			// Editor resources
 			Ref<Texture2D> m_IconPlay, m_IconSimulate, m_IconStop;

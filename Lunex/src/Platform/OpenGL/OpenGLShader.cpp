@@ -671,7 +671,7 @@ namespace Lunex {
 		UploadUniformFloat(name, value);
 	}
 	
-	void OpenGLShader::setFloat2(const std::string& name, const glm::vec2& value) {
+	void OpenGLShader::SetFloat2(const std::string& name, const glm::vec2& value) {
 		LNX_PROFILE_FUNCTION();
 		UploadUniformFloat2(name, value);
 	}	 

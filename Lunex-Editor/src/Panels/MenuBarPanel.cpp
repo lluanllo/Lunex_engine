@@ -109,6 +109,9 @@ namespace Lunex {
 				if (ImGui::MenuItem("Input Settings", "Ctrl+K")) {
 					if (m_OnOpenInputSettings) m_OnOpenInputSettings();
 				}
+				if (ImGui::MenuItem("Outline Settings")) {
+					if (m_OnOpenOutlineSettings) m_OnOpenOutlineSettings();
+				}
 				ImGui::Separator();
 				if (ImGui::MenuItem("Editor Settings", nullptr, false, false)) {
 					// TODO: Implement editor settings

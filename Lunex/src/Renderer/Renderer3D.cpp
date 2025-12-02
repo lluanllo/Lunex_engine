@@ -254,6 +254,10 @@ namespace Lunex {
 		for (const auto& mesh : model->GetMeshes()) {
 			s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
 		}
+
+		// TODO: Integrate with AnimationComponent for bone transforms
+		// For now, disable animation in shader
+		s_Data.MeshShader->SetInt("u_UseAnimation", 0);
 	}
 
 	void Renderer3D::DrawModel(const glm::mat4& transform, const Ref<Model>& model, MaterialComponent& materialComponent, int entityID) {
@@ -303,6 +307,10 @@ namespace Lunex {
 		for (const auto& mesh : model->GetMeshes()) {
 			s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
 		}
+
+		// TODO: Integrate with AnimationComponent for bone transforms
+		// For now, disable animation in shader
+		s_Data.MeshShader->SetInt("u_UseAnimation", 0);
 	}
 
 	void Renderer3D::DrawModel(const glm::mat4& transform, const Ref<Model>& model, MaterialComponent& materialComponent, TextureComponent& textureComponent, int entityID) {
@@ -363,6 +371,10 @@ namespace Lunex {
 		for (const auto& mesh : model->GetMeshes()) {
 			s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
 		}
+
+		// TODO: Integrate with AnimationComponent for bone transforms
+		// For now, disable animation in shader
+		s_Data.MeshShader->SetInt("u_UseAnimation", 0);
 	}
 
 	void Renderer3D::ResetStats() {
