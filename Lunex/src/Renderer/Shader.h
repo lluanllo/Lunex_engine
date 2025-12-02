@@ -26,8 +26,24 @@ namespace Lunex {
 			
 			virtual const std::string& GetName() const = 0;
 			
+			// ========================================
+			// COMPUTE SHADER API
+			// ========================================
+			
+			// Dispatch compute shader with work group counts
+			virtual void DispatchCompute(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t numGroupsZ) = 0;
+			
+			// Get compute shader work group size (defined in shader with layout(local_size_x, local_size_y, local_size_z))
+			virtual void GetComputeWorkGroupSize(uint32_t& sizeX, uint32_t& sizeY, uint32_t& sizeZ) const = 0;
+			
+			// Check if this is a compute shader
+			virtual bool IsComputeShader() const = 0;
+			
 			static Ref<Shader> Create(const std::string& filepath);
 			static Ref<Shader> Create(const std::string& names, const std::string& vertexSrc, const std::string& fragmentSrc);
+			
+			// Create compute shader from file
+			static Ref<Shader> CreateCompute(const std::string& filepath);
 	};
 	
 	class ShaderLibrary {

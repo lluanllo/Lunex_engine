@@ -11,7 +11,11 @@ namespace Lunex {
 		bool GetShowPhysicsColliders() const { return m_ShowPhysicsColliders; }
 		void SetShowPhysicsColliders(bool show) { m_ShowPhysicsColliders = show; }
 
+		bool GetShowPhysics3DColliders() const { return m_ShowPhysics3DColliders; }
+		void SetShowPhysics3DColliders(bool show) { m_ShowPhysics3DColliders = show; }
+
 	private:
 		bool m_ShowPhysicsColliders = false;
+		bool m_ShowPhysics3DColliders = false;
 	};
 }

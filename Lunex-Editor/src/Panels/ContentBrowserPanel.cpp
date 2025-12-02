@@ -47,9 +47,6 @@ namespace Lunex {
 	}
 	
 	void ContentBrowserPanel::OnImGuiRender() {
-		// ===== KEYBOARD SHORTCUTS =====
-		HandleKeyboardShortcuts();
-		
 		// ===== ESTILO PROFESIONAL OSCURO (como Unreal Engine) =====
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.12f, 0.13f, 1.0f));        // Fondo principal
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.12f, 0.13f, 1.0f));         // Child backgrounds
@@ -966,8 +963,8 @@ namespace Lunex {
 							// Scripts C++ - abrir en Visual Studio
 							if (extension == ".cpp" || extension == ".h" || extension == ".hpp" || extension == ".c") {
 								std::string command = "cmd /c start \"\" \"" + path.string() + "\"";
-								system(command.c_str());
-								LNX_LOG_INFO("Opening script in editor: {0}", path.filename().string());
+							 system(command.c_str());
+							 LNX_LOG_INFO("Opening script in editor: {0}", path.filename().string());
 							}
 							// Scenes - cargar en editor (TODO: implementar carga de escena)
 							else if (extension == ".lunex") {
@@ -1445,16 +1442,11 @@ extern "C"
 	}
 	
 	// ============================================================================
-	// SELECTION FUNCTIONS
+	// SELECTION FUNCTIONS (PRIVATE - INTERNAL USE)
 	// ============================================================================
-
+	
 	bool ContentBrowserPanel::IsSelected(const std::filesystem::path& path) const {
 		return m_SelectedItems.find(path.string()) != m_SelectedItems.end();
-	}
-	
-	void ContentBrowserPanel::ClearSelection() {
-		m_SelectedItems.clear();
-		m_LastSelectedItem.clear();
 	}
 	
 	void ContentBrowserPanel::AddToSelection(const std::filesystem::path& path) {
@@ -1501,75 +1493,76 @@ extern "C"
 	}
 	
 	// ============================================================================
-	// KEYBOARD SHORTCUTS HANDLER
+	// PUBLIC API FOR GLOBAL SHORTCUTS
 	// ============================================================================
 	
-	void ContentBrowserPanel::HandleKeyboardShortcuts() {
-		ImGuiIO& io = ImGui::GetIO();
-		
-		// Delete key - Delete selected items
-		if (ImGui::IsKeyPressed(ImGuiKey_Delete) && !m_SelectedItems.empty()) {
-			for (const auto& selectedPath : m_SelectedItems) {
-				DeleteItem(std::filesystem::path(selectedPath));
-			}
-			ClearSelection();
+	void ContentBrowserPanel::DeleteSelectedItems() {
+		for (const auto& selectedPath : m_SelectedItems) {
+			DeleteItem(std::filesystem::path(selectedPath));
 		}
-		
-		// Ctrl+C - Copy
-		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C) && !m_SelectedItems.empty()) {
-			CopySelectedItems();
-		}
-		
-		// Ctrl+X - Cut
-		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_X) && !m_SelectedItems.empty()) {
-			CutSelectedItems();
-		}
-		
-		// Ctrl+V - Paste
-		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V) && CanPaste()) {
-			PasteItems();
-		}
-		
-		// Ctrl+A - Select All
-		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A)) {
-			SelectAll();
-		}
-		
-		// Ctrl+D - Duplicate
-		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && m_SelectedItems.size() == 1) {
+		ClearSelection();
+	}
+	
+	void ContentBrowserPanel::DuplicateSelectedItem() {
+		if (m_SelectedItems.size() == 1) {
 			DuplicateItem(std::filesystem::path(*m_SelectedItems.begin()));
 		}
-		
-		// F2 - Rename
-		if (ImGui::IsKeyPressed(ImGuiKey_F2) && m_SelectedItems.size() == 1) {
+	}
+	
+	void ContentBrowserPanel::RenameSelectedItem() {
+		if (m_SelectedItems.size() == 1) {
 			m_ItemToRename = std::filesystem::path(*m_SelectedItems.begin());
 			strncpy_s(m_NewItemName, sizeof(m_NewItemName), 
 				m_ItemToRename.filename().string().c_str(), _TRUNCATE);
 			m_ShowRenameDialog = true;
 		}
-		
-		// Alt + Left Arrow - Back
-		if (io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_LeftArrow) && m_HistoryIndex > 0) {
+	}
+	
+	void ContentBrowserPanel::NavigateBack() {
+		if (m_HistoryIndex > 0) {
 			m_HistoryIndex--;
 			m_CurrentDirectory = m_DirectoryHistory[m_HistoryIndex];
 		}
-		
-		// Alt + Right Arrow - Forward
-		if (io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_RightArrow) && 
-			m_HistoryIndex < (int)m_DirectoryHistory.size() - 1) {
+	}
+	
+	void ContentBrowserPanel::NavigateForward() {
+		if (m_HistoryIndex < (int)m_DirectoryHistory.size() - 1) {
 			m_HistoryIndex++;
 			m_CurrentDirectory = m_DirectoryHistory[m_HistoryIndex];
 		}
+	}
+	
+	void ContentBrowserPanel::NavigateUp() {
+		NavigateToParent();
+	}
+	
+	void ContentBrowserPanel::ClearSelection() {
+		m_SelectedItems.clear();
+		m_LastSelectedItem.clear();
+	}
+	
+	void ContentBrowserPanel::SelectAll() {
+		ClearSelection();
 		
-		// Alt + Up Arrow - Parent directory
-		if (io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
-			NavigateToParent();
+		for (auto& entry : std::filesystem::directory_iterator(m_CurrentDirectory)) {
+			// Apply search filter
+			std::string searchQuery = m_SearchBuffer;
+			if (!searchQuery.empty()) {
+				std::string filenameLower = entry.path().filename().string();
+				std::transform(filenameLower.begin(), filenameLower.end(), 
+					filenameLower.begin(), ::tolower);
+				std::transform(searchQuery.begin(), searchQuery.end(), 
+					searchQuery.begin(), ::tolower);
+				
+				if (filenameLower.find(searchQuery) == std::string::npos) {
+					continue;
+				}
+			}
+			
+			AddToSelection(entry.path());
 		}
 		
-		// Escape - Clear selection
-		if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-			ClearSelection();
-		}
+		LNX_LOG_INFO("Selected all {0} items", m_SelectedItems.size());
 	}
 	
 	// ============================================================================
@@ -1711,34 +1704,6 @@ extern "C"
 		m_DirectoryHistory.push_back(directory);
 		m_CurrentDirectory = directory;
 		ClearSelection();
-	}
-	
-	// ============================================================================
-	// SELECTION
-	// ============================================================================
-	
-	void ContentBrowserPanel::SelectAll() {
-		ClearSelection();
-		
-		for (auto& entry : std::filesystem::directory_iterator(m_CurrentDirectory)) {
-			// Apply search filter
-			std::string searchQuery = m_SearchBuffer;
-			if (!searchQuery.empty()) {
-				std::string filenameLower = entry.path().filename().string();
-				std::transform(filenameLower.begin(), filenameLower.end(), 
-					filenameLower.begin(), ::tolower);
-				std::transform(searchQuery.begin(), searchQuery.end(), 
-					searchQuery.begin(), ::tolower);
-				
-				if (filenameLower.find(searchQuery) == std::string::npos) {
-					continue;
-				}
-			}
-			
-			AddToSelection(entry.path());
-		}
-		
-		LNX_LOG_INFO("Selected all {0} items", m_SelectedItems.size());
 	}
 	
 	// ============================================================================

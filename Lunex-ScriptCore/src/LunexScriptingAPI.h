@@ -265,6 +265,67 @@ namespace Lunex {
         void* m_Entity;
     };
 
+    // NEW: Rigidbody3D API for Bullet3 physics
+    class Rigidbody3DAPI {
+    public:
+        Rigidbody3DAPI() : m_Context(nullptr), m_Entity(nullptr) {}
+        Rigidbody3DAPI(EngineContext* ctx, void* entity) : m_Context(ctx), m_Entity(entity) {}
+        
+        bool Exists();
+        
+        // Velocity
+        Vec3 GetLinearVelocity();
+        void SetLinearVelocity(const Vec3& vel);
+        void AddLinearVelocity(const Vec3& delta);
+        
+        Vec3 GetAngularVelocity();
+        void SetAngularVelocity(const Vec3& vel);
+        
+        // Forces
+        void ApplyForce(const Vec3& force);
+        void ApplyForceAtPoint(const Vec3& force, const Vec3& point);
+        void ApplyImpulse(const Vec3& impulse);
+        void ApplyImpulseAtPoint(const Vec3& impulse, const Vec3& point);
+        void ApplyTorque(const Vec3& torque);
+        void ApplyTorqueImpulse(const Vec3& torque);
+        
+        // Properties
+        float GetMass();
+        void SetMass(float mass);
+        
+        float GetFriction();
+        void SetFriction(float friction);
+        
+        float GetRestitution();
+        void SetRestitution(float restitution);
+        
+        float GetLinearDamping();
+        void SetLinearDamping(float damping);
+        
+        float GetAngularDamping();
+        void SetAngularDamping(float damping);
+        
+        // Constraints
+        void SetLinearFactor(const Vec3& factor);
+        Vec3 GetLinearFactor();
+        
+        void SetAngularFactor(const Vec3& factor);
+        Vec3 GetAngularFactor();
+        
+        // State
+        void SetKinematic(bool kinematic);
+        bool IsKinematic();
+        
+        void ClearForces();
+        void Activate();
+        void Deactivate();
+        bool IsActive();
+        
+    private:
+        EngineContext* m_Context;
+        void* m_Entity;
+    };
+
     class InputAPI {
     public:
         InputAPI() : m_Context(nullptr) {}
@@ -360,6 +421,43 @@ namespace Lunex {
         float (*GetGravityScale)(void* entity);
         void (*SetGravityScale)(void* entity, float scale);
         
+        // === RIGIDBODY3D COMPONENT (Bullet3) ===
+        bool (*HasRigidbody3D)(void* entity);
+        void (*GetLinearVelocity3D)(void* entity, Vec3* outVelocity);
+        void (*SetLinearVelocity3D)(void* entity, const Vec3* velocity);
+        void (*GetAngularVelocity3D)(void* entity, Vec3* outVelocity);
+        void (*SetAngularVelocity3D)(void* entity, const Vec3* velocity);
+        
+        void (*ApplyForce3D)(void* entity, const Vec3* force);
+        void (*ApplyForceAtPoint3D)(void* entity, const Vec3* force, const Vec3* point);
+        void (*ApplyImpulse3D)(void* entity, const Vec3* impulse);
+        void (*ApplyImpulseAtPoint3D)(void* entity, const Vec3* impulse, const Vec3* point);
+        void (*ApplyTorque3D)(void* entity, const Vec3* torque);
+        void (*ApplyTorqueImpulse3D)(void* entity, const Vec3* torque);
+        
+        float (*GetMass3D)(void* entity);
+        void (*SetMass3D)(void* entity, float mass);
+        float (*GetFriction3D)(void* entity);
+        void (*SetFriction3D)(void* entity, float friction);
+        float (*GetRestitution3D)(void* entity);
+        void (*SetRestitution3D)(void* entity, float restitution);
+        float (*GetLinearDamping3D)(void* entity);
+        void (*SetLinearDamping3D)(void* entity, float damping);
+        float (*GetAngularDamping3D)(void* entity);
+        void (*SetAngularDamping3D)(void* entity, float damping);
+        
+        void (*SetLinearFactor3D)(void* entity, const Vec3* factor);
+        void (*GetLinearFactor3D)(void* entity, Vec3* outFactor);
+        void (*SetAngularFactor3D)(void* entity, const Vec3* factor);
+        void (*GetAngularFactor3D)(void* entity, Vec3* outFactor);
+        
+        void (*ClearForces3D)(void* entity);
+        void (*Activate3D)(void* entity);
+        void (*Deactivate3D)(void* entity);
+        bool (*IsActive3D)(void* entity);
+        bool (*IsKinematic3D)(void* entity);
+        void (*SetKinematic3D)(void* entity, bool kinematic);
+        
         // === ENTITY HANDLE ===
         void* CurrentEntity;
         
@@ -403,6 +501,7 @@ namespace Lunex {
             // Initialize helper objects
             transform = TransformAPI(ctx, ctx->CurrentEntity);
             rigidbody = Rigidbody2DAPI(ctx, ctx->CurrentEntity);
+            rigidbody3d = Rigidbody3DAPI(ctx, ctx->CurrentEntity);
             input = InputAPI(ctx);
             time = TimeAPI(ctx);
             debug = DebugAPI(ctx);
@@ -435,6 +534,7 @@ namespace Lunex {
         // Helper objects (ready to use!)
         TransformAPI transform;
         Rigidbody2DAPI rigidbody;
+        Rigidbody3DAPI rigidbody3d;
         InputAPI input;
         TimeAPI time;
         DebugAPI debug;

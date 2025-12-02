@@ -2,6 +2,7 @@
 #include "ScriptingEngine.h"
 #include "Core/Input.h"
 #include "Scene/Entity.h"
+#include "Physics/Physics.h"
 
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
@@ -334,6 +335,395 @@ namespace Lunex {
 			}
 		};
 
+		// === RIGIDBODY3D COMPONENT (Bullet3) ===
+		m_EngineContext->HasRigidbody3D = [](void* entity) -> bool {
+			if (!entity || !g_CurrentScene) return false;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			return ent.HasComponent<Rigidbody3DComponent>();
+		};
+
+		m_EngineContext->GetLinearVelocity3D = [](void* entity, Vec3* outVelocity) {
+			if (!entity || !g_CurrentScene || !outVelocity) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					glm::vec3 vel = body->GetLinearVelocity();
+					*outVelocity = Vec3(vel);
+				}
+			}
+		};
+
+		m_EngineContext->SetLinearVelocity3D = [](void* entity, const Vec3* velocity) {
+			if (!entity || !g_CurrentScene || !velocity) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					body->SetLinearVelocity(glm::vec3(*velocity));
+				}
+			}
+		};
+
+		m_EngineContext->GetAngularVelocity3D = [](void* entity, Vec3* outVelocity) {
+			if (!entity || !g_CurrentScene || !outVelocity) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					glm::vec3 vel = body->GetAngularVelocity();
+					*outVelocity = Vec3(vel);
+				}
+			}
+		};
+
+		m_EngineContext->SetAngularVelocity3D = [](void* entity, const Vec3* velocity) {
+			if (!entity || !g_CurrentScene || !velocity) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					body->SetAngularVelocity(glm::vec3(*velocity));
+				}
+			}
+		};
+
+		m_EngineContext->ApplyForce3D = [](void* entity, const Vec3* force) {
+			if (!entity || !g_CurrentScene || !force) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					body->ApplyForce(glm::vec3(*force));
+				}
+			}
+		};
+
+		m_EngineContext->ApplyForceAtPoint3D = [](void* entity, const Vec3* force, const Vec3* point) {
+			if (!entity || !g_CurrentScene || !force || !point) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					body->ApplyForce(glm::vec3(*force), glm::vec3(*point));
+				}
+			}
+		};
+
+		m_EngineContext->ApplyImpulse3D = [](void* entity, const Vec3* impulse) {
+			if (!entity || !g_CurrentScene || !impulse) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					body->ApplyImpulse(glm::vec3(*impulse));
+				}
+			}
+		};
+
+		m_EngineContext->ApplyImpulseAtPoint3D = [](void* entity, const Vec3* impulse, const Vec3* point) {
+			if (!entity || !g_CurrentScene || !impulse || !point) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					body->ApplyImpulse(glm::vec3(*impulse), glm::vec3(*point));
+				}
+			}
+		};
+
+		m_EngineContext->ApplyTorque3D = [](void* entity, const Vec3* torque) {
+			if (!entity || !g_CurrentScene || !torque) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					body->ApplyTorque(glm::vec3(*torque));
+				}
+			}
+		};
+
+		m_EngineContext->ApplyTorqueImpulse3D = [](void* entity, const Vec3* torque) {
+			if (!entity || !g_CurrentScene || !torque) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					body->ApplyTorqueImpulse(glm::vec3(*torque));
+				}
+			}
+		};
+
+		m_EngineContext->GetMass3D = [](void* entity) -> float {
+			if (!entity || !g_CurrentScene) return 0.0f;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					return body->GetMass();
+				}
+			}
+			return 0.0f;
+		};
+
+		m_EngineContext->SetMass3D = [](void* entity, float mass) {
+			if (!entity || !g_CurrentScene) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				rb3d.Mass = mass;
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					body->SetMass(mass);
+				}
+			}
+		};
+
+		m_EngineContext->GetFriction3D = [](void* entity) -> float {
+			if (!entity || !g_CurrentScene) return 0.5f;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				return rb3d.Friction;
+			}
+			return 0.5f;
+		};
+
+		m_EngineContext->SetFriction3D = [](void* entity, float friction) {
+			if (!entity || !g_CurrentScene) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				rb3d.Friction = friction;
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					body->SetFriction(friction);
+				}
+			}
+		};
+
+		m_EngineContext->GetRestitution3D = [](void* entity) -> float {
+			if (!entity || !g_CurrentScene) return 0.0f;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				return rb3d.Restitution;
+			}
+			return 0.0f;
+		};
+
+		m_EngineContext->SetRestitution3D = [](void* entity, float restitution) {
+			if (!entity || !g_CurrentScene) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				rb3d.Restitution = restitution;
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					body->SetRestitution(restitution);
+				}
+			}
+		};
+
+		m_EngineContext->GetLinearDamping3D = [](void* entity) -> float {
+			if (!entity || !g_CurrentScene) return 0.0f;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				return rb3d.LinearDamping;
+			}
+			return 0.0f;
+		};
+
+		m_EngineContext->SetLinearDamping3D = [](void* entity, float damping) {
+			if (!entity || !g_CurrentScene) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				rb3d.LinearDamping = damping;
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					// SetDamping takes both linear and angular, so preserve angular
+					body->SetDamping(damping, rb3d.AngularDamping);
+				}
+			}
+		};
+
+		m_EngineContext->GetAngularDamping3D = [](void* entity) -> float {
+			if (!entity || !g_CurrentScene) return 0.0f;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				return rb3d.AngularDamping;
+			}
+			return 0.0f;
+		};
+
+		m_EngineContext->SetAngularDamping3D = [](void* entity, float damping) {
+			if (!entity || !g_CurrentScene) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				rb3d.AngularDamping = damping;
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					// SetDamping takes both linear and angular, so preserve linear
+					body->SetDamping(rb3d.LinearDamping, damping);
+				}
+			}
+		};
+
+		m_EngineContext->SetLinearFactor3D = [](void* entity, const Vec3* factor) {
+			if (!entity || !g_CurrentScene || !factor) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				rb3d.LinearFactor = glm::vec3(*factor);
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					body->SetLinearFactor(glm::vec3(*factor));
+				}
+			}
+		};
+
+		m_EngineContext->GetLinearFactor3D = [](void* entity, Vec3* outFactor) {
+			if (!entity || !g_CurrentScene || !outFactor) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				*outFactor = Vec3(rb3d.LinearFactor);
+			}
+		};
+
+		m_EngineContext->SetAngularFactor3D = [](void* entity, const Vec3* factor) {
+			if (!entity || !g_CurrentScene || !factor) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				rb3d.AngularFactor = glm::vec3(*factor);
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					body->SetAngularFactor(glm::vec3(*factor));
+				}
+			}
+		};
+
+		m_EngineContext->GetAngularFactor3D = [](void* entity, Vec3* outFactor) {
+			if (!entity || !g_CurrentScene || !outFactor) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				*outFactor = Vec3(rb3d.AngularFactor);
+			}
+		};
+
+		m_EngineContext->ClearForces3D = [](void* entity) {
+			if (!entity || !g_CurrentScene) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					// Bullet clears forces by setting them to zero
+					btRigidBody* btBody = body->GetRigidBody();
+					if (btBody) {
+						btBody->clearForces();
+					}
+				}
+			}
+		};
+
+		m_EngineContext->Activate3D = [](void* entity) {
+			if (!entity || !g_CurrentScene) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					body->Activate();
+				}
+			}
+		};
+
+		m_EngineContext->Deactivate3D = [](void* entity) {
+			if (!entity || !g_CurrentScene) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					// SetActivationState with WANTS_DEACTIVATION
+					body->SetActivationState(WANTS_DEACTIVATION);
+				}
+			}
+		};
+
 		// CurrentEntity se establecerá cuando se cargue el script
 		m_EngineContext->CurrentEntity = nullptr;
 
@@ -623,7 +1013,7 @@ namespace Lunex {
 				scriptCoreInclude = candidate;
 				lunexInclude = searchDir / "Lunex" / "src";
 				spdlogInclude = searchDir / "vendor" / "spdlog" / "include";
-				glmInclude = searchDir / "vendor" / "glm" / "glm.hpp"; // Buscar glm.hpp específicamente
+				glmInclude = searchDir / "vendor" / "glm"; // ? FIX: Buscar el directorio glm, no glm.hpp
 				break;
 			}
 			searchDir = searchDir.parent_path();

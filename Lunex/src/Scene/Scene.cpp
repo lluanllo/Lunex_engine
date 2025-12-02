@@ -9,6 +9,7 @@
 #include "Core/Input.h"
 
 #include "Scripting/ScriptingEngine.h"
+#include "Physics/Physics.h"
 
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
@@ -120,19 +121,23 @@ namespace Lunex {
 
 	void Scene::OnRuntimeStart() {
 		OnPhysics2DStart();
+		OnPhysics3DStart();
 		m_ScriptingEngine->OnScriptsStart(m_Registry);
 	}
 
 	void Scene::OnRuntimeStop() {
 		m_ScriptingEngine->OnScriptsStop(m_Registry);
+		OnPhysics3DStop();
 		OnPhysics2DStop();
 	}
 
 	void Scene::OnSimulationStart() {
 		OnPhysics2DStart();
+		OnPhysics3DStart();
 	}
 
 	void Scene::OnSimulationStop() {
+		OnPhysics3DStop();
 		OnPhysics2DStop();
 	}
 
@@ -152,7 +157,7 @@ namespace Lunex {
 				});
 		}
 
-		// Physics
+		// Physics 2D
 		{
 			// ✅ Box2D v3.x: Step con firma actualizada
 			b2World_Step(m_PhysicsWorld, ts, 4);
@@ -171,6 +176,49 @@ namespace Lunex {
 				transform.Translation.x = position.x;
 				transform.Translation.y = position.y;
 				transform.Rotation.z = b2Rot_GetAngle(rotation);
+			}
+		}
+
+		// Physics 3D
+		{
+			// ✅ CRITICAL FIX: Use proper substeps and fixed timestep
+			// This prevents tunneling and ensures stable physics simulation
+			float fixedTimeStep = 1.0f / 60.0f; // 60 FPS physics
+			int maxSubSteps = 30; // ↑ Match updated PhysicsConfig
+			
+			PhysicsCore::Get().GetWorld()->StepSimulation(ts, maxSubSteps, fixedTimeStep);
+
+			// Retrieve transforms from Bullet
+			auto view = m_Registry.view<TransformComponent, Rigidbody3DComponent>();
+			for (auto e : view) {
+				auto& transform = view.get<TransformComponent>(e);
+				auto& rb3d = view.get<Rigidbody3DComponent>(e);
+
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					
+					// ✅ NEW: Clamp velocity for heavy objects to prevent tunneling
+					if (rb3d.Mass > 10.0f) {
+						glm::vec3 velocity = body->GetLinearVelocity();
+						float speed = glm::length(velocity);
+						
+						// Max speed based on mass (heavier = slower max speed)
+						float maxSpeed = 50.0f / std::sqrt(rb3d.Mass / 10.0f);
+						
+						if (speed > maxSpeed) {
+							glm::vec3 clampedVelocity = glm::normalize(velocity) * maxSpeed;
+							body->SetLinearVelocity(clampedVelocity);
+						}
+					}
+					
+					// Get position and rotation from physics
+					glm::vec3 position = body->GetPosition();
+					glm::quat rotation = body->GetRotation();
+
+					// Update transform
+					transform.Translation = position;
+					transform.Rotation = glm::eulerAngles(rotation);
+				}
 			}
 		}
 
@@ -319,7 +367,7 @@ namespace Lunex {
 	}
 
 	void Scene::OnUpdateSimulation(Timestep ts, EditorCamera& camera) {
-		// Physics
+		// Physics 2D
 		{
 			// ✅ Box2D v3.x: Step con firma actualizada
 			b2World_Step(m_PhysicsWorld, ts, 4);
@@ -338,6 +386,47 @@ namespace Lunex {
 				transform.Translation.x = position.x;
 				transform.Translation.y = position.y;
 				transform.Rotation.z = b2Rot_GetAngle(rotation);
+			}
+		}
+
+		// Physics 3D
+		{
+			// ✅ CRITICAL FIX: Use proper substeps and fixed timestep
+			float fixedTimeStep = 1.0f / 60.0f;
+			int maxSubSteps = 30;
+			
+			PhysicsCore::Get().GetWorld()->StepSimulation(ts, maxSubSteps, fixedTimeStep);
+
+			// Retrieve transforms from Bullet
+			auto view = m_Registry.view<TransformComponent, Rigidbody3DComponent>();
+			for (auto e : view) {
+				auto& transform = view.get<TransformComponent>(e);
+				auto& rb3d = view.get<Rigidbody3DComponent>(e);
+
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					
+					// ✅ NEW: Clamp velocity for heavy objects
+					if (rb3d.Mass > 10.0f) {
+						glm::vec3 velocity = body->GetLinearVelocity();
+						float speed = glm::length(velocity);
+						
+						float maxSpeed = 50.0f / std::sqrt(rb3d.Mass / 10.0f);
+						
+						if (speed > maxSpeed) {
+							glm::vec3 clampedVelocity = glm::normalize(velocity) * maxSpeed;
+							body->SetLinearVelocity(clampedVelocity);
+						}
+					}
+					
+					// Get position and rotation from physics
+					glm::vec3 position = body->GetPosition();
+					glm::quat rotation = body->GetRotation();
+
+					// Update transform
+					transform.Translation = position;
+					transform.Rotation = glm::eulerAngles(rotation);
+				}
 			}
 		}
 
@@ -497,7 +586,7 @@ namespace Lunex {
 		// End current batch before rendering billboards to avoid texture slot conflicts
 		Renderer2D::EndScene();
 		
-		// Start fresh batch for billboards
+		// Start fresh batch for billboards and frustums
 		Renderer2D::BeginScene(camera);
 
 		// Render billboards (lights and cameras) sorted by distance
@@ -563,6 +652,73 @@ namespace Lunex {
 		
 		// Re-enable depth writing
 		RenderCommand::SetDepthMask(true);
+		
+		// ========================================
+		// DRAW CAMERA FRUSTUMS (Editor only)
+		// ========================================
+		
+		// ✅ Save current line width and set thin lines for frustums
+		float previousLineWidth = Renderer2D::GetLineWidth();
+		Renderer2D::SetLineWidth(0.15f);  // Ultra-thin lines that stay thin at any distance
+		
+		{
+			auto view = m_Registry.view<TransformComponent, CameraComponent>();
+			for (auto entity : view) {
+				auto [transform, cameraComp] = view.get<TransformComponent, CameraComponent>(entity);
+				
+				// Get camera projection and view matrices
+				glm::mat4 cameraProjection = cameraComp.Camera.GetProjection();
+				glm::mat4 cameraView = glm::inverse(transform.GetTransform());
+				
+				// ✅ Always use black color (ignored in DrawCameraFrustum since it uses hardcoded black)
+				glm::vec4 frustumColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+				
+				// Draw the frustum
+				Renderer2D::DrawCameraFrustum(cameraProjection, cameraView, frustumColor, (int)entity);
+			}
+		}
+		
+		// ========================================
+		// DRAW LIGHT GIZMOS (Editor only)
+		// ========================================
+		
+		{
+			auto view = m_Registry.view<TransformComponent, LightComponent>();
+			for (auto entity : view) {
+				auto [transform, light] = view.get<TransformComponent, LightComponent>(entity);
+				
+				// Use black color for gizmos
+				glm::vec4 gizmoColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+				
+				// Calculate light direction (forward vector from transform)
+				glm::mat4 transformMatrix = transform.GetTransform();
+				glm::vec3 forward = -glm::normalize(glm::vec3(transformMatrix[2]));  // -Z axis
+				
+				// Draw gizmo based on light type
+				switch (light.GetType()) {
+					case LightType::Point: {
+						// Draw sphere showing radius of influence
+						Renderer2D::DrawPointLightGizmo(transform.Translation, light.GetRange(), gizmoColor, (int)entity);
+						break;
+					}
+					
+					case LightType::Directional: {
+						// Draw arrow showing direction
+						Renderer2D::DrawDirectionalLightGizmo(transform.Translation, forward, gizmoColor, (int)entity);
+						break;
+					}
+					
+					case LightType::Spot: {
+						// Draw cone showing direction, range, and angle
+						Renderer2D::DrawSpotLightGizmo(transform.Translation, forward, light.GetRange(), light.GetOuterConeAngle(), gizmoColor, (int)entity);
+						break;
+					}
+				}
+			}
+		}
+		
+		// ✅ Restore previous line width
+		Renderer2D::SetLineWidth(previousLineWidth);
 
 		Renderer2D::EndScene();
 
@@ -673,5 +829,134 @@ namespace Lunex {
 	void Scene::OnComponentAdded<ScriptComponent>(Entity entity, ScriptComponent& component) {
 		// No hacer nada especial al añadir el componente
 		// La compilación y carga se manejará en ScriptingEngine
+	}
+
+	// ========================================
+	// 3D PHYSICS (Bullet3)
+	// ========================================
+
+	void Scene::OnPhysics3DStart() {
+		// Initialize Bullet physics
+		PhysicsConfig config;
+		config.Gravity = glm::vec3(0.0f, -9.81f, 0.0f);
+		config.FixedTimestep = 1.0f / 60.0f;
+		PhysicsCore::Get().Initialize(config);
+		
+		// Create rigid bodies for all entities with Rigidbody3DComponent
+		auto view = m_Registry.view<TransformComponent, Rigidbody3DComponent>();
+		for (auto e : view) {
+			auto& transform = view.get<TransformComponent>(e);
+			auto& rb3d = view.get<Rigidbody3DComponent>(e);
+			
+			// Determine collider type and apply scale
+			ColliderComponent* collider = new ColliderComponent();
+			
+			if (m_Registry.all_of<BoxCollider3DComponent>(e)) {
+				auto& bc3d = m_Registry.get<BoxCollider3DComponent>(e);
+				// ✅ Apply scale to half extents
+				glm::vec3 scaledHalfExtents = bc3d.HalfExtents * transform.Scale;
+				collider->CreateBoxShape(scaledHalfExtents);
+				collider->SetOffset(bc3d.Offset);
+			}
+			else if (m_Registry.all_of<SphereCollider3DComponent>(e)) {
+				auto& sc3d = m_Registry.get<SphereCollider3DComponent>(e);
+				// ✅ Apply uniform scale (use max component for sphere)
+				float scaledRadius = sc3d.Radius * std::max({transform.Scale.x, transform.Scale.y, transform.Scale.z});
+				collider->CreateSphereShape(scaledRadius);
+				collider->SetOffset(sc3d.Offset);
+			}
+			else if (m_Registry.all_of<CapsuleCollider3DComponent>(e)) {
+				auto& cc3d = m_Registry.get<CapsuleCollider3DComponent>(e);
+				// ✅ Apply scale to radius and height
+				float scaledRadius = cc3d.Radius * std::max(transform.Scale.x, transform.Scale.z);
+				float scaledHeight = cc3d.Height * transform.Scale.y;
+				collider->CreateCapsuleShape(scaledRadius, scaledHeight);
+				collider->SetOffset(cc3d.Offset);
+			}
+			else {
+				// Default box collider
+				collider->CreateBoxShape(glm::vec3(0.5f) * transform.Scale);
+			}
+			
+			rb3d.RuntimeCollider = collider;
+			
+			// Create rigid body
+			PhysicsMaterial material;
+			material.Mass = rb3d.Mass;
+			material.Friction = rb3d.Friction;
+			material.Restitution = rb3d.Restitution;
+			material.LinearDamping = rb3d.LinearDamping;
+			material.AngularDamping = rb3d.AngularDamping;
+			material.IsStatic = (rb3d.Type == Rigidbody3DComponent::BodyType::Static);
+			material.IsKinematic = (rb3d.Type == Rigidbody3DComponent::BodyType::Kinematic);
+			material.IsTrigger = rb3d.IsTrigger;
+			material.UseCCD = rb3d.UseCCD;
+			material.CcdMotionThreshold = rb3d.CcdMotionThreshold;
+			material.CcdSweptSphereRadius = rb3d.CcdSweptSphereRadius;
+			
+			glm::quat rotation = glm::quat(transform.Rotation);
+			
+			RigidBodyComponent* body = new RigidBodyComponent();
+			body->Create(
+				PhysicsCore::Get().GetWorld(),
+				collider,
+				material,
+				transform.Translation,
+				rotation
+			);
+			
+			// Apply constraints
+			body->SetLinearFactor(rb3d.LinearFactor);
+			body->SetAngularFactor(rb3d.AngularFactor);
+			
+			// Store user pointer for collision callbacks
+			body->GetRigidBody()->setUserPointer(reinterpret_cast<void*>(static_cast<intptr_t>(e)));
+			
+			rb3d.RuntimeBody = body;
+		}
+	}
+
+	void Scene::OnPhysics3DStop() {
+		// Destroy all rigid bodies
+		auto view = m_Registry.view<Rigidbody3DComponent>();
+		for (auto e : view) {
+			auto& rb3d = view.get<Rigidbody3DComponent>(e);
+			
+			if (rb3d.RuntimeBody) {
+				RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+				body->Destroy(PhysicsCore::Get().GetWorld());
+				delete body;
+				rb3d.RuntimeBody = nullptr;
+			}
+			
+			if (rb3d.RuntimeCollider) {
+				delete static_cast<ColliderComponent*>(rb3d.RuntimeCollider);
+				rb3d.RuntimeCollider = nullptr;
+			}
+		}
+		
+		// Shutdown physics
+		PhysicsCore::Get().Shutdown();
+	}
+
+	// Template specializations for 3D physics components
+	template<>
+	void Scene::OnComponentAdded<Rigidbody3DComponent>(Entity entity, Rigidbody3DComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<BoxCollider3DComponent>(Entity entity, BoxCollider3DComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<SphereCollider3DComponent>(Entity entity, SphereCollider3DComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<CapsuleCollider3DComponent>(Entity entity, CapsuleCollider3DComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<MeshCollider3DComponent>(Entity entity, MeshCollider3DComponent& component) {
 	}
 }

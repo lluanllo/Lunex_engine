@@ -27,21 +27,40 @@ namespace Lunex {
 		const std::set<Entity>& GetSelectedEntities() const { return m_SelectedEntities; }
 		bool IsEntitySelected(Entity entity) const;
 		
+		// Active element (last selected entity)
+		Entity GetActiveEntity() const { return m_LastSelectedEntity; }
+		
+		// ========================================
+		// PIVOT POINT CALCULATIONS (Blender-style)
+		// ========================================
+		glm::vec3 CalculateMedianPoint() const;
+		glm::vec3 CalculateActiveElementPosition() const;
+		glm::vec3 CalculateBoundingBoxCenter() const;
+		
+		// ========================================
+		// PUBLIC API FOR GLOBAL SHORTCUTS
+		// ========================================
+		void SelectAll();
+		void ClearSelection();
+		void DeleteSelectedEntities();
+		void DuplicateSelectedEntities();
+		void RenameSelectedEntity();
+		
+		// ========================================
+		// PUBLIC API FOR MULTI-SELECTION (Ray Picking)
+		// ========================================
+		void AddEntityToSelection(Entity entity);
+		void ToggleEntitySelection(Entity entity);
+
 	private:
 		void DrawEntityNode(Entity entity);
 		void RenderTopBar();
-		void HandleKeyboardShortcuts();
 		
 		// Selection operations
 		void SelectEntity(Entity entity, bool clearPrevious = true);
-		void ToggleEntitySelection(Entity entity);
-		void ClearSelection();
-		void SelectAll();
-		void DeleteSelectedEntities();
 		
 		// Entity operations
 		void DuplicateEntity(Entity entity);
-		void DuplicateSelectedEntities();
 		void RenameEntity(Entity entity);
 		
 		// Sorting

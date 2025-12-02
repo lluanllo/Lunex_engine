@@ -3,6 +3,7 @@
 
 #include "Renderer/RenderCommand.h"
 #include "Renderer/UniformBuffer.h"
+#include "Renderer/StorageBuffer.h"
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
 #include "Log/Log.h"
@@ -47,21 +48,26 @@ namespace Lunex {
 			float AOMultiplier;
 		};
 
-		struct LightsUniformData {
+		// Dynamic light buffer structure
+		struct LightsStorageData {
 			int NumLights;
 			float _padding1, _padding2, _padding3;
-			Light::LightData Lights[16];
+			// Light data follows dynamically
 		};
 
 		CameraData CameraBuffer;
 		TransformData TransformBuffer;
 		MaterialUniformData MaterialBuffer;
-		LightsUniformData LightsBuffer;
+		
+		// Dynamic light buffer
+		std::vector<uint8_t> LightsBufferData;
+		int CurrentLightCount = 0;
+		static constexpr int MaxLights = 10000;
 
 		Ref<UniformBuffer> CameraUniformBuffer;
 		Ref<UniformBuffer> TransformUniformBuffer;
 		Ref<UniformBuffer> MaterialUniformBuffer;
-		Ref<UniformBuffer> LightsUniformBuffer;
+		Ref<StorageBuffer> LightsStorageBuffer;
 
 		Ref<Shader> MeshShader;
 
@@ -81,11 +87,21 @@ namespace Lunex {
 		s_Data.CameraUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::CameraData), 0);
 		s_Data.TransformUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::TransformData), 1);
 		s_Data.MaterialUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::MaterialUniformData), 2);
-		s_Data.LightsUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::LightsUniformData), 3);
+		
+		// Create storage buffer for lights (header + 10000 lights)
+		uint32_t lightsBufferSize = sizeof(Renderer3DData::LightsStorageData) + 
+									 (s_Data.MaxLights * sizeof(Light::LightData));
+		s_Data.LightsStorageBuffer = StorageBuffer::Create(lightsBufferSize, 3);
+		
+		// Allocate CPU-side buffer
+		s_Data.LightsBufferData.resize(lightsBufferSize);
 
 		// Initialize with zero lights
-		s_Data.LightsBuffer.NumLights = 0;
-		s_Data.LightsUniformBuffer->SetData(&s_Data.LightsBuffer, sizeof(Renderer3DData::LightsUniformData));
+		s_Data.CurrentLightCount = 0;
+		Renderer3DData::LightsStorageData* header = 
+			reinterpret_cast<Renderer3DData::LightsStorageData*>(s_Data.LightsBufferData.data());
+		header->NumLights = 0;
+		s_Data.LightsStorageBuffer->SetData(s_Data.LightsBufferData.data(), lightsBufferSize);
 	}
 
 	void Renderer3D::Shutdown() {
@@ -123,13 +139,32 @@ namespace Lunex {
 	void Renderer3D::UpdateLights(Scene* scene) {
 		LNX_PROFILE_FUNCTION();
 
-		s_Data.LightsBuffer.NumLights = 0;
-
 		auto view = scene->GetAllEntitiesWith<TransformComponent, LightComponent>();
-		int lightIndex = 0;
-
+		
+		// Count lights (capped at MaxLights)
+		int lightCount = 0;
 		for (auto entity : view) {
-			if (lightIndex >= 16) break;
+			if (lightCount >= s_Data.MaxLights) {
+				LNX_LOG_WARN("Light count exceeded maximum of {0}. Some lights will not be rendered.", s_Data.MaxLights);
+				break;
+			}
+			lightCount++;
+		}
+		
+		// Update header
+		Renderer3DData::LightsStorageData* header = 
+			reinterpret_cast<Renderer3DData::LightsStorageData*>(s_Data.LightsBufferData.data());
+		header->NumLights = lightCount;
+		
+		// Get pointer to light data array (starts after header)
+		Light::LightData* lightsArray = reinterpret_cast<Light::LightData*>(
+			s_Data.LightsBufferData.data() + sizeof(Renderer3DData::LightsStorageData)
+		);
+		
+		// Fill light data
+		int lightIndex = 0;
+		for (auto entity : view) {
+			if (lightIndex >= s_Data.MaxLights) break;
 
 			Entity e = { entity, scene };
 			auto& transform = e.GetComponent<TransformComponent>();
@@ -140,14 +175,16 @@ namespace Lunex {
 				glm::rotate(glm::quat(transform.Rotation), glm::vec3(0.0f, 0.0f, -1.0f))
 			);
 
-			s_Data.LightsBuffer.Lights[lightIndex] =
-				light.LightInstance->GetLightData(position, direction);
+			lightsArray[lightIndex] = light.LightInstance->GetLightData(position, direction);
 			lightIndex++;
 		}
-
-		s_Data.LightsBuffer.NumLights = lightIndex;
-		s_Data.LightsUniformBuffer->SetData(&s_Data.LightsBuffer,
-			sizeof(Renderer3DData::LightsUniformData));
+		
+		s_Data.CurrentLightCount = lightCount;
+		
+		// Upload to GPU
+		uint32_t dataSize = sizeof(Renderer3DData::LightsStorageData) + 
+							(lightCount * sizeof(Light::LightData));
+		s_Data.LightsStorageBuffer->SetData(s_Data.LightsBufferData.data(), dataSize);
 	}
 
 	void Renderer3D::DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, int entityID) {
