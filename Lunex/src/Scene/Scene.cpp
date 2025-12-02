@@ -303,8 +303,9 @@ namespace Lunex {
 					// Only add billboard if texture is valid and loaded
 					if (cameraComp.IconTexture && cameraComp.IconTexture->IsLoaded()) {
 						float distance = glm::length(cameraPos - transform.Translation);
-						// Offset slightly towards camera to avoid z-fighting
-						glm::vec3 offsetPos = transform.Translation + glm::normalize(cameraPos - transform.Translation) * 0.01f;
+						// ✅ FIX: Use LARGER offset to prevent z-fighting
+						glm::vec3 toCamera = glm::normalize(cameraPos - transform.Translation);
+						glm::vec3 offsetPos = transform.Translation + toCamera * 0.1f; // Increased from 0.01f
 						billboards.push_back({ offsetPos, cameraComp.IconTexture, (int)entity, distance, 1.0f, 1 });
 					}
 				}
@@ -319,7 +320,8 @@ namespace Lunex {
 					return a.Distance > b.Distance; // Farthest first
 				});
 			
-			// Disable depth writing for billboards (but keep depth testing)
+			// ✅ FIX: For transparent billboards keep depth test enabled (so they are occluded by nearer opaque geometry)
+			// Disable ONLY depth writes to allow correct back-to-front blending
 			RenderCommand::SetDepthMask(false);
 			
 			// Render sorted billboards
@@ -328,7 +330,7 @@ namespace Lunex {
 					cameraPos, billboard.Size, billboard.EntityID);
 			}
 			
-			// Re-enable depth writing
+			// Restore depth write
 			RenderCommand::SetDepthMask(true);
 
 			Renderer2D::EndScene();
@@ -625,8 +627,9 @@ namespace Lunex {
 				// Only add billboard if texture is valid and loaded
 				if (cameraComp.IconTexture && cameraComp.IconTexture->IsLoaded()) {
 					float distance = glm::length(cameraPos - transform.Translation);
-					// Offset slightly towards camera to avoid z-fighting
-					glm::vec3 offsetPos = transform.Translation + glm::normalize(cameraPos - transform.Translation) * 0.01f;
+					// ✅ FIX: Use LARGER offset to prevent z-fighting
+					glm::vec3 toCamera = glm::normalize(cameraPos - transform.Translation);
+					glm::vec3 offsetPos = transform.Translation + toCamera * 0.1f; // Increased from 0.01f
 					billboards.push_back({ offsetPos, cameraComp.IconTexture, (int)entity, distance, 1.0f, 1 });
 				}
 			}
@@ -641,7 +644,7 @@ namespace Lunex {
 				return a.Distance > b.Distance; // Farthest first
 			});
 		
-		// Disable depth writing for billboards (but keep depth testing)
+		// ✅ FIX: Disable BOTH depth writing AND depth testing for billboards
 		RenderCommand::SetDepthMask(false);
 		
 		// Render sorted billboards
@@ -650,7 +653,7 @@ namespace Lunex {
 				cameraPos, billboard.Size, billboard.EntityID);
 		}
 		
-		// Re-enable depth writing
+		// ✅ Re-enable depth testing and writing
 		RenderCommand::SetDepthMask(true);
 		
 		// ========================================
