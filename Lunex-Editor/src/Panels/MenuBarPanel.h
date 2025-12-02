@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <string>
+#include "Renderer/Texture.h"
 
 namespace Lunex {
 	class MenuBarPanel {
@@ -25,6 +26,7 @@ namespace Lunex {
 		void SetOnOpenInputSettingsCallback(const std::function<void()>& callback) { m_OnOpenInputSettings = callback; }
 		
 		void SetProjectName(const std::string& name) { m_ProjectName = name; }
+		void SetSceneName(const std::string& name) { m_SceneName = name; }
 		
 	private:
 		std::function<void()> m_OnNewProject;
@@ -41,5 +43,7 @@ namespace Lunex {
 		std::function<void()> m_OnOpenInputSettings;
 		
 		std::string m_ProjectName = "No Project";
+		std::string m_SceneName = "Untitled";
+		Ref<Texture2D> m_LogoTexture;
 	};
 }

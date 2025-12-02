@@ -8,6 +8,7 @@
 #include "Events/FileDropEvent.h"
 
 #include <glad/glad.h>
+#include <stb_image.h>
 
 namespace Lunex {
 
@@ -48,6 +49,9 @@ namespace Lunex {
 			++s_GLFWInitialized;
 			LNX_CORE_ASSERT(m_Window, "Could not create GLFW window!");
 		}
+		
+		// Set window icon
+		LoadWindowIcon("Lunex-Editor/Resources/Icons/LunexLogo/LunexLogo.png");
 		
 		m_Context = CreateScope<OpenGLContext>(m_Window);
 		m_Context->Init();
@@ -167,10 +171,64 @@ namespace Lunex {
 		}
 		m_Data.VSync = enabled;
 		
-		LNX_LOG_INFO("VSync is now {0}", enabled ? "enabled" : "disabled");
+		LNX_LOG_INFO("VSync is now {0}", enabled ? "enabled" : "enabled");
 	}
 	
 	bool WindowsWindow::IsVSync() const {
 		return m_Data.VSync;
+	}
+
+	void WindowsWindow::SetWindowIcon(const std::string& iconPath) {
+		LoadWindowIcon(iconPath);
+	}
+
+	void WindowsWindow::LoadWindowIcon(const std::string& iconPath) {
+		int width, height, channels;
+		stbi_set_flip_vertically_on_load(0); // Don't flip for window icons
+		
+		// Try to load the image
+		unsigned char* data = stbi_load(iconPath.c_str(), &width, &height, &channels, 4); // Force RGBA
+		
+		if (data) {
+			GLFWimage icon;
+			icon.width = width;
+			icon.height = height;
+			icon.pixels = data;
+			
+			// GLFW usará el tamaño nativo de la imagen
+			// Para mejor resultado, asegúrate de que LunexLogo.png sea al menos 256x256 píxeles
+			glfwSetWindowIcon(m_Window, 1, &icon);
+			
+			stbi_image_free(data);
+			LNX_LOG_INFO("Window icon set successfully: {0} (Size: {1}x{2}, Channels: {3})", 
+				iconPath, width, height, channels);
+		}
+		else {
+			// Log error with stbi reason
+			const char* error = stbi_failure_reason();
+			LNX_LOG_ERROR("Failed to load window icon: {0} - Reason: {1}", iconPath, error);
+			
+			// Try alternative path
+			std::string altPath = "Resources/Icons/LunexLogo/LunexLogo.png";
+			LNX_LOG_INFO("Trying alternative path: {0}", altPath);
+			
+			data = stbi_load(altPath.c_str(), &width, &height, &channels, 4);
+			if (data) {
+				GLFWimage icon;
+				icon.width = width;
+				icon.height = height;
+				icon.pixels = data;
+				
+				glfwSetWindowIcon(m_Window, 1, &icon);
+				stbi_image_free(data);
+				LNX_LOG_INFO("Window icon set successfully with alternative path: {0} ({1}x{2})", 
+					altPath, width, height);
+			}
+			else {
+				LNX_LOG_ERROR("Failed to load window icon from alternative path as well");
+			}
+		}
+		
+		stbi_set_flip_vertically_on_load(1); // Reset to default
 	}
 }

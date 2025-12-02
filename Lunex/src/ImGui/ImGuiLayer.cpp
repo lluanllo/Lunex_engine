@@ -106,7 +106,7 @@ namespace Lunex {
 		
 		// Espaciado profesional y compacto
 		style.WindowPadding = ImVec2(8, 8);
-		style.FramePadding = ImVec2(6, 4);
+		style.FramePadding = ImVec2(6, 4); 
 		style.CellPadding = ImVec2(6, 3);
 		style.ItemSpacing = ImVec2(8, 4);
 		style.ItemInnerSpacing = ImVec2(4, 4);
