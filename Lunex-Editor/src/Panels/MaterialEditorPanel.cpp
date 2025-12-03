@@ -217,15 +217,29 @@ namespace Lunex {
 		// Obtener el tamaño disponible
 		ImVec2 viewportSize = ImGui::GetContentRegionAvail();
 
+		// Actualizar resolución del preview renderer si cambió
+		if (m_PreviewRenderer && (viewportSize.x != m_PreviewWidth || viewportSize.y != m_PreviewHeight)) {
+			if (viewportSize.x > 0 && viewportSize.y > 0) {
+				m_PreviewWidth = (uint32_t)viewportSize.x;
+				m_PreviewHeight = (uint32_t)viewportSize.y;
+				m_PreviewRenderer->SetResolution(m_PreviewWidth, m_PreviewHeight);
+			}
+		}
+
 		// Renderizar preview
 		if (m_PreviewRenderer && viewportSize.x > 0 && viewportSize.y > 0) {
 			uint32_t textureID = m_PreviewRenderer->GetPreviewTextureID();
-			if (textureID) {
+			if (textureID > 0) {
 				ImGui::Image(
 					(void*)(intptr_t)textureID,
 					viewportSize,
 					ImVec2(0, 1), ImVec2(1, 0)
 				);
+			} else {
+				// Mostrar mensaje si no hay textura
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+				ImGui::Text("Preview not available");
+				ImGui::PopStyleColor();
 			}
 		}
 
@@ -492,15 +506,20 @@ namespace Lunex {
 
 		// Icon and label
 		ImGui::Text("%s %s", icon, label);
-		ImGui::SameLine();
-
+		
 		// Remove button if texture exists
 		if (texture) {
 			ImGui::SameLine(ImGui::GetContentRegionAvail().x - 60);
 			ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
 			if (ImGui::Button("Remove", ImVec2(60, 0))) {
-				// Limpiar la textura llamando al load func con string vacío
-				// (esto será manejado por el lambda que llama a SetXXXMap(nullptr))
+				// Clear texture by setting nullptr
+				if (std::string(label) == "Albedo") m_EditingMaterial->SetAlbedoMap(nullptr);
+				else if (std::string(label) == "Normal") m_EditingMaterial->SetNormalMap(nullptr);
+				else if (std::string(label) == "Metallic") m_EditingMaterial->SetMetallicMap(nullptr);
+				else if (std::string(label) == "Roughness") m_EditingMaterial->SetRoughnessMap(nullptr);
+				else if (std::string(label) == "Specular") m_EditingMaterial->SetSpecularMap(nullptr);
+				else if (std::string(label) == "Emission") m_EditingMaterial->SetEmissionMap(nullptr);
+				else if (std::string(label) == "Ambient Occlusion") m_EditingMaterial->SetAOMap(nullptr);
 				MarkAsModified();
 			}
 			ImGui::PopStyleColor();

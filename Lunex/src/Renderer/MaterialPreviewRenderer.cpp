@@ -171,41 +171,55 @@ namespace Lunex {
 			return;
 		}
 
+		if (!material) {
+			LNX_LOG_ERROR("MaterialPreviewRenderer::RenderInternal - Material is null");
+			return;
+		}
+
 		// Bind framebuffer
 		m_Framebuffer->Bind();
 
-		// Clear
+		// Clear with background color
 		RenderCommand::SetClearColor(m_BackgroundColor);
 		RenderCommand::Clear();
 
-		// Begin scene
+		// Begin scene with editor camera
 		Renderer3D::BeginScene(m_Camera);
 
-		// Actualizar luces desde la escena de preview
+		// Update lights from preview scene
 		Renderer3D::UpdateLights(m_PreviewScene.get());
 
-		// Calcular transform con rotación
+		// Calculate transform with rotation
 		glm::mat4 transform = glm::mat4(1.0f);
 		if (m_AutoRotate) {
 			transform = glm::rotate(transform, glm::radians(m_CurrentRotation), glm::vec3(0.0f, 1.0f, 0.0f));
 		}
 
-		// Crear MaterialInstance temporal para el rendering
+		// Create temporary MaterialInstance for rendering
 		Ref<MaterialInstance> tempInstance = MaterialInstance::Create(material);
 
-		// Crear componentes temporales para el rendering
+		if (!tempInstance) {
+			LNX_LOG_ERROR("MaterialPreviewRenderer::RenderInternal - Failed to create MaterialInstance");
+			Renderer3D::EndScene();
+			m_Framebuffer->Unbind();
+			return;
+		}
+
+		// Create temporary components for rendering
 		MeshComponent meshComp;
 		meshComp.MeshModel = m_PreviewModel;
 		meshComp.Type = ModelType::Sphere;
+		meshComp.Color = glm::vec4(1.0f); // White tint
 
 		MaterialComponent matComp;
 		matComp.Instance = tempInstance;
 		matComp.MaterialAssetID = material->GetID();
 
-		// Renderizar usando el nuevo sistema
-		if (tempInstance && meshComp.MeshModel) {
-			// Usar DrawMesh con MaterialComponent
+		// Render the mesh with material
+		if (meshComp.MeshModel) {
 			Renderer3D::DrawMesh(transform, meshComp, matComp, -1);
+		} else {
+			LNX_LOG_WARN("MaterialPreviewRenderer::RenderInternal - Preview model is null");
 		}
 
 		Renderer3D::EndScene();

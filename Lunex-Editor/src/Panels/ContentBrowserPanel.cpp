@@ -2,6 +2,7 @@
 #include "ContentBrowserPanel.h"
 #include "Events/Event.h"
 #include "Events/FileDropEvent.h"
+#include "Renderer/MaterialRegistry.h"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <sstream>
@@ -993,7 +994,16 @@ namespace Lunex {
 				// Filename label
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.85f, 1.0f));
 				
-			 std::string displayName = filenameString;
+				// ✅ Ocultar extensión .lumat para elegancia
+				std::string displayName = filenameString;
+				std::filesystem::path filePath(filenameString);
+				std::string extension = filePath.extension().string();
+				std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+				
+				if (extension == ".lumat") {
+					displayName = filePath.stem().string(); // Sin extensión
+				}
+				
 				const int maxChars = 18;
 				if (displayName.length() > maxChars) {
 					displayName = displayName.substr(0, maxChars - 3) + "...";
@@ -1447,8 +1457,44 @@ extern "C"
 				return;
 			}
 			
-			std::filesystem::rename(oldPath, newPath);
-			LNX_LOG_INFO("Renamed {0} to {1}", oldPath.filename().string(), m_NewItemName);
+			// ✅ SPECIAL HANDLING FOR .lumat FILES - Update internal name
+			std::string oldExtension = oldPath.extension().string();
+			std::transform(oldExtension.begin(), oldExtension.end(), oldExtension.begin(), ::tolower);
+			
+			if (oldExtension == ".lumat") {
+				// Load material, update name, save it
+				auto material = MaterialRegistry::Get().LoadMaterial(oldPath);
+				if (material) {
+					// Get new name without extension
+					std::filesystem::path newNamePath(m_NewItemName);
+					std::string newMaterialName = newNamePath.stem().string();
+					
+					material->SetName(newMaterialName);
+					material->SetPath(newPath);
+					
+					// Save with new name
+					if (!material->SaveToFile(newPath)) {
+						LNX_LOG_ERROR("Failed to save material with new name: {0}", m_NewItemName);
+						return;
+					}
+					
+					// Delete old file after successful save
+					std::filesystem::remove(oldPath);
+					
+					// Update registry
+					MaterialRegistry::Get().ReloadMaterial(material->GetID());
+					
+					LNX_LOG_INFO("Renamed material {0} to {1} (internal name updated)", 
+						oldPath.filename().string(), newMaterialName);
+				} else {
+					LNX_LOG_ERROR("Failed to load material for renaming: {0}", oldPath.string());
+					return;
+				}
+			} else {
+				// Normal rename for other files
+				std::filesystem::rename(oldPath, newPath);
+				LNX_LOG_INFO("Renamed {0} to {1}", oldPath.filename().string(), m_NewItemName);
+			}
 			
 			// Update texture cache if it was an image
 			auto it = m_TextureCache.find(oldPath.string());
@@ -1686,7 +1732,7 @@ extern "C"
 					}
 					LNX_LOG_INFO("Copied {0} to {1}", sourcePath.filename().string(), 
 						destPath.filename().string());
-				}
+								}
 				else if (m_ClipboardOperation == ClipboardOperation::Cut) {
 					std::filesystem::rename(sourcePath, destPath);
 					LNX_LOG_INFO("Moved {0} to {1}", sourcePath.filename().string(), 
@@ -1694,7 +1740,7 @@ extern "C"
 				}
 			}
 			catch (const std::exception& e) {
-				LNX_LOG_ERROR("Failed to paste {0}: {1}", sourcePath.filename().string(), e.what());
+			 LNX_LOG_ERROR("Failed to paste {0}: {1}", sourcePath.filename().string(), e.what());
 			}
 		}
 		
