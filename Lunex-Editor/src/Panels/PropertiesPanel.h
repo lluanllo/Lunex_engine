@@ -3,8 +3,10 @@
 #include "Core/Core.h"
 #include "Scene/Scene.h"
 #include "Scene/Entity.h"
+#include <functional>
 
 namespace Lunex {
+	class MaterialAsset;
 
 	class PropertiesPanel {
 	public:
@@ -15,6 +17,11 @@ namespace Lunex {
 		void SetSelectedEntity(Entity entity);
 
 		void OnImGuiRender();
+		
+		// Callback for opening material editor
+		void SetOnMaterialEditCallback(const std::function<void(Ref<MaterialAsset>)>& callback) {
+			m_OnMaterialEditCallback = callback;
+		}
 
 	private:
 		void DrawComponents(Entity entity);
@@ -25,6 +32,9 @@ namespace Lunex {
 	private:
 		Ref<Scene> m_Context;
 		Entity m_SelectedEntity;
+		
+		// Callback
+		std::function<void(Ref<MaterialAsset>)> m_OnMaterialEditCallback;
 	};
 
 }

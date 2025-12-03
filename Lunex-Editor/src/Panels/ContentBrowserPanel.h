@@ -5,6 +5,7 @@
 #include <vector>
 #include <set>
 #include <unordered_map>
+#include <functional>
 #include <imgui.h>
 #include <imgui_internal.h>
 
@@ -34,6 +35,13 @@ namespace Lunex {
 		void SetRootDirectory(const std::filesystem::path& directory);
 
 		const std::filesystem::path& GetCurrentDirectory() const { return m_CurrentDirectory; }
+		
+		// ========================================
+		// CALLBACKS
+		// ========================================
+		void SetOnMaterialOpenCallback(const std::function<void(const std::filesystem::path&)>& callback) {
+			m_OnMaterialOpenCallback = callback;
+		}
 		
 		// ========================================
 		// PUBLIC API FOR GLOBAL SHORTCUTS
@@ -68,6 +76,7 @@ namespace Lunex {
 		void CreateNewFolder();
 		void CreateNewScene();
 		void CreateNewScript();
+		void CreateNewMaterial();
 		void DeleteItem(const std::filesystem::path& path);
 		void RenameItem(const std::filesystem::path& oldPath);
 		void DuplicateItem(const std::filesystem::path& path);
@@ -136,6 +145,7 @@ namespace Lunex {
 		Ref<Texture2D> m_ShaderIcon;
 		Ref<Texture2D> m_AudioIcon;
 		Ref<Texture2D> m_ScriptIcon;
+		Ref<Texture2D> m_MaterialIcon;
 
 		// Texture preview cache
 		std::unordered_map<std::string, Ref<Texture2D>> m_TextureCache;
@@ -147,5 +157,8 @@ namespace Lunex {
 		enum class ClipboardOperation { None, Copy, Cut };
 		ClipboardOperation m_ClipboardOperation = ClipboardOperation::None;
 		std::vector<std::filesystem::path> m_ClipboardItems;
+		
+		// Callbacks
+		std::function<void(const std::filesystem::path&)> m_OnMaterialOpenCallback;
 	};
 }

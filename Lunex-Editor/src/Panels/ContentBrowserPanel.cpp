@@ -1,4 +1,4 @@
-#include "stpch.h"
+Ôªø#include "stpch.h"
 #include "ContentBrowserPanel.h"
 #include "Events/Event.h"
 #include "Events/FileDropEvent.h"
@@ -12,18 +12,19 @@ namespace Lunex {
 	ContentBrowserPanel::ContentBrowserPanel()
 		: m_BaseDirectory(g_AssetPath), m_CurrentDirectory(g_AssetPath)
 	{
-		// Iconos especÌficos para Content Browser
+		// Iconos espec√≠ficos para Content Browser
 		m_DirectoryIcon = Texture2D::Create("Resources/Icons/ContentBrowser/FolderIcon.png");
 		m_FileIcon = Texture2D::Create("Resources/Icons/ContentBrowser/FileIcon.png");
 		m_BackIcon = Texture2D::Create("Resources/Icons/ContentBrowser/BackIcon.png");
 		m_ForwardIcon = Texture2D::Create("Resources/Icons/ContentBrowser/ForwardIcon.png");
 		
-		// Iconos especÌficos por tipo de archivo
+		// Iconos espec√≠ficos por tipo de archivo
 		m_SceneIcon = Texture2D::Create("Resources/Icons/ContentBrowser/SceneIcon.png");
 		m_TextureIcon = Texture2D::Create("Resources/Icons/ContentBrowser/ImageIcon.png");
 		m_ShaderIcon = Texture2D::Create("Resources/Icons/ContentBrowser/ShaderIcon.png");
 		m_AudioIcon = Texture2D::Create("Resources/Icons/ContentBrowser/AudioIcon.png");
 		m_ScriptIcon = Texture2D::Create("Resources/Icons/ContentBrowser/ScriptIcon.png");
+		m_MaterialIcon = Texture2D::Create("Resources/Icons/ContentBrowser/MaterialIcon.png");
 		
 		// Inicializar historial
 		m_DirectoryHistory.push_back(m_CurrentDirectory);
@@ -50,7 +51,7 @@ namespace Lunex {
 		// ===== ESTILO PROFESIONAL OSCURO (como Unreal Engine) =====
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.12f, 0.12f, 0.13f, 1.0f));        // Fondo principal
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.12f, 0.13f, 1.0f));         // Child backgrounds
-		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.08f, 0.08f, 0.09f, 1.0f));          // Bordes m·s sutiles
+		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.08f, 0.08f, 0.09f, 1.0f));          // Bordes m√°s sutiles
 		ImGui::PushStyleColor(ImGuiCol_BorderShadow, ImVec4(0.0f, 0.0f, 0.0f, 0.6f));       // Sombras
 		
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -69,7 +70,7 @@ namespace Lunex {
 		
 		ImVec2 availSize = ImGui::GetContentRegionAvail();
 		
-		// Sidebar con fondo m·s oscuro
+		// Sidebar con fondo m√°s oscuro
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.10f, 0.11f, 1.0f));
 		ImGui::BeginChild("Sidebar", ImVec2(sidebarWidth, availSize.y), false);
 		RenderSidebar();
@@ -82,7 +83,7 @@ namespace Lunex {
 		ImVec2 shadowStart = ImVec2(sidebarMax.x, sidebarMax.y - availSize.y);
 		ImVec2 shadowEnd = sidebarMax;
 		
-		// Sombra gradiente de 6px (m·s sutil)
+		// Sombra gradiente de 6px (m√°s sutil)
 		for (int i = 0; i < 6; i++) {
 			float alpha = (1.0f - (i / 6.0f)) * 0.25f;
 			ImU32 shadowColor = IM_COL32(0, 0, 0, (int)(alpha * 255));
@@ -114,7 +115,7 @@ namespace Lunex {
 		
 		ImGui::SameLine();
 		
-		// Grid de archivos con fondo ligeramente m·s claro
+		// Grid de archivos con fondo ligeramente m√°s claro
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.14f, 0.14f, 0.15f, 1.0f));
 		ImGui::BeginChild("FileGrid", ImVec2(0, availSize.y), false);
 		RenderFileGrid();
@@ -141,7 +142,7 @@ namespace Lunex {
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 6));
 		ImGui::BeginChild("TopBar", ImVec2(0, 40), true, ImGuiWindowFlags_NoScrollbar);
 		
-		// Botones de navegaciÛn con iconos
+		// Botones de navegaci√≥n con iconos
 		bool canGoBack = m_HistoryIndex > 0;
 		if (!canGoBack) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.3f);
 		
@@ -245,13 +246,13 @@ namespace Lunex {
 		
 		ImGui::Dummy(ImVec2(0, 4));
 		
-		// Colores del ·rbol (como Unity)
+		// Colores del √°rbol (como Unity)
 		ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.20f, 0.20f, 0.20f, 0.0f));
 		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.25f, 0.25f, 0.25f, 1.0f));
 		ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.18f, 0.40f, 0.65f, 1.0f));
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.90f, 0.90f, 0.90f, 1.0f));
 		
-		// FunciÛn recursiva para mostrar ·rbol de directorios
+		// Funci√≥n recursiva para mostrar √°rbol de directorios
 		std::function<void(const std::filesystem::path&)> displayDirectoryTree = 
 			[&](const std::filesystem::path& path) {
 			for (auto& entry : std::filesystem::directory_iterator(path)) {
@@ -282,15 +283,15 @@ namespace Lunex {
 					// Dibujar icono de carpeta antes del TreeNode
 					ImGui::PushID(dirName.c_str());
 					
-					// AÒadir espacio invisible al nombre para que el texto no se superponga con el icono
+					// A√±adir espacio invisible al nombre para que el texto no se superponga con el icono
 					std::string displayName = "   " + dirName; // 3 espacios para el icono
 					
-					// Guardar posiciÛn del cursor
+					// Guardar posici√≥n del cursor
 					ImVec2 cursorPos = ImGui::GetCursorScreenPos();
 					
 					bool opened = ImGui::TreeNodeEx(displayName.c_str(), flags);
 					
-					// Dibujar el icono despuÈs del TreeNode para que aparezca encima
+					// Dibujar el icono despu√©s del TreeNode para que aparezca encima
 					if (m_DirectoryIcon) {
 						ImDrawList* drawList = ImGui::GetWindowDrawList();
 						float iconSize = 16.0f;
@@ -405,7 +406,7 @@ namespace Lunex {
 			}
 		};
 		
-		// RaÌz "Assets"
+		// Ra√≠z "Assets"
 		ImGuiTreeNodeFlags rootFlags = ImGuiTreeNodeFlags_OpenOnArrow | 
 									   ImGuiTreeNodeFlags_SpanAvailWidth | 
 									   ImGuiTreeNodeFlags_DefaultOpen |
@@ -415,10 +416,10 @@ namespace Lunex {
 			rootFlags |= ImGuiTreeNodeFlags_Selected;
 		}
 		
-		// Guardar posiciÛn del cursor para la raÌz
+		// Guardar posici√≥n del cursor para la ra√≠z
 		ImVec2 rootCursorPos = ImGui::GetCursorScreenPos();
 		
-		// AÒadir espacio invisible al nombre de Assets
+		// A√±adir espacio invisible al nombre de Assets
 		bool rootOpened = ImGui::TreeNodeEx("   Assets", rootFlags);
 		
 		// Dibujar el icono de carpeta para Assets
@@ -538,6 +539,7 @@ namespace Lunex {
 		std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 		
 		if (extension == ".lunex") return m_SceneIcon ? m_SceneIcon : m_FileIcon;
+		if (extension == ".lumat") return m_MaterialIcon ? m_MaterialIcon : m_FileIcon;
 		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg") 
 			return m_TextureIcon ? m_TextureIcon : m_FileIcon;
 		if (extension == ".glsl" || extension == ".shader") 
@@ -558,7 +560,7 @@ namespace Lunex {
 		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp" || extension == ".tga") {
 			std::string pathStr = path.string();
 			
-			// Verificar si ya est· en cachÈ
+			// Verificar si ya est√° en cach√©
 			auto it = m_TextureCache.find(pathStr);
 			if (it != m_TextureCache.end()) {
 				return it->second;
@@ -632,7 +634,7 @@ namespace Lunex {
 		
 		if (ImGui::BeginTable("FileGridTable", columnCount, ImGuiTableFlags_None)) {
 			
-			// Filtrar por b˙squeda
+			// Filtrar por b√∫squeda
 			std::string searchQuery = m_SearchBuffer;
 			std::transform(searchQuery.begin(), searchQuery.end(), searchQuery.begin(), ::tolower);
 			
@@ -646,7 +648,7 @@ namespace Lunex {
 				const auto& path = directoryEntry.path();
 				std::string filenameString = path.filename().string();
 				
-				// Aplicar filtro de b˙squeda
+				// Aplicar filtro de b√∫squeda
 				if (!searchQuery.empty()) {
 					std::string filenameLower = filenameString;
 					std::transform(filenameLower.begin(), filenameLower.end(), filenameLower.begin(), ::tolower);
@@ -691,7 +693,7 @@ namespace Lunex {
 						rounding
 					);
 					
-					// BotÛn invisible
+					// Bot√≥n invisible
 					ImGui::SetCursorScreenPos(cursorPos);
 					ImGui::InvisibleButton(filenameString.c_str(), ImVec2(iconSize, iconSize));
 					
@@ -728,8 +730,8 @@ namespace Lunex {
 							m_LastSelectedItem = path;
 						}
 						else {
-							// Normal click: mantener selecciÛn si ya est· seleccionado
-							// Esto permite arrastrar m˙ltiples items
+							// Normal click: mantener selecci√≥n si ya est√° seleccionado
+							// Esto permite arrastrar m√∫ltiples items
 							if (!IsSelected(path)) {
 								ClearSelection();
 								AddToSelection(path);
@@ -746,9 +748,9 @@ namespace Lunex {
 					
 					// ============ DRAG & DROP SOURCE - FIXED ============
 					if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-						// Si hay m˙ltiples items seleccionados Y este est· entre ellos
+						// Si hay m√∫ltiples items seleccionados Y este est√° entre ellos
 						if (IsSelected(path) && m_SelectedItems.size() > 1) {
-							// Payload para m˙ltiples items (solo Content Browser interno)
+							// Payload para m√∫ltiples items (solo Content Browser interno)
 							std::string payloadData;
 							for (const auto& selectedPath : m_SelectedItems) {
 								std::filesystem::path sp(selectedPath);
@@ -834,7 +836,7 @@ namespace Lunex {
 										if (line.empty()) continue;
 											
 										std::filesystem::path sourcePath = std::filesystem::path(g_AssetPath) / line;
-										std::filesystem::path destPath = path / sourcePath.filename();
+									 std::filesystem::path destPath = path / sourcePath.filename();
 										
 										try {
 											if (sourcePath != destPath && !std::filesystem::exists(destPath)) {
@@ -956,15 +958,23 @@ namespace Lunex {
 							m_CurrentDirectory = path;
 						}
 						else {
-							// Double click en archivo - abrir seg˙n el tipo
+							// Double click en archivo - abrir seg√∫n el tipo
 							std::string extension = path.extension().string();
 							std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 							
+							// Material files - open in MaterialEditorPanel
+							if (extension == ".lumat") {
+								if (m_OnMaterialOpenCallback) {
+									m_OnMaterialOpenCallback(path);
+								} else {
+									LNX_LOG_WARN("Material editor not connected - cannot open {0}", path.filename().string());
+								}
+							}
 							// Scripts C++ - abrir en Visual Studio
-							if (extension == ".cpp" || extension == ".h" || extension == ".hpp" || extension == ".c") {
+							else if (extension == ".cpp" || extension == ".h" || extension == ".hpp" || extension == ".c") {
 								std::string command = "cmd /c start \"\" \"" + path.string() + "\"";
-							 system(command.c_str());
-							 LNX_LOG_INFO("Opening script in editor: {0}", path.filename().string());
+								system(command.c_str());
+								LNX_LOG_INFO("Opening script in editor: {0}", path.filename().string());
 							}
 							// Scenes - cargar en editor (TODO: implementar carga de escena)
 							else if (extension == ".lunex") {
@@ -974,7 +984,7 @@ namespace Lunex {
 							// Otros archivos - abrir con programa por defecto
 							else {
 								std::string command = "cmd /c start \"\" \"" + path.string() + "\"";
-							 system(command.c_str());
+								system(command.c_str());
 							}
 						}
 					}
@@ -1003,7 +1013,7 @@ namespace Lunex {
 				itemIndex++;
 			}
 			
-			// IMPORTANTE: Agregar deselecciÛn en ·rea vacÌa DESPU…S del loop, ANTES de EndTable()
+			// IMPORTANTE: Agregar deselecci√≥n en √°rea vac√≠a DESPU√âS del loop, ANTES de EndTable()
 			// Deselect when clicking empty space
 			bool isCtrlDown = ImGui::GetIO().KeyCtrl;
 			bool isShiftDown = ImGui::GetIO().KeyShift;
@@ -1040,7 +1050,7 @@ namespace Lunex {
 		ImGui::EndChild();
 		ImGui::PopStyleVar();
 		
-		// Bottom bar con slider de tamaÒo (oscuro con sombra superior)
+		// Bottom bar con slider de tama√±o (oscuro con sombra superior)
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
 		ImVec2 bottomBarStart = ImGui::GetCursorScreenPos();
 		
@@ -1103,6 +1113,10 @@ namespace Lunex {
 			
 			if (ImGui::MenuItem("New Script")) {
 				CreateNewScript();
+			}
+			
+			if (ImGui::MenuItem("New Material")) {
+				CreateNewMaterial();
 			}
 			
 			ImGui::Separator();
@@ -1340,12 +1354,64 @@ extern "C"
 		LNX_LOG_INFO("2. Press PLAY - compilation is 100%% automatic!");
 		LNX_LOG_INFO("");
 		LNX_LOG_INFO("The engine will:");
-		LNX_LOG_INFO("  ï Auto-detect Visual Studio");
-		LNX_LOG_INFO("  ï Auto-configure compiler");
-		LNX_LOG_INFO("  ï Auto-compile your script");
-		LNX_LOG_INFO("  ï Auto-load the DLL");
+		LNX_LOG_INFO("  ‚Ä¢ Auto-detect Visual Studio");
+		LNX_LOG_INFO("  ‚Ä¢ Auto-configure compiler");
+		LNX_LOG_INFO("  ‚Ä¢ Auto-compile your script");
+		LNX_LOG_INFO("  ‚Ä¢ Auto-load the DLL");
 		LNX_LOG_INFO("");
 		LNX_LOG_INFO("DLL output: {0}", (m_CurrentDirectory / "bin").string());
+		LNX_LOG_INFO("==================================================");
+	}
+	
+	void ContentBrowserPanel::CreateNewMaterial() {
+		// Find available name
+		int counter = 1;
+		std::filesystem::path materialPath;
+		std::string baseName;
+		do {
+			baseName = "NewMaterial" + (counter > 1 ? std::to_string(counter) : "");
+			std::string materialName = baseName + ".lumat";
+			materialPath = m_CurrentDirectory / materialName;
+			counter++;
+		} while (std::filesystem::exists(materialPath));
+		
+		// Generate UUID (simple random for now)
+		uint64_t id = (uint64_t)rand() * (uint64_t)rand();
+		
+		// Create material file with default PBR values (proper YAML format)
+		std::stringstream ss;
+		ss << "Material:\n";
+		ss << "  ID: " << id << "\n";
+		ss << "  Name: " << baseName << "\n";
+		ss << "Properties:\n";
+		ss << "  Albedo: [1, 1, 1, 1]\n";
+		ss << "  Metallic: 0\n";
+		ss << "  Roughness: 0.5\n";
+		ss << "  Specular: 0.5\n";
+		ss << "  EmissionColor: [0, 0, 0]\n";
+		ss << "  EmissionIntensity: 0\n";
+		ss << "  NormalIntensity: 1\n";
+		ss << "Textures:\n";
+		ss << "Multipliers:\n";
+		ss << "  Metallic: 1\n";
+		ss << "  Roughness: 1\n";
+		ss << "  Specular: 1\n";
+		ss << "  AO: 1\n";
+		
+		std::ofstream materialFile(materialPath);
+		materialFile << ss.str();
+		materialFile.close();
+		
+		LNX_LOG_INFO("Created new material: {0}", materialPath.string());
+		LNX_LOG_INFO("==================================================");
+		LNX_LOG_INFO("üíé MATERIAL CREATED SUCCESSFULLY!");
+		LNX_LOG_INFO("");
+		LNX_LOG_INFO("Next steps:");
+		LNX_LOG_INFO("1. Double-click '{0}' to open Material Editor", materialPath.filename().string());
+		LNX_LOG_INFO("2. Configure PBR properties and textures");
+		LNX_LOG_INFO("3. Assign to MeshRenderer components");
+		LNX_LOG_INFO("");
+		LNX_LOG_INFO("Material path: {0}", materialPath.string());
 		LNX_LOG_INFO("==================================================");
 	}
 	

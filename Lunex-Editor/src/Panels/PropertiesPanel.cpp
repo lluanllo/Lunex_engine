@@ -693,7 +693,7 @@ namespace Lunex {
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
 			PropertyLabel("Type", "Defines how the body responds to physics");
-			ImGui::NextColumn();
+		 ImGui::NextColumn();
 			ImGui::SetNextItemWidth(-1);
 			if (ImGui::BeginCombo("##BodyType", currentBodyTypeString)) {
 				for (int i = 0; i < 3; i++) {
@@ -782,7 +782,7 @@ namespace Lunex {
 		});
 
 		// Mesh Component
-		DrawComponent<MeshComponent>("🗿 Mesh Renderer", entity, [](auto& component) {
+		DrawComponent<MeshComponent>("🗿  Mesh Renderer", entity, [](auto& component) {
 			SectionHeader("🎲", "Model");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
 			
@@ -909,17 +909,25 @@ namespace Lunex {
 				// Header row
 				ImGui::BeginGroup();
 				
-				// Preview thumbnail (placeholder por ahora)
-				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_BG_MEDIUM);
-				ImGui::Button("##preview", ImVec2(70, 70));
-				ImGui::PopStyleColor();
-				
-				// TODO: Cuando esté MaterialPreviewRenderer:
-				// if (component.PreviewThumbnail) {
-				//     ImGui::Image((void*)(intptr_t)component.PreviewThumbnail->GetRendererID(), 
-				//                  ImVec2(70, 70), ImVec2(0, 1), ImVec2(1, 0));
-				// }
-				
+				// Preview thumbnail - generar usando MaterialPreviewRenderer
+				if (asset) {
+					// TODO: Generar thumbnail una sola vez y cachear
+					// Por ahora mostramos un placeholder con color del material
+					auto albedo = asset->GetAlbedo();
+					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(albedo.r, albedo.g, albedo.b, albedo.a));
+					ImGui::Button("##preview", ImVec2(70, 70));
+					ImGui::PopStyleColor();
+					
+					if (ImGui::IsItemHovered()) {
+						ImGui::SetTooltip("Material Preview\n(Preview renderer will be integrated here)");
+					}
+				}
+				else {
+					ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_BG_MEDIUM);
+					ImGui::Button("##preview", ImVec2(70, 70));
+					ImGui::PopStyleColor();
+				}
+
 				ImGui::EndGroup();
 				ImGui::SameLine();
 				
@@ -965,12 +973,14 @@ namespace Lunex {
 				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_ACCENT);
 				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.36f, 0.69f, 1.0f, 1.0f));
 				if (ImGui::Button("🖊️ Edit Material", ImVec2(140, 0))) {
-					// TODO: Abrir MaterialEditorPanel
-					// m_MaterialEditorPanel->OpenMaterial(asset);
-					LNX_LOG_INFO("Open Material Editor: {0}", component.GetMaterialName());
+					if (m_OnMaterialEditCallback && asset) {
+						m_OnMaterialEditCallback(asset);
+					} else {
+						LNX_LOG_WARN("Material editor not connected or asset is null");
+					}
 				}
 				ImGui::PopStyleColor(2);
-				
+
 				ImGui::SameLine();
 				
 				// Reset overrides button (solo si hay overrides)
