@@ -161,6 +161,7 @@ namespace Lunex {
 		m_MenuBarPanel.SetOnExitCallback([this]() { Application::Get().Close(); });
 		
 		m_MenuBarPanel.SetOnOpenInputSettingsCallback([this]() { m_InputSettingsPanel.Open(); });
+		m_MenuBarPanel.SetOnOpenJobSystemPanelCallback([this]() { m_JobSystemPanel.Toggle(); });
 
 		// ========================================
 		// MATERIAL EDITOR PANEL CALLBACKS

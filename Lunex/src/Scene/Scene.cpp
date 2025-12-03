@@ -7,6 +7,7 @@
 #include "Renderer/Renderer3D.h"
 #include "Renderer/RenderCommand.h"
 #include "Core/Input.h"
+#include "Core/JobSystem/JobSystem.h"  // ✅ Added for parallel physics
 
 #include "Scripting/ScriptingEngine.h"
 #include "Physics/Physics.h"
@@ -157,68 +158,113 @@ namespace Lunex {
 				});
 		}
 
-		// Physics 2D
+		// ========================================
+		// PARALLELIZED PHYSICS 2D
+		// ========================================
 		{
 			// ✅ Box2D v3.x: Step con firma actualizada
 			b2World_Step(m_PhysicsWorld, ts, 4);
 
-			// Retrieve transform from Box2D
+			// ✅ PARALLEL: Retrieve transforms from Box2D across multiple threads
 			auto view = m_Registry.view<Rigidbody2DComponent>();
-			for (auto e : view) {
-				Entity entity = { e, this };
-				auto& transform = entity.GetComponent<TransformComponent>();
-				auto& rb2d = entity.GetComponent<Rigidbody2DComponent>();
+			std::vector<entt::entity> entities(view.begin(), view.end());
+			
+			if (!entities.empty()) {
+				// Use ParallelFor to distribute entity updates across workers
+				auto counter = JobSystem::Get().ParallelFor(
+					0,
+					static_cast<uint32_t>(entities.size()),
+					[this, &entities](uint32_t index) {
+						entt::entity e = entities[index];
+						Entity entity = { e, this };
+						
+						// Check if entity still has required components (thread-safe read)
+						if (!entity.HasComponent<TransformComponent>() || !entity.HasComponent<Rigidbody2DComponent>()) {
+							return;
+						}
+						
+						auto& transform = entity.GetComponent<TransformComponent>();
+						auto& rb2d = entity.GetComponent<Rigidbody2DComponent>();
 
-				b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
-				b2Vec2 position = b2Body_GetPosition(bodyId);
-				b2Rot rotation = b2Body_GetRotation(bodyId);
+						b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+						b2Vec2 position = b2Body_GetPosition(bodyId);
+						b2Rot rotation = b2Body_GetRotation(bodyId);
 
-				transform.Translation.x = position.x;
-				transform.Translation.y = position.y;
-				transform.Rotation.z = b2Rot_GetAngle(rotation);
+						transform.Translation.x = position.x;
+						transform.Translation.y = position.y;
+						transform.Rotation.z = b2Rot_GetAngle(rotation);
+					},
+					64,  // Grain size: process 64 entities per job
+					JobPriority::High
+				);
+				
+				// Wait for all physics updates to complete
+				JobSystem::Get().Wait(counter);
 			}
 		}
 
-		// Physics 3D
+		// ========================================
+		// PARALLELIZED PHYSICS 3D
+		// ========================================
 		{
 			// ✅ CRITICAL FIX: Use proper substeps and fixed timestep
-			// This prevents tunneling and ensures stable physics simulation
 			float fixedTimeStep = 1.0f / 60.0f; // 60 FPS physics
-			int maxSubSteps = 30; // ↑ Match updated PhysicsConfig
+			int maxSubSteps = 30;
 			
 			PhysicsCore::Get().GetWorld()->StepSimulation(ts, maxSubSteps, fixedTimeStep);
 
-			// Retrieve transforms from Bullet
+			// ✅ PARALLEL: Retrieve transforms from Bullet across multiple threads
 			auto view = m_Registry.view<TransformComponent, Rigidbody3DComponent>();
-			for (auto e : view) {
-				auto& transform = view.get<TransformComponent>(e);
-				auto& rb3d = view.get<Rigidbody3DComponent>(e);
-
-				if (rb3d.RuntimeBody) {
-					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
-					
-					// ✅ NEW: Clamp velocity for heavy objects to prevent tunneling
-					if (rb3d.Mass > 10.0f) {
-						glm::vec3 velocity = body->GetLinearVelocity();
-						float speed = glm::length(velocity);
+			std::vector<entt::entity> entities(view.begin(), view.end());
+			
+			if (!entities.empty()) {
+				auto counter = JobSystem::Get().ParallelFor(
+					0,
+					static_cast<uint32_t>(entities.size()),
+					[this, &entities, &view](uint32_t index) {
+						entt::entity e = entities[index];
 						
-						// Max speed based on mass (heavier = slower max speed)
-						float maxSpeed = 50.0f / std::sqrt(rb3d.Mass / 10.0f);
-						
-						if (speed > maxSpeed) {
-							glm::vec3 clampedVelocity = glm::normalize(velocity) * maxSpeed;
-							body->SetLinearVelocity(clampedVelocity);
+						// Check if entity still valid (might have been destroyed)
+						if (!m_Registry.valid(e)) {
+							return;
 						}
-					}
-					
-					// Get position and rotation from physics
-					glm::vec3 position = body->GetPosition();
-					glm::quat rotation = body->GetRotation();
+						
+						// Get components (thread-safe if only reading/writing own entity)
+						auto& transform = view.get<TransformComponent>(e);
+						auto& rb3d = view.get<Rigidbody3DComponent>(e);
 
-					// Update transform
-					transform.Translation = position;
-					transform.Rotation = glm::eulerAngles(rotation);
-				}
+						if (rb3d.RuntimeBody) {
+							RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+							
+							// ✅ NEW: Clamp velocity for heavy objects to prevent tunneling
+							if (rb3d.Mass > 10.0f) {
+								glm::vec3 velocity = body->GetLinearVelocity();
+								float speed = glm::length(velocity);
+								
+								// Max speed based on mass (heavier = slower max speed)
+								float maxSpeed = 50.0f / std::sqrt(rb3d.Mass / 10.0f);
+								
+								if (speed > maxSpeed) {
+									glm::vec3 clampedVelocity = glm::normalize(velocity) * maxSpeed;
+									body->SetLinearVelocity(clampedVelocity);
+								}
+							}
+							
+							// Get position and rotation from physics
+							glm::vec3 position = body->GetPosition();
+							glm::quat rotation = body->GetRotation();
+
+							// Update transform
+							transform.Translation = position;
+							transform.Rotation = glm::eulerAngles(rotation);
+						}
+					},
+					32,  // Grain size: process 32 3D physics entities per job
+					JobPriority::High
+				);
+				
+				// Wait for all 3D physics updates to complete
+				JobSystem::Get().Wait(counter);
 			}
 		}
 

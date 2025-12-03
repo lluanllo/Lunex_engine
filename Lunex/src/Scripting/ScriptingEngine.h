@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Core.h"
+#include "Core/JobSystem/JobSystem.h"  // ? Added for parallel compilation
 #include "Scene/Scene.h"
 #include "Scene/Components.h"
 #include "../../Lunex-ScriptCore/src/LunexScriptingAPI.h"

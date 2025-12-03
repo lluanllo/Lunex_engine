@@ -733,12 +733,20 @@ namespace Lunex {
 	}
 
 	void ScriptingEngine::OnScriptsStart(entt::registry& registry) {
+		// ===== PARALLELIZED SCRIPT COMPILATION =====
+		// Collect all scripts that need compilation
+		struct ScriptCompileTask {
+			uint32_t EntityRaw;  // Store as uint32_t instead of entt::entity
+			size_t ScriptIndex;
+			std::string ScriptPath;
+			uint64_t EntityID;
+		};
+		
+		std::vector<ScriptCompileTask> compileTasks;
+		
 		// Iterar por todas las entidades con ScriptComponent
 		auto view = registry.view<ScriptComponent, IDComponent>();
-		for (auto entity : view) {
-			auto& scriptComp = view.get<ScriptComponent>(entity);
-			auto& idComp = view.get<IDComponent>(entity);
-
+		view.each([&](auto entityHandle, auto& scriptComp, auto& idComp) {
 			// ===== ITERAR POR TODOS LOS SCRIPTS DE LA ENTIDAD =====
 			for (size_t i = 0; i < scriptComp.GetScriptCount(); i++) {
 				const std::string& scriptPath = scriptComp.GetScriptPath(i);
@@ -747,20 +755,83 @@ namespace Lunex {
 					continue;
 				}
 
-				// Compilar script si es necesario
-				std::string dllPath;
 				if (scriptComp.AutoCompile) {
-					if (CompileScript(scriptPath, dllPath)) {
-						// Actualizar DLL path en el componente
-						if (i < scriptComp.CompiledDLLPaths.size()) {
-							scriptComp.CompiledDLLPaths[i] = dllPath;
+					compileTasks.push_back({ 
+						static_cast<uint32_t>(entityHandle), 
+						i, 
+						scriptPath, 
+						static_cast<uint64_t>(idComp.ID)
+					});
+				}
+			}
+		});
+
+		// ===== COMPILE ALL SCRIPTS IN PARALLEL =====
+		if (!compileTasks.empty()) {
+			LNX_LOG_INFO("?? Compiling {0} scripts in parallel...", compileTasks.size());
+			
+			// Use shared_ptr to safely share data across threads
+			auto compiledResults = std::make_shared<std::vector<std::pair<size_t, std::string>>>(compileTasks.size());
+			
+			auto counter = JobSystem::Get().CreateCounter(static_cast<int32_t>(compileTasks.size()));
+			
+			for (size_t taskIdx = 0; taskIdx < compileTasks.size(); ++taskIdx) {
+				const auto& task = compileTasks[taskIdx];
+				
+				JobSystem::Get().Schedule(
+					[this, task, taskIdx, compiledResults]() {
+						std::string dllPath;
+						if (CompileScript(task.ScriptPath, dllPath)) {
+							(*compiledResults)[taskIdx] = { taskIdx, dllPath };
+							LNX_LOG_INFO("? Script #{0} compiled: {1}", task.ScriptIndex + 1, dllPath);
 						}
-						LNX_LOG_INFO("Script #{0} compiled successfully: {1}", i + 1, dllPath);
+						else {
+							(*compiledResults)[taskIdx] = { taskIdx, "" };
+							LNX_LOG_ERROR("? Failed to compile script #{0}: {1}", task.ScriptIndex + 1, task.ScriptPath);
+						}
+					},
+					nullptr,
+					counter,
+					JobPriority::High  // High priority for compilation
+				);
+			}
+			
+			// Wait for all compilations to complete
+			JobSystem::Get().Wait(counter);
+			
+			// Apply results back to components (main thread only)
+			for (size_t i = 0; i < compileTasks.size(); ++i) {
+				const auto& task = compileTasks[i];
+				const auto& [idx, dllPath] = (*compiledResults)[i];
+				
+				// Reconstruct entity handle
+				entt::entity entity = static_cast<entt::entity>(task.EntityRaw);
+				
+				// Find entity again (might have been destroyed)
+				if (!registry.valid(entity)) {
+					continue;
+				}
+				
+				auto& scriptComp = registry.get<ScriptComponent>(entity);
+				
+				if (!dllPath.empty()) {
+					// Update DLL path in the component
+					if (task.ScriptIndex < scriptComp.CompiledDLLPaths.size()) {
+						scriptComp.CompiledDLLPaths[task.ScriptIndex] = dllPath;
 					}
-					else {
-						LNX_LOG_ERROR("Failed to compile script #{0}: {1}", i + 1, scriptPath);
-						continue;
-					}
+				}
+			}
+			
+			LNX_LOG_INFO("? All scripts compiled in parallel");
+		}
+
+		// ===== LOAD COMPILED SCRIPTS (sequential for now, DLL loading is not thread-safe) =====
+		view.each([&](auto entityHandle, auto& scriptComp, auto& idComp) {
+			for (size_t i = 0; i < scriptComp.GetScriptCount(); i++) {
+				const std::string& scriptPath = scriptComp.GetScriptPath(i);
+				
+				if (scriptPath.empty()) {
+					continue;
 				}
 
 				// Si no hay DLL compilada, saltar
@@ -773,7 +844,6 @@ namespace Lunex {
 				auto plugin = std::make_unique<ScriptPlugin>();
 
 				// Establecer CurrentEntity antes de cargar el script
-				auto entityHandle = (entt::entity)entity;
 				m_EngineContext->CurrentEntity = reinterpret_cast<void*>(static_cast<uintptr_t>(entityHandle));
 
 				if (plugin->Load(scriptComp.CompiledDLLPaths[i], m_EngineContext.get())) {
@@ -797,7 +867,7 @@ namespace Lunex {
 					LNX_LOG_ERROR("Failed to load script #{0}: {1}", i + 1, scriptComp.CompiledDLLPaths[i]);
 				}
 			}
-		}
+		});
 	}
 
 	void ScriptingEngine::OnScriptsStop(entt::registry& registry) {
@@ -814,9 +884,7 @@ namespace Lunex {
 
 		// Marcar todos los componentes como descargados
 		auto view = registry.view<ScriptComponent>();
-		for (auto entity : view) {
-			auto& scriptComp = view.get<ScriptComponent>(entity);
-			
+		view.each([&](auto entityHandle, auto& scriptComp) {
 			// Limpiar estados de todos los scripts
 			for (size_t i = 0; i < scriptComp.ScriptLoadedStates.size(); i++) {
 				scriptComp.ScriptLoadedStates[i] = false;
@@ -824,19 +892,48 @@ namespace Lunex {
 			for (size_t i = 0; i < scriptComp.ScriptPluginInstances.size(); i++) {
 				scriptComp.ScriptPluginInstances[i] = nullptr;
 			}
-		}
+		});
 	}
 
 	void ScriptingEngine::OnScriptsUpdate(float deltaTime) {
 		// Actualizar deltaTime global
 		g_CurrentDeltaTime = deltaTime;
 
-		// Actualizar todos los scripts cargados
+		// ===== PARALLELIZED SCRIPT UPDATES =====
+		if (m_ScriptInstances.empty()) {
+			return;
+		}
+		
+		// Collect all valid scripts
+		std::vector<ScriptPlugin*> activeScripts;
+		activeScripts.reserve(m_ScriptInstances.size());
+		
 		for (auto& [uuid, plugin] : m_ScriptInstances) {
 			if (plugin && plugin->IsLoaded()) {
-				plugin->Update(deltaTime);
+				activeScripts.push_back(plugin.get());
 			}
 		}
+		
+		if (activeScripts.empty()) {
+			return;
+		}
+		
+		// ? PARALLEL: Update all scripts concurrently
+		auto counter = JobSystem::Get().ParallelFor(
+			0,
+			static_cast<uint32_t>(activeScripts.size()),
+			[deltaTime, &activeScripts](uint32_t index) {
+				ScriptPlugin* plugin = activeScripts[index];
+				if (plugin && plugin->IsLoaded()) {
+					plugin->Update(deltaTime);
+				}
+			},
+			8,  // Grain size: process 8 scripts per job
+			JobPriority::Normal
+		);
+		
+		// Wait for all script updates to complete
+		JobSystem::Get().Wait(counter);
 	}
 
 	bool ScriptingEngine::CompileScript(const std::string& scriptPath, std::string& outDLLPath) {
@@ -881,10 +978,8 @@ namespace Lunex {
 				// Buscar en el registry cuál entidad usa esta DLL
 				bool found = false;
 				auto view = m_CurrentScene->m_Registry.view<ScriptComponent, IDComponent>();
-				for (auto entity : view) {
-					auto& scriptComp = view.get<ScriptComponent>(entity);
-					auto& idComp = view.get<IDComponent>(entity);
-
+				
+				view.each([&](auto entity, auto& scriptComp, auto& idComp) {
 					// Buscar en todos los scripts del componente
 					for (size_t i = 0; i < scriptComp.CompiledDLLPaths.size(); i++) {
 						if (scriptComp.CompiledDLLPaths[i] == dllPath.string() && 
@@ -907,13 +1002,12 @@ namespace Lunex {
 								}
 								
 								found = true;
-								break;
+								return;  // Exit each() early
 							}
 						}
 					}
-					
-					if (found) break;
-				}
+				});
+				
 				if (!found) ++it;
 			}
 
