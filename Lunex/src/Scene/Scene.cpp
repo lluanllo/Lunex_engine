@@ -738,8 +738,8 @@ namespace Lunex {
 					Renderer3D::DrawMesh(transform.GetTransform(), mesh, material, (int)entity);
 				}
 				else {
-					// Sin MaterialComponent, usar color del mesh como fallback
-					Renderer3D::DrawMesh(transform.GetTransform(), mesh, (int)entity);
+					// ✅ FIX: Pass mesh color to DrawModel when no MaterialComponent exists
+					Renderer3D::DrawModel(transform.GetTransform(), mesh.MeshModel, mesh.Color, (int)entity);
 				}
 			}
 		}
