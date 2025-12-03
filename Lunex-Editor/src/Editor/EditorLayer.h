@@ -14,6 +14,7 @@
 #include "../Panels/ProjectCreationDialog.h"
 #include "../Panels/InputSettingsPanel.h"
 #include "../Panels/GizmoSettingsPanel.h"
+#include "../Panels/JobSystemPanel.h"
 
 #include "Renderer/EditorCamera.h"
 
@@ -113,6 +114,7 @@ namespace Lunex {
 			ProjectCreationDialog m_ProjectCreationDialog;
 			InputSettingsPanel m_InputSettingsPanel;
 			GizmoSettingsPanel m_GizmoSettingsPanel;
+			JobSystemPanel m_JobSystemPanel;
 			
 			// Editor resources
 			Ref<Texture2D> m_IconPlay, m_IconSimulate, m_IconStop;

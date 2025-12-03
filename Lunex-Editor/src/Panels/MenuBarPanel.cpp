@@ -109,6 +109,11 @@ namespace Lunex {
 				if (ImGui::MenuItem("Input Settings", "Ctrl+K")) {
 					if (m_OnOpenInputSettings) m_OnOpenInputSettings();
 				}
+				
+				if (ImGui::MenuItem("JobSystem Monitor")) {
+					if (m_OnOpenJobSystemPanel) m_OnOpenJobSystemPanel();
+				}
+				
 				ImGui::Separator();
 				if (ImGui::MenuItem("Editor Settings", nullptr, false, false)) {
 					// TODO: Implement editor settings

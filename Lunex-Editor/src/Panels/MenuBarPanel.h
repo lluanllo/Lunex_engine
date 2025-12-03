@@ -24,6 +24,7 @@ namespace Lunex {
 		
 		void SetOnExitCallback(const std::function<void()>& callback) { m_OnExit = callback; }
 		void SetOnOpenInputSettingsCallback(const std::function<void()>& callback) { m_OnOpenInputSettings = callback; }
+		void SetOnOpenJobSystemPanelCallback(const std::function<void()>& callback) { m_OnOpenJobSystemPanel = callback; }
 		
 		void SetProjectName(const std::string& name) { m_ProjectName = name; }
 		void SetSceneName(const std::string& name) { m_SceneName = name; }
@@ -41,6 +42,7 @@ namespace Lunex {
 		
 		std::function<void()> m_OnExit;
 		std::function<void()> m_OnOpenInputSettings;
+		std::function<void()> m_OnOpenJobSystemPanel;
 		
 		std::string m_ProjectName = "No Project";
 		std::string m_SceneName = "Untitled";

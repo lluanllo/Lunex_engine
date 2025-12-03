@@ -73,7 +73,7 @@ namespace Lunex {
 	// Command callback function type
 	using CommandCallback = std::function<void(const std::vector<std::string>&)>;
 	
-	struct Command {
+	struct ConsoleCommand {
 		std::string Name;
 		std::string Description;
 		std::string Usage;
@@ -120,7 +120,7 @@ namespace Lunex {
 			std::vector<std::string> m_AutoCompleteOptions;
 			
 			// Registered commands
-			std::unordered_map<std::string, Command> m_Commands;
+			std::unordered_map<std::string, ConsoleCommand> m_Commands;
 			
 			// UI state
 			bool m_ReclaimFocus = false;
