@@ -455,7 +455,7 @@ namespace Lunex {
 	}
 
 	void ConsolePanel::RegisterCommand(const std::string& name, const std::string& description, const std::string& usage, CommandCallback callback) {
-		Command cmd;
+		ConsoleCommand cmd;
 		cmd.Name = name;
 		cmd.Description = description;
 		cmd.Usage = usage;

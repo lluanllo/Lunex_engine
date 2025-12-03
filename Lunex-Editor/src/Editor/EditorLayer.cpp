@@ -32,6 +32,17 @@ namespace Lunex {
 	void EditorLayer::OnAttach() {
 		LNX_PROFILE_FUNCTION();
 		
+		// ========================================
+		// INITIALIZE JOB SYSTEM
+		// ========================================
+		JobSystemConfig jobConfig;
+		jobConfig.NumWorkers = std::thread::hardware_concurrency() - 1; // Reserve 1 for main thread
+		jobConfig.NumIOWorkers = 2;
+		jobConfig.EnableWorkStealing = true;
+		jobConfig.EnableProfiling = true;
+		JobSystem::Init(jobConfig);
+		LNX_LOG_INFO("JobSystem initialized with {0} workers", jobConfig.NumWorkers);
+		
 		// ✅ NEW: Initialize Input System
 		InputManager::Get().Initialize();
 		RegisterEditorActions();
@@ -155,7 +166,7 @@ namespace Lunex {
 		// MATERIAL EDITOR PANEL CALLBACKS
 		// ========================================
 		
-		// 1. Content Browser -> Material Editor (double-click .lumat files)
+		// 1. Content Browser -> Material Editor (double-click .umat files)
 		m_ContentBrowserPanel.SetOnMaterialOpenCallback([this](const std::filesystem::path& path) {
 			m_MaterialEditorPanel.OpenMaterial(path);
 		});
@@ -273,6 +284,13 @@ namespace Lunex {
 
 	void EditorLayer::OnDetach() {
 		LNX_PROFILE_FUNCTION();
+		
+		// ========================================
+		// SHUTDOWN JOB SYSTEM
+		// ========================================
+		JobSystem::Get().WaitForAllJobs();
+		JobSystem::Shutdown();
+		LNX_LOG_INFO("JobSystem shut down");
 		
 		// ✅ NEW: Shutdown Input System
 		InputManager::Get().Shutdown();
@@ -558,6 +576,13 @@ namespace Lunex {
 	void EditorLayer::OnUpdate(Lunex::Timestep ts) {
 		LNX_PROFILE_FUNCTION();
 		
+		// ========================================
+		// FLUSH MAIN-THREAD COMMANDS (Job System)
+		// ========================================
+		// Execute pending commands from worker threads
+		// NOTE: Scene version is 0 for now (no cancellation)
+		JobSystem::Get().FlushMainThreadCommands(0);
+		
 		// ✅ NEW: Update Input System
 		InputManager::Get().Update(ts);
 
@@ -693,6 +718,7 @@ namespace Lunex {
 		m_SettingsPanel.OnImGuiRender();
 		m_ConsolePanel.OnImGuiRender();
 		m_InputSettingsPanel.OnImGuiRender(); // ✅ NEW: Input settings panel
+		m_JobSystemPanel.OnImGuiRender(); // ✅ NEW: Job system monitor panel
 
 		// Render dialogs (on top)
 		m_ProjectCreationDialog.OnImGuiRender();
@@ -752,7 +778,7 @@ namespace Lunex {
 
 		return false;
 	}
-	
+
 	bool EditorLayer::OnKeyReleased(KeyReleasedEvent& e) {
 		// Convert to KeyModifiers format
 		uint8_t modifiers = KeyModifiers::None;
@@ -774,19 +800,19 @@ namespace Lunex {
 		if (m_EditorCamera.IsFlyCameraActive()) {
 			return false; // Don't process clicks while flying
 		}
-		
+
 		// ✅ MULTI-SELECTION RAY PICKING (Blender-style)
 		if (e.GetMouseButton() == Mouse::ButtonLeft) {
 			if (m_ViewportPanel.IsViewportHovered() && !ImGuizmo::IsOver()) {
 				// ✅ Use Input system for modifier detection
 				bool shiftPressed = Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift);
 				bool ctrlPressed = Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl);
-				
+
 				if (m_HoveredEntity) {
 					if (shiftPressed) {
 						// Shift+Click: Add to selection (Blender-style)
 						const auto& selectedEntities = m_SceneHierarchyPanel.GetSelectedEntities();
-						
+
 						if (selectedEntities.empty()) {
 							// No selection yet, just select this entity
 							m_SceneHierarchyPanel.SetSelectedEntity(m_HoveredEntity);
@@ -1048,7 +1074,7 @@ namespace Lunex {
 		// Create project directory
 		std::filesystem::path projectPath = location / name;
 		std::filesystem::path projectFile = projectPath / "project.lunex";
-		
+
 		// Create new project
 		Ref<Project> project = ProjectManager::New();
 		project->SetName(name);
@@ -1057,17 +1083,17 @@ namespace Lunex {
 		project->GetConfig().Height = 1080;
 		project->GetConfig().VSync = true;
 		project->GetConfig().StartScene = "Scenes/SampleScene.lunex";
-		
+
 		// Save project (this will create directories and default scene)
 		if (!ProjectManager::SaveActive(projectFile)) {
 			LNX_LOG_ERROR("Failed to create project");
 			m_ConsolePanel.AddLog("Failed to create project: " + name, LogLevel::Error, "Project");
 			return;
 		}
-		
+
 		// Update Content Browser to show project assets
 		m_ContentBrowserPanel.SetRootDirectory(project->GetAssetDirectory());
-		
+
 		// Load the default scene
 		auto startScenePath = project->GetAssetFileSystemPath(project->GetConfig().StartScene);
 		if (std::filesystem::exists(startScenePath)) {
@@ -1077,7 +1103,7 @@ namespace Lunex {
 			// If default scene doesn't exist, create new empty scene
 			NewScene();
 		}
-		
+
 		UI_UpdateWindowTitle();
 		m_ConsolePanel.AddLog("Project created: " + name, LogLevel::Info, "Project");
 		LNX_LOG_INFO("Project created successfully at: {0}", projectPath.string());
