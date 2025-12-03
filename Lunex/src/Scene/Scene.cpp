@@ -347,18 +347,13 @@ namespace Lunex {
 					Entity e = { entity, this };
 					auto [transform, mesh] = view.get<TransformComponent, MeshComponent>(entity);
 
-					// Check for TextureComponent and MaterialComponent
-					if (e.HasComponent<TextureComponent>() && e.HasComponent<MaterialComponent>()) {
-						auto& texture = e.GetComponent<TextureComponent>();
-						auto& material = e.GetComponent<MaterialComponent>();
-						Renderer3D::DrawMesh(transform.GetTransform(), mesh, material, texture, (int)entity);
-					}
-					// Use MaterialComponent if available
-					else if (e.HasComponent<MaterialComponent>()) {
+					// NEW MATERIAL SYSTEM: Solo MaterialComponent
+					if (e.HasComponent<MaterialComponent>()) {
 						auto& material = e.GetComponent<MaterialComponent>();
 						Renderer3D::DrawMesh(transform.GetTransform(), mesh, material, (int)entity);
 					}
 					else {
+						// Sin MaterialComponent, usar color del mesh como fallback
 						Renderer3D::DrawMesh(transform.GetTransform(), mesh, (int)entity);
 					}
 				}
@@ -737,19 +732,14 @@ namespace Lunex {
 				Entity e = { entity, this };
 				auto [transform, mesh] = view.get<TransformComponent, MeshComponent>(entity);
 
-				// Check for TextureComponent and MaterialComponent
-				if (e.HasComponent<TextureComponent>() && e.HasComponent<MaterialComponent>()) {
-					auto& texture = e.GetComponent<TextureComponent>();
-					auto& material = e.GetComponent<MaterialComponent>();
-					Renderer3D::DrawMesh(transform.GetTransform(), mesh, material, texture, (int)entity);
-				}
-				// Use MaterialComponent if available
-				else if (e.HasComponent<MaterialComponent>()) {
+				// NEW MATERIAL SYSTEM: Solo MaterialComponent
+				if (e.HasComponent<MaterialComponent>()) {
 					auto& material = e.GetComponent<MaterialComponent>();
 					Renderer3D::DrawMesh(transform.GetTransform(), mesh, material, (int)entity);
 				}
 				else {
-					Renderer3D::DrawMesh(transform.GetTransform(), mesh, (int)entity);
+					// ✅ FIX: Pass mesh color to DrawModel when no MaterialComponent exists
+					Renderer3D::DrawModel(transform.GetTransform(), mesh.MeshModel, mesh.Color, (int)entity);
 				}
 			}
 		}

@@ -123,6 +123,7 @@ namespace Lunex {
 
 	PropertiesPanel::PropertiesPanel(const Ref<Scene>& context) {
 		SetContext(context);
+		// MaterialPreviewRenderer will be initialized on first use (lazy initialization)
 	}
 
 	void PropertiesPanel::SetContext(const Ref<Scene>& context) {
@@ -132,6 +133,70 @@ namespace Lunex {
 
 	void PropertiesPanel::SetSelectedEntity(Entity entity) {
 		m_SelectedEntity = entity;
+	}
+
+	// =========================================================================
+	// THUMBNAIL SYSTEM
+	// ===========================================================================
+
+	uint32_t PropertiesPanel::GetOrGenerateThumbnail(const Ref<MaterialAsset>& asset) {
+		if (!asset) return 0;
+
+		UUID assetID = asset->GetID();
+
+		// Check if thumbnail already exists in cache
+		auto it = m_ThumbnailCache.find(assetID);
+		if (it != m_ThumbnailCache.end()) {
+			return it->second; // Return cached texture ID
+		}
+
+		// Generate new thumbnail
+		if (!m_PreviewRenderer) {
+			LNX_LOG_INFO("MaterialPreviewRenderer initializing (lazy)...");
+			try {
+				m_PreviewRenderer = CreateScope<MaterialPreviewRenderer>();
+				m_PreviewRenderer->SetResolution(512, 512);
+				m_PreviewRenderer->SetAutoRotate(false);
+			}
+			catch (const std::exception& e) {
+				LNX_LOG_ERROR("Failed to initialize MaterialPreviewRenderer: {0}", e.what());
+				return 0;
+			}
+		}
+
+		// Render preview to offscreen buffer
+		try {
+			m_PreviewRenderer->RenderPreview(asset);
+			uint32_t textureID = m_PreviewRenderer->GetPreviewTextureID();
+
+			if (textureID == 0) {
+				LNX_LOG_WARN("MaterialPreviewRenderer generated invalid texture ID for material: {0}", asset->GetName());
+				return 0;
+			}
+
+			// Cache the texture ID
+			m_ThumbnailCache[assetID] = textureID;
+			LNX_LOG_TRACE("Generated thumbnail for material: {0} (UUID: {1})", asset->GetName(), (uint64_t)assetID);
+
+			return textureID;
+		}
+		catch (const std::exception& e) {
+			LNX_LOG_ERROR("Failed to generate thumbnail for material {0}: {1}", asset->GetName(), e.what());
+			return 0;
+		}
+	}
+
+	void PropertiesPanel::InvalidateThumbnail(UUID assetID) {
+		auto it = m_ThumbnailCache.find(assetID);
+		if (it != m_ThumbnailCache.end()) {
+			m_ThumbnailCache.erase(it);
+			LNX_LOG_TRACE("Invalidated thumbnail for material UUID: {0}", (uint64_t)assetID);
+		}
+	}
+
+	void PropertiesPanel::ClearThumbnailCache() {
+		m_ThumbnailCache.clear();
+		LNX_LOG_TRACE("Cleared material thumbnail cache");
 	}
 
 	void PropertiesPanel::OnImGuiRender() {
@@ -331,16 +396,16 @@ namespace Lunex {
 			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 8.0f));
 			ImGui::PushStyleColor(ImGuiCol_FrameBg, UIStyle::COLOR_BG_DARK);
 			ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, UIStyle::COLOR_BG_MEDIUM);
-			
+
 			char buffer[256];
 			memset(buffer, 0, sizeof(buffer));
 			strcpy_s(buffer, sizeof(buffer), tag.c_str());
-			
+
 			ImGui::SetNextItemWidth(-1);
 			if (ImGui::InputText("##Tag", buffer, sizeof(buffer))) {
 				tag = std::string(buffer);
 			}
-			
+
 			ImGui::PopStyleColor(2);
 			ImGui::PopStyleVar();
 		}
@@ -351,40 +416,39 @@ namespace Lunex {
 		ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_ACCENT);
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.36f, 0.69f, 1.0f, 1.0f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.20f, 0.50f, 0.90f, 1.0f));
-		
+
 		if (ImGui::Button("+ Add Component", ImVec2(-1, 32.0f)))
 			ImGui::OpenPopup("AddComponent");
-			
+
 		ImGui::PopStyleColor(3);
-		
+
 		if (ImGui::BeginPopup("AddComponent")) {
 			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HEADER);
 			ImGui::Text("Add Component");
 			ImGui::PopStyleColor();
 			ImGui::Separator();
-			
+
 			DisplayAddComponentEntry<CameraComponent>("🎥  Camera");
 			DisplayAddComponentEntry<ScriptComponent>("📜  C++ Script");
 			DisplayAddComponentEntry<SpriteRendererComponent>("🖼️  Sprite Renderer");
 			DisplayAddComponentEntry<CircleRendererComponent>("⭕  Circle Renderer");
 			DisplayAddComponentEntry<MeshComponent>("🗿  Mesh Renderer");
 			DisplayAddComponentEntry<LightComponent>("💡  Light");
-			DisplayAddComponentEntry<TextureComponent>("🎨  Textures Mapper");
-			
+
 			ImGui::Separator();
 			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
 			ImGui::Text("Physics 2D");
 			ImGui::PopStyleColor();
-			
+
 			DisplayAddComponentEntry<Rigidbody2DComponent>("⚙️  Rigidbody 2D");
 			DisplayAddComponentEntry<BoxCollider2DComponent>("📦  Box Collider 2D");
 			DisplayAddComponentEntry<CircleCollider2DComponent>("⭕  Circle Collider 2D");
-			
+
 			ImGui::Separator();
 			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
 			ImGui::Text("Physics 3D");
 			ImGui::PopStyleColor();
-			
+
 			DisplayAddComponentEntry<Rigidbody3DComponent>("🎲  Rigidbody 3D");
 			DisplayAddComponentEntry<BoxCollider3DComponent>("📦  Box Collider 3D");
 			DisplayAddComponentEntry<SphereCollider3DComponent>("🌐  Sphere Collider 3D");
@@ -405,40 +469,40 @@ namespace Lunex {
 			DrawVec3Control("Rotation", rotation);
 			component.Rotation = glm::radians(rotation);
 			DrawVec3Control("Scale", component.Scale, 1.0f);
-		});
+			});
 
 		// Script Component
 		DrawComponent<ScriptComponent>("📜 Script", entity, [](auto& component) {
 			SectionHeader("📝", "C++ Scripts");
-			
+
 			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
+
 			// Lista de scripts
 			for (size_t i = 0; i < component.GetScriptCount(); i++) {
 				ImGui::PushID((int)i);
-				
+
 				const std::string& scriptPath = component.GetScriptPath(i);
 				std::filesystem::path path(scriptPath);
 				std::string filename = path.filename().string();
 				bool isLoaded = component.IsScriptLoaded(i);
-				
+
 				// Script card
 				ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
 				ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
 				ImGui::BeginChild(("##ScriptCard" + std::to_string(i)).c_str(), ImVec2(-1, 100.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-				
+
 				// Header row
 				ImGui::BeginGroup();
 				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
 				ImGui::Text("Script #%d", (int)i + 1);
 				ImGui::PopStyleColor();
 				ImGui::EndGroup();
-				
+
 				ImGui::SameLine(ImGui::GetContentRegionAvail().x - 65);
 				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
 				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
 				if (ImGui::Button("Remove", ImVec2(65, 0))) {
-					component.RemoveScript(i);
+				 component.RemoveScript(i);
 					ImGui::PopStyleColor(2);
 					ImGui::EndChild();
 					ImGui::PopStyleVar();
@@ -447,19 +511,19 @@ namespace Lunex {
 					break;
 				}
 				ImGui::PopStyleColor(2);
-				
+
 				ImGui::Separator();
 				ImGui::Spacing();
-				
+
 				// File info
 				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_ACCENT);
 				ImGui::Text("📄");
 				ImGui::PopStyleColor();
 				ImGui::SameLine();
 				ImGui::TextWrapped("%s", filename.c_str());
-				
+
 				ImGui::Spacing();
-				
+
 				// Status badge
 				ImGui::Text("Status:");
 				ImGui::SameLine();
@@ -473,36 +537,36 @@ namespace Lunex {
 					ImGui::Text("⚠ Will compile on Play");
 					ImGui::PopStyleColor();
 				}
-				
+
 				ImGui::EndChild();
 				ImGui::PopStyleVar();
 				ImGui::PopStyleColor();
-				
+
 				ImGui::Spacing();
-				
+
 				ImGui::PopID();
 			}
-			
+
 			// Add Script button
 			ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_BG_MEDIUM);
 			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.30f, 1.0f));
 			ImGui::PushStyleColor(ImGuiCol_Border, UIStyle::COLOR_ACCENT);
 			ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-			
+
 			if (ImGui::Button("➕ Add Script", ImVec2(-1, 35.0f))) {
 				// Drag & drop zone
 			}
-			
+
 			ImGui::PopStyleVar();
 			ImGui::PopStyleColor(3);
-			
+
 			// Drag and drop
 			if (ImGui::BeginDragDropTarget()) {
 				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
 					ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
 					std::string ext = data->Extension;
 					if (ext == ".cpp" || ext == ".h") {
-					component.AddScript(data->RelativePath);
+						component.AddScript(data->RelativePath);
 						LNX_LOG_INFO("Added script: {0}", data->RelativePath);
 					}
 					else {
@@ -511,9 +575,9 @@ namespace Lunex {
 				}
 				ImGui::EndDragDropTarget();
 			}
-			
+
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-			
+
 			// Script Properties placeholder
 			if (component.GetScriptCount() > 0) {
 				SectionHeader("⚙️", "Script Properties");
@@ -523,20 +587,20 @@ namespace Lunex {
 				ImGui::PopStyleColor();
 				ImGui::Unindent(UIStyle::INDENT_SIZE);
 			}
-		});
+			});
 
 		// Camera Component
 		DrawComponent<CameraComponent>("🎥 Camera", entity, [](auto& component) {
 			auto& camera = component.Camera;
 
 			PropertyCheckbox("Primary", &component.Primary, "This camera will be used for rendering");
-			
+
 			SectionHeader("📐", "Projection");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
 
 			const char* projectionTypeStrings[] = { "Perspective", "Orthographic" };
 			const char* currentProjectionTypeString = projectionTypeStrings[(int)camera.GetProjectionType()];
-			
+
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
 			PropertyLabel("Type");
@@ -564,12 +628,12 @@ namespace Lunex {
 
 				float perspectiveNear = camera.GetPerspectiveNearClip();
 				float perspectiveFar = camera.GetPerspectiveFarClip();
-				
+
 				if (PropertyDrag("Near", &perspectiveNear, 0.01f, 0.01f, perspectiveFar - 0.01f))
 					camera.SetPerspectiveNearClip(perspectiveNear);
 
 				if (PropertyDrag("Far", &perspectiveFar, 0.1f, perspectiveNear + 0.01f, 10000.0f))
-				 camera.SetPerspectiveFarClip(perspectiveFar);
+					camera.SetPerspectiveFarClip(perspectiveFar);
 			}
 
 			if (camera.GetProjectionType() == SceneCamera::ProjectionType::Orthographic) {
@@ -579,7 +643,7 @@ namespace Lunex {
 
 				float orthoNear = camera.GetOrthographicNearClip();
 				float orthoFar = camera.GetOrthographicFarClip();
-				
+
 				if (PropertyDrag("Near", &orthoNear, 0.1f, -1000.0f, orthoFar - 0.1f))
 					camera.SetOrthographicNearClip(orthoNear);
 
@@ -588,19 +652,19 @@ namespace Lunex {
 
 				PropertyCheckbox("Fixed Aspect", &component.FixedAspectRatio);
 			}
-			
+
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// Sprite Renderer Component
 		DrawComponent<SpriteRendererComponent>("🖼️ Sprite Renderer", entity, [](auto& component) {
 			SectionHeader("🎨", "Appearance");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
+
 			PropertyColor4("Color", component.Color);
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-			
+
 			SectionHeader("🖼️", "Texture");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
 
@@ -608,13 +672,13 @@ namespace Lunex {
 				ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
 				ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
 				ImGui::BeginChild("##TextureInfo", ImVec2(-1, 90.0f), true);
-				
+
 				ImGui::Image(
 					(void*)(intptr_t)component.Texture->GetRendererID(),
 					ImVec2(70, 70),
 					ImVec2(0, 1), ImVec2(1, 0)
 				);
-				
+
 				ImGui::SameLine();
 				ImGui::BeginGroup();
 				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HEADER);
@@ -631,7 +695,7 @@ namespace Lunex {
 				}
 				ImGui::PopStyleColor(2);
 				ImGui::EndGroup();
-				
+
 				ImGui::EndChild();
 				ImGui::PopStyleVar();
 				ImGui::PopStyleColor();
@@ -645,7 +709,7 @@ namespace Lunex {
 				ImGui::PopStyleVar();
 				ImGui::PopStyleColor(3);
 			}
-			
+
 			if (ImGui::BeginDragDropTarget()) {
 				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
 					ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
@@ -654,7 +718,7 @@ namespace Lunex {
 						ext == ".bmp" || ext == ".tga" || ext == ".hdr") {
 						Ref<Texture2D> texture = Texture2D::Create(data->FilePath);
 						if (texture->IsLoaded())
-							component.Texture = texture;
+						component.Texture = texture;
 						else
 							LNX_LOG_WARN("Could not load texture {0}", data->FilePath);
 					}
@@ -666,30 +730,30 @@ namespace Lunex {
 			}
 
 			PropertyDrag("Tiling Factor", &component.TilingFactor, 0.1f, 0.0f, 100.0f, "%.2f", "Texture repeat multiplier");
-			
+
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// Circle Renderer Component
 		DrawComponent<CircleRendererComponent>("⭕ Circle Renderer", entity, [](auto& component) {
 			SectionHeader("🎨", "Appearance");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
+
 			PropertyColor4("Color", component.Color);
 			PropertySlider("Thickness", &component.Thickness, 0.0f, 1.0f, "%.3f", "0 = Filled, 1 = Outline");
 			PropertySlider("Fade", &component.Fade, 0.0f, 1.0f, "%.3f", "Edge softness");
-			
+
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// Rigidbody 2D Component
 		DrawComponent<Rigidbody2DComponent>("⚙️ Rigidbody 2D", entity, [](auto& component) {
 			SectionHeader("🔧", "Body Configuration");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
+
 			const char* bodyTypeStrings[] = { "Static", "Dynamic", "Kinematic" };
 			const char* currentBodyTypeString = bodyTypeStrings[(int)component.Type];
-			
+
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
 			PropertyLabel("Type", "Defines how the body responds to physics");
@@ -709,15 +773,15 @@ namespace Lunex {
 			ImGui::Columns(1);
 
 			PropertyCheckbox("Fixed Rotation", &component.FixedRotation, "Prevent rotation from physics");
-			
+
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// Box Collider 2D Component
 		DrawComponent<BoxCollider2DComponent>("📦 Box Collider 2D", entity, [](auto& component) {
 			SectionHeader("📐", "Shape");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
+
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
 			PropertyLabel("Offset");
@@ -727,35 +791,35 @@ namespace Lunex {
 			ImGui::DragFloat2("##Offset", glm::value_ptr(component.Offset), 0.01f);
 			ImGui::PopStyleColor();
 			ImGui::Columns(1);
-			
+
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
 			PropertyLabel("Size");
-		 ImGui::NextColumn();
+			ImGui::NextColumn();
 			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
 			ImGui::SetNextItemWidth(-1);
 			ImGui::DragFloat2("##Size", glm::value_ptr(component.Size), 0.01f, 0.01f);
 			ImGui::PopStyleColor();
 			ImGui::Columns(1);
-			
+
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-			
+
 			SectionHeader("⚗️", "Physics Material");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
+
 			PropertyDrag("Density", &component.Density, 0.01f, 0.0f, 100.0f, "%.2f", "Mass per unit area");
 			PropertyDrag("Friction", &component.Friction, 0.01f, 0.0f, 1.0f, "%.2f", "Surface friction coefficient");
 			PropertyDrag("Restitution", &component.Restitution, 0.01f, 0.0f, 1.0f, "%.2f", "Bounciness (0 = no bounce, 1 = perfect bounce)");
 			PropertyDrag("Restitution Threshold", &component.RestitutionThreshold, 0.01f, 0.0f, 10.0f, "%.2f", "Minimum velocity for bounce");
-			
+
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// Circle Collider 2D Component
 		DrawComponent<CircleCollider2DComponent>("⭕ Circle Collider 2D", entity, [](auto& component) {
 			SectionHeader("📐", "Shape");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
+
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
 			PropertyLabel("Offset");
@@ -765,29 +829,29 @@ namespace Lunex {
 			ImGui::DragFloat2("##Offset", glm::value_ptr(component.Offset), 0.01f);
 			ImGui::PopStyleColor();
 			ImGui::Columns(1);
-			
+
 			PropertyDrag("Radius", &component.Radius, 0.01f, 0.01f);
-			
+
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-			
+
 			SectionHeader("⚗️", "Physics Material");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
+
 			PropertyDrag("Density", &component.Density, 0.01f, 0.0f, 100.0f, "%.2f", "Mass per unit area");
 			PropertyDrag("Friction", &component.Friction, 0.01f, 0.0f, 1.0f, "%.2f", "Surface friction coefficient");
 			PropertyDrag("Restitution", &component.Restitution, 0.01f, 0.0f, 1.0f, "%.2f", "Bounciness");
 			PropertyDrag("Restitution Threshold", &component.RestitutionThreshold, 0.01f, 0.0f, 10.0f);
-			
+
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// Mesh Component
-		DrawComponent<MeshComponent>("🗿 Mesh Renderer", entity, [](auto& component) {
+		DrawComponent<MeshComponent>("🗿  Mesh Renderer", entity, [](auto& component) {
 			SectionHeader("🎲", "Model");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
+
 			const char* modelTypes[] = { "Cube", "Sphere", "Plane", "Cylinder", "Custom Model" };
-		 int currentType = (int)component.Type;
+			int currentType = (int)component.Type;
 
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
@@ -805,46 +869,46 @@ namespace Lunex {
 			// Custom Model Section
 			if (component.Type == ModelType::FromFile) {
 				ImGui::Spacing();
-				
+
 				if (component.MeshModel) {
 					ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
 					ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
 					ImGui::BeginChild("##ModelInfo", ImVec2(-1, 145.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-					
+
 					std::filesystem::path modelPath(component.FilePath);
 					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_ACCENT);
 					ImGui::Text("🗿 %s", modelPath.filename().string().c_str());
 					ImGui::PopStyleColor();
-					
+
 					ImGui::Spacing();
 					ImGui::Separator();
 					ImGui::Spacing();
-					
+
 					uint32_t totalVertices = 0;
 					uint32_t totalIndices = 0;
 					for (const auto& mesh : component.MeshModel->GetMeshes()) {
 						totalVertices += (uint32_t)mesh->GetVertices().size();
 						totalIndices += (uint32_t)mesh->GetIndices().size();
 					}
-					
+
 					ImGui::Columns(2, nullptr, false);
 					ImGui::SetColumnWidth(0, 100.0f);
 					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
 					ImGui::Text("Submeshes"); ImGui::NextColumn();
 					ImGui::PopStyleColor();
 					ImGui::Text("%d", component.MeshModel->GetMeshes().size()); ImGui::NextColumn();
-					
+
 					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
 					ImGui::Text("Vertices"); ImGui::NextColumn();
 					ImGui::PopStyleColor();
 					ImGui::Text("%d", totalVertices); ImGui::NextColumn();
-					
+
 					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
 					ImGui::Text("Triangles"); ImGui::NextColumn();
 					ImGui::PopStyleColor();
 					ImGui::Text("%d", totalIndices / 3); ImGui::NextColumn();
 					ImGui::Columns(1);
-					
+
 					ImGui::Spacing();
 					ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
 					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
@@ -853,7 +917,7 @@ namespace Lunex {
 						component.MeshModel.reset();
 					}
 					ImGui::PopStyleColor(2);
-					
+
 					ImGui::EndChild();
 					ImGui::PopStyleVar();
 					ImGui::PopStyleColor();
@@ -866,7 +930,7 @@ namespace Lunex {
 					ImGui::Button("📁 Drop 3D Model Here\n(.obj, .fbx, .gltf, .glb, .dae)", ImVec2(-1, 60.0f));
 					ImGui::PopStyleVar();
 					ImGui::PopStyleColor(3);
-					
+
 					if (ImGui::BeginDragDropTarget()) {
 						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
 							ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
@@ -876,47 +940,202 @@ namespace Lunex {
 								LNX_LOG_INFO("Loaded model: {0}", data->FilePath);
 							}
 							else {
-							 LNX_LOG_WARN("Unsupported model format: {0}", ext);
+								LNX_LOG_WARN("Unsupported model format: {0}", ext);
 							}
 						}
 						ImGui::EndDragDropTarget();
 					}
 				}
 			}
-			
+
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-			
+
 			SectionHeader("🎨", "Color Tint");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
 			PropertyColor4("Color", component.Color);
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
-		// Material Component
+		// Material Component - NUEVO SISTEMA
 		DrawComponent<MaterialComponent>("✨ Material", entity, [&](auto& component) {
+			// ========== MATERIAL ASSET SECTION ==========
+			SectionHeader("📦", "Material Asset");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			// Material Asset Card
+			ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
+			ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+			ImGui::BeginChild("##MaterialAssetCard", ImVec2(-1, 150.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+			if (component.Instance && component.Instance->GetBaseAsset()) {
+				auto asset = component.Instance->GetBaseAsset();
+
+				// Header row
+				ImGui::BeginGroup();
+
+				// ✅ Preview thumbnail - Generate using MaterialPreviewRenderer
+				if (asset) {
+					uint32_t thumbnailID = GetOrGenerateThumbnail(asset);
+					
+					if (thumbnailID != 0) {
+						// Render actual thumbnail texture
+						ImGui::Image(
+							(ImTextureID)(intptr_t)thumbnailID,
+							ImVec2(70, 70),
+							ImVec2(0, 1),  // Flip Y for OpenGL
+							ImVec2(1, 0)
+						);
+						
+						if (ImGui::IsItemHovered()) {
+							ImGui::SetTooltip("Material Preview\nClick 'Edit Material' to modify");
+						}
+					}
+					else {
+						// Fallback: color placeholder if thumbnail generation failed
+						auto albedo = asset->GetAlbedo();
+						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(albedo.r, albedo.g, albedo.b, albedo.a));
+						ImGui::Button("##preview", ImVec2(70, 70));
+						ImGui::PopStyleColor();
+
+						if (ImGui::IsItemHovered()) {
+							ImGui::SetTooltip("Material Preview\n(Thumbnail generation failed)");
+						}
+					}
+				}
+				else {
+					ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_BG_MEDIUM);
+					ImGui::Button("##preview", ImVec2(70, 70));
+					ImGui::PopStyleColor();
+				}
+
+				ImGui::EndGroup();
+				ImGui::SameLine();
+
+				// Material info
+				ImGui::BeginGroup();
+
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HEADER);
+				ImGui::Text("🎨 %s", component.GetMaterialName().c_str());
+				ImGui::PopStyleColor();
+
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+				if (!component.GetAssetPath().empty()) {
+					std::filesystem::path matPath(component.GetAssetPath());
+					ImGui::Text("📁 %s", matPath.filename().string().c_str());
+				}
+				else {
+					ImGui::Text("📁 Default Material");
+				}
+				ImGui::PopStyleColor();
+
+				ImGui::Spacing();
+
+				// Local overrides indicator
+				if (component.HasLocalOverrides()) {
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_WARNING);
+					ImGui::Text("⚙️ Has local overrides");
+					ImGui::PopStyleColor();
+				}
+				else {
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
+					ImGui::Text("✓ Using base asset");
+					ImGui::PopStyleColor();
+				}
+
+				ImGui::EndGroup();
+
+				ImGui::Spacing();
+				ImGui::Separator();
+				ImGui::Spacing();
+
+				// Action buttons
+				ImGui::BeginGroup();
+
+				// Open in Editor button
+				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_ACCENT);
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.36f, 0.69f, 1.0f, 1.0f));
+				if (ImGui::Button("🖊️ Edit Material", ImVec2(140, 0))) {
+					if (m_OnMaterialEditCallback && asset) {
+						m_OnMaterialEditCallback(asset);
+					}
+					else {
+						LNX_LOG_WARN("Material editor not connected or asset is null");
+					}
+				}
+				ImGui::PopStyleColor(2);
+
+				ImGui::SameLine();
+
+				// Reset overrides button (solo si hay overrides)
+				if (component.HasLocalOverrides()) {
+					ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_WARNING);
+					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.7f, 0.3f, 1.0f));
+					if (ImGui::Button("🔄 Reset Overrides", ImVec2(140, 0))) {
+						component.ResetOverrides();
+					}
+					ImGui::PopStyleColor(2);
+				}
+
+				ImGui::EndGroup();
+			}
+			else {
+				// No material assigned
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+				ImGui::TextWrapped("No material assigned. Drop a .lumat file here.");
+				ImGui::PopStyleColor();
+			}
+
+			ImGui::EndChild();
+			ImGui::PopStyleVar();
+			ImGui::PopStyleColor();
+
+			// Drag & Drop for .lumat files
+			if (ImGui::BeginDragDropTarget()) {
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+					ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+					std::string ext = data->Extension;
+					if (ext == ".lumat") {
+						component.SetMaterialAsset(data->FilePath);
+						LNX_LOG_INFO("Material assigned: {0}", data->FilePath);
+					}
+					else {
+						LNX_LOG_WARN("Only .lumat files are valid materials");
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+
+			// ========== PBR PROPERTIES (con override support) ==========
 			SectionHeader("🎨", "Surface Properties");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
 
-			glm::vec4 color = component.GetColor();
+			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+			ImGui::TextWrapped("💡 Tip: Changes here create local overrides. Use 'Reset Overrides' to revert.");
+			ImGui::PopStyleColor();
+			ImGui::Spacing();
+
+			glm::vec4 color = component.GetAlbedo();
 			if (PropertyColor4("Base Color", color)) {
-				component.SetColor(color);
+				component.SetAlbedo(color, true); // asOverride = true
 			}
 
 			float metallic = component.GetMetallic();
 			if (PropertySlider("Metallic", &metallic, 0.0f, 1.0f, "%.2f", "0 = Dielectric, 1 = Metal")) {
-				component.SetMetallic(metallic);
+				component.SetMetallic(metallic, true);
 			}
 
 			float roughness = component.GetRoughness();
 			if (PropertySlider("Roughness", &roughness, 0.0f, 1.0f, "%.2f", "0 = Smooth, 1 = Rough")) {
-				component.SetRoughness(roughness);
+				component.SetRoughness(roughness, true);
 			}
 
 			float specular = component.GetSpecular();
 			if (PropertySlider("Specular", &specular, 0.0f, 1.0f)) {
-				component.SetSpecular(specular);
+				component.SetSpecular(specular, true);
 			}
-			
+
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
 
 			SectionHeader("💡", "Emission");
@@ -924,450 +1143,44 @@ namespace Lunex {
 
 			glm::vec3 emissionColor = component.GetEmissionColor();
 			if (PropertyColor("Color", emissionColor)) {
-				component.SetEmissionColor(emissionColor);
+				component.SetEmissionColor(emissionColor, true);
 			}
 
 			float emissionIntensity = component.GetEmissionIntensity();
 			if (PropertyDrag("Intensity", &emissionIntensity, 0.1f, 0.0f, 100.0f)) {
-				component.SetEmissionIntensity(emissionIntensity);
+				component.SetEmissionIntensity(emissionIntensity, true);
 			}
-			
+
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-			
-			// Texture Maps (if TextureComponent exists)
-			if (entity.HasComponent<TextureComponent>()) {
-				auto& texComp = entity.GetComponent<TextureComponent>();
-				
-				SectionHeader("🖼️", "Texture Maps");
-				ImGui::Indent(UIStyle::INDENT_SIZE);
-				
-				// Helper lambda for texture slots
-				auto DrawTextureSlot = [&](const char* label, const char* icon, Ref<Texture2D>& texture, std::string& path,
-					auto loadFunc, float* multiplier = nullptr) {
-					
-					ImGui::PushID(label);
-					
-					ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
-					ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
-					ImGui::BeginChild(("##Tex" + std::string(label)).c_str(), ImVec2(-1, multiplier ? 130.0f : 120.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-					
-					ImGui::BeginGroup();
-					
-					// Thumbnail
-					if (texture && texture->IsLoaded()) {
-						ImGui::Image(
-							(void*)(intptr_t)texture->GetRendererID(),
-							ImVec2(55, 55),
-							ImVec2(0, 1), ImVec2(1, 0)
-						);
-					}
-					else {
-						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.18f, 0.20f, 1.0f));
-						ImGui::Button("##empty", ImVec2(55, 55));
-						ImGui::PopStyleColor();
-					}
-					
-					// Drag & Drop
-					if (ImGui::BeginDragDropTarget()) {
-						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
-							ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
-							std::string ext = data->Extension;
-							if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" || ext == ".hdr") {
-								loadFunc(texComp, data->FilePath);
-							}
-						}
-						ImGui::EndDragDropTarget();
-					}
-					
-					ImGui::EndGroup();
-					ImGui::SameLine();
-					
-					// Info
-					ImGui::BeginGroup();
-					
-					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HEADER);
-					ImGui::Text("%s %s", icon, label);
+
+			// ========== TEXTURE MAPS INFO (desde MaterialAsset) ==========
+			if (component.Instance && component.Instance->GetBaseAsset()) {
+				auto asset = component.Instance->GetBaseAsset();
+
+				if (asset->HasAnyTexture()) {
+					SectionHeader("🖼️", "Texture Maps");
+					ImGui::Indent(UIStyle::INDENT_SIZE);
+
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+					ImGui::TextWrapped("Textures are managed in the Material Asset. Open the Material Editor to modify them.");
 					ImGui::PopStyleColor();
-					
-					if (texture && texture->IsLoaded()) {
-						std::filesystem::path texPath(path);
-						ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-						ImGui::TextWrapped("%s", texPath.filename().string().c_str());
-						ImGui::Text("%dx%d", texture->GetWidth(), texture->GetHeight());
-						ImGui::PopStyleColor();
-						
-						if (multiplier) {
-							ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-							ImGui::SetNextItemWidth(100.0f);
-							ImGui::SliderFloat("##mult", multiplier, 0.0f, 2.0f, "×%.2f");
-							ImGui::PopStyleColor();
-						}
-						
-						ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
-						ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
-						if (ImGui::Button("Remove", ImVec2(70, 0))) {
-							texture.reset();
-							path.clear();
-						}
-						ImGui::PopStyleColor(2);
-					}
-					else {
-						ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-						ImGui::TextWrapped("Drop texture here");
-						ImGui::PopStyleColor();
-					}
-					
-					ImGui::EndGroup();
-					
-					ImGui::EndChild();
-					ImGui::PopStyleVar();
-					ImGui::PopStyleColor();
+
 					ImGui::Spacing();
-					ImGui::PopID();
-				};
 
-				DrawTextureSlot("Albedo", "🎨", texComp.AlbedoMap, texComp.AlbedoPath,
-					[](TextureComponent& tc, const std::string& path) { tc.LoadAlbedo(path); });
+					// Lista de texturas cargadas
+					if (asset->HasAlbedoMap()) ImGui::BulletText("🎨 Albedo Map");
+					if (asset->HasNormalMap()) ImGui::BulletText("🧭 Normal Map");
+					if (asset->HasMetallicMap()) ImGui::BulletText("⚙️ Metallic Map");
+					if (asset->HasRoughnessMap()) ImGui::BulletText("🔧 Roughness Map");
+					if (asset->HasSpecularMap()) ImGui::BulletText("💎 Specular Map");
+					if (asset->HasEmissionMap()) ImGui::BulletText("💡 Emission Map");
+					if (asset->HasAOMap()) ImGui::BulletText("🌑 AO Map");
 
-				DrawTextureSlot("Normal", "🧭", texComp.NormalMap, texComp.NormalPath,
-					[](TextureComponent& tc, const std::string& path) { tc.LoadNormal(path); });
-
-				DrawTextureSlot("Metallic", "⚙️", texComp.MetallicMap, texComp.MetallicPath,
-					[](TextureComponent& tc, const std::string& path) { tc.LoadMetallic(path); },
-					&texComp.MetallicMultiplier);
-
-				DrawTextureSlot("Roughness", "🔧", texComp.RoughnessMap, texComp.RoughnessPath,
-					[](TextureComponent& tc, const std::string& path) { tc.LoadRoughness(path); },
-					&texComp.RoughnessMultiplier);
-
-				DrawTextureSlot("Specular", "💎", texComp.SpecularMap, texComp.SpecularPath,
-					[](TextureComponent& tc, const std::string& path) { tc.LoadSpecular(path); },
-					&texComp.SpecularMultiplier);
-
-				DrawTextureSlot("Emission", "💡", texComp.EmissionMap, texComp.EmissionPath,
-					[](TextureComponent& tc, const std::string& path) { tc.LoadEmission(path); });
-
-				DrawTextureSlot("AO", "🌑", texComp.AOMap, texComp.AOPath,
-					[](TextureComponent& tc, const std::string& path) { tc.LoadAO(path); },
-					&texComp.AOMultiplier);
-				
-				ImGui::Unindent(UIStyle::INDENT_SIZE);
-			}
-			else {
-				ImGui::Spacing();
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-				ImGui::TextWrapped("💡 Add 'Textures Mapper' component to use texture maps");
-				ImGui::PopStyleColor();
-			}
-		});
-
-		// Light Component
-		DrawComponent<LightComponent>("💡 Light", entity, [](auto& component) {
-			SectionHeader("🔦", "Type");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			const char* lightTypes[] = { "Directional", "Point", "Spot" };
-			int currentType = (int)component.GetType();
-
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Light Type");
-			ImGui::NextColumn();
-			ImGui::SetNextItemWidth(-1);
-			if (ImGui::Combo("##Type", &currentType, lightTypes, IM_ARRAYSIZE(lightTypes))) {
-				component.SetType((LightType)currentType);
-			}
-			ImGui::Columns(1);
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-
-			SectionHeader("🎨", "Basic Properties");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-
-			glm::vec3 color = component.GetColor();
-			if (PropertyColor("Color", color)) {
-				component.SetColor(color);
-			}
-
-			float intensity = component.GetIntensity();
-			if (PropertyDrag("Intensity", &intensity, 0.1f, 0.0f, 100.0f)) {
-				component.SetIntensity(intensity);
-			}
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-
-			if (component.GetType() == LightType::Point || component.GetType() == LightType::Spot) {
-				SectionHeader("📏", "Attenuation");
-				ImGui::Indent(UIStyle::INDENT_SIZE);
-
-				float range = component.GetRange();
-				if (PropertyDrag("Range", &range, 0.1f, 0.0f, 100.0f)) {
-					component.SetRange(range);
+					ImGui::Unindent(UIStyle::INDENT_SIZE);
 				}
-
-				glm::vec3 attenuation = component.GetAttenuation();
-				ImGui::Columns(2, nullptr, false);
-				ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-				PropertyLabel("Attenuation", "Constant, Linear, Quadratic");
-				ImGui::NextColumn();
-				ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-				ImGui::SetNextItemWidth(-1);
-				if (ImGui::DragFloat3("##Attenuation", glm::value_ptr(attenuation), 0.001f, 0.0f, 10.0f)) {
-					component.SetAttenuation(attenuation);
-				}
-				ImGui::PopStyleColor();
-				ImGui::Columns(1);
-				
-				ImGui::Unindent(UIStyle::INDENT_SIZE);
 			}
-
-			if (component.GetType() == LightType::Spot) {
-				SectionHeader("🔦", "Spot Properties");
-				ImGui::Indent(UIStyle::INDENT_SIZE);
-
-				float innerAngle = component.GetInnerConeAngle();
-				if (PropertySlider("Inner Cone", &innerAngle, 0.0f, 90.0f, "%.1f°")) {
-					component.SetInnerConeAngle(innerAngle);
-				}
-
-				float outerAngle = component.GetOuterConeAngle();
-				if (PropertySlider("Outer Cone", &outerAngle, 0.0f, 90.0f, "%.1f°")) {
-					component.SetOuterConeAngle(outerAngle);
-				}
-				
-				ImGui::Unindent(UIStyle::INDENT_SIZE);
-			}
-
-			SectionHeader("🌑", "Shadows");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-
-			bool castShadows = component.GetCastShadows();
-			if (PropertyCheckbox("Cast Shadows", &castShadows)) {
-				component.SetCastShadows(castShadows);
-			}
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
-
-		// Rigidbody 3D Component
-		DrawComponent<Rigidbody3DComponent>("🎲 Rigidbody 3D", entity, [](auto& component) {
-			SectionHeader("🔧", "Body Configuration");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			const char* bodyTypeStrings[] = { "Static", "Dynamic", "Kinematic" };
-			const char* currentBodyTypeString = bodyTypeStrings[(int)component.Type];
-			
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Type", "Defines how the body responds to physics");
-			ImGui::NextColumn();
-			ImGui::SetNextItemWidth(-1);
-			if (ImGui::BeginCombo("##BodyType", currentBodyTypeString)) {
-				for (int i = 0; i < 3; i++) {
-					bool isSelected = ((int)component.Type == i);
-					if (ImGui::Selectable(bodyTypeStrings[i], isSelected)) {
-						component.Type = (Rigidbody3DComponent::BodyType)i;
-					}
-					if (isSelected)
-						ImGui::SetItemDefaultFocus();
-				}
-				ImGui::EndCombo();
-			}
-			ImGui::Columns(1);
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-			
-			SectionHeader("⚗️", "Physics Properties");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			PropertyDrag("Mass", &component.Mass, 0.1f, 0.01f, 1000.0f, "%.2f", "Body mass in kg");
-			PropertyDrag("Linear Damping", &component.LinearDamping, 0.01f, 0.0f, 1.0f, "%.3f", "Air resistance for linear motion");
-			PropertyDrag("Angular Damping", &component.AngularDamping, 0.01f, 0.0f, 1.0f, "%.3f", "Air resistance for rotation");
-			PropertyDrag("Friction", &component.Friction, 0.01f, 0.0f, 1.0f, "%.2f", "Surface friction coefficient");
-			PropertyDrag("Restitution", &component.Restitution, 0.01f, 0.0f, 1.0f, "%.2f", "Bounciness (0 = no bounce, 1 = perfect)");
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-			
-			SectionHeader("🔒", "Constraints");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Linear Factor", "Lock linear movement axes");
-			ImGui::NextColumn();
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-			ImGui::SetNextItemWidth(-1);
-			ImGui::DragFloat3("##LinearFactor", glm::value_ptr(component.LinearFactor), 0.1f, 0.0f, 1.0f);
-			ImGui::PopStyleColor();
-			ImGui::Columns(1);
-			
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Angular Factor", "Lock rotation axes");
-			ImGui::NextColumn();
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-			ImGui::SetNextItemWidth(-1);
-			ImGui::DragFloat3("##AngularFactor", glm::value_ptr(component.AngularFactor), 0.1f, 0.0f, 1.0f);
-			ImGui::PopStyleColor();
-			ImGui::Columns(1);
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-			
-			SectionHeader("⚡", "Advanced");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			PropertyCheckbox("Is Trigger", &component.IsTrigger, "No collision response, only events");
-			PropertyCheckbox("Use CCD", &component.UseCCD, "Continuous Collision Detection for fast objects");
-			
-			if (component.UseCCD) {
-				PropertyDrag("CCD Motion Threshold", &component.CcdMotionThreshold, 0.01f, 0.0f, 1.0f);
-				PropertyDrag("CCD Swept Sphere Radius", &component.CcdSweptSphereRadius, 0.01f, 0.0f, 1.0f);
-			}
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
-
-		// Box Collider 3D Component
-		DrawComponent<BoxCollider3DComponent>("📦 Box Collider 3D", entity, [](auto& component) {
-			SectionHeader("📐", "Shape");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Half Extents", "Half size in each axis");
-			ImGui::NextColumn();
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-			ImGui::SetNextItemWidth(-1);
-			ImGui::DragFloat3("##HalfExtents", glm::value_ptr(component.HalfExtents), 0.01f, 0.01f, 100.0f);
-			ImGui::PopStyleColor();
-			ImGui::Columns(1);
-			
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Offset");
-			ImGui::NextColumn();
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-			ImGui::SetNextItemWidth(-1);
-			ImGui::DragFloat3("##Offset", glm::value_ptr(component.Offset), 0.01f);
-			ImGui::PopStyleColor();
-			ImGui::Columns(1);
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
-
-		// Sphere Collider 3D Component
-		DrawComponent<SphereCollider3DComponent>("🌐 Sphere Collider 3D", entity, [](auto& component) {
-			SectionHeader("📐", "Shape");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			PropertyDrag("Radius", &component.Radius, 0.01f, 0.01f, 100.0f);
-			
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Offset");
-			ImGui::NextColumn();
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-			ImGui::SetNextItemWidth(-1);
-			ImGui::DragFloat3("##Offset", glm::value_ptr(component.Offset), 0.01f);
-			ImGui::PopStyleColor();
-			ImGui::Columns(1);
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
-
-		// Capsule Collider 3D Component
-		DrawComponent<CapsuleCollider3DComponent>("💊 Capsule Collider 3D", entity, [](auto& component) {
-			SectionHeader("📐", "Shape");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			PropertyDrag("Radius", &component.Radius, 0.01f, 0.01f, 100.0f);
-			PropertyDrag("Height", &component.Height, 0.01f, 0.01f, 100.0f, "%.2f", "Total height including caps");
-			
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Offset");
-			ImGui::NextColumn();
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
-			ImGui::SetNextItemWidth(-1);
-			ImGui::DragFloat3("##Offset", glm::value_ptr(component.Offset), 0.01f);
-			ImGui::PopStyleColor();
-			ImGui::Columns(1);
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
-
-		// Mesh Collider 3D Component
-		DrawComponent<MeshCollider3DComponent>("🗿 Mesh Collider 3D", entity, [](auto& component) {
-			SectionHeader("🎲", "Mesh");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			
-			const char* collisionTypes[] = { "Convex", "Concave" };
-			int currentType = (int)component.Type;
-
-			ImGui::Columns(2, nullptr, false);
-			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			PropertyLabel("Type", "Convex = fast, dynamic. Concave = slow, static only");
-			ImGui::NextColumn();
-			ImGui::SetNextItemWidth(-1);
-			if (ImGui::Combo("##CollisionType", &currentType, collisionTypes, IM_ARRAYSIZE(collisionTypes))) {
-				component.Type = (MeshCollider3DComponent::CollisionType)currentType;
-			}
-			ImGui::Columns(1);
-			
-			PropertyCheckbox("Use Entity Mesh", &component.UseEntityMesh, "Automatically use the entity's MeshComponent");
-			
-			ImGui::Spacing();
-			
-			ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
-			ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
-			ImGui::BeginChild("##MeshColliderInfo", ImVec2(-1, 90.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-			
-			if (component.UseEntityMesh) {
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
-				ImGui::TextWrapped("✓ Using MeshComponent geometry");
-				ImGui::PopStyleColor();
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-				ImGui::TextWrapped("Collision shape will be generated from the entity's mesh at runtime.");
-				ImGui::PopStyleColor();
-			}
-			else if (!component.Vertices.empty()) {
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_ACCENT);
-				ImGui::Text("🗿 Custom Mesh Data");
-				ImGui::PopStyleColor();
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-				ImGui::Text("Vertices: %zu", component.Vertices.size());
-				ImGui::Text("Indices: %zu", component.Indices.size());
-				ImGui::Text("Triangles: %zu", component.Indices.size() / 3);
-				ImGui::PopStyleColor();
-			}
-			else {
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_WARNING);
-				ImGui::TextWrapped("⚠ No mesh data available");
-				ImGui::PopStyleColor();
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-				ImGui::TextWrapped("Enable 'Use Entity Mesh' or provide custom vertices.");
-				ImGui::PopStyleColor();
-			}
-			
-			ImGui::EndChild();
-			ImGui::PopStyleVar();
-			ImGui::PopStyleColor();
-			
-			ImGui::Spacing();
-			
-			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-			if (component.Type == MeshCollider3DComponent::CollisionType::Convex) {
-				ImGui::TextWrapped("💡 Tip: Convex colliders are fast and work with dynamic objects.");
-			}
-			else {
-				ImGui::TextWrapped("💡 Tip: Concave colliders are slower and can only be used with static objects.");
-			}
-			ImGui::PopStyleColor();
-			
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
 		});
 	}
-
 	template<typename T>
 	void PropertiesPanel::DisplayAddComponentEntry(const std::string& entryName) {
 		if (!m_SelectedEntity.HasComponent<T>()) {

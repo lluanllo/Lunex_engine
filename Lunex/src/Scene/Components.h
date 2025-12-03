@@ -4,9 +4,12 @@
 #include "Core/UUID.h"
 #include "Renderer/Texture.h"
 #include "Renderer/Model.h"
-#include "Renderer/Material.h"
 #include "Renderer/Light.h"
 #include "Log/Log.h"
+
+// NEW MATERIAL SYSTEM
+#include "Renderer/MaterialInstance.h"
+#include "Renderer/MaterialRegistry.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -123,36 +126,189 @@ namespace Lunex {
 	};
 
 	struct MaterialComponent {
-		Ref<Material> MaterialInstance;
-
-		MaterialComponent()
-			: MaterialInstance(CreateRef<Material>()) {
+		// ========== NUEVA ARQUITECTURA ==========
+		// Instancia del material (compartida o con overrides locales)
+		Ref<MaterialInstance> Instance;
+		
+		// UUID del MaterialAsset (para serialización y lookup)
+		UUID MaterialAssetID;
+		
+		// Path del asset (para UI y hot-reload)
+		std::string MaterialAssetPath;
+		
+		// Preview thumbnail (generado por MaterialPreviewRenderer)
+		Ref<Texture2D> PreviewThumbnail;
+		
+		// ========== CONSTRUCTORES ==========
+		
+		MaterialComponent() {
+			// Usar material por defecto del registry
+			auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
+			Instance = MaterialInstance::Create(defaultMaterial);
+			MaterialAssetID = defaultMaterial->GetID();
+			MaterialAssetPath = ""; // Material por defecto no tiene path
 		}
-
-		MaterialComponent(const MaterialComponent& other)
-			: MaterialInstance(CreateRef<Material>(*other.MaterialInstance)) {
+		
+		MaterialComponent(const MaterialComponent& other) {
+			// Crear nueva instancia del mismo asset base
+			if (other.Instance) {
+				Instance = MaterialInstance::Create(other.Instance->GetBaseAsset());
+				MaterialAssetID = other.MaterialAssetID;
+				MaterialAssetPath = other.MaterialAssetPath;
+				PreviewThumbnail = other.PreviewThumbnail;
+			}
 		}
-
-		MaterialComponent(const glm::vec4& color)
-			: MaterialInstance(CreateRef<Material>(color)) {
+		
+		MaterialComponent(Ref<MaterialAsset> asset) {
+			Instance = MaterialInstance::Create(asset);
+			MaterialAssetID = asset->GetID();
+			MaterialAssetPath = asset->GetPath().string();
 		}
-
-		// Material properties accessors
-		void SetColor(const glm::vec4& color) { MaterialInstance->SetColor(color); }
-		void SetMetallic(float metallic) { MaterialInstance->SetMetallic(metallic); }
-		void SetRoughness(float roughness) { MaterialInstance->SetRoughness(roughness); }
-		void SetSpecular(float specular) { MaterialInstance->SetSpecular(specular); }
-		void SetEmissionColor(const glm::vec3& color) { MaterialInstance->SetEmissionColor(color); }
-		void SetEmissionIntensity(float intensity) { MaterialInstance->SetEmissionIntensity(intensity); }
-
-		const glm::vec4& GetColor() const { return MaterialInstance->GetColor(); }
-		float GetMetallic() const { return MaterialInstance->GetMetallic(); }
-		float GetRoughness() const { return MaterialInstance->GetRoughness(); }
-		float GetSpecular() const { return MaterialInstance->GetSpecular(); }
-		const glm::vec3& GetEmissionColor() const { return MaterialInstance->GetEmissionColor(); }
-		float GetEmissionIntensity() const { return MaterialInstance->GetEmissionIntensity(); }
+		
+		MaterialComponent(const std::filesystem::path& assetPath) {
+			auto asset = MaterialRegistry::Get().LoadMaterial(assetPath);
+			if (asset) {
+				Instance = MaterialInstance::Create(asset);
+				MaterialAssetID = asset->GetID();
+				MaterialAssetPath = assetPath.string();
+			} else {
+				// Fallback a material por defecto
+				auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
+				Instance = MaterialInstance::Create(defaultMaterial);
+				MaterialAssetID = defaultMaterial->GetID();
+				MaterialAssetPath = "";
+			}
+		}
+		
+		// ========== API DE MATERIAL ==========
+		
+		// Cambiar el MaterialAsset base (perderá overrides locales)
+		void SetMaterialAsset(Ref<MaterialAsset> asset) {
+			if (!asset) return;
+			
+			Instance->SetBaseAsset(asset);
+			MaterialAssetID = asset->GetID();
+			MaterialAssetPath = asset->GetPath().string();
+		}
+		
+		void SetMaterialAsset(const std::filesystem::path& assetPath) {
+			auto asset = MaterialRegistry::Get().LoadMaterial(assetPath);
+			if (asset) {
+				SetMaterialAsset(asset);
+			}
+		}
+		
+		// Obtener información del material
+		std::string GetMaterialName() const {
+			return Instance ? Instance->GetName() : "None";
+		}
+		
+		UUID GetAssetID() const {
+			return MaterialAssetID;
+		}
+		
+		const std::string& GetAssetPath() const {
+			return MaterialAssetPath;
+		}
+		
+		Ref<MaterialAsset> GetBaseAsset() const {
+			return Instance ? Instance->GetBaseAsset() : nullptr;
+		}
+		
+		// Verificar si hay overrides locales
+		bool HasLocalOverrides() const {
+			return Instance ? Instance->HasLocalOverrides() : false;
+		}
+		
+		// Resetear overrides (volver al asset base)
+		void ResetOverrides() {
+			if (Instance) {
+				Instance->ResetOverrides();
+			}
+		}
+		
+		// ========== PROPERTIES ACCESSORS (con override support) ==========
+		// Nota: `asOverride = true` para modificar solo esta instancia
+		//       `asOverride = false` para modificar el asset base (afecta a todos)
+		
+		void SetAlbedo(const glm::vec4& color, bool asOverride = true) {
+			if (Instance) Instance->SetAlbedo(color, asOverride);
+		}
+		
+		glm::vec4 GetAlbedo() const {
+			return Instance ? Instance->GetAlbedo() : glm::vec4(1.0f);
+		}
+		
+		void SetMetallic(float metallic, bool asOverride = true) {
+			if (Instance) Instance->SetMetallic(metallic, asOverride);
+		}
+		
+		float GetMetallic() const {
+			return Instance ? Instance->GetMetallic() : 0.0f;
+		}
+		
+		void SetRoughness(float roughness, bool asOverride = true) {
+			if (Instance) Instance->SetRoughness(roughness, asOverride);
+		}
+		
+		float GetRoughness() const {
+			return Instance ? Instance->GetRoughness() : 0.5f;
+		}
+		
+		void SetSpecular(float specular, bool asOverride = true) {
+			if (Instance) Instance->SetSpecular(specular, asOverride);
+		}
+		
+		float GetSpecular() const {
+			return Instance ? Instance->GetSpecular() : 0.5f;
+		}
+		
+		void SetEmissionColor(const glm::vec3& color, bool asOverride = true) {
+			if (Instance) Instance->SetEmissionColor(color, asOverride);
+		}
+		
+		glm::vec3 GetEmissionColor() const {
+			return Instance ? Instance->GetEmissionColor() : glm::vec3(0.0f);
+		}
+		
+		void SetEmissionIntensity(float intensity, bool asOverride = true) {
+			if (Instance) Instance->SetEmissionIntensity(intensity, asOverride);
+		}
+		
+		float GetEmissionIntensity() const {
+			return Instance ? Instance->GetEmissionIntensity() : 0.0f;
+		}
+		
+		// ========== LEGACY API (para compatibilidad temporal) ==========
+		// Deprecated: usar SetAlbedo/GetAlbedo en su lugar
+		void SetColor(const glm::vec4& color) { SetAlbedo(color); }
+		const glm::vec4 GetColor() const { return GetAlbedo(); }
 	};
-
+	
+	// ========================================
+	// DEPRECATED: TextureComponent
+	// ========================================
+	// ?? Este componente está OBSOLETO a partir de la nueva arquitectura de materiales
+	// 
+	// ANTES (sistema antiguo):
+	//   MaterialComponent - propiedades PBR
+	//   TextureComponent  - texturas PBR
+	//
+	// AHORA (sistema nuevo):
+	//   MaterialComponent - contiene MaterialInstance que incluye TODO:
+	//     - Propiedades PBR (metallic, roughness, etc.)
+	//     - Texturas PBR (albedo, normal, metallic, etc.)
+	//     - Multipliers y configuración avanzada
+	//
+	// MIGRACIÓN:
+	//   1. Crear o cargar un MaterialAsset (.lumat)
+	//   2. Asignar texturas al MaterialAsset
+	//   3. Asignar el MaterialAsset al MaterialComponent
+	//   4. Eliminar TextureComponent de la entidad
+	//
+	// Este componente se mantendrá temporalmente para compatibilidad con escenas antiguas,
+	// pero será eliminado en una versión futura.
+	// ========================================
 	struct TextureComponent {
 		// PBR Texture Maps
 		Ref<Texture2D> AlbedoMap;

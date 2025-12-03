@@ -4,6 +4,7 @@
 #include "../Panels/SceneHierarchyPanel.h"
 #include "../Panels/PropertiesPanel.h"
 #include "../Panels/ContentBrowserPanel.h"
+#include "../Panels/MaterialEditorPanel.h"
 #include "../Panels/StatsPanel.h"
 #include "../Panels/SettingsPanel.h"
 #include "../Panels/ViewportPanel.h"
@@ -102,6 +103,7 @@ namespace Lunex {
 			SceneHierarchyPanel m_SceneHierarchyPanel;
 			PropertiesPanel m_PropertiesPanel;
 			ContentBrowserPanel m_ContentBrowserPanel;
+			MaterialEditorPanel m_MaterialEditorPanel;
 			StatsPanel m_StatsPanel;
 			SettingsPanel m_SettingsPanel;
 			ViewportPanel m_ViewportPanel;

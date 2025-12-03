@@ -326,12 +326,27 @@ namespace Lunex {
 			out << YAML::BeginMap; // MaterialComponent
 			
 			auto& materialComponent = entity.GetComponent<MaterialComponent>();
-			out << YAML::Key << "Color" << YAML::Value << materialComponent.GetColor();
-			out << YAML::Key << "Metallic" << YAML::Value << materialComponent.GetMetallic();
-			out << YAML::Key << "Roughness" << YAML::Value << materialComponent.GetRoughness();
-			out << YAML::Key << "Specular" << YAML::Value << materialComponent.GetSpecular();
-			out << YAML::Key << "EmissionColor" << YAML::Value << materialComponent.GetEmissionColor();
-			out << YAML::Key << "EmissionIntensity" << YAML::Value << materialComponent.GetEmissionIntensity();
+			
+			// ===== NEW ARCHITECTURE: Serialize MaterialAsset reference =====
+			// Store UUID and path for MaterialAsset lookup
+			out << YAML::Key << "MaterialAssetID" << YAML::Value << (uint64_t)materialComponent.GetAssetID();
+			out << YAML::Key << "MaterialAssetPath" << YAML::Value << materialComponent.GetAssetPath();
+			
+			// ===== Serialize local overrides (if any) =====
+			// Only save overrides if they exist - this keeps the file clean
+			if (materialComponent.HasLocalOverrides()) {
+				out << YAML::Key << "HasLocalOverrides" << YAML::Value << true;
+				
+				// Save current property values (which include overrides)
+				out << YAML::Key << "Color" << YAML::Value << materialComponent.GetAlbedo();
+				out << YAML::Key << "Metallic" << YAML::Value << materialComponent.GetMetallic();
+				out << YAML::Key << "Roughness" << YAML::Value << materialComponent.GetRoughness();
+				out << YAML::Key << "Specular" << YAML::Value << materialComponent.GetSpecular();
+				out << YAML::Key << "EmissionColor" << YAML::Value << materialComponent.GetEmissionColor();
+				out << YAML::Key << "EmissionIntensity" << YAML::Value << materialComponent.GetEmissionIntensity();
+			} else {
+				out << YAML::Key << "HasLocalOverrides" << YAML::Value << false;
+			}
 			
 			out << YAML::EndMap; // MaterialComponent
 		}
@@ -623,12 +638,64 @@ namespace Lunex {
 						mat = &deserializedEntity.AddComponent<MaterialComponent>();
 					}
 					
-					mat->SetColor(materialComponent["Color"].as<glm::vec4>());
-					mat->SetMetallic(materialComponent["Metallic"].as<float>());
-					mat->SetRoughness(materialComponent["Roughness"].as<float>());
-					mat->SetSpecular(materialComponent["Specular"].as<float>());
-					mat->SetEmissionColor(materialComponent["EmissionColor"].as<glm::vec3>());
-					mat->SetEmissionIntensity(materialComponent["EmissionIntensity"].as<float>());
+					// ===== NEW ARCHITECTURE: Load MaterialAsset by UUID/Path =====
+					if (materialComponent["MaterialAssetID"]) {
+						uint64_t assetID = materialComponent["MaterialAssetID"].as<uint64_t>();
+						UUID materialUUID(assetID);
+						
+						// Try to load material from registry by UUID
+						auto& registry = MaterialRegistry::Get();
+						Ref<MaterialAsset> materialAsset = registry.GetMaterial(materialUUID);
+						
+						// If not found by UUID, try loading by path
+						if (!materialAsset && materialComponent["MaterialAssetPath"]) {
+							std::string assetPath = materialComponent["MaterialAssetPath"].as<std::string>();
+							if (!assetPath.empty()) {
+								materialAsset = registry.LoadMaterial(assetPath);
+							}
+						}
+						
+						// If material asset was found, assign it
+						if (materialAsset) {
+							mat->SetMaterialAsset(materialAsset);
+						} else {
+							LNX_LOG_WARN("MaterialAsset with UUID {0} not found, using default material", assetID);
+							// Component will keep its default material from constructor
+						}
+					}
+					
+					// ===== Restore local overrides if present =====
+					if (materialComponent["HasLocalOverrides"] && materialComponent["HasLocalOverrides"].as<bool>()) {
+						// Apply overrides (asOverride = true to create local overrides)
+						if (materialComponent["Color"]) {
+							mat->SetAlbedo(materialComponent["Color"].as<glm::vec4>(), true);
+						}
+						if (materialComponent["Metallic"]) {
+							mat->SetMetallic(materialComponent["Metallic"].as<float>(), true);
+						}
+						if (materialComponent["Roughness"]) {
+							mat->SetRoughness(materialComponent["Roughness"].as<float>(), true);
+						}
+						if (materialComponent["Specular"]) {
+							mat->SetSpecular(materialComponent["Specular"].as<float>(), true);
+						}
+						if (materialComponent["EmissionColor"]) {
+							mat->SetEmissionColor(materialComponent["EmissionColor"].as<glm::vec3>(), true);
+						}
+						if (materialComponent["EmissionIntensity"]) {
+							mat->SetEmissionIntensity(materialComponent["EmissionIntensity"].as<float>(), true);
+						}
+					}
+					// ===== LEGACY COMPATIBILITY: Old format (no MaterialAssetID) =====
+					else if (!materialComponent["MaterialAssetID"] && materialComponent["Color"]) {
+						// Old scene format - apply values as overrides to default material
+						mat->SetAlbedo(materialComponent["Color"].as<glm::vec4>(), true);
+						mat->SetMetallic(materialComponent["Metallic"].as<float>(), true);
+						mat->SetRoughness(materialComponent["Roughness"].as<float>(), true);
+						mat->SetSpecular(materialComponent["Specular"].as<float>(), true);
+						mat->SetEmissionColor(materialComponent["EmissionColor"].as<glm::vec3>(), true);
+						mat->SetEmissionIntensity(materialComponent["EmissionIntensity"].as<float>(), true);
+					}
 				}
 
 				auto lightComponent = entity["LightComponent"];

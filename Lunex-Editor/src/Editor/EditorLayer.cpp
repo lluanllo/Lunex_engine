@@ -151,6 +151,22 @@ namespace Lunex {
 		
 		m_MenuBarPanel.SetOnOpenInputSettingsCallback([this]() { m_InputSettingsPanel.Open(); });
 
+		// ========================================
+		// MATERIAL EDITOR PANEL CALLBACKS
+		// ========================================
+		
+		// 1. Content Browser -> Material Editor (double-click .lumat files)
+		m_ContentBrowserPanel.SetOnMaterialOpenCallback([this](const std::filesystem::path& path) {
+			m_MaterialEditorPanel.OpenMaterial(path);
+		});
+		
+		// 2. Properties Panel -> Material Editor (Edit Material button)
+		m_PropertiesPanel.SetOnMaterialEditCallback([this](Ref<MaterialAsset> asset) {
+			m_MaterialEditorPanel.OpenMaterial(asset);
+		});
+		
+		LNX_LOG_INFO("✅ Material Editor Panel callbacks configured");
+
 		// Configure project creation dialog
 		m_ProjectCreationDialog.SetOnCreateCallback([this](const std::string& name, const std::filesystem::path& location) {
 			CreateProjectWithDialog(name, location);
@@ -612,6 +628,9 @@ namespace Lunex {
 
 		// Update stats panel with hovered entity
 		m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
+		
+		// Update Material Editor Panel
+		m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
 
 		OnOverlayRender();
 
@@ -669,6 +688,7 @@ namespace Lunex {
 		m_SceneHierarchyPanel.OnImGuiRender();
 		m_PropertiesPanel.OnImGuiRender();
 		m_ContentBrowserPanel.OnImGuiRender();
+		m_MaterialEditorPanel.OnImGuiRender();
 		m_StatsPanel.OnImGuiRender();
 		m_SettingsPanel.OnImGuiRender();
 		m_ConsolePanel.OnImGuiRender();
@@ -1179,5 +1199,4 @@ namespace Lunex {
 			m_MenuBarPanel.SetProjectName("No Project");
 		}
 	}
-
 }
