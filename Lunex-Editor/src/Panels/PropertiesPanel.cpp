@@ -123,6 +123,7 @@ namespace Lunex {
 
 	PropertiesPanel::PropertiesPanel(const Ref<Scene>& context) {
 		SetContext(context);
+		// MaterialPreviewRenderer will be initialized on first use (lazy initialization)
 	}
 
 	void PropertiesPanel::SetContext(const Ref<Scene>& context) {
@@ -132,6 +133,70 @@ namespace Lunex {
 
 	void PropertiesPanel::SetSelectedEntity(Entity entity) {
 		m_SelectedEntity = entity;
+	}
+
+	// =========================================================================
+	// THUMBNAIL SYSTEM
+	// ===========================================================================
+
+	uint32_t PropertiesPanel::GetOrGenerateThumbnail(const Ref<MaterialAsset>& asset) {
+		if (!asset) return 0;
+
+		UUID assetID = asset->GetID();
+
+		// Check if thumbnail already exists in cache
+		auto it = m_ThumbnailCache.find(assetID);
+		if (it != m_ThumbnailCache.end()) {
+			return it->second; // Return cached texture ID
+		}
+
+		// Generate new thumbnail
+		if (!m_PreviewRenderer) {
+			LNX_LOG_INFO("MaterialPreviewRenderer initializing (lazy)...");
+			try {
+				m_PreviewRenderer = CreateScope<MaterialPreviewRenderer>();
+				m_PreviewRenderer->SetResolution(512, 512);
+				m_PreviewRenderer->SetAutoRotate(false);
+			}
+			catch (const std::exception& e) {
+				LNX_LOG_ERROR("Failed to initialize MaterialPreviewRenderer: {0}", e.what());
+				return 0;
+			}
+		}
+
+		// Render preview to offscreen buffer
+		try {
+			m_PreviewRenderer->RenderPreview(asset);
+			uint32_t textureID = m_PreviewRenderer->GetPreviewTextureID();
+
+			if (textureID == 0) {
+				LNX_LOG_WARN("MaterialPreviewRenderer generated invalid texture ID for material: {0}", asset->GetName());
+				return 0;
+			}
+
+			// Cache the texture ID
+			m_ThumbnailCache[assetID] = textureID;
+			LNX_LOG_TRACE("Generated thumbnail for material: {0} (UUID: {1})", asset->GetName(), (uint64_t)assetID);
+
+			return textureID;
+		}
+		catch (const std::exception& e) {
+			LNX_LOG_ERROR("Failed to generate thumbnail for material {0}: {1}", asset->GetName(), e.what());
+			return 0;
+		}
+	}
+
+	void PropertiesPanel::InvalidateThumbnail(UUID assetID) {
+		auto it = m_ThumbnailCache.find(assetID);
+		if (it != m_ThumbnailCache.end()) {
+			m_ThumbnailCache.erase(it);
+			LNX_LOG_TRACE("Invalidated thumbnail for material UUID: {0}", (uint64_t)assetID);
+		}
+	}
+
+	void PropertiesPanel::ClearThumbnailCache() {
+		m_ThumbnailCache.clear();
+		LNX_LOG_TRACE("Cleared material thumbnail cache");
 	}
 
 	void PropertiesPanel::OnImGuiRender() {
@@ -437,7 +502,7 @@ namespace Lunex {
 				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
 				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
 				if (ImGui::Button("Remove", ImVec2(65, 0))) {
-					component.RemoveScript(i);
+				 component.RemoveScript(i);
 					ImGui::PopStyleColor(2);
 					ImGui::EndChild();
 					ImGui::PopStyleVar();
@@ -653,7 +718,7 @@ namespace Lunex {
 						ext == ".bmp" || ext == ".tga" || ext == ".hdr") {
 						Ref<Texture2D> texture = Texture2D::Create(data->FilePath);
 						if (texture->IsLoaded())
-							component.Texture = texture;
+						component.Texture = texture;
 						else
 							LNX_LOG_WARN("Could not load texture {0}", data->FilePath);
 					}
@@ -908,17 +973,33 @@ namespace Lunex {
 				// Header row
 				ImGui::BeginGroup();
 
-				// Preview thumbnail - generar usando MaterialPreviewRenderer
+				// ✅ Preview thumbnail - Generate using MaterialPreviewRenderer
 				if (asset) {
-					// TODO: Generar thumbnail una sola vez y cachear
-					// Por ahora mostramos un placeholder con color del material
-					auto albedo = asset->GetAlbedo();
-					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(albedo.r, albedo.g, albedo.b, albedo.a));
-					ImGui::Button("##preview", ImVec2(70, 70));
-					ImGui::PopStyleColor();
+					uint32_t thumbnailID = GetOrGenerateThumbnail(asset);
+					
+					if (thumbnailID != 0) {
+						// Render actual thumbnail texture
+						ImGui::Image(
+							(ImTextureID)(intptr_t)thumbnailID,
+							ImVec2(70, 70),
+							ImVec2(0, 1),  // Flip Y for OpenGL
+							ImVec2(1, 0)
+						);
+						
+						if (ImGui::IsItemHovered()) {
+							ImGui::SetTooltip("Material Preview\nClick 'Edit Material' to modify");
+						}
+					}
+					else {
+						// Fallback: color placeholder if thumbnail generation failed
+						auto albedo = asset->GetAlbedo();
+						ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(albedo.r, albedo.g, albedo.b, albedo.a));
+						ImGui::Button("##preview", ImVec2(70, 70));
+						ImGui::PopStyleColor();
 
-					if (ImGui::IsItemHovered()) {
-						ImGui::SetTooltip("Material Preview\n(Preview renderer will be integrated here)");
+						if (ImGui::IsItemHovered()) {
+							ImGui::SetTooltip("Material Preview\n(Thumbnail generation failed)");
+						}
 					}
 				}
 				else {
