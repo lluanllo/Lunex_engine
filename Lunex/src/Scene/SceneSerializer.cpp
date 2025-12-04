@@ -407,10 +407,30 @@ namespace Lunex {
 			
 			out << YAML::Key << "AutoCompile" << YAML::Value << scriptComponent.AutoCompile;
 			
-			// No serializar CompiledDLLPaths ni runtime data (ScriptLoadedStates, ScriptPluginInstances)
-			// Estos se regenerarán al cargar
-			
 			out << YAML::EndMap; // ScriptComponent
+		}
+
+		// ========================================
+		// RELATIONSHIP COMPONENT (Parent-Child Hierarchy)
+		// ========================================
+		if (entity.HasComponent<RelationshipComponent>()) {
+			auto& rel = entity.GetComponent<RelationshipComponent>();
+			
+			// Only serialize if has parent or children
+			if (rel.HasParent() || rel.HasChildren()) {
+				out << YAML::Key << "RelationshipComponent";
+				out << YAML::BeginMap;
+				
+				out << YAML::Key << "ParentID" << YAML::Value << (uint64_t)rel.ParentID;
+				
+				out << YAML::Key << "ChildrenIDs" << YAML::Value << YAML::BeginSeq;
+				for (UUID childID : rel.ChildrenIDs) {
+					out << (uint64_t)childID;
+				}
+				out << YAML::EndSeq;
+				
+				out << YAML::EndMap;
+			}
 		}
 		
 		out << YAML::EndMap; // Entity
@@ -877,9 +897,24 @@ namespace Lunex {
 					if (scriptComponent["AutoCompile"]) {
 						script.AutoCompile = scriptComponent["AutoCompile"].as<bool>();
 					}
+				}
+
+				// ========================================
+				// RELATIONSHIP COMPONENT (Parent-Child Hierarchy)
+				// ========================================
+				auto relationshipComponent = entity["RelationshipComponent"];
+				if (relationshipComponent) {
+					auto& rel = deserializedEntity.AddComponent<RelationshipComponent>();
 					
-					// Los datos de runtime se regenerarán al iniciar el play mode
-					// ScriptLoadedStates y ScriptPluginInstances ya están inicializados por AddScript()
+					if (relationshipComponent["ParentID"]) {
+						rel.ParentID = UUID(relationshipComponent["ParentID"].as<uint64_t>());
+					}
+					
+					if (relationshipComponent["ChildrenIDs"] && relationshipComponent["ChildrenIDs"].IsSequence()) {
+						for (auto childIDNode : relationshipComponent["ChildrenIDs"]) {
+							rel.ChildrenIDs.push_back(UUID(childIDNode.as<uint64_t>()));
+						}
+					}
 				}
 			}
 		}
