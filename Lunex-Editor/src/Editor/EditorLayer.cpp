@@ -190,6 +190,13 @@ namespace Lunex {
 		fbSpec.Height = 720;
 		m_Framebuffer = Framebuffer::Create(fbSpec);
 
+		// Camera Preview Framebuffer (smaller size for performance)
+		Lunex::FramebufferSpecification previewFbSpec;
+		previewFbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::Depth };
+		previewFbSpec.Width = 400;
+		previewFbSpec.Height = 225; // 16:9 aspect ratio
+		m_CameraPreviewFramebuffer = Framebuffer::Create(previewFbSpec);
+
 		// Create initial project
 		ProjectManager::New();
 
@@ -580,8 +587,6 @@ namespace Lunex {
 		// ========================================
 		// FLUSH MAIN-THREAD COMMANDS (Job System)
 		// ========================================
-		// Execute pending commands from worker threads
-		// NOTE: Scene version is 0 for now (no cancellation)
 		JobSystem::Get().FlushMainThreadCommands(0);
 		
 		// ✅ NEW: Update Input System
@@ -595,7 +600,7 @@ namespace Lunex {
 
 		// Resize
 		if (FramebufferSpecification spec = m_Framebuffer->GetSpecification();
-			m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f && // zero sized framebuffer is invalid
+			m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f &&
 			(spec.Width != m_ViewportSize.x || spec.Height != m_ViewportSize.y))
 		{
 			m_Framebuffer->Resize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
@@ -605,11 +610,14 @@ namespace Lunex {
 			m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 		}
 
-		// Render
+		// ========================================
+		// MAIN VIEWPORT RENDERING
+		// ========================================
 		Renderer2D::ResetStats();
-		Renderer3D::ResetStats();  // ✅ AÑADIDO: Reset stats del 3D también
+		Renderer3D::ResetStats();
 
 		m_Framebuffer->Bind();
+		RenderCommand::SetViewport(0, 0, (uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 		RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
 		RenderCommand::Clear();
 
@@ -638,7 +646,7 @@ namespace Lunex {
 		}
 		}
 
-		// ✅ ENTITY PICKING - Funciona para 2D Y 3D
+		// ✅ ENTITY PICKING
 		auto [mx, my] = ImGui::GetMousePos();
 		mx -= m_ViewportBounds[0].x;
 		my -= m_ViewportBounds[0].y;
@@ -652,15 +660,20 @@ namespace Lunex {
 			m_HoveredEntity = pixelData == -1 ? Entity() : Entity((entt::entity)pixelData, m_ActiveScene.get());
 		}
 
-		// Update stats panel with hovered entity
 		m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
-		
-		// Update Material Editor Panel
 		m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
 
 		OnOverlayRender();
 
 		m_Framebuffer->Unbind();
+
+		// ========================================
+		// CAMERA PREVIEW RENDERING (after main scene, separate pass)
+		// ========================================
+		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
+		if (selectedEntity && selectedEntity.HasComponent<CameraComponent>() && m_SceneState == SceneState::Edit) {
+			RenderCameraPreview(selectedEntity);
+		}
 	}
 
 	void EditorLayer::OnImGuiRender() {
@@ -729,7 +742,13 @@ namespace Lunex {
 		// Sincronizar la entidad seleccionada con PropertiesPanel
 		m_PropertiesPanel.SetSelectedEntity(selectedEntity);
 		
-		m_ViewportPanel.OnImGuiRender(m_Framebuffer, m_SceneHierarchyPanel, m_EditorCamera,
+		// Pass camera preview framebuffer only if a camera is selected
+		Ref<Framebuffer> cameraPreview = nullptr;
+		if (selectedEntity && selectedEntity.HasComponent<CameraComponent>() && m_SceneState == SceneState::Edit) {
+			cameraPreview = m_CameraPreviewFramebuffer;
+		}
+		
+		m_ViewportPanel.OnImGuiRender(m_Framebuffer, cameraPreview, m_SceneHierarchyPanel, m_EditorCamera,
 			selectedEntity, m_GizmoType, m_ToolbarPanel,
 			m_SceneState, (bool)m_ActiveScene);
 		
@@ -1224,6 +1243,108 @@ namespace Lunex {
 		}
 		else {
 			m_MenuBarPanel.SetProjectName("No Project");
+		}
+	}
+
+	void EditorLayer::RenderCameraPreview(Entity cameraEntity) {
+		if (!cameraEntity || !cameraEntity.HasComponent<CameraComponent>())
+			return;
+
+		auto& cameraComp = cameraEntity.GetComponent<CameraComponent>();
+		glm::mat4 cameraWorldTransform = m_ActiveScene->GetWorldTransform(cameraEntity);
+
+		uint32_t previewWidth = 320;
+		uint32_t previewHeight = 180;
+
+		auto previewSpec = m_CameraPreviewFramebuffer->GetSpecification();
+		if (previewSpec.Width != previewWidth || previewSpec.Height != previewHeight) {
+			m_CameraPreviewFramebuffer->Resize(previewWidth, previewHeight);
+		}
+
+		// ========================================
+		// SAVE CURRENT VIEWPORT STATE
+		// ========================================
+		int currentViewport[4];
+		RenderCommand::SaveViewport(currentViewport);
+
+		// ========================================
+		// RENDER CAMERA PREVIEW (Isolated)
+		// ========================================
+		m_CameraPreviewFramebuffer->Bind();
+		RenderCommand::SetViewport(0, 0, previewWidth, previewHeight);
+		RenderCommand::SetClearColor({ 0.15f, 0.15f, 0.18f, 1.0f });
+		RenderCommand::Clear();
+
+		// ========================================
+		// RENDER 3D MESHES ONLY (NO GRID, NO BILLBOARDS)
+		// ========================================
+		Renderer3D::BeginScene(cameraComp.Camera, cameraWorldTransform);
+		Renderer3D::UpdateLights(m_ActiveScene.get());
+
+		{
+			auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, MeshComponent>();
+			for (auto entityID : view) {
+				Entity e = { entityID, m_ActiveScene.get() };
+				auto& mesh = e.GetComponent<MeshComponent>();
+				glm::mat4 worldTransform = m_ActiveScene->GetWorldTransform(e);
+
+				if (e.HasComponent<MaterialComponent>()) {
+					auto& material = e.GetComponent<MaterialComponent>();
+					Renderer3D::DrawMesh(worldTransform, mesh, material, -1);
+				}
+				else {
+					Renderer3D::DrawModel(worldTransform, mesh.MeshModel, mesh.Color, -1);
+				}
+			}
+		}
+
+		Renderer3D::EndScene();
+
+		// ========================================
+		// RENDER 2D SPRITES ONLY (NO GRID, NO BILLBOARDS)
+		// ========================================
+		Renderer2D::BeginScene(cameraComp.Camera, cameraWorldTransform);
+
+		{
+			auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, SpriteRendererComponent>();
+			for (auto entityID : view) {
+				Entity e = { entityID, m_ActiveScene.get() };
+				auto& sprite = e.GetComponent<SpriteRendererComponent>();
+				glm::mat4 worldTransform = m_ActiveScene->GetWorldTransform(e);
+				Renderer2D::DrawSprite(worldTransform, sprite, -1);
+			}
+		}
+
+		Renderer2D::EndScene();
+
+		// ========================================
+		// RESTORE MAIN VIEWPORT STATE
+		// ========================================
+		m_CameraPreviewFramebuffer->Unbind();
+		RenderCommand::RestoreViewport(currentViewport);
+
+		// ========================================
+		// CRITICAL: RESTORE MAIN CAMERA (Editor or Runtime)
+		// ========================================
+		if (m_SceneState == SceneState::Edit) {
+			Renderer2D::BeginScene(m_EditorCamera);
+			Renderer2D::EndScene();
+
+			Renderer3D::BeginScene(m_EditorCamera);
+			Renderer3D::EndScene();
+		}
+		else if (m_SceneState == SceneState::Play) {
+			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
+			if (camera) {
+				auto& cameraComponent = camera.GetComponent<CameraComponent>();
+				glm::mat4 cameraTransform = camera.GetComponent<TransformComponent>().GetTransform();
+
+				Renderer2D::BeginScene(cameraComponent.Camera, cameraTransform);
+				Renderer2D::EndScene();
+
+				Renderer3D::BeginScene(cameraComponent.Camera, cameraTransform);
+				Renderer3D::EndScene();
+			}
 		}
 	}
 }

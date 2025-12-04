@@ -69,6 +69,9 @@ namespace Lunex {
 			// UI Refresh
 			void UI_UpdateWindowTitle();
 			
+			// Camera Preview
+			void RenderCameraPreview(Entity cameraEntity);
+			
 		private:
 			OrthographicCameraController m_CameraController;
 			
@@ -76,6 +79,7 @@ namespace Lunex {
 			Ref<VertexArray> m_SquareVA;
 			Ref<Shader> m_FlatColorShader;
 			Ref<Framebuffer> m_Framebuffer;
+			Ref<Framebuffer> m_CameraPreviewFramebuffer;
 			
 			Ref<Scene> m_ActiveScene;
 			Ref<Scene> m_EditorScene;
