@@ -98,10 +98,6 @@ namespace Lunex {
 		s_Data.GridSettingsBuffer.FadeDistance = s_Settings.FadeDistance;
 		s_Data.GridSettingsUniformBuffer->SetData(&s_Data.GridSettingsBuffer, sizeof(GridRendererData::GridSettingsData));
 
-		// ? CRITICAL FIX: Disable writing to entity ID attachment (attachment 1)
-		// Only write to color attachment 0 (RGBA8)
-		RenderCommand::SetDrawBuffers({ 0 });
-
 		// Bind shader
 		s_Data.GridShader->Bind();
 
@@ -114,9 +110,6 @@ namespace Lunex {
 
 		// Restaurar depth mask
 		RenderCommand::SetDepthMask(true);
-		
-		// ? CRITICAL FIX: Re-enable writing to all attachments after grid rendering
-		RenderCommand::SetDrawBuffers({ 0, 1 });
 	}
 
 }

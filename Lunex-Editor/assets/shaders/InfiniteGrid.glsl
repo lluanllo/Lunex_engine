@@ -36,6 +36,7 @@ void main() {
 #ifdef FRAGMENT
 
 layout(location = 0) out vec4 FragColor;
+layout(location = 1) out int EntityID;
 
 layout(location = 0) in vec3 v_NearPoint;
 layout(location = 1) in vec3 v_FarPoint;
@@ -113,6 +114,9 @@ vec4 MajorGrid(vec3 fragPos3D, float scale, float lineThickness) {
 }
 
 void main() {
+	// ? CRITICAL: Write -1 to entity ID to prevent grid selection
+	EntityID = -1;
+	
 	// Intersección del rayo con el plano Y=0 (plano horizontal)
 	float t = -v_NearPoint.y / (v_FarPoint.y - v_NearPoint.y);
 

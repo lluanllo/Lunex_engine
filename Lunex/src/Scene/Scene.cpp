@@ -607,13 +607,13 @@ namespace Lunex {
 	}
 
 	void Scene::RenderScene(EditorCamera& camera) {
-		// ========================================
-		// RENDER INFINITE GRID (first, as background)
-		// ========================================
-		
-		
 		Renderer2D::BeginScene(camera);
-		//GridRenderer::DrawGrid(camera);
+		
+		// ========================================
+		// RENDER INFINITE GRID (after BeginScene, before entities)
+		// ========================================
+		GridRenderer::DrawGrid(camera);
+		
 		// Draw sprites
 		{
 			auto group = m_Registry.group<TransformComponent>(entt::get<SpriteRendererComponent>);
