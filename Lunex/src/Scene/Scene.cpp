@@ -1061,6 +1061,12 @@ namespace Lunex {
 
 		UUID childUUID = child.GetComponent<IDComponent>().ID;
 
+		// Guardar la posición mundial actual del hijo antes de cambiar el parent
+		glm::vec3 childWorldPos = glm::vec3(0.0f);
+		if (child.HasComponent<TransformComponent>()) {
+			childWorldPos = glm::vec3(GetWorldTransform(child)[3]);
+		}
+
 		RemoveParent(child);
 
 		if (!child.HasComponent<RelationshipComponent>()) {
@@ -1079,6 +1085,13 @@ namespace Lunex {
 			
 			auto& parentRel = parent.GetComponent<RelationshipComponent>();
 			parentRel.AddChild(childUUID);
+
+			// Ajustar la posición local del hijo para que mantenga su posición mundial
+			if (child.HasComponent<TransformComponent>() && parent.HasComponent<TransformComponent>()) {
+				glm::vec3 parentWorldPos = glm::vec3(GetWorldTransform(parent)[3]);
+				// Nueva posición local = posición mundial anterior - posición mundial del padre
+				child.GetComponent<TransformComponent>().Translation = childWorldPos - parentWorldPos;
+			}
 		}
 	}
 
@@ -1091,6 +1104,12 @@ namespace Lunex {
 		if (!childRel.HasParent())
 			return;
 
+		// Guardar posición mundial actual antes de desemparentar
+		glm::vec3 childWorldPos = glm::vec3(0.0f);
+		if (child.HasComponent<TransformComponent>()) {
+			childWorldPos = glm::vec3(GetWorldTransform(child)[3]);
+		}
+
 		UUID childUUID = child.GetComponent<IDComponent>().ID;
 		UUID parentUUID = childRel.ParentID;
 
@@ -1100,6 +1119,11 @@ namespace Lunex {
 		}
 
 		childRel.ClearParent();
+
+		// Restaurar posición mundial como posición local (ya no tiene padre)
+		if (child.HasComponent<TransformComponent>()) {
+			child.GetComponent<TransformComponent>().Translation = childWorldPos;
+		}
 	}
 
 	Entity Scene::GetParent(Entity entity) {
