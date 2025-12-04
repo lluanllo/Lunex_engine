@@ -36,6 +36,10 @@ namespace Lunex {
 			static void SetDepthMask(bool enabled) {
 				s_RendererAPI->SetDepthMask(enabled);
 			}
+			
+			static void SetDrawBuffers(const std::vector<uint32_t>& attachments) {
+				s_RendererAPI->SetDrawBuffers(attachments);
+			}
 		private:
 			static Scope<RendererAPI> s_RendererAPI;
 	};

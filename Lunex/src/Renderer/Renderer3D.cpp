@@ -5,6 +5,7 @@
 #include "Renderer/UniformBuffer.h"
 #include "Renderer/StorageBuffer.h"
 #include "Renderer/MaterialRegistry.h"
+#include "Renderer/GridRenderer.h"
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
 #include "Log/Log.h"
@@ -103,10 +104,15 @@ namespace Lunex {
 			reinterpret_cast<Renderer3DData::LightsStorageData*>(s_Data.LightsBufferData.data());
 		header->NumLights = 0;
 		s_Data.LightsStorageBuffer->SetData(s_Data.LightsBufferData.data(), lightsBufferSize);
+		
+		// Initialize GridRenderer
+		GridRenderer::Init();
 	}
 
 	void Renderer3D::Shutdown() {
 		LNX_PROFILE_FUNCTION();
+		
+		GridRenderer::Shutdown();
 	}
 
 	void Renderer3D::BeginScene(const OrthographicCamera& camera) {

@@ -68,4 +68,20 @@ namespace Lunex {
 	void OpenGLRendererAPI::SetDepthMask(bool enabled) {
 		glDepthMask(enabled ? GL_TRUE : GL_FALSE);
 	}
+	
+	void OpenGLRendererAPI::SetDrawBuffers(const std::vector<uint32_t>& attachments) {
+		if (attachments.empty()) {
+			glDrawBuffer(GL_NONE);
+			return;
+		}
+		
+		std::vector<GLenum> glAttachments;
+		glAttachments.reserve(attachments.size());
+		
+		for (uint32_t attachment : attachments) {
+			glAttachments.push_back(GL_COLOR_ATTACHMENT0 + attachment);
+		}
+		
+		glDrawBuffers(static_cast<GLsizei>(glAttachments.size()), glAttachments.data());
+	}
 }

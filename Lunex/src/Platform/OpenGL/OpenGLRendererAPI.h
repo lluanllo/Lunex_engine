@@ -16,5 +16,7 @@ namespace Lunex {
 			
 			virtual void SetLineWidth(float width) override;
 			virtual void SetDepthMask(bool enabled) override;
+			
+			virtual void SetDrawBuffers(const std::vector<uint32_t>& attachments) override;
 	};
 }

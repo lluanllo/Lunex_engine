@@ -5,6 +5,8 @@
 
 #include "glm/glm.hpp"
 
+#include <vector>
+
 namespace Lunex {
 	class   RendererAPI {
 		public:
@@ -25,6 +27,9 @@ namespace Lunex {
 			
 			virtual void SetLineWidth(float width) = 0;
 			virtual void SetDepthMask(bool enabled) = 0;
+			
+			// Framebuffer draw buffer control
+			virtual void SetDrawBuffers(const std::vector<uint32_t>& attachments) = 0;
 			
 			inline static API GetAPI() { return s_API; }
 			
