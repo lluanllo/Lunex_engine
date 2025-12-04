@@ -37,7 +37,7 @@ namespace Lunex {
 
 	Scene::~Scene() {
 		// El ScriptingEngine se destruirá automáticamente (unique_ptr)
-		
+
 		// Box2D v3.x: verificar si el mundo existe antes de destruir
 		if (B2_IS_NON_NULL(m_PhysicsWorld)) {
 			b2DestroyWorld(m_PhysicsWorld);
@@ -145,7 +145,7 @@ namespace Lunex {
 	void Scene::OnUpdateRuntime(Timestep ts) {
 		// Update scripts con deltaTime real
 		m_ScriptingEngine->OnScriptsUpdate(ts);
-		
+
 		// Native scripts
 		{
 			m_Registry.view<NativeScriptComponent>().each([=](auto entity, auto& nsc) {
@@ -168,7 +168,7 @@ namespace Lunex {
 			// ✅ PARALLEL: Retrieve transforms from Box2D across multiple threads
 			auto view = m_Registry.view<Rigidbody2DComponent>();
 			std::vector<entt::entity> entities(view.begin(), view.end());
-			
+
 			if (!entities.empty()) {
 				// Use ParallelFor to distribute entity updates across workers
 				auto counter = JobSystem::Get().ParallelFor(
@@ -177,12 +177,12 @@ namespace Lunex {
 					[this, &entities](uint32_t index) {
 						entt::entity e = entities[index];
 						Entity entity = { e, this };
-						
+
 						// Check if entity still has required components (thread-safe read)
 						if (!entity.HasComponent<TransformComponent>() || !entity.HasComponent<Rigidbody2DComponent>()) {
 							return;
 						}
-						
+
 						auto& transform = entity.GetComponent<TransformComponent>();
 						auto& rb2d = entity.GetComponent<Rigidbody2DComponent>();
 
@@ -197,7 +197,7 @@ namespace Lunex {
 					64,  // Grain size: process 64 entities per job
 					JobPriority::High
 				);
-				
+
 				// Wait for all physics updates to complete
 				JobSystem::Get().Wait(counter);
 			}
@@ -210,46 +210,46 @@ namespace Lunex {
 			// ✅ CRITICAL FIX: Use proper substeps and fixed timestep
 			float fixedTimeStep = 1.0f / 60.0f; // 60 FPS physics
 			int maxSubSteps = 30;
-			
+
 			PhysicsCore::Get().GetWorld()->StepSimulation(ts, maxSubSteps, fixedTimeStep);
 
 			// ✅ PARALLEL: Retrieve transforms from Bullet across multiple threads
 			auto view = m_Registry.view<TransformComponent, Rigidbody3DComponent>();
 			std::vector<entt::entity> entities(view.begin(), view.end());
-			
+
 			if (!entities.empty()) {
 				auto counter = JobSystem::Get().ParallelFor(
 					0,
 					static_cast<uint32_t>(entities.size()),
 					[this, &entities, &view](uint32_t index) {
 						entt::entity e = entities[index];
-						
+
 						// Check if entity still valid (might have been destroyed)
 						if (!m_Registry.valid(e)) {
 							return;
 						}
-						
+
 						// Get components (thread-safe if only reading/writing own entity)
 						auto& transform = view.get<TransformComponent>(e);
 						auto& rb3d = view.get<Rigidbody3DComponent>(e);
 
 						if (rb3d.RuntimeBody) {
 							RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
-							
+
 							// ✅ NEW: Clamp velocity for heavy objects to prevent tunneling
 							if (rb3d.Mass > 10.0f) {
 								glm::vec3 velocity = body->GetLinearVelocity();
 								float speed = glm::length(velocity);
-								
+
 								// Max speed based on mass (heavier = slower max speed)
 								float maxSpeed = 50.0f / std::sqrt(rb3d.Mass / 10.0f);
-								
+
 								if (speed > maxSpeed) {
 									glm::vec3 clampedVelocity = glm::normalize(velocity) * maxSpeed;
 									body->SetLinearVelocity(clampedVelocity);
 								}
 							}
-							
+
 							// Get position and rotation from physics
 							glm::vec3 position = body->GetPosition();
 							glm::quat rotation = body->GetRotation();
@@ -262,7 +262,7 @@ namespace Lunex {
 					32,  // Grain size: process 32 3D physics entities per job
 					JobPriority::High
 				);
-				
+
 				// Wait for all 3D physics updates to complete
 				JobSystem::Get().Wait(counter);
 			}
@@ -308,7 +308,7 @@ namespace Lunex {
 
 			// End current batch before rendering billboards to avoid texture slot conflicts
 			Renderer2D::EndScene();
-			
+
 			// Start fresh batch for billboards
 			Renderer2D::BeginScene(*mainCamera, cameraTransform);
 
@@ -321,17 +321,17 @@ namespace Lunex {
 				float Size;
 				int Priority; // 0 = luz (primero), 1 = cámara (después)
 			};
-			
+
 			std::vector<BillboardData> billboards;
 			// Extract camera position from transform matrix
 			glm::vec3 cameraPos = glm::vec3(cameraTransform[3]);
-			
+
 			// Collect light billboards
 			{
 				auto view = m_Registry.view<TransformComponent, LightComponent>();
 				for (auto entity : view) {
 					auto [transform, light] = view.get<TransformComponent, LightComponent>(entity);
-					
+
 					// Only add billboard if texture is valid and loaded
 					if (light.IconTexture && light.IconTexture->IsLoaded()) {
 						float distance = glm::length(cameraPos - transform.Translation);
@@ -339,13 +339,13 @@ namespace Lunex {
 					}
 				}
 			}
-			
+
 			// Collect camera billboards
 			{
 				auto view = m_Registry.view<TransformComponent, CameraComponent>();
 				for (auto entity : view) {
 					auto [transform, cameraComp] = view.get<TransformComponent, CameraComponent>(entity);
-					
+
 					// Only add billboard if texture is valid and loaded
 					if (cameraComp.IconTexture && cameraComp.IconTexture->IsLoaded()) {
 						float distance = glm::length(cameraPos - transform.Translation);
@@ -356,31 +356,31 @@ namespace Lunex {
 					}
 				}
 			}
-			
+
 			// Sort billboards: first by distance (farthest first), then by priority
-			std::sort(billboards.begin(), billboards.end(), 
+			std::sort(billboards.begin(), billboards.end(),
 				[](const BillboardData& a, const BillboardData& b) {
 					if (std::abs(a.Distance - b.Distance) < 0.01f) {
 						return a.Priority < b.Priority; // Luces antes que cámaras si están en la misma posición
 					}
 					return a.Distance > b.Distance; // Farthest first
 				});
-			
+
 			// ✅ FIX: For transparent billboards keep depth test enabled (so they are occluded by nearer opaque geometry)
 			// Disable ONLY depth writes to allow correct back-to-front blending
 			RenderCommand::SetDepthMask(false);
-			
+
 			// Render sorted billboards
 			for (const auto& billboard : billboards) {
 				Renderer2D::DrawBillboard(billboard.Position, billboard.Texture,
 					cameraPos, billboard.Size, billboard.EntityID);
 			}
-			
+
 			// Restore depth write
 			RenderCommand::SetDepthMask(true);
 
 			Renderer2D::EndScene();
-			
+
 			// Render 3D (SIN iconos de luz en runtime)
 			Renderer3D::BeginScene(*mainCamera, cameraTransform);
 
@@ -437,7 +437,7 @@ namespace Lunex {
 			// ✅ CRITICAL FIX: Use proper substeps and fixed timestep
 			float fixedTimeStep = 1.0f / 60.0f;
 			int maxSubSteps = 30;
-			
+
 			PhysicsCore::Get().GetWorld()->StepSimulation(ts, maxSubSteps, fixedTimeStep);
 
 			// Retrieve transforms from Bullet
@@ -448,20 +448,20 @@ namespace Lunex {
 
 				if (rb3d.RuntimeBody) {
 					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
-					
+
 					// ✅ NEW: Clamp velocity for heavy objects
 					if (rb3d.Mass > 10.0f) {
 						glm::vec3 velocity = body->GetLinearVelocity();
 						float speed = glm::length(velocity);
-						
+
 						float maxSpeed = 50.0f / std::sqrt(rb3d.Mass / 10.0f);
-						
+
 						if (speed > maxSpeed) {
 							glm::vec3 clampedVelocity = glm::normalize(velocity) * maxSpeed;
 							body->SetLinearVelocity(clampedVelocity);
 						}
 					}
-					
+
 					// Get position and rotation from physics
 					glm::vec3 position = body->GetPosition();
 					glm::quat rotation = body->GetRotation();
@@ -606,8 +606,9 @@ namespace Lunex {
 	}
 
 	void Scene::RenderScene(EditorCamera& camera) {
+		
 		Renderer2D::BeginScene(camera);
-
+		
 		// Draw sprites
 		{
 			auto group = m_Registry.group<TransformComponent>(entt::get<SpriteRendererComponent>);
@@ -628,7 +629,7 @@ namespace Lunex {
 
 		// End current batch before rendering billboards to avoid texture slot conflicts
 		Renderer2D::EndScene();
-		
+
 		// Start fresh batch for billboards and frustums
 		Renderer2D::BeginScene(camera);
 
@@ -641,16 +642,16 @@ namespace Lunex {
 			float Size;
 			int Priority; // 0 = luz (primero), 1 = cámara (después)
 		};
-		
+
 		std::vector<BillboardData> billboards;
 		glm::vec3 cameraPos = camera.GetPosition();
-		
+
 		// Collect light billboards
 		{
 			auto view = m_Registry.view<TransformComponent, LightComponent>();
 			for (auto entity : view) {
 				auto [transform, light] = view.get<TransformComponent, LightComponent>(entity);
-				
+
 				// Only add billboard if texture is valid and loaded
 				if (light.IconTexture && light.IconTexture->IsLoaded()) {
 					float distance = glm::length(cameraPos - transform.Translation);
@@ -658,13 +659,13 @@ namespace Lunex {
 				}
 			}
 		}
-		
+
 		// Collect camera billboards
 		{
 			auto view = m_Registry.view<TransformComponent, CameraComponent>();
 			for (auto entity : view) {
 				auto [transform, cameraComp] = view.get<TransformComponent, CameraComponent>(entity);
-				
+
 				// Only add billboard if texture is valid and loaded
 				if (cameraComp.IconTexture && cameraComp.IconTexture->IsLoaded()) {
 					float distance = glm::length(cameraPos - transform.Translation);
@@ -675,92 +676,92 @@ namespace Lunex {
 				}
 			}
 		}
-		
+
 		// Sort billboards: first by distance (farthest first), then by priority
-		std::sort(billboards.begin(), billboards.end(), 
+		std::sort(billboards.begin(), billboards.end(),
 			[](const BillboardData& a, const BillboardData& b) {
 				if (std::abs(a.Distance - b.Distance) < 0.01f) {
 					return a.Priority < b.Priority; // Luces antes que cámaras si están en la misma posición
 				}
 				return a.Distance > b.Distance; // Farthest first
 			});
-		
+
 		// ✅ FIX: Disable BOTH depth writing AND depth testing for billboards
 		RenderCommand::SetDepthMask(false);
-		
+
 		// Render sorted billboards
 		for (const auto& billboard : billboards) {
 			Renderer2D::DrawBillboard(billboard.Position, billboard.Texture,
 				cameraPos, billboard.Size, billboard.EntityID);
 		}
-		
+
 		// ✅ Re-enable depth testing and writing
 		RenderCommand::SetDepthMask(true);
-		
+
 		// ========================================
 		// DRAW CAMERA FRUSTUMS (Editor only)
 		// ========================================
-		
+
 		// ✅ Save current line width and set thin lines for frustums
 		float previousLineWidth = Renderer2D::GetLineWidth();
 		Renderer2D::SetLineWidth(0.15f);  // Ultra-thin lines that stay thin at any distance
-		
+
 		{
 			auto view = m_Registry.view<TransformComponent, CameraComponent>();
 			for (auto entity : view) {
 				auto [transform, cameraComp] = view.get<TransformComponent, CameraComponent>(entity);
-				
+
 				// Get camera projection and view matrices
 				glm::mat4 cameraProjection = cameraComp.Camera.GetProjection();
 				glm::mat4 cameraView = glm::inverse(transform.GetTransform());
-				
+
 				// ✅ Always use black color (ignored in DrawCameraFrustum since it uses hardcoded black)
 				glm::vec4 frustumColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-				
+
 				// Draw the frustum
 				Renderer2D::DrawCameraFrustum(cameraProjection, cameraView, frustumColor, (int)entity);
 			}
 		}
-		
+
 		// ========================================
 		// DRAW LIGHT GIZMOS (Editor only)
 		// ========================================
-		
+
 		{
 			auto view = m_Registry.view<TransformComponent, LightComponent>();
 			for (auto entity : view) {
 				auto [transform, light] = view.get<TransformComponent, LightComponent>(entity);
-				
+
 				// Use black color for gizmos
 				glm::vec4 gizmoColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-				
+
 				// Calculate light direction (forward vector from transform)
 				glm::mat4 transformMatrix = transform.GetTransform();
 				glm::vec3 forward = -glm::normalize(glm::vec3(transformMatrix[2]));  // -Z axis
-				
+
 				// Draw gizmo based on light type
 				switch (light.GetType()) {
-					case LightType::Point: {
-						// Draw sphere showing radius of influence
-						Renderer2D::DrawPointLightGizmo(transform.Translation, light.GetRange(), gizmoColor, (int)entity);
-						break;
-					}
-					
-					case LightType::Directional: {
-						// Draw arrow showing direction
-						Renderer2D::DrawDirectionalLightGizmo(transform.Translation, forward, gizmoColor, (int)entity);
-						break;
-					}
-					
-					case LightType::Spot: {
-						// Draw cone showing direction, range, and angle
-						Renderer2D::DrawSpotLightGizmo(transform.Translation, forward, light.GetRange(), light.GetOuterConeAngle(), gizmoColor, (int)entity);
-						break;
-					}
+				case LightType::Point: {
+					// Draw sphere showing radius of influence
+					Renderer2D::DrawPointLightGizmo(transform.Translation, light.GetRange(), gizmoColor, (int)entity);
+					break;
+				}
+
+				case LightType::Directional: {
+					// Draw arrow showing direction
+					Renderer2D::DrawDirectionalLightGizmo(transform.Translation, forward, gizmoColor, (int)entity);
+					break;
+				}
+
+				case LightType::Spot: {
+					// Draw cone showing direction, range, and angle
+					Renderer2D::DrawSpotLightGizmo(transform.Translation, forward, light.GetRange(), light.GetOuterConeAngle(), gizmoColor, (int)entity);
+					break;
+				}
 				}
 			}
 		}
-		
+
 		// ✅ Restore previous line width
 		Renderer2D::SetLineWidth(previousLineWidth);
 
@@ -880,16 +881,16 @@ namespace Lunex {
 		config.Gravity = glm::vec3(0.0f, -9.81f, 0.0f);
 		config.FixedTimestep = 1.0f / 60.0f;
 		PhysicsCore::Get().Initialize(config);
-		
+
 		// Create rigid bodies for all entities with Rigidbody3DComponent
 		auto view = m_Registry.view<TransformComponent, Rigidbody3DComponent>();
 		for (auto e : view) {
 			auto& transform = view.get<TransformComponent>(e);
 			auto& rb3d = view.get<Rigidbody3DComponent>(e);
-			
+
 			// Determine collider type and apply scale
 			ColliderComponent* collider = new ColliderComponent();
-			
+
 			if (m_Registry.all_of<BoxCollider3DComponent>(e)) {
 				auto& bc3d = m_Registry.get<BoxCollider3DComponent>(e);
 				// ✅ Apply scale to half extents
@@ -900,7 +901,7 @@ namespace Lunex {
 			else if (m_Registry.all_of<SphereCollider3DComponent>(e)) {
 				auto& sc3d = m_Registry.get<SphereCollider3DComponent>(e);
 				// ✅ Apply uniform scale (use max component for sphere)
-				float scaledRadius = sc3d.Radius * std::max({transform.Scale.x, transform.Scale.y, transform.Scale.z});
+				float scaledRadius = sc3d.Radius * std::max({ transform.Scale.x, transform.Scale.y, transform.Scale.z });
 				collider->CreateSphereShape(scaledRadius);
 				collider->SetOffset(sc3d.Offset);
 			}
@@ -916,9 +917,9 @@ namespace Lunex {
 				// Default box collider
 				collider->CreateBoxShape(glm::vec3(0.5f) * transform.Scale);
 			}
-			
+
 			rb3d.RuntimeCollider = collider;
-			
+
 			// Create rigid body
 			PhysicsMaterial material;
 			material.Mass = rb3d.Mass;
@@ -932,9 +933,9 @@ namespace Lunex {
 			material.UseCCD = rb3d.UseCCD;
 			material.CcdMotionThreshold = rb3d.CcdMotionThreshold;
 			material.CcdSweptSphereRadius = rb3d.CcdSweptSphereRadius;
-			
+
 			glm::quat rotation = glm::quat(transform.Rotation);
-			
+
 			RigidBodyComponent* body = new RigidBodyComponent();
 			body->Create(
 				PhysicsCore::Get().GetWorld(),
@@ -943,14 +944,14 @@ namespace Lunex {
 				transform.Translation,
 				rotation
 			);
-			
+
 			// Apply constraints
 			body->SetLinearFactor(rb3d.LinearFactor);
 			body->SetAngularFactor(rb3d.AngularFactor);
-			
+
 			// Store user pointer for collision callbacks
 			body->GetRigidBody()->setUserPointer(reinterpret_cast<void*>(static_cast<intptr_t>(e)));
-			
+
 			rb3d.RuntimeBody = body;
 		}
 	}
@@ -960,20 +961,20 @@ namespace Lunex {
 		auto view = m_Registry.view<Rigidbody3DComponent>();
 		for (auto e : view) {
 			auto& rb3d = view.get<Rigidbody3DComponent>(e);
-			
+
 			if (rb3d.RuntimeBody) {
 				RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
 				body->Destroy(PhysicsCore::Get().GetWorld());
 				delete body;
 				rb3d.RuntimeBody = nullptr;
 			}
-			
+
 			if (rb3d.RuntimeCollider) {
 				delete static_cast<ColliderComponent*>(rb3d.RuntimeCollider);
 				rb3d.RuntimeCollider = nullptr;
 			}
 		}
-		
+
 		// Shutdown physics
 		PhysicsCore::Get().Shutdown();
 	}

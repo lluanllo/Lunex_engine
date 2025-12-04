@@ -1180,6 +1180,300 @@ namespace Lunex {
 				}
 			}
 		});
+
+		// ========================================
+		// LIGHT COMPONENT
+		// ========================================
+		DrawComponent<LightComponent>("💡 Light", entity, [](auto& component) {
+			SectionHeader("⚙️", "Light Type");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			const char* lightTypeStrings[] = { "Directional", "Point", "Spot" };
+			int currentType = (int)component.GetType();
+
+			ImGui::Columns(2, nullptr, false);
+			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
+			PropertyLabel("Type", "Type of light source");
+			ImGui::NextColumn();
+			ImGui::SetNextItemWidth(-1);
+			if (ImGui::Combo("##LightType", &currentType, lightTypeStrings, IM_ARRAYSIZE(lightTypeStrings))) {
+				component.SetType((LightType)currentType);
+			}
+			ImGui::Columns(1);
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+
+			SectionHeader("🎨", "Appearance");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			glm::vec3 color = component.GetColor();
+			if (PropertyColor("Color", color, "Light color")) {
+				component.SetColor(color);
+			}
+
+			float intensity = component.GetIntensity();
+			if (PropertyDrag("Intensity", &intensity, 0.1f, 0.0f, 100.0f, "%.2f", "Light brightness")) {
+				component.SetIntensity(intensity);
+			}
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+
+			// Type-specific settings
+			if (component.GetType() == LightType::Point || component.GetType() == LightType::Spot) {
+				SectionHeader("📐", "Range & Attenuation");
+				ImGui::Indent(UIStyle::INDENT_SIZE);
+
+				float range = component.GetRange();
+				if (PropertyDrag("Range", &range, 0.1f, 0.1f, 1000.0f, "%.2f", "Maximum light distance")) {
+					component.SetRange(range);
+				}
+
+				glm::vec3 attenuation = component.GetAttenuation();
+				ImGui::Columns(2, nullptr, false);
+				ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
+				PropertyLabel("Attenuation", "Constant, Linear, Quadratic");
+				ImGui::NextColumn();
+				ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
+				ImGui::SetNextItemWidth(-1);
+				if (ImGui::DragFloat3("##Attenuation", glm::value_ptr(attenuation), 0.01f, 0.0f, 10.0f, "%.3f")) {
+					component.SetAttenuation(attenuation);
+				}
+				ImGui::PopStyleColor();
+				ImGui::Columns(1);
+
+				ImGui::Unindent(UIStyle::INDENT_SIZE);
+			}
+
+			if (component.GetType() == LightType::Spot) {
+				SectionHeader("🔦", "Spotlight Cone");
+				ImGui::Indent(UIStyle::INDENT_SIZE);
+
+				float innerAngle = component.GetInnerConeAngle();
+				if (PropertySlider("Inner Angle", &innerAngle, 0.0f, 90.0f, "%.1f°", "Inner cone angle (full brightness)")) {
+					component.SetInnerConeAngle(innerAngle);
+				}
+
+				float outerAngle = component.GetOuterConeAngle();
+				if (PropertySlider("Outer Angle", &outerAngle, 0.0f, 90.0f, "%.1f°", "Outer cone angle (fades to zero)")) {
+					component.SetOuterConeAngle(outerAngle);
+				}
+
+				ImGui::Unindent(UIStyle::INDENT_SIZE);
+			}
+
+			SectionHeader("🌑", "Shadows");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			bool castShadows = component.GetCastShadows();
+			if (PropertyCheckbox("Cast Shadows", &castShadows, "Enable shadow casting")) {
+				component.SetCastShadows(castShadows);
+			}
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+		});
+
+		// ========================================
+		// 3D PHYSICS COMPONENTS
+		// ========================================
+
+		// Rigidbody 3D Component
+		DrawComponent<Rigidbody3DComponent>("🎲 Rigidbody 3D", entity, [](auto& component) {
+			SectionHeader("🔧", "Body Configuration");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			const char* bodyTypeStrings[] = { "Static", "Dynamic", "Kinematic" };
+			const char* currentBodyTypeString = bodyTypeStrings[(int)component.Type];
+
+			ImGui::Columns(2, nullptr, false);
+			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
+			PropertyLabel("Type", "Defines how the body responds to physics");
+			ImGui::NextColumn();
+			ImGui::SetNextItemWidth(-1);
+			if (ImGui::BeginCombo("##BodyType", currentBodyTypeString)) {
+				for (int i = 0; i < 3; i++) {
+					bool isSelected = ((int)component.Type == i);
+					if (ImGui::Selectable(bodyTypeStrings[i], isSelected)) {
+						component.Type = (Rigidbody3DComponent::BodyType)i;
+					}
+					if (isSelected)
+						ImGui::SetItemDefaultFocus();
+				}
+				ImGui::EndCombo();
+			}
+			ImGui::Columns(1);
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+
+			SectionHeader("⚗️", "Physics Material");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			PropertyDrag("Mass", &component.Mass, 0.1f, 0.0f, 10000.0f, "%.2f", "Object mass (kg)");
+			PropertyDrag("Friction", &component.Friction, 0.01f, 0.0f, 1.0f, "%.2f", "Surface friction coefficient");
+			PropertyDrag("Restitution", &component.Restitution, 0.01f, 0.0f, 1.0f, "%.2f", "Bounciness (0 = no bounce, 1 = perfect bounce)");
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+
+			SectionHeader("🌊", "Damping");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			PropertyDrag("Linear Damping", &component.LinearDamping, 0.01f, 0.0f, 1.0f, "%.2f", "Velocity damping (air resistance)");
+			PropertyDrag("Angular Damping", &component.AngularDamping, 0.01f, 0.0f, 1.0f, "%.2f", "Rotation damping");
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+
+			SectionHeader("🔒", "Constraints");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			ImGui::Columns(2, nullptr, false);
+			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
+			PropertyLabel("Linear Factor", "Lock movement on axes (0 = locked, 1 = free)");
+			ImGui::NextColumn();
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
+			ImGui::SetNextItemWidth(-1);
+			ImGui::DragFloat3("##LinearFactor", glm::value_ptr(component.LinearFactor), 0.1f, 0.0f, 1.0f, "%.1f");
+			ImGui::PopStyleColor();
+			ImGui::Columns(1);
+
+			ImGui::Columns(2, nullptr, false);
+			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
+			PropertyLabel("Angular Factor", "Lock rotation on axes (0 = locked, 1 = free)");
+			ImGui::NextColumn();
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
+			ImGui::SetNextItemWidth(-1);
+			ImGui::DragFloat3("##AngularFactor", glm::value_ptr(component.AngularFactor), 0.1f, 0.0f, 1.0f, "%.1f");
+			ImGui::PopStyleColor();
+			ImGui::Columns(1);
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+
+			SectionHeader("⚡", "Advanced");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			PropertyCheckbox("Is Trigger", &component.IsTrigger, "Detect collisions without physical response");
+			PropertyCheckbox("Use CCD", &component.UseCCD, "Continuous Collision Detection (prevents tunneling)");
+
+			if (component.UseCCD) {
+				PropertyDrag("CCD Motion Threshold", &component.CcdMotionThreshold, 0.01f, 0.0f, 10.0f, "%.2f", "Minimum motion to trigger CCD");
+				PropertyDrag("CCD Swept Sphere Radius", &component.CcdSweptSphereRadius, 0.01f, 0.0f, 10.0f, "%.2f", "Radius for swept sphere test");
+			}
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+		});
+
+		// Box Collider 3D Component
+		DrawComponent<BoxCollider3DComponent>("📦 Box Collider 3D", entity, [](auto& component) {
+			SectionHeader("📐", "Shape");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			ImGui::Columns(2, nullptr, false);
+			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
+			PropertyLabel("Offset", "Center offset from entity position");
+			ImGui::NextColumn();
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
+			ImGui::SetNextItemWidth(-1);
+			ImGui::DragFloat3("##Offset", glm::value_ptr(component.Offset), 0.01f);
+			ImGui::PopStyleColor();
+			ImGui::Columns(1);
+
+			ImGui::Columns(2, nullptr, false);
+			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
+			PropertyLabel("Half Extents", "Half-size on each axis (full size = 2x this)");
+			ImGui::NextColumn();
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
+			ImGui::SetNextItemWidth(-1);
+			ImGui::DragFloat3("##HalfExtents", glm::value_ptr(component.HalfExtents), 0.01f, 0.01f, 100.0f);
+			ImGui::PopStyleColor();
+			ImGui::Columns(1);
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+		});
+
+		// Sphere Collider 3D Component
+		DrawComponent<SphereCollider3DComponent>("🌐 Sphere Collider 3D", entity, [](auto& component) {
+			SectionHeader("📐", "Shape");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			ImGui::Columns(2, nullptr, false);
+			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
+			PropertyLabel("Offset", "Center offset from entity position");
+			ImGui::NextColumn();
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
+			ImGui::SetNextItemWidth(-1);
+			ImGui::DragFloat3("##Offset", glm::value_ptr(component.Offset), 0.01f);
+			ImGui::PopStyleColor();
+			ImGui::Columns(1);
+
+			PropertyDrag("Radius", &component.Radius, 0.01f, 0.01f, 100.0f, "%.2f", "Sphere radius");
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+		});
+
+		// Capsule Collider 3D Component
+		DrawComponent<CapsuleCollider3DComponent>("💊 Capsule Collider 3D", entity, [](auto& component) {
+			SectionHeader("📐", "Shape");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			ImGui::Columns(2, nullptr, false);
+			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
+			PropertyLabel("Offset", "Center offset from entity position");
+			ImGui::NextColumn();
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
+			ImGui::SetNextItemWidth(-1);
+			ImGui::DragFloat3("##Offset", glm::value_ptr(component.Offset), 0.01f);
+			ImGui::PopStyleColor();
+			ImGui::Columns(1);
+
+			PropertyDrag("Radius", &component.Radius, 0.01f, 0.01f, 100.0f, "%.2f", "Capsule radius");
+			PropertyDrag("Height", &component.Height, 0.01f, 0.01f, 100.0f, "%.2f", "Capsule cylinder height (excluding caps)");
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+		});
+
+		// Mesh Collider 3D Component
+		DrawComponent<MeshCollider3DComponent>("🗿 Mesh Collider 3D", entity, [](auto& component) {
+			SectionHeader("⚠️", "Warning");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_WARNING);
+			ImGui::TextWrapped("Mesh colliders are expensive! Use for static geometry only.");
+			ImGui::PopStyleColor();
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+
+			SectionHeader("📐", "Shape");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			const char* collisionTypeStrings[] = { "Convex", "Concave" };
+			const char* currentCollisionTypeString = collisionTypeStrings[(int)component.Type];
+
+			ImGui::Columns(2, nullptr, false);
+			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
+			PropertyLabel("Type", "Convex = faster but simplified, Concave = exact but slower");
+			ImGui::NextColumn();
+			ImGui::SetNextItemWidth(-1);
+			if (ImGui::BeginCombo("##CollisionType", currentCollisionTypeString)) {
+				for (int i = 0; i < 2; i++) {
+					bool isSelected = ((int)component.Type == i);
+					if (ImGui::Selectable(collisionTypeStrings[i], isSelected)) {
+						component.Type = (MeshCollider3DComponent::CollisionType)i;
+					}
+					if (isSelected)
+						ImGui::SetItemDefaultFocus();
+				}
+				ImGui::EndCombo();
+			}
+			ImGui::Columns(1);
+
+			if (component.Type == MeshCollider3DComponent::CollisionType::Concave) {
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+				ImGui::TextWrapped("Concave meshes can only be used with static rigidbodies.");
+				ImGui::PopStyleColor();
+			}
+
+			PropertyCheckbox("Use Entity Mesh", &component.UseEntityMesh, "Automatically use mesh from MeshComponent");
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+		});
 	}
 	template<typename T>
 	void PropertiesPanel::DisplayAddComponentEntry(const std::string& entryName) {
