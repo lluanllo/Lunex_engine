@@ -1,79 +1,14 @@
 #include "stpch.h"
 #include "GridRenderer.h"
 
-#include "Renderer/RenderCommand.h"
-#include "Renderer/Buffer.h"
-#include "Renderer/UniformBuffer.h"
+#include "Renderer/Renderer2D.h"
 
 namespace Lunex {
 
-	struct GridRendererData {
-		struct CameraData {
-			glm::mat4 ViewProjection;
-			glm::vec3 CameraPosition;
-			float _padding;
-		};
-		
-		struct GridSettingsData {
-			glm::vec3 XAxisColor;
-			float GridScale;
-			glm::vec3 ZAxisColor;
-			float MinorLineThickness;
-			glm::vec3 GridColor;
-			float MajorLineThickness;
-			float FadeDistance;
-			float _padding1, _padding2, _padding3;
-		};
-		
-		Ref<Shader> GridShader;
-		Ref<VertexArray> GridVAO;
-		Ref<VertexBuffer> GridVBO;
-		Ref<IndexBuffer> GridIBO;
-		
-		Ref<UniformBuffer> CameraUniformBuffer;
-		Ref<UniformBuffer> GridSettingsUniformBuffer;
-		
-		CameraData CameraBuffer;
-		GridSettingsData GridSettingsBuffer;
-	};
-
-	static GridRendererData s_Data;
 	GridRenderer::GridSettings GridRenderer::s_Settings;
 
 	void GridRenderer::Init() {
 		LNX_PROFILE_FUNCTION();
-
-		// Crear un quad fullscreen simple
-		// El grid se calcula completamente en el fragment shader
-		float quadVertices[] = {
-			-1.0f, -1.0f, 0.0f,
-			 1.0f, -1.0f, 0.0f,
-			 1.0f,  1.0f, 0.0f,
-			-1.0f,  1.0f, 0.0f
-		};
-
-		uint32_t quadIndices[] = {
-			0, 1, 2,
-			2, 3, 0
-		};
-
-		s_Data.GridVAO = VertexArray::Create();
-
-		s_Data.GridVBO = VertexBuffer::Create(quadVertices, sizeof(quadVertices));
-		s_Data.GridVBO->SetLayout({
-			{ ShaderDataType::Float3, "a_Position" }
-		});
-		s_Data.GridVAO->AddVertexBuffer(s_Data.GridVBO);
-
-		s_Data.GridIBO = IndexBuffer::Create(quadIndices, 6);
-		s_Data.GridVAO->SetIndexBuffer(s_Data.GridIBO);
-
-		// Crear uniform buffers
-		s_Data.CameraUniformBuffer = UniformBuffer::Create(sizeof(GridRendererData::CameraData), 0);
-		s_Data.GridSettingsUniformBuffer = UniformBuffer::Create(sizeof(GridRendererData::GridSettingsData), 1);
-		
-		// Cargar el shader del grid
-		s_Data.GridShader = Shader::Create("assets/shaders/InfiniteGrid.glsl");
 	}
 
 	void GridRenderer::Shutdown() {
@@ -83,33 +18,49 @@ namespace Lunex {
 	void GridRenderer::DrawGrid(const EditorCamera& camera) {
 		LNX_PROFILE_FUNCTION();
 
-		// Preparar camera uniform buffer
-		s_Data.CameraBuffer.ViewProjection = camera.GetViewProjection();
-		s_Data.CameraBuffer.CameraPosition = camera.GetPosition();
-		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(GridRendererData::CameraData));
+		// Grid parameters
+		const float gridExtent = s_Settings.FadeDistance;  // How far the grid extends from center
+		const float cellSize = s_Settings.GridScale;       // Size of each cell (1.0 = 1 unit)
+		const int numCells = static_cast<int>(gridExtent / cellSize);
 		
-		// Preparar grid settings uniform buffer
-		s_Data.GridSettingsBuffer.XAxisColor = s_Settings.XAxisColor;
-		s_Data.GridSettingsBuffer.ZAxisColor = s_Settings.ZAxisColor;
-		s_Data.GridSettingsBuffer.GridColor = s_Settings.GridColor;
-		s_Data.GridSettingsBuffer.GridScale = s_Settings.GridScale;
-		s_Data.GridSettingsBuffer.MinorLineThickness = s_Settings.MinorLineThickness;
-		s_Data.GridSettingsBuffer.MajorLineThickness = s_Settings.MajorLineThickness;
-		s_Data.GridSettingsBuffer.FadeDistance = s_Settings.FadeDistance;
-		s_Data.GridSettingsUniformBuffer->SetData(&s_Data.GridSettingsBuffer, sizeof(GridRendererData::GridSettingsData));
-
-		// Bind shader
-		s_Data.GridShader->Bind();
-
-		// Deshabilitar escritura en depth buffer para que el grid esté siempre atrás
-		RenderCommand::SetDepthMask(false);
-
-		// Renderizar el quad
-		s_Data.GridVAO->Bind();
-		RenderCommand::DrawIndexed(s_Data.GridVAO);
-
-		// Restaurar depth mask
-		RenderCommand::SetDepthMask(true);
+		// Grid colors - subtle and thin
+		glm::vec4 lineColor = glm::vec4(s_Settings.GridColor, 0.25f);
+		glm::vec4 majorColor = glm::vec4(s_Settings.GridColor * 0.6f, 0.4f);
+		
+		// Set thin line width
+		float previousLineWidth = Renderer2D::GetLineWidth();
+		Renderer2D::SetLineWidth(s_Settings.MinorLineThickness);
+		
+		// Draw grid lines on XZ plane (Y = 0)
+		// Lines parallel to Z axis
+		for (int i = -numCells; i <= numCells; i++) {
+			float x = i * cellSize;
+			
+			// Every 10 lines is a major line (but not the center)
+			bool isMajor = (i % 10 == 0) && (i != 0);
+			glm::vec4 color = isMajor ? majorColor : lineColor;
+			
+			glm::vec3 start = { x, 0.0f, -gridExtent };
+			glm::vec3 end = { x, 0.0f, gridExtent };
+			
+			Renderer2D::DrawLine(start, end, color);
+		}
+		
+		// Lines parallel to X axis
+		for (int i = -numCells; i <= numCells; i++) {
+			float z = i * cellSize;
+			
+			bool isMajor = (i % 10 == 0) && (i != 0);
+			glm::vec4 color = isMajor ? majorColor : lineColor;
+			
+			glm::vec3 start = { -gridExtent, 0.0f, z };
+			glm::vec3 end = { gridExtent, 0.0f, z };
+			
+			Renderer2D::DrawLine(start, end, color);
+		}
+		
+		// Restore previous line width
+		Renderer2D::SetLineWidth(previousLineWidth);
 	}
 
 }

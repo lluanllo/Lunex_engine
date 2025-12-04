@@ -1,8 +1,6 @@
 #pragma once
 
 #include "Core/Core.h"
-#include "Renderer/Shader.h"
-#include "Renderer/VertexArray.h"
 #include "Renderer/EditorCamera.h"
 
 #include <glm/glm.hpp>
@@ -14,17 +12,15 @@ namespace Lunex {
 		static void Init();
 		static void Shutdown();
 
-		// Renderiza el infinite grid usando la cámara del editor
+		// Renderiza el grid usando la cámara del editor
 		static void DrawGrid(const EditorCamera& camera);
 
 		struct GridSettings {
-			glm::vec3 XAxisColor = { 0.8f, 0.3f, 0.3f };  // Rojo suave
-			glm::vec3 ZAxisColor = { 0.3f, 0.3f, 0.8f };  // Azul suave
-			glm::vec3 GridColor = { 0.5f, 0.5f, 0.5f };   // Gris para líneas normales
-			float GridScale = 1.0f;                        // 1 unidad = 1 metro
-			float MinorLineThickness = 0.01f;
-			float MajorLineThickness = 0.02f;
-			float FadeDistance = 100.0f;
+			glm::vec3 GridColor = { 0.35f, 0.35f, 0.35f };  // Gris sutil
+			float GridScale = 1.0f;                         // 1 unidad por celda
+			float MinorLineThickness = 0.8f;                // Líneas finas
+			float MajorLineThickness = 1.2f;                // Líneas mayores (cada 10)
+			float FadeDistance = 20.0f;                     // 20 unidades de extensión
 		};
 
 		static GridSettings& GetSettings() { return s_Settings; }
