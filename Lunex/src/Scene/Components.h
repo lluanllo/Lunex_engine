@@ -154,14 +154,38 @@ namespace Lunex {
 			MaterialAssetPath = ""; // Material por defecto no tiene path
 		}
 		
-		MaterialComponent(const MaterialComponent& other) {
-			// Crear nueva instancia del mismo asset base
+		MaterialComponent(const MaterialComponent& other)
+			: MaterialAssetID(other.MaterialAssetID)
+			, MaterialAssetPath(other.MaterialAssetPath)
+			, PreviewThumbnail(other.PreviewThumbnail)
+		{
+			// Clone the instance to preserve local overrides
 			if (other.Instance) {
-				Instance = MaterialInstance::Create(other.Instance->GetBaseAsset());
+				Instance = other.Instance->Clone();
+			}
+			else {
+				// Fallback to default material if source has no instance
+				auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
+				Instance = MaterialInstance::Create(defaultMaterial);
+			}
+		}
+		
+		MaterialComponent& operator=(const MaterialComponent& other) {
+			if (this != &other) {
 				MaterialAssetID = other.MaterialAssetID;
 				MaterialAssetPath = other.MaterialAssetPath;
 				PreviewThumbnail = other.PreviewThumbnail;
+				
+				if (other.Instance) {
+					Instance = other.Instance->Clone();
+				}
+				else {
+					// Fallback to default material if source has no instance
+					auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
+					Instance = MaterialInstance::Create(defaultMaterial);
+				}
 			}
+			return *this;
 		}
 		
 		MaterialComponent(Ref<MaterialAsset> asset) {

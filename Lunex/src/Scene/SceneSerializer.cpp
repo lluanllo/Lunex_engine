@@ -437,88 +437,26 @@ namespace Lunex {
 	}
 	
 	void SceneSerializer::Serialize(const std::string& filepath) {
-		// ===== PARALLELIZED ENTITY SERIALIZATION =====
-		LNX_LOG_INFO("🚀 Starting parallel scene serialization...");
+		YAML::Emitter out;
+		out << YAML::BeginMap;
+		out << YAML::Key << "Scene" << YAML::Value << "Untitled";
+		out << YAML::Key << "Entities" << YAML::Value << YAML::BeginSeq;
 		
-		// Collect all entities
-		std::vector<Entity> entities;
 		m_Scene->m_Registry.view<entt::entity>().each([&](auto entityID) {
 			Entity entity = { entityID, m_Scene.get() };
-			if (entity) {
-				entities.push_back(entity);
-			}
+			if (!entity)
+				return;
+
+			SerializeEntity(out, entity);
 		});
 		
-		if (entities.empty()) {
-			LNX_LOG_WARN("No entities to serialize");
-			YAML::Emitter out;
-			out << YAML::BeginMap;
-			out << YAML::Key << "Scene" << YAML::Value << "Untitled";
-			out << YAML::Key << "Entities" << YAML::Value << YAML::BeginSeq;
-			out << YAML::EndSeq;
-			out << YAML::EndMap;
-			
-			std::ofstream fout(filepath);
-			fout << out.c_str();
-			return;
-		}
-		
-		LNX_LOG_INFO("Serializing {0} entities in parallel...", entities.size());
-		
-		// Create per-thread buffers for entity YAML strings
-		auto entityBuffers = std::make_shared<std::vector<std::string>>(entities.size());
-		
-		// ✅ PARALLEL: Serialize each entity to its own string buffer
-		auto counter = JobSystem::Get().ParallelFor(
-			0,
-			static_cast<uint32_t>(entities.size()),
-			[&entities, entityBuffers](uint32_t index) {
-				Entity entity = entities[index];
-				
-				// Each thread gets its own YAML emitter (thread-safe)
-				YAML::Emitter out;
-				SerializeEntity(out, entity);
-				
-				// Store serialized YAML as string
-				(*entityBuffers)[index] = std::string(out.c_str());
-			},
-			64,  // Grain size: 64 entities per job
-			JobPriority::High
-		);
-		
-		// Wait for all entities to be serialized
-		JobSystem::Get().Wait(counter);
-		
-		LNX_LOG_INFO("✅ Parallel serialization complete, merging results...");
-		
-		// ===== MERGE: Combine all entity strings into final file =====
+		out << YAML::EndSeq;
+		out << YAML::EndMap;
+
 		std::ofstream fout(filepath);
+		fout << out.c_str();
 		
-		// Write header manually
-		fout << "Scene: Untitled\n";
-		fout << "Entities:\n";
-		
-		// Append each entity's YAML string (they already include proper indentation)
-		for (const auto& entityYaml : *entityBuffers) {
-			if (!entityYaml.empty()) {
-				// Add proper indentation for each line (2 spaces for YAML sequence items)
-				std::istringstream stream(entityYaml);
-				std::string line;
-				bool firstLine = true;
-				while (std::getline(stream, line)) {
-					if (firstLine) {
-						fout << "  " << line << "\n";  // First line gets list marker indentation
-						firstLine = false;
-					} else {
-						fout << "  " << line << "\n";  // Subsequent lines maintain indentation
-					}
-				}
-			}
-		}
-		
-		fout.close();
-		
-		LNX_LOG_INFO("✅ Scene serialized to: {0}", filepath);
+		LNX_LOG_INFO("Scene serialized to: {0}", filepath);
 	}
 	
 	void SceneSerializer::SerializeRuntime(const std::string& filepath) {

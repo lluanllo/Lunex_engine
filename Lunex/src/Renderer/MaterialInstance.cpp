@@ -27,6 +27,26 @@ namespace Lunex {
 		return CreateRef<MaterialInstance>(baseAsset);
 	}
 
+	Ref<MaterialInstance> MaterialInstance::Clone() const {
+		auto clone = CreateRef<MaterialInstance>(m_BaseAsset);
+		
+		// Copy all overrides
+		clone->m_HasLocalOverrides = m_HasLocalOverrides;
+		clone->m_AlbedoOverride = m_AlbedoOverride;
+		clone->m_MetallicOverride = m_MetallicOverride;
+		clone->m_RoughnessOverride = m_RoughnessOverride;
+		clone->m_SpecularOverride = m_SpecularOverride;
+		clone->m_EmissionColorOverride = m_EmissionColorOverride;
+		clone->m_EmissionIntensityOverride = m_EmissionIntensityOverride;
+		clone->m_NormalIntensityOverride = m_NormalIntensityOverride;
+		clone->m_MetallicMultiplierOverride = m_MetallicMultiplierOverride;
+		clone->m_RoughnessMultiplierOverride = m_RoughnessMultiplierOverride;
+		clone->m_SpecularMultiplierOverride = m_SpecularMultiplierOverride;
+		clone->m_AOMultiplierOverride = m_AOMultiplierOverride;
+		
+		return clone;
+	}
+
 	void MaterialInstance::SetBaseAsset(Ref<MaterialAsset> asset) {
 		LNX_CORE_ASSERT(asset, "MaterialInstance::SetBaseAsset - Asset cannot be null");
 		m_BaseAsset = asset;
