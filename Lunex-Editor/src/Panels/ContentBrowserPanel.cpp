@@ -51,11 +51,10 @@ namespace Lunex {
 		m_DirectoryHistory.push_back(m_CurrentDirectory);
 		m_HistoryIndex = 0;
 		
-		// Clear texture cache
+		// Clear all thumbnail caches
 		m_TextureCache.clear();
-		
-		// Clear material thumbnail cache
 		m_MaterialThumbnailCache.clear();
+		m_MeshThumbnailCache.clear();
 		
 		// Clear selection
 		ClearSelection();
@@ -279,7 +278,7 @@ namespace Lunex {
 											   ImGuiTreeNodeFlags_FramePadding;
 					
 					if (dirPath == m_CurrentDirectory) {
-						flags |= ImGuiTreeNodeFlags_Selected;
+					(flags |= ImGuiTreeNodeFlags_Selected);
 					}
 					
 					bool hasSubdirs = false;
@@ -344,7 +343,7 @@ namespace Lunex {
 							if (payload->IsDelivery()) {
 								ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
 								std::filesystem::path sourcePath(data->FilePath);
-							 std::filesystem::path destPath = dirPath / sourcePath.filename();
+								std::filesystem::path destPath = dirPath / sourcePath.filename();
 								
 								try {
 									if (sourcePath != destPath && !std::filesystem::exists(destPath)) {
@@ -556,7 +555,6 @@ namespace Lunex {
 		if (extension == ".lumat") return m_MaterialIcon ? m_MaterialIcon : m_FileIcon;
 		if (extension == ".lumesh") return m_MeshIcon ? m_MeshIcon : m_FileIcon;
 		if (extension == ".luprefab") return m_PrefabIcon ? m_PrefabIcon : m_FileIcon;
-		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg")
 		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg") 
 			return m_TextureIcon ? m_TextureIcon : m_FileIcon;
 		if (extension == ".glsl" || extension == ".shader") 
@@ -600,6 +598,117 @@ namespace Lunex {
 			}
 			
 			return m_MaterialIcon ? m_MaterialIcon : m_FileIcon;
+		}
+		
+		// ✅ Mesh Asset files (.lumesh) - render 3D preview
+		if (extension == ".lumesh") {
+			std::string pathStr = path.string();
+			
+			// Check cache first
+			auto it = m_MeshThumbnailCache.find(pathStr);
+			if (it != m_MeshThumbnailCache.end() && it->second) {
+				return it->second;
+			}
+			
+			// Load mesh and render preview
+			try {
+				auto meshAsset = MeshAsset::LoadFromFile(path);
+				if (meshAsset && meshAsset->GetModel() && m_MaterialPreviewRenderer) {
+					// Temporarily set the preview model to the mesh's model
+					Ref<Model> originalModel = m_MaterialPreviewRenderer->GetPreviewModel();
+					m_MaterialPreviewRenderer->SetPreviewModel(meshAsset->GetModel());
+					
+					// Create a default gray material for mesh preview
+					auto defaultMaterial = CreateRef<MaterialAsset>("MeshPreview");
+					defaultMaterial->SetAlbedo(glm::vec4(0.7f, 0.7f, 0.7f, 1.0f));
+					defaultMaterial->SetMetallic(0.0f);
+					defaultMaterial->SetRoughness(0.5f);
+					
+					// Render the mesh with default material
+					Ref<Texture2D> thumbnail = m_MaterialPreviewRenderer->RenderToTexture(defaultMaterial);
+					
+					// Restore original preview model (sphere)
+					m_MaterialPreviewRenderer->SetPreviewModel(originalModel);
+					
+					if (thumbnail) {
+						m_MeshThumbnailCache[pathStr] = thumbnail;
+						return thumbnail;
+					}
+				}
+			}
+			catch (...) {
+				// If rendering fails, fall back to icon
+			}
+			
+			return m_MeshIcon ? m_MeshIcon : m_FileIcon;
+		}
+		
+		// ✅ Prefab files (.luprefab) - render 3D preview of root mesh
+		if (extension == ".luprefab") {
+			std::string pathStr = path.string();
+			
+			// Check cache first
+			auto it = m_MeshThumbnailCache.find(pathStr);
+			if (it != m_MeshThumbnailCache.end() && it->second) {
+				return it->second;
+			}
+			
+			// Load prefab and try to render preview from its mesh
+			try {
+				auto prefab = Prefab::LoadFromFile(path);
+				if (prefab && m_MaterialPreviewRenderer) {
+					// Try to find mesh asset path in prefab data
+					for (const auto& entityData : prefab->GetEntityData()) {
+						for (const auto& compData : entityData.Components) {
+							if (compData.ComponentType == "MeshComponent") {
+								// Parse mesh asset path from component data
+								// Format: "type;color;meshAssetID;meshAssetPath;filePath"
+								std::istringstream iss(compData.SerializedData);
+								std::string token;
+								
+								std::getline(iss, token, ';'); // type
+								std::getline(iss, token, ';'); // color
+								std::getline(iss, token, ';'); // meshAssetID
+								std::getline(iss, token, ';'); // meshAssetPath
+								std::string meshAssetPath = token;
+								
+								if (!meshAssetPath.empty()) {
+									// Resolve path relative to assets
+									std::filesystem::path fullMeshPath = m_BaseDirectory / meshAssetPath;
+									if (std::filesystem::exists(fullMeshPath)) {
+										auto meshAsset = MeshAsset::LoadFromFile(fullMeshPath);
+										if (meshAsset && meshAsset->GetModel()) {
+											// Render mesh preview
+											Ref<Model> originalModel = m_MaterialPreviewRenderer->GetPreviewModel();
+											m_MaterialPreviewRenderer->SetPreviewModel(meshAsset->GetModel());
+											
+											auto defaultMaterial = CreateRef<MaterialAsset>("PrefabPreview");
+											defaultMaterial->SetAlbedo(glm::vec4(0.6f, 0.65f, 0.7f, 1.0f));
+											defaultMaterial->SetMetallic(0.0f);
+											defaultMaterial->SetRoughness(0.4f);
+											
+											Ref<Texture2D> thumbnail = m_MaterialPreviewRenderer->RenderToTexture(defaultMaterial);
+											
+											m_MaterialPreviewRenderer->SetPreviewModel(originalModel);
+											
+											if (thumbnail) {
+												m_MeshThumbnailCache[pathStr] = thumbnail;
+												return thumbnail;
+											}
+										}
+									}
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+			catch (...) {
+				// If rendering fails, fall back to icon
+			}
+			
+			return m_PrefabIcon ? m_PrefabIcon : m_FileIcon;
 		}
 		
 		// Si es una imagen, intentar cargar el preview
@@ -1054,7 +1163,7 @@ namespace Lunex {
 				// ✅ Ocultar extensión .lumat, .lumesh, .luprefab para elegancia
 				std::string displayName = filenameString;
 				std::filesystem::path filePath(filenameString);
-				std::string extension = filePath.extension().string();
+			 std::string extension = filePath.extension().string();
 				std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 				
 				if (extension == ".lumat" || extension == ".lumesh" || extension == ".luprefab") {
@@ -1194,10 +1303,10 @@ namespace Lunex {
 			}
 			
 			if (ImGui::MenuItem("Refresh")) {
-				// Clear texture cache to force reload
+				// Clear all thumbnail caches to force reload
 				m_TextureCache.clear();
-				// Clear material thumbnail cache for hot reloading
 				m_MaterialThumbnailCache.clear();
+				m_MeshThumbnailCache.clear();
 			}
 			
 			ImGui::EndPopup();
@@ -1444,16 +1553,16 @@ extern "C"
 			counter++;
 		} while (std::filesystem::exists(materialPath));
 		
-		// Generate UUID (simple random for now)
-		uint64_t id = (uint64_t)rand() * (uint64_t)rand();
+		// Generate random ID for material
+		uint64_t materialID = (uint64_t)rand() * (uint64_t)rand();
 		
 		// Create material file with default PBR values (proper YAML format)
 		std::stringstream ss;
 		ss << "Material:\n";
-		ss << "  ID: " << id << "\n";
+		ss << "  ID: " << materialID << "\n";
 		ss << "  Name: " << baseName << "\n";
 		ss << "Properties:\n";
-	 ss << "  Albedo: [1, 1, 1, 1]\n";
+		ss << "  Albedo: [1, 1, 1, 1]\n";
 		ss << "  Metallic: 0\n";
 		ss << "  Roughness: 0.5\n";
 		ss << "  Specular: 0.5\n";
@@ -1495,6 +1604,15 @@ extern "C"
 		// Create prefab with same name as mesh
 		std::string baseName = meshAssetPath.stem().string();
 		
+		// ✅ Save prefab to Assets/Prefabs folder instead of same folder as mesh
+		std::filesystem::path prefabsFolder = m_BaseDirectory / "Prefabs";
+		
+		// Create Prefabs folder if it doesn't exist
+		if (!std::filesystem::exists(prefabsFolder)) {
+			std::filesystem::create_directories(prefabsFolder);
+			LNX_LOG_INFO("Created Prefabs folder: {0}", prefabsFolder.string());
+		}
+		
 		// Find available name for prefab
 		int counter = 1;
 		std::filesystem::path prefabPath;
@@ -1502,7 +1620,7 @@ extern "C"
 		do {
 			prefabName = baseName + (counter > 1 ? std::to_string(counter) : "");
 			std::string prefabFilename = prefabName + ".luprefab";
-			prefabPath = meshAssetPath.parent_path() / prefabFilename;
+			prefabPath = prefabsFolder / prefabFilename;
 			counter++;
 		} while (std::filesystem::exists(prefabPath));
 		
@@ -1526,7 +1644,7 @@ extern "C"
 		ss << "  OriginalTransform:\n";
 		ss << "    Position: [0, 0, 0]\n";
 		ss << "    Rotation: [0, 0, 0]\n";
-		ss << "    Scale: [1, 1, 1]\n";
+	 ss << "    Scale: [1, 1, 1]\n";
 		ss << "Entities:\n";
 		ss << "  - EntityID: " << entityID << "\n";
 		ss << "    Tag: " << prefabName << "\n";
@@ -1550,7 +1668,7 @@ extern "C"
 		prefabFile.close();
 		
 		LNX_LOG_INFO("Created prefab '{0}' from mesh '{1}'", prefabName, baseName);
-		LNX_LOG_INFO("Prefab path: {0}", prefabPath.string());
+		LNX_LOG_INFO("Prefab saved to: {0}", prefabPath.string());
 	}
 	
 	void ContentBrowserPanel::DeleteItem(const std::filesystem::path& path) {
@@ -1697,6 +1815,7 @@ extern "C"
 	void ContentBrowserPanel::RefreshAllThumbnails() {
 		m_TextureCache.clear();
 		m_MaterialThumbnailCache.clear();
+		m_MeshThumbnailCache.clear();
 		LNX_LOG_INFO("Refreshed all Content Browser thumbnails");
 	}
 	
