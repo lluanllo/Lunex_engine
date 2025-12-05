@@ -26,6 +26,7 @@ namespace Lunex {
 		m_AudioIcon = Texture2D::Create("Resources/Icons/ContentBrowser/AudioIcon.png");
 		m_ScriptIcon = Texture2D::Create("Resources/Icons/ContentBrowser/ScriptIcon.png");
 		m_MaterialIcon = Texture2D::Create("Resources/Icons/ContentBrowser/MaterialIcon.png");
+		m_MeshIcon = Texture2D::Create("Resources/Icons/ContentBrowser/MeshIcon.png");
 		
 		// Inicializar historial
 		m_DirectoryHistory.push_back(m_CurrentDirectory);
@@ -541,6 +542,7 @@ namespace Lunex {
 		
 		if (extension == ".lunex") return m_SceneIcon ? m_SceneIcon : m_FileIcon;
 		if (extension == ".lumat") return m_MaterialIcon ? m_MaterialIcon : m_FileIcon;
+		if (extension == ".lumesh") return m_MeshIcon ? m_MeshIcon : m_FileIcon;
 		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg") 
 			return m_TextureIcon ? m_TextureIcon : m_FileIcon;
 		if (extension == ".glsl" || extension == ".shader") 
@@ -1661,8 +1663,7 @@ extern "C"
 			std::string searchQuery = m_SearchBuffer;
 			if (!searchQuery.empty()) {
 				std::string filenameLower = entry.path().filename().string();
-				std::transform(filenameLower.begin(), filenameLower.end(), 
-					filenameLower.begin(), ::tolower);
+				std::transform(filenameLower.begin(), filenameLower.end(), filenameLower.begin(), ::tolower);
 				std::transform(searchQuery.begin(), searchQuery.end(), 
 					searchQuery.begin(), ::tolower);
 				
@@ -1689,7 +1690,7 @@ extern "C"
 			m_ClipboardItems.push_back(std::filesystem::path(selectedPath));
 		}
 		
-		LNX_LOG_INFO("Copied {0} item(s) to clipboard", m_ClipboardItems.size());
+	 LNX_LOG_INFO("Copied {0} item(s) to clipboard", m_ClipboardItems.size());
 	}
 	
 	void ContentBrowserPanel::CutSelectedItems() {

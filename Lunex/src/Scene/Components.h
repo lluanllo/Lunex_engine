@@ -11,6 +11,9 @@
 #include "Renderer/MaterialInstance.h"
 #include "Renderer/MaterialRegistry.h"
 
+// NEW MESH ASSET SYSTEM
+#include "Asset/MeshAsset.h"
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -85,25 +88,57 @@ namespace Lunex {
 		CircleRendererComponent(const CircleRendererComponent&) = default;
 	};
 
+	// ========================================
+	// MESH COMPONENT - Updated with MeshAsset support
+	// ========================================
 	struct MeshComponent {
+		// Runtime model (loaded from primitive or MeshAsset)
 		Ref<Model> MeshModel;
+		
+		// Mesh source type
 		ModelType Type = ModelType::Cube;
+		
+		// ========== NEW: MeshAsset Support ==========
+		// Reference to MeshAsset for custom models
+		Ref<MeshAsset> Asset;
+		UUID MeshAssetID;
+		std::string MeshAssetPath;  // Path to .lumesh file
+		
+		// Legacy: Direct file path (deprecated, use MeshAsset instead)
 		std::string FilePath;
+		
+		// Tint color
 		glm::vec4 Color{ 1.0f, 1.0f, 1.0f, 1.0f };
 
 		MeshComponent() {
 			CreatePrimitive(ModelType::Cube);
 		}
 		
-		MeshComponent(const MeshComponent&) = default;
+		MeshComponent(const MeshComponent& other)
+			: MeshModel(other.MeshModel)
+			, Type(other.Type)
+			, Asset(other.Asset)
+			, MeshAssetID(other.MeshAssetID)
+			, MeshAssetPath(other.MeshAssetPath)
+			, FilePath(other.FilePath)
+			, Color(other.Color)
+		{
+		}
 		
 		MeshComponent(ModelType type)
 			: Type(type) {
 			CreatePrimitive(type);
 		}
 
+		// ========== PRIMITIVE CREATION ==========
+		
 		void CreatePrimitive(ModelType type) {
 			Type = type;
+			Asset = nullptr;
+			MeshAssetID = UUID(0);
+			MeshAssetPath.clear();
+			FilePath.clear();
+			
 			switch (type) {
 			case ModelType::Cube:
 				MeshModel = Model::CreateCube();
@@ -118,15 +153,127 @@ namespace Lunex {
 				MeshModel = Model::CreateCylinder();
 				break;
 			case ModelType::FromFile:
-				// Will be loaded from FilePath
+				// Will be loaded from Asset or FilePath
+				MeshModel = nullptr;
 				break;
 			}
 		}
 
+		// ========== NEW: MeshAsset API ==========
+		
+		// Set mesh from a MeshAsset
+		void SetMeshAsset(Ref<MeshAsset> meshAsset) {
+			if (!meshAsset) return;
+			
+			Asset = meshAsset;
+			MeshAssetID = meshAsset->GetID();
+			MeshAssetPath = meshAsset->GetPath().string();
+			Type = ModelType::FromFile;
+			FilePath.clear();  // Clear legacy path
+			
+			// Get the model from the asset
+			MeshModel = meshAsset->GetModel();
+		}
+		
+		// Set mesh from a .lumesh file path
+		void SetMeshAsset(const std::filesystem::path& assetPath) {
+			if (!std::filesystem::exists(assetPath)) {
+				LNX_LOG_WARN("MeshComponent::SetMeshAsset - File not found: {0}", assetPath.string());
+				return;
+			}
+			
+			// Check if it's a .lumesh file
+			if (assetPath.extension() == ".lumesh") {
+				Asset = MeshAsset::LoadFromFile(assetPath);
+				if (Asset) {
+					MeshAssetID = Asset->GetID();
+					MeshAssetPath = assetPath.string();
+					Type = ModelType::FromFile;
+					FilePath.clear();
+					MeshModel = Asset->GetModel();
+				}
+			}
+			else {
+				// Legacy: Direct model file - load directly
+				LoadFromFile(assetPath.string());
+			}
+		}
+		
+		// Get the current MeshAsset
+		Ref<MeshAsset> GetMeshAsset() const {
+			return Asset;
+		}
+		
+		// Clear the MeshAsset reference
+		void ClearMeshAsset() {
+			Asset = nullptr;
+			MeshAssetID = UUID(0);
+			MeshAssetPath.clear();
+			MeshModel = nullptr;
+			FilePath.clear();
+		}
+		
+		// Check if using a MeshAsset
+		bool HasMeshAsset() const {
+			return Asset != nullptr;
+		}
+		
+		// Get mesh metadata (from asset or calculated)
+		uint32_t GetVertexCount() const {
+			if (Asset) return Asset->GetVertexCount();
+			if (!MeshModel) return 0;
+			
+			uint32_t count = 0;
+			for (const auto& mesh : MeshModel->GetMeshes()) {
+				count += static_cast<uint32_t>(mesh->GetVertices().size());
+			}
+			return count;
+		}
+		
+		uint32_t GetTriangleCount() const {
+			if (Asset) return Asset->GetTriangleCount();
+			if (!MeshModel) return 0;
+			
+			uint32_t count = 0;
+			for (const auto& mesh : MeshModel->GetMeshes()) {
+				count += static_cast<uint32_t>(mesh->GetIndices().size()) / 3;
+			}
+			return count;
+		}
+		
+		uint32_t GetSubmeshCount() const {
+			if (Asset) return Asset->GetSubmeshCount();
+			return MeshModel ? static_cast<uint32_t>(MeshModel->GetMeshes().size()) : 0;
+		}
+
+		// ========== LEGACY: Direct file loading (deprecated) ==========
+		// Prefer using SetMeshAsset with a .lumesh file instead
+		
 		void LoadFromFile(const std::string& path) {
 			FilePath = path;
 			Type = ModelType::FromFile;
+			Asset = nullptr;
+			MeshAssetID = UUID(0);
+			MeshAssetPath.clear();
 			MeshModel = CreateRef<Model>(path);
+		}
+		
+		// ========== UTILITY ==========
+		
+		// Reload mesh from source
+		void Reload() {
+			if (Asset) {
+				Asset->ReloadModel();
+				MeshModel = Asset->GetModel();
+			}
+			else if (!FilePath.empty()) {
+				MeshModel = CreateRef<Model>(FilePath);
+			}
+		}
+		
+		// Check if mesh is valid and loaded
+		bool IsValid() const {
+			return MeshModel != nullptr && !MeshModel->GetMeshes().empty();
 		}
 	};
 

@@ -18,6 +18,10 @@
 // ✅ Input System
 #include "Input/InputManager.h"
 
+// ✅ MeshAsset System
+#include "Asset/MeshAsset.h"
+#include "Asset/MeshImporter.h"
+
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
 
@@ -146,6 +150,23 @@ namespace Lunex {
 		m_ViewportPanel.SetOnSceneDropCallback([this](const std::filesystem::path& path) {
 			OpenScene(path);
 			});
+		
+		// ========================================
+		// MESH IMPORT CALLBACKS
+		// ========================================
+		m_ViewportPanel.SetOnModelDropCallback([this](const std::filesystem::path& path) {
+			OnModelDropped(path);
+		});
+		
+		m_ViewportPanel.SetOnMeshAssetDropCallback([this](const std::filesystem::path& path) {
+			OnMeshAssetDropped(path);
+		});
+		
+		m_MeshImportModal.SetOnImportCallback([this](Ref<MeshAsset> asset) {
+			OnMeshImported(asset);
+		});
+		
+		LNX_LOG_INFO("✅ MeshAsset import system configured");
 
 		// Configure menu bar panel
 		m_MenuBarPanel.SetOnNewProjectCallback([this]() { NewProject(); });
@@ -731,8 +752,9 @@ namespace Lunex {
 		m_StatsPanel.OnImGuiRender();
 		m_SettingsPanel.OnImGuiRender();
 		m_ConsolePanel.OnImGuiRender();
-		m_InputSettingsPanel.OnImGuiRender(); // ✅ NEW: Input settings panel
-		m_JobSystemPanel.OnImGuiRender(); // ✅ NEW: Job system monitor panel
+		m_InputSettingsPanel.OnImGuiRender();
+		m_JobSystemPanel.OnImGuiRender();
+		m_MeshImportModal.OnImGuiRender();  // NEW: Mesh import modal
 
 		// Render dialogs (on top)
 		m_ProjectCreationDialog.OnImGuiRender();
@@ -1351,5 +1373,74 @@ namespace Lunex {
 				Renderer3D::EndScene();
 			}
 		}
+	}
+
+	// ============================================================================
+	// MESH IMPORT HANDLERS
+	// ============================================================================
+
+	void EditorLayer::OnModelDropped(const std::filesystem::path& modelPath) {
+		if (!MeshImporter::IsSupported(modelPath)) {
+			LNX_LOG_WARN("Unsupported model format: {0}", modelPath.extension().string());
+			m_ConsolePanel.AddLog("Unsupported model format: " + modelPath.extension().string(), LogLevel::Warning, "Import");
+			return;
+		}
+		
+		// Get the assets directory for output
+		auto project = ProjectManager::GetActiveProject();
+		std::filesystem::path outputDir = project ? project->GetAssetDirectory() : g_AssetPath;
+		
+		// Open the import modal
+		m_MeshImportModal.Open(modelPath, outputDir);
+		
+		LNX_LOG_INFO("Opening mesh import modal for: {0}", modelPath.filename().string());
+	}
+
+	void EditorLayer::OnMeshAssetDropped(const std::filesystem::path& meshAssetPath) {
+		if (m_SceneState != SceneState::Edit) {
+			LNX_LOG_WARN("Cannot create entities while playing");
+			return;
+		}
+		
+		// Load the MeshAsset
+		Ref<MeshAsset> meshAsset = MeshAsset::LoadFromFile(meshAssetPath);
+		if (!meshAsset) {
+			LNX_LOG_ERROR("Failed to load MeshAsset: {0}", meshAssetPath.string());
+			m_ConsolePanel.AddLog("Failed to load mesh: " + meshAssetPath.filename().string(), LogLevel::Error, "Asset");
+			return;
+		}
+		
+		// Create entity with the mesh
+		OnMeshImported(meshAsset);
+	}
+
+	void EditorLayer::OnMeshImported(Ref<MeshAsset> meshAsset) {
+		if (!meshAsset || m_SceneState != SceneState::Edit) {
+			return;
+		}
+		
+		// Create a new entity with the mesh
+		std::string entityName = meshAsset->GetName();
+		if (entityName.empty()) {
+			entityName = "Mesh";
+		}
+		
+		Entity newEntity = m_ActiveScene->CreateEntity(entityName);
+		
+		// Add MeshComponent and set the MeshAsset
+		auto& meshComp = newEntity.AddComponent<MeshComponent>();
+		meshComp.SetMeshAsset(meshAsset);
+		
+		// MaterialComponent is added automatically by MeshComponent
+		// but we ensure it exists
+		if (!newEntity.HasComponent<MaterialComponent>()) {
+			newEntity.AddComponent<MaterialComponent>();
+		}
+		
+		// Select the new entity
+		m_SceneHierarchyPanel.SetSelectedEntity(newEntity);
+		
+		LNX_LOG_INFO("Created entity '{0}' with MeshAsset", entityName);
+		m_ConsolePanel.AddLog("Created mesh entity: " + entityName, LogLevel::Info, "Scene");
 	}
 }

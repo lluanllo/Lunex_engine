@@ -31,6 +31,16 @@ namespace Lunex {
 		void SetOnSceneDropCallback(std::function<void(const std::filesystem::path&)> callback) {
 			m_OnSceneDropCallback = callback;
 		}
+		
+		// Callback for 3D model file drop (triggers import modal)
+		void SetOnModelDropCallback(std::function<void(const std::filesystem::path&)> callback) {
+			m_OnModelDropCallback = callback;
+		}
+		
+		// Callback for .lumesh file drop (creates entity directly)
+		void SetOnMeshAssetDropCallback(std::function<void(const std::filesystem::path&)> callback) {
+			m_OnMeshAssetDropCallback = callback;
+		}
 
 	private:
 		void RenderCameraPreview(Ref<Framebuffer> previewFramebuffer, Entity selectedEntity);
@@ -41,5 +51,7 @@ namespace Lunex {
 		glm::vec2 m_ViewportBounds[2];
 
 		std::function<void(const std::filesystem::path&)> m_OnSceneDropCallback;
+		std::function<void(const std::filesystem::path&)> m_OnModelDropCallback;
+		std::function<void(const std::filesystem::path&)> m_OnMeshAssetDropCallback;
 	};
 }

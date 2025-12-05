@@ -6,6 +6,7 @@
 #include "Core/Input.h"
 #include "Scene/Components.h"
 #include "Math/Math.h"
+#include "Asset/MeshImporter.h"
 #include <glm/gtc/type_ptr.hpp>
 
 namespace Lunex {
@@ -35,20 +36,33 @@ namespace Lunex {
 		uint64_t textureID = framebuffer->GetColorAttachmentRendererID();
 		ImGui::Image(reinterpret_cast<void*>(textureID), ImVec2{ m_ViewportSize.x, m_ViewportSize.y }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
 
-		// Drag & drop de escenas desde Content Browser
+		// Drag & drop desde Content Browser
 		if (ImGui::BeginDragDropTarget()) {
 			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
 				ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
-
-				// Validar que sea un archivo .lunex (escena)
 				std::string ext = data->Extension;
+				std::filesystem::path filePath = data->FilePath;
+
+				// Scene files (.lunex)
 				if (ext == ".lunex") {
 					if (m_OnSceneDropCallback) {
-						m_OnSceneDropCallback(data->FilePath);
+						m_OnSceneDropCallback(filePath);
+					}
+				}
+				// MeshAsset files (.lumesh) - create entity directly
+				else if (ext == ".lumesh") {
+					if (m_OnMeshAssetDropCallback) {
+						m_OnMeshAssetDropCallback(filePath);
+					}
+				}
+				// 3D model files - open import modal
+				else if (MeshImporter::IsSupported(filePath)) {
+					if (m_OnModelDropCallback) {
+						m_OnModelDropCallback(filePath);
 					}
 				}
 				else {
-					LNX_LOG_WARN("Dropped file is not a scene file (.lunex)");
+					LNX_LOG_WARN("Unsupported file type dropped on viewport: {0}", ext);
 				}
 			}
 			ImGui::EndDragDropTarget();

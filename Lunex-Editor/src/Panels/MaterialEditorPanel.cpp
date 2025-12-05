@@ -569,7 +569,8 @@ namespace Lunex {
 	void MaterialEditorPanel::SaveMaterial() {
 		if (!m_EditingMaterial) return;
 
-		if (m_EditingMaterial->SaveToFile()) {
+		// Use the base Asset::Save() method which calls SaveToFile with the current path
+		if (m_EditingMaterial->Save()) {
 			m_HasUnsavedChanges = false;
 			LNX_LOG_INFO("Material saved: {0}", m_EditingMaterial->GetName());
 		} else {

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Core.h"
-#include "Core/UUID.h"
+#include "Asset/Asset.h"
 #include "Texture.h"
 #include <glm/glm.hpp>
 #include <string>
@@ -17,47 +17,44 @@ namespace Lunex {
 
 	// MaterialAsset - Recurso serializable que representa un material físicamente basado (PBR)
 	// Puede ser compartido entre múltiples entidades y guardado como archivo .lumat
-	class MaterialAsset {
+	// Inherits from Asset base class for unified asset management
+	class MaterialAsset : public Asset {
 	public:
 		MaterialAsset();
 		MaterialAsset(const std::string& name);
 		~MaterialAsset() = default;
 
-		// ========== IDENTIFICACIÓN ==========
-		UUID GetID() const { return m_ID; }
-		const std::string& GetName() const { return m_Name; }
-		void SetName(const std::string& name) { m_Name = name; }
-
-		const std::filesystem::path& GetPath() const { return m_FilePath; }
-		void SetPath(const std::filesystem::path& path) { m_FilePath = path; }
+		// ========== ASSET TYPE (from Asset base) =========
+		AssetType GetType() const override { return AssetType::Material; }
+		static AssetType GetStaticType() { return AssetType::Material; }
 
 		// ========== PROPIEDADES PBR ==========
 		
 		// Albedo (Color base)
-		void SetAlbedo(const glm::vec4& color) { m_Albedo = color; m_IsDirty = true; }
+		void SetAlbedo(const glm::vec4& color) { m_Albedo = color; MarkDirty(); }
 		const glm::vec4& GetAlbedo() const { return m_Albedo; }
 
 		// Metallic (0 = dieléctrico, 1 = metal)
-		void SetMetallic(float metallic) { m_Metallic = glm::clamp(metallic, 0.0f, 1.0f); m_IsDirty = true; }
+		void SetMetallic(float metallic) { m_Metallic = glm::clamp(metallic, 0.0f, 1.0f); MarkDirty(); }
 		float GetMetallic() const { return m_Metallic; }
 
 		// Roughness (0 = liso, 1 = rugoso)
-		void SetRoughness(float roughness) { m_Roughness = glm::clamp(roughness, 0.0f, 1.0f); m_IsDirty = true; }
+		void SetRoughness(float roughness) { m_Roughness = glm::clamp(roughness, 0.0f, 1.0f); MarkDirty(); }
 		float GetRoughness() const { return m_Roughness; }
 
 		// Specular (reflectividad en ángulo normal)
-		void SetSpecular(float specular) { m_Specular = glm::clamp(specular, 0.0f, 1.0f); m_IsDirty = true; }
+		void SetSpecular(float specular) { m_Specular = glm::clamp(specular, 0.0f, 1.0f); MarkDirty(); }
 		float GetSpecular() const { return m_Specular; }
 
 		// Emission (emisión de luz)
-		void SetEmissionColor(const glm::vec3& color) { m_EmissionColor = color; m_IsDirty = true; }
+		void SetEmissionColor(const glm::vec3& color) { m_EmissionColor = color; MarkDirty(); }
 		const glm::vec3& GetEmissionColor() const { return m_EmissionColor; }
 
-		void SetEmissionIntensity(float intensity) { m_EmissionIntensity = glm::max(0.0f, intensity); m_IsDirty = true; }
+		void SetEmissionIntensity(float intensity) { m_EmissionIntensity = glm::max(0.0f, intensity); MarkDirty(); }
 		float GetEmissionIntensity() const { return m_EmissionIntensity; }
 
 		// Normal intensity (para controlar la intensidad del normal map)
-		void SetNormalIntensity(float intensity) { m_NormalIntensity = glm::clamp(intensity, 0.0f, 2.0f); m_IsDirty = true; }
+		void SetNormalIntensity(float intensity) { m_NormalIntensity = glm::clamp(intensity, 0.0f, 2.0f); MarkDirty(); }
 		float GetNormalIntensity() const { return m_NormalIntensity; }
 
 		// ========== TEXTURAS PBR ==========
@@ -79,7 +76,7 @@ namespace Lunex {
 		Ref<Texture2D> GetMetallicMap() const { return m_MetallicMap; }
 		const std::string& GetMetallicPath() const { return m_MetallicPath; }
 		bool HasMetallicMap() const { return m_MetallicMap != nullptr; }
-		void SetMetallicMultiplier(float multiplier) { m_MetallicMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); m_IsDirty = true; }
+		void SetMetallicMultiplier(float multiplier) { m_MetallicMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); MarkDirty(); }
 		float GetMetallicMultiplier() const { return m_MetallicMultiplier; }
 
 		// Roughness Map
@@ -87,7 +84,7 @@ namespace Lunex {
 		Ref<Texture2D> GetRoughnessMap() const { return m_RoughnessMap; }
 		const std::string& GetRoughnessPath() const { return m_RoughnessPath; }
 		bool HasRoughnessMap() const { return m_RoughnessMap != nullptr; }
-		void SetRoughnessMultiplier(float multiplier) { m_RoughnessMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); m_IsDirty = true; }
+		void SetRoughnessMultiplier(float multiplier) { m_RoughnessMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); MarkDirty(); }
 		float GetRoughnessMultiplier() const { return m_RoughnessMultiplier; }
 
 		// Specular Map
@@ -95,7 +92,7 @@ namespace Lunex {
 		Ref<Texture2D> GetSpecularMap() const { return m_SpecularMap; }
 		const std::string& GetSpecularPath() const { return m_SpecularPath; }
 		bool HasSpecularMap() const { return m_SpecularMap != nullptr; }
-		void SetSpecularMultiplier(float multiplier) { m_SpecularMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); m_IsDirty = true; }
+		void SetSpecularMultiplier(float multiplier) { m_SpecularMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); MarkDirty(); }
 		float GetSpecularMultiplier() const { return m_SpecularMultiplier; }
 
 		// Emission Map
@@ -109,23 +106,18 @@ namespace Lunex {
 		Ref<Texture2D> GetAOMap() const { return m_AOMap; }
 		const std::string& GetAOPath() const { return m_AOPath; }
 		bool HasAOMap() const { return m_AOMap != nullptr; }
-		void SetAOMultiplier(float multiplier) { m_AOMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); m_IsDirty = true; }
+		void SetAOMultiplier(float multiplier) { m_AOMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); MarkDirty(); }
 		float GetAOMultiplier() const { return m_AOMultiplier; }
 
 		// ========== SERIALIZACIÓN ==========
 		
-		// Guardar material a archivo .lumat
-		bool SaveToFile(const std::filesystem::path& path);
-		bool SaveToFile(); // Usa m_FilePath
+		// Guardar material a archivo .lumat (override from Asset)
+		bool SaveToFile(const std::filesystem::path& path) override;
 		
 		// Cargar material desde archivo .lumat
 		static Ref<MaterialAsset> LoadFromFile(const std::filesystem::path& path);
 
 		// ========== UTILIDADES ==========
-		
-		// Verificar si hay cambios sin guardar
-		bool IsDirty() const { return m_IsDirty; }
-		void SetDirty(bool dirty) { m_IsDirty = dirty; }
 
 		// Verificar si tiene alguna textura
 		bool HasAnyTexture() const {
@@ -168,11 +160,6 @@ namespace Lunex {
 		MaterialUniformData GetUniformData() const;
 
 	private:
-		// Identificación
-		UUID m_ID;
-		std::string m_Name = "New Material";
-		std::filesystem::path m_FilePath;
-
 		// Propiedades PBR
 		glm::vec4 m_Albedo = { 1.0f, 1.0f, 1.0f, 1.0f };
 		float m_Metallic = 0.0f;
@@ -207,9 +194,6 @@ namespace Lunex {
 		Ref<Texture2D> m_AOMap;
 		std::string m_AOPath;
 		float m_AOMultiplier = 1.0f;
-
-		// Estado
-		bool m_IsDirty = false; // Cambios sin guardar
 
 		// Helpers privados para serialización
 		void SerializeTexture(YAML::Emitter& out, const std::string& key, const std::string& path) const;

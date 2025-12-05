@@ -146,6 +146,7 @@ namespace Lunex {
 		Ref<Texture2D> m_AudioIcon;
 		Ref<Texture2D> m_ScriptIcon;
 		Ref<Texture2D> m_MaterialIcon;
+		Ref<Texture2D> m_MeshIcon;  // NEW: Icon for .lumesh files
 
 		// Texture preview cache
 		std::unordered_map<std::string, Ref<Texture2D>> m_TextureCache;

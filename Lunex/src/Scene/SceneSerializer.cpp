@@ -317,8 +317,16 @@ namespace Lunex {
 			
 			auto& meshComponent = entity.GetComponent<MeshComponent>();
 			out << YAML::Key << "Type" << YAML::Value << (int)meshComponent.Type;
-			out << YAML::Key << "FilePath" << YAML::Value << meshComponent.FilePath;
 			out << YAML::Key << "Color" << YAML::Value << meshComponent.Color;
+			
+			// ===== NEW: MeshAsset serialization =====
+			if (meshComponent.HasMeshAsset()) {
+				out << YAML::Key << "MeshAssetID" << YAML::Value << (uint64_t)meshComponent.MeshAssetID;
+				out << YAML::Key << "MeshAssetPath" << YAML::Value << meshComponent.MeshAssetPath;
+			}
+			
+			// Legacy: Direct file path (for backwards compatibility)
+			out << YAML::Key << "FilePath" << YAML::Value << meshComponent.FilePath;
 			
 			out << YAML::EndMap; // MeshComponent
 		}
@@ -639,7 +647,27 @@ namespace Lunex {
 					mc.Type = (ModelType)meshComponent["Type"].as<int>();
 					mc.Color = meshComponent["Color"].as<glm::vec4>();
 					
-					if (meshComponent["FilePath"]) {
+					// ===== NEW: MeshAsset deserialization =====
+					if (meshComponent["MeshAssetID"] && meshComponent["MeshAssetPath"]) {
+						uint64_t assetID = meshComponent["MeshAssetID"].as<uint64_t>();
+						std::string assetPath = meshComponent["MeshAssetPath"].as<std::string>();
+						
+						if (!assetPath.empty()) {
+							// Try to load MeshAsset from path
+							Ref<MeshAsset> meshAsset = MeshAsset::LoadFromFile(assetPath);
+							if (meshAsset) {
+								mc.SetMeshAsset(meshAsset);
+							}
+							else {
+								LNX_LOG_WARN("MeshAsset with UUID {0} at path '{1}' not found", assetID, assetPath);
+								// Store the path for potential later loading
+								mc.MeshAssetID = UUID(assetID);
+								mc.MeshAssetPath = assetPath;
+							}
+						}
+					}
+					// Legacy: Direct file path loading
+					else if (meshComponent["FilePath"]) {
 						mc.FilePath = meshComponent["FilePath"].as<std::string>();
 						if (!mc.FilePath.empty() && mc.Type == ModelType::FromFile) {
 							mc.LoadFromFile(mc.FilePath);
