@@ -4,6 +4,7 @@
 #include "Renderer/MaterialAsset.h"
 #include "Renderer/MaterialPreviewRenderer.h"
 #include <filesystem>
+#include <functional>
 
 namespace Lunex {
 
@@ -35,6 +36,12 @@ namespace Lunex {
 		// Obtener material en edición
 		Ref<MaterialAsset> GetEditingMaterial() const { return m_EditingMaterial; }
 
+		// ========== CALLBACKS ==========
+		
+		// Called when a material is saved (for hot reloading)
+		using MaterialSavedCallback = std::function<void(const std::filesystem::path&)>;
+		void SetOnMaterialSavedCallback(MaterialSavedCallback callback) { m_OnMaterialSaved = callback; }
+
 		// ========== RENDERING ==========
 
 		// Renderizar el panel (llamar en OnImGuiRender)
@@ -58,6 +65,9 @@ namespace Lunex {
 
 		// Preview renderer
 		Ref<MaterialPreviewRenderer> m_PreviewRenderer;
+
+		// Callbacks
+		MaterialSavedCallback m_OnMaterialSaved;
 
 		// UI State
 		bool m_IsOpen = false;

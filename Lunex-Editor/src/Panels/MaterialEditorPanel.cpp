@@ -249,6 +249,7 @@ namespace Lunex {
 	void MaterialEditorPanel::DrawPropertiesPanel() {
 		if (!m_EditingMaterial) return;
 
+		ImGui::PushID("PBRProperties");  // ✅ Add unique ID scope
 		ImGui::Text("PBR Properties");
 		ImGui::Separator();
 		ImGui::Spacing();
@@ -313,11 +314,14 @@ namespace Lunex {
 			m_EditingMaterial->SetNormalIntensity(normalIntensity);
 			MarkAsModified();
 		}
+		
+		ImGui::PopID();  // ✅ End PBRProperties scope
 	}
 
 	void MaterialEditorPanel::DrawTexturesPanel() {
 		if (!m_EditingMaterial) return;
 
+		ImGui::PushID("TexturesPanel");  // ✅ Add unique ID scope
 		ImGui::Spacing();
 		ImGui::Separator();
 		ImGui::Spacing();
@@ -327,6 +331,7 @@ namespace Lunex {
 
 		// Albedo
 		{
+			ImGui::PushID("AlbedoTexture");
 			Ref<Texture2D> tex = m_EditingMaterial->GetAlbedoMap();
 			std::string path = m_EditingMaterial->GetAlbedoPath();
 			DrawTextureSlot("Albedo", "🎨", tex, path,
@@ -337,10 +342,12 @@ namespace Lunex {
 						MarkAsModified();
 					}
 				});
+			ImGui::PopID();
 		}
 
 		// Normal
 		{
+			ImGui::PushID("NormalTexture");
 			Ref<Texture2D> tex = m_EditingMaterial->GetNormalMap();
 			std::string path = m_EditingMaterial->GetNormalPath();
 			DrawTextureSlot("Normal", "🧭", tex, path,
@@ -351,10 +358,12 @@ namespace Lunex {
 						MarkAsModified();
 					}
 				});
+			ImGui::PopID();
 		}
 
 		// Metallic with multiplier
 		{
+			ImGui::PushID("MetallicTexture");
 			Ref<Texture2D> tex = m_EditingMaterial->GetMetallicMap();
 			std::string path = m_EditingMaterial->GetMetallicPath();
 			DrawTextureSlot("Metallic", "⚙️", tex, path,
@@ -368,15 +377,17 @@ namespace Lunex {
 			
 			if (m_EditingMaterial->HasMetallicMap()) {
 				float mult = m_EditingMaterial->GetMetallicMultiplier();
-				if (DrawFloatProperty("  Multiplier", mult, 0.0f, 2.0f)) {
+				if (DrawFloatProperty("MetallicMult", mult, 0.0f, 2.0f)) {
 					m_EditingMaterial->SetMetallicMultiplier(mult);
 					MarkAsModified();
 				}
 			}
+			ImGui::PopID();
 		}
 
 		// Roughness with multiplier
 		{
+			ImGui::PushID("RoughnessTexture");
 			Ref<Texture2D> tex = m_EditingMaterial->GetRoughnessMap();
 			std::string path = m_EditingMaterial->GetRoughnessPath();
 			DrawTextureSlot("Roughness", "🔧", tex, path,
@@ -390,15 +401,17 @@ namespace Lunex {
 			
 			if (m_EditingMaterial->HasRoughnessMap()) {
 				float mult = m_EditingMaterial->GetRoughnessMultiplier();
-				if (DrawFloatProperty("  Multiplier", mult, 0.0f, 2.0f)) {
+				if (DrawFloatProperty("RoughnessMult", mult, 0.0f, 2.0f)) {
 					m_EditingMaterial->SetRoughnessMultiplier(mult);
 					MarkAsModified();
 				}
 			}
+			ImGui::PopID();
 		}
 
 		// Specular with multiplier
 		{
+			ImGui::PushID("SpecularTexture");
 			Ref<Texture2D> tex = m_EditingMaterial->GetSpecularMap();
 			std::string path = m_EditingMaterial->GetSpecularPath();
 			DrawTextureSlot("Specular", "💎", tex, path,
@@ -412,15 +425,17 @@ namespace Lunex {
 			
 			if (m_EditingMaterial->HasSpecularMap()) {
 				float mult = m_EditingMaterial->GetSpecularMultiplier();
-				if (DrawFloatProperty("  Multiplier", mult, 0.0f, 2.0f)) {
+				if (DrawFloatProperty("SpecularMult", mult, 0.0f, 2.0f)) {
 					m_EditingMaterial->SetSpecularMultiplier(mult);
 					MarkAsModified();
 				}
 			}
+			ImGui::PopID();
 		}
 
 		// Emission
 		{
+			ImGui::PushID("EmissionTexture");
 			Ref<Texture2D> tex = m_EditingMaterial->GetEmissionMap();
 			std::string path = m_EditingMaterial->GetEmissionPath();
 			DrawTextureSlot("Emission", "💡", tex, path,
@@ -431,10 +446,12 @@ namespace Lunex {
 						MarkAsModified();
 					}
 				});
+			ImGui::PopID();
 		}
 
 		// AO with multiplier
 		{
+			ImGui::PushID("AOTexture");
 			Ref<Texture2D> tex = m_EditingMaterial->GetAOMap();
 			std::string path = m_EditingMaterial->GetAOPath();
 			DrawTextureSlot("Ambient Occlusion", "🌑", tex, path,
@@ -448,12 +465,15 @@ namespace Lunex {
 			
 			if (m_EditingMaterial->HasAOMap()) {
 				float mult = m_EditingMaterial->GetAOMultiplier();
-				if (DrawFloatProperty("  Multiplier", mult, 0.0f, 2.0f)) {
+				if (DrawFloatProperty("AOMult", mult, 0.0f, 2.0f)) {
 					m_EditingMaterial->SetAOMultiplier(mult);
 					MarkAsModified();
 				}
 			}
+			ImGui::PopID();
 		}
+		
+		ImGui::PopID();  // ✅ End TexturesPanel scope
 	}
 
 	// ========== PROPERTY CONTROLS ==========
@@ -573,6 +593,11 @@ namespace Lunex {
 		if (m_EditingMaterial->Save()) {
 			m_HasUnsavedChanges = false;
 			LNX_LOG_INFO("Material saved: {0}", m_EditingMaterial->GetName());
+			
+			// Notify listeners for hot reloading (Content Browser, etc.)
+			if (m_OnMaterialSaved) {
+				m_OnMaterialSaved(m_EditingMaterial->GetPath());
+			}
 		} else {
 			LNX_LOG_ERROR("Failed to save material: {0}", m_EditingMaterial->GetName());
 		}

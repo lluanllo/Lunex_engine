@@ -203,6 +203,21 @@ namespace Lunex {
 			m_MaterialEditorPanel.OpenMaterial(asset);
 		});
 		
+		// 3. Material Editor -> Content Browser & Properties Panel (hot reload when saved)
+		m_MaterialEditorPanel.SetOnMaterialSavedCallback([this](const std::filesystem::path& path) {
+			// Invalidate Content Browser thumbnail
+			m_ContentBrowserPanel.InvalidateMaterialThumbnail(path);
+			
+			// Also invalidate PropertiesPanel thumbnail cache for the material
+			// (we need to get the material's UUID to invalidate it)
+			auto material = MaterialRegistry::Get().LoadMaterial(path);
+			if (material) {
+				m_PropertiesPanel.InvalidateMaterialThumbnail(material->GetID());
+			}
+			
+			LNX_LOG_INFO("Hot reload: Material thumbnails invalidated for {0}", path.filename().string());
+		});
+		
 		LNX_LOG_INFO("✅ Material Editor Panel callbacks configured");
 
 		// Configure project creation dialog

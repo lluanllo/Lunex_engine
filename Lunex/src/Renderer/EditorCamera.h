@@ -19,6 +19,8 @@ namespace Lunex {
 			float GetDistance() const { return m_Distance; }
 			void SetDistance(float distance) { m_Distance = distance; }
 			
+			void SetPosition(const glm::vec3& position) { m_Position = position; UpdateView(); }
+			
 			inline void SetViewportSize(float width, float height) { m_ViewportWidth = width; m_ViewportHeight = height; UpdateProjection(); }
 			
 			const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }

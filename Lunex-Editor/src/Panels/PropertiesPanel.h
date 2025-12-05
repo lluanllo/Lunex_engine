@@ -24,6 +24,10 @@ namespace Lunex {
 		void SetOnMaterialEditCallback(const std::function<void(Ref<MaterialAsset>)>& callback) {
 			m_OnMaterialEditCallback = callback;
 		}
+		
+		// Cache management for hot reloading
+		void InvalidateMaterialThumbnail(UUID assetID);
+		void ClearThumbnailCache();
 
 	private:
 		void DrawComponents(Entity entity);
@@ -32,9 +36,7 @@ namespace Lunex {
 		void DisplayAddComponentEntry(const std::string& entryName);
 		
 		// ===== THUMBNAIL SYSTEM =====
-		uint32_t GetOrGenerateThumbnail(const Ref<MaterialAsset>& asset);
-		void InvalidateThumbnail(UUID assetID);
-		void ClearThumbnailCache();
+		Ref<Texture2D> GetOrGenerateThumbnail(const Ref<MaterialAsset>& asset);
 
 	private:
 		Ref<Scene> m_Context;
@@ -44,8 +46,8 @@ namespace Lunex {
 		std::function<void(Ref<MaterialAsset>)> m_OnMaterialEditCallback;
 		
 		// ===== THUMBNAIL CACHE =====
-		// Maps MaterialAsset UUID -> OpenGL Texture ID
-		std::unordered_map<UUID, uint32_t> m_ThumbnailCache;
+		// Maps MaterialAsset UUID -> Standalone Texture
+		std::unordered_map<UUID, Ref<Texture2D>> m_ThumbnailCache;
 		Scope<MaterialPreviewRenderer> m_PreviewRenderer;
 	};
 
