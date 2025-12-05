@@ -9,6 +9,7 @@
 #include "Scene/Components.h"
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <glad/glad.h>
 
 namespace Lunex {
 
@@ -37,7 +38,6 @@ namespace Lunex {
 
 		// Actualizar camera aspect ratio
 		m_Camera.SetViewportSize(width, height);
-		LNX_LOG_INFO("MaterialPreviewRenderer resolution updated: {0}x{1}", width, height);
 	}
 
 	void MaterialPreviewRenderer::SetPreviewModel(Ref<Model> model) {
@@ -79,6 +79,45 @@ namespace Lunex {
 
 	// ========== THUMBNAIL GENERATION ==========
 
+	Ref<Texture2D> MaterialPreviewRenderer::RenderToTexture(Ref<MaterialAsset> material) {
+		if (!material) {
+			LNX_LOG_ERROR("MaterialPreviewRenderer::RenderToTexture - Material is null");
+			return nullptr;
+		}
+
+		// Render the material
+		RenderInternal(material);
+		
+		// Copy framebuffer to standalone texture
+		return CopyFramebufferToTexture();
+	}
+
+	Ref<Texture2D> MaterialPreviewRenderer::CopyFramebufferToTexture() {
+		if (!m_Framebuffer) {
+			return nullptr;
+		}
+
+		// Create a new texture with the same dimensions
+		Ref<Texture2D> texture = Texture2D::Create(m_Width, m_Height);
+		if (!texture) {
+			return nullptr;
+		}
+
+		// Allocate buffer for pixel data
+		uint32_t dataSize = m_Width * m_Height * 4; // RGBA
+		std::vector<uint8_t> pixels(dataSize);
+
+		// Bind framebuffer and read pixels
+		m_Framebuffer->Bind();
+		glReadPixels(0, 0, m_Width, m_Height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+		m_Framebuffer->Unbind();
+
+		// Upload to texture
+		texture->SetData(pixels.data(), dataSize);
+
+		return texture;
+	}
+
 	Ref<Texture2D> MaterialPreviewRenderer::GenerateThumbnail(Ref<MaterialAsset> material, uint32_t size) {
 		// Guardar configuración actual
 		uint32_t oldWidth = m_Width;
@@ -89,11 +128,8 @@ namespace Lunex {
 		SetResolution(size, size);
 		SetAutoRotate(false);
 
-		// Renderizar
-		RenderPreview(material);
-
-		// Crear textura a partir del framebuffer
-		Ref<Texture2D> thumbnail = m_PreviewTexture;
+		// Renderizar y copiar a textura independiente
+		Ref<Texture2D> thumbnail = RenderToTexture(material);
 
 		// Restaurar configuración
 		SetResolution(oldWidth, oldHeight);
@@ -123,16 +159,19 @@ namespace Lunex {
 		spec.Samples = 1;
 
 		m_Framebuffer = Framebuffer::Create(spec);
-		LNX_LOG_INFO("MaterialPreviewRenderer framebuffer created: {0}x{1}", m_Width, m_Height);
 	}
 
 	void MaterialPreviewRenderer::InitializePreviewScene() {
 		// Crear esfera por defecto
 		m_PreviewModel = Model::CreateSphere();
 
-		// Configurar cámara
+		// Initialize camera with proper perspective settings
+		m_Camera = EditorCamera(45.0f, 1.0f, 0.1f, 1000.0f);
 		m_Camera.SetViewportSize(m_Width, m_Height);
-		m_Camera.SetDistance(3.0f);
+		
+		// Position camera outside the sphere (radius=0.5f)
+		// Camera at z=2.5f looking at origin gives good view of the sphere
+		m_Camera.SetPosition(glm::vec3(0.0f, 0.0f, 2.5f));
 
 		// Crear escena temporal para el preview
 		m_PreviewScene = CreateRef<Scene>();
@@ -161,8 +200,6 @@ namespace Lunex {
 		fillLightComp.SetIntensity(0.5f);
 
 		m_MainLight = lightComp.LightInstance;
-
-		LNX_LOG_INFO("MaterialPreviewRenderer scene initialized");
 	}
 
 	void MaterialPreviewRenderer::RenderInternal(Ref<MaterialAsset> material) {
@@ -176,12 +213,23 @@ namespace Lunex {
 			return;
 		}
 
+		if (!m_Framebuffer) {
+			LNX_LOG_ERROR("MaterialPreviewRenderer::RenderInternal - Framebuffer not initialized");
+			return;
+		}
+
 		// Bind framebuffer
 		m_Framebuffer->Bind();
+
+		// Set viewport to match framebuffer size
+		RenderCommand::SetViewport(0, 0, m_Width, m_Height);
 
 		// Clear with background color
 		RenderCommand::SetClearColor(m_BackgroundColor);
 		RenderCommand::Clear();
+
+		// Clear entity ID attachment to -1 (attachment index 1)
+		m_Framebuffer->ClearAttachment(1, -1);
 
 		// Begin scene with editor camera
 		Renderer3D::BeginScene(m_Camera);

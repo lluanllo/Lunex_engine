@@ -1,6 +1,9 @@
 #pragma once
 
 #include "Renderer/Texture.h"
+#include "Renderer/MaterialPreviewRenderer.h"
+#include "Renderer/MaterialAsset.h"
+#include "Renderer/MaterialRegistry.h"
 #include <filesystem>
 #include <vector>
 #include <set>
@@ -42,6 +45,12 @@ namespace Lunex {
 		void SetOnMaterialOpenCallback(const std::function<void(const std::filesystem::path&)>& callback) {
 			m_OnMaterialOpenCallback = callback;
 		}
+		
+		// ========================================
+		// CACHE MANAGEMENT
+		// ========================================
+		void InvalidateMaterialThumbnail(const std::filesystem::path& materialPath);
+		void RefreshAllThumbnails();
 		
 		// ========================================
 		// PUBLIC API FOR GLOBAL SHORTCUTS
@@ -152,6 +161,10 @@ namespace Lunex {
 
 		// Texture preview cache
 		std::unordered_map<std::string, Ref<Texture2D>> m_TextureCache;
+		
+		// Material preview renderer and cache (stores standalone textures, not framebuffer IDs)
+		Scope<MaterialPreviewRenderer> m_MaterialPreviewRenderer;
+		std::unordered_map<std::string, Ref<Texture2D>> m_MaterialThumbnailCache;
 
 		// Item positions for selection rectangle
 		std::unordered_map<std::string, ImRect> m_ItemBounds;

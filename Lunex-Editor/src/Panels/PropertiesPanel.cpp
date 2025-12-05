@@ -140,15 +140,15 @@ namespace Lunex {
 	// THUMBNAIL SYSTEM
 	// ===========================================================================
 
-	uint32_t PropertiesPanel::GetOrGenerateThumbnail(const Ref<MaterialAsset>& asset) {
-		if (!asset) return 0;
+	Ref<Texture2D> PropertiesPanel::GetOrGenerateThumbnail(const Ref<MaterialAsset>& asset) {
+		if (!asset) return nullptr;
 
 		UUID assetID = asset->GetID();
 
 		// Check if thumbnail already exists in cache
 		auto it = m_ThumbnailCache.find(assetID);
-		if (it != m_ThumbnailCache.end()) {
-			return it->second; // Return cached texture ID
+		if (it != m_ThumbnailCache.end() && it->second) {
+			return it->second; // Return cached texture
 		}
 
 		// Generate new thumbnail
@@ -156,42 +156,35 @@ namespace Lunex {
 			LNX_LOG_INFO("MaterialPreviewRenderer initializing (lazy)...");
 			try {
 				m_PreviewRenderer = CreateScope<MaterialPreviewRenderer>();
-				m_PreviewRenderer->SetResolution(512, 512);
+				m_PreviewRenderer->SetResolution(128, 128);
 				m_PreviewRenderer->SetAutoRotate(false);
 			}
 			catch (const std::exception& e) {
 				LNX_LOG_ERROR("Failed to initialize MaterialPreviewRenderer: {0}", e.what());
-				return 0;
+				return nullptr;
 			}
 		}
 
-		// Render preview to offscreen buffer
+		// Render preview to a standalone texture
 		try {
-			m_PreviewRenderer->RenderPreview(asset);
-			uint32_t textureID = m_PreviewRenderer->GetPreviewTextureID();
-
-			if (textureID == 0) {
-				LNX_LOG_WARN("MaterialPreviewRenderer generated invalid texture ID for material: {0}", asset->GetName());
-				return 0;
+			Ref<Texture2D> thumbnail = m_PreviewRenderer->RenderToTexture(asset);
+			if (thumbnail) {
+				// Cache the texture
+				m_ThumbnailCache[assetID] = thumbnail;
+				return thumbnail;
 			}
-
-			// Cache the texture ID
-			m_ThumbnailCache[assetID] = textureID;
-			LNX_LOG_TRACE("Generated thumbnail for material: {0} (UUID: {1})", asset->GetName(), (uint64_t)assetID);
-
-			return textureID;
 		}
 		catch (const std::exception& e) {
 			LNX_LOG_ERROR("Failed to generate thumbnail for material {0}: {1}", asset->GetName(), e.what());
-			return 0;
 		}
+
+		return nullptr;
 	}
 
-	void PropertiesPanel::InvalidateThumbnail(UUID assetID) {
+	void PropertiesPanel::InvalidateMaterialThumbnail(UUID assetID) {
 		auto it = m_ThumbnailCache.find(assetID);
 		if (it != m_ThumbnailCache.end()) {
 			m_ThumbnailCache.erase(it);
-			LNX_LOG_TRACE("Invalidated thumbnail for material UUID: {0}", (uint64_t)assetID);
 		}
 	}
 
@@ -758,7 +751,7 @@ namespace Lunex {
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
 			PropertyLabel("Type", "Defines how the body responds to physics");
-			ImGui::NextColumn();
+		 ImGui::NextColumn();
 			ImGui::SetNextItemWidth(-1);
 			if (ImGui::BeginCombo("##BodyType", currentBodyTypeString)) {
 				for (int i = 0; i < 3; i++) {
@@ -1056,12 +1049,12 @@ namespace Lunex {
 
 				// ✅ Preview thumbnail - Generate using MaterialPreviewRenderer
 				if (asset) {
-					uint32_t thumbnailID = GetOrGenerateThumbnail(asset);
+					Ref<Texture2D> thumbnail = GetOrGenerateThumbnail(asset);
 					
-					if (thumbnailID != 0) {
+					if (thumbnail) {
 						// Render actual thumbnail texture
 						ImGui::Image(
-							(ImTextureID)(intptr_t)thumbnailID,
+							(ImTextureID)(intptr_t)thumbnail->GetRendererID(),
 							ImVec2(70, 70),
 							ImVec2(0, 1),  // Flip Y for OpenGL
 							ImVec2(1, 0)

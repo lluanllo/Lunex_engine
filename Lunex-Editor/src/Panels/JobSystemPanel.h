@@ -63,7 +63,7 @@ namespace Lunex {
 		void DrawTestControls();
 
 	private:
-		bool m_IsOpen = true;
+		bool m_IsOpen = false;  // ? FIX: Start closed by default, only show when explicitly opened from Preferences menu
 
 		// Performance history for graphs
 		std::vector<float> m_ThroughputHistory;

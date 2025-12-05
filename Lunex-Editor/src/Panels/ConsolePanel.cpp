@@ -44,20 +44,22 @@ namespace Lunex {
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
 		
 		if (ImGui::BeginChild("##filters", ImVec2(0, 35), true, ImGuiWindowFlags_NoScrollbar)) {
-			// Log level filters
+			// Log level filters - Add unique IDs to prevent conflicts
 			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.26f, 0.59f, 0.98f, 0.50f));
 			
-			ImGui::Checkbox("Trace", &m_ShowTrace); ImGui::SameLine();
-			ImGui::Checkbox("Info", &m_ShowInfo); ImGui::SameLine();
-			ImGui::Checkbox("Warning", &m_ShowWarning); ImGui::SameLine();
-			ImGui::Checkbox("Error", &m_ShowError); ImGui::SameLine();
-			ImGui::Checkbox("Critical", &m_ShowCritical); ImGui::SameLine();
+			ImGui::PushID("LogLevelFilters");
+			ImGui::Checkbox("##Trace", &m_ShowTrace); ImGui::SameLine(); ImGui::Text("Trace"); ImGui::SameLine();
+			ImGui::Checkbox("##Info", &m_ShowInfo); ImGui::SameLine(); ImGui::Text("Info"); ImGui::SameLine();
+			ImGui::Checkbox("##Warning", &m_ShowWarning); ImGui::SameLine(); ImGui::Text("Warning"); ImGui::SameLine();
+			ImGui::Checkbox("##Error", &m_ShowError); ImGui::SameLine(); ImGui::Text("Error"); ImGui::SameLine();
+			ImGui::Checkbox("##Critical", &m_ShowCritical); ImGui::SameLine(); ImGui::Text("Critical"); ImGui::SameLine();
+			ImGui::PopID();
 			
 			ImGui::PopStyleColor();
 			
 			ImGui::SameLine(0, 20);
 			ImGui::SetNextItemWidth(150);
-			if (ImGui::BeginCombo("##Category", m_CategoryFilter.c_str())) {
+			if (ImGui::BeginCombo("##CategoryFilter", m_CategoryFilter.c_str())) {
 				for (const auto& category : m_Categories) {
 					bool isSelected = (m_CategoryFilter == category);
 					if (ImGui::Selectable(category.c_str(), isSelected))
@@ -71,16 +73,16 @@ namespace Lunex {
 			ImGui::SameLine();
 			ImGui::SetNextItemWidth(200);
 			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.26f, 0.59f, 0.98f, 0.50f));
-			ImGui::InputTextWithHint("##search", "Search...", m_SearchFilter, IM_ARRAYSIZE(m_SearchFilter));
+			ImGui::InputTextWithHint("##SearchFilter", "Search...", m_SearchFilter, IM_ARRAYSIZE(m_SearchFilter));
 			ImGui::PopStyleColor();
 			
 			ImGui::SameLine();
-			if (ImGui::Button("Clear")) {
+			if (ImGui::Button("Clear##ClearLogs")) {
 				Clear();
 			}
 			
 			ImGui::SameLine();
-			ImGui::Checkbox("Auto-scroll", &m_AutoScroll);
+			ImGui::Checkbox("##AutoScroll", &m_AutoScroll); ImGui::SameLine(); ImGui::Text("Auto-scroll");
 		}
 		ImGui::EndChild();
 		
