@@ -77,6 +77,7 @@ namespace Lunex {
 		void CreateNewScene();
 		void CreateNewScript();
 		void CreateNewMaterial();
+		void CreatePrefabFromMesh(const std::filesystem::path& meshAssetPath);
 		void DeleteItem(const std::filesystem::path& path);
 		void RenameItem(const std::filesystem::path& oldPath);
 		void DuplicateItem(const std::filesystem::path& path);
@@ -146,6 +147,8 @@ namespace Lunex {
 		Ref<Texture2D> m_AudioIcon;
 		Ref<Texture2D> m_ScriptIcon;
 		Ref<Texture2D> m_MaterialIcon;
+		Ref<Texture2D> m_MeshIcon;  // Icon for .lumesh files
+		Ref<Texture2D> m_PrefabIcon;  // Icon for .luprefab files
 
 		// Texture preview cache
 		std::unordered_map<std::string, Ref<Texture2D>> m_TextureCache;

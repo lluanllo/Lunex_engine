@@ -8,12 +8,13 @@
 namespace Lunex {
 
 	MaterialAsset::MaterialAsset()
-		: m_ID(UUID())
+		: Asset()
 	{
+		m_Name = "New Material";
 	}
 
 	MaterialAsset::MaterialAsset(const std::string& name)
-		: m_ID(UUID()), m_Name(name)
+		: Asset(name)
 	{
 	}
 
@@ -24,7 +25,7 @@ namespace Lunex {
 		if (texture && texture->IsLoaded()) {
 			m_AlbedoPath = texture->GetPath();
 		}
-		m_IsDirty = true;
+		MarkDirty();
 	}
 
 	void MaterialAsset::SetNormalMap(Ref<Texture2D> texture) {
@@ -32,7 +33,7 @@ namespace Lunex {
 		if (texture && texture->IsLoaded()) {
 			m_NormalPath = texture->GetPath();
 		}
-		m_IsDirty = true;
+		MarkDirty();
 	}
 
 	void MaterialAsset::SetMetallicMap(Ref<Texture2D> texture) {
@@ -40,7 +41,7 @@ namespace Lunex {
 		if (texture && texture->IsLoaded()) {
 			m_MetallicPath = texture->GetPath();
 		}
-		m_IsDirty = true;
+		MarkDirty();
 	}
 
 	void MaterialAsset::SetRoughnessMap(Ref<Texture2D> texture) {
@@ -48,7 +49,7 @@ namespace Lunex {
 		if (texture && texture->IsLoaded()) {
 			m_RoughnessPath = texture->GetPath();
 		}
-		m_IsDirty = true;
+		MarkDirty();
 	}
 
 	void MaterialAsset::SetSpecularMap(Ref<Texture2D> texture) {
@@ -56,7 +57,7 @@ namespace Lunex {
 		if (texture && texture->IsLoaded()) {
 			m_SpecularPath = texture->GetPath();
 		}
-		m_IsDirty = true;
+		MarkDirty();
 	}
 
 	void MaterialAsset::SetEmissionMap(Ref<Texture2D> texture) {
@@ -64,7 +65,7 @@ namespace Lunex {
 		if (texture && texture->IsLoaded()) {
 			m_EmissionPath = texture->GetPath();
 		}
-		m_IsDirty = true;
+		MarkDirty();
 	}
 
 	void MaterialAsset::SetAOMap(Ref<Texture2D> texture) {
@@ -72,17 +73,14 @@ namespace Lunex {
 		if (texture && texture->IsLoaded()) {
 			m_AOPath = texture->GetPath();
 		}
-		m_IsDirty = true;
+		MarkDirty();
 	}
 
 	// ========== SERIALIZACIÓN ==========
 
 	bool MaterialAsset::SaveToFile(const std::filesystem::path& path) {
 		m_FilePath = path;
-		return SaveToFile();
-	}
 
-	bool MaterialAsset::SaveToFile() {
 		if (m_FilePath.empty()) {
 			LNX_LOG_ERROR("MaterialAsset::SaveToFile - No file path specified");
 			return false;
@@ -145,7 +143,7 @@ namespace Lunex {
 		fout << out.c_str();
 		fout.close();
 
-		m_IsDirty = false;
+		ClearDirty();
 		LNX_LOG_INFO("Material saved: {0}", m_FilePath.string());
 		return true;
 	}
@@ -178,7 +176,7 @@ namespace Lunex {
 		Ref<MaterialAsset> material = CreateRef<MaterialAsset>();
 		material->m_FilePath = path;
 
-		// Metadata
+		// Metadata - use inherited members from Asset
 		material->m_ID = UUID(materialNode["ID"].as<uint64_t>());
 		material->m_Name = materialNode["Name"].as<std::string>();
 
@@ -233,7 +231,8 @@ namespace Lunex {
 			material->m_AOMultiplier = multipliersNode["AO"].as<float>(1.0f);
 		}
 
-		material->m_IsDirty = false;
+		material->ClearDirty();
+		material->SetLoaded(true);
 		LNX_LOG_INFO("Material loaded: {0}", path.string());
 		return material;
 	}
@@ -278,7 +277,7 @@ namespace Lunex {
 		clone->m_AOPath = m_AOPath;
 		clone->m_AOMultiplier = m_AOMultiplier;
 
-		clone->m_IsDirty = true;
+		clone->MarkDirty();
 		return clone;
 	}
 

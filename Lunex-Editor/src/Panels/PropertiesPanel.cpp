@@ -8,6 +8,7 @@
 #include <filesystem>
 
 #include "Scene/Components.h"
+#include "Asset/MeshAsset.h"
 
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
@@ -785,7 +786,7 @@ namespace Lunex {
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
 			PropertyLabel("Offset");
-			ImGui::NextColumn();
+		 ImGui::NextColumn();
 			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
 			ImGui::SetNextItemWidth(-1);
 			ImGui::DragFloat2("##Offset", glm::value_ptr(component.Offset), 0.01f);
@@ -861,6 +862,7 @@ namespace Lunex {
 			if (ImGui::Combo("##ModelType", &currentType, modelTypes, IM_ARRAYSIZE(modelTypes))) {
 				component.Type = (ModelType)currentType;
 				if (component.Type != ModelType::FromFile) {
+					component.ClearMeshAsset();  // Clear any mesh asset when switching to primitive
 					component.CreatePrimitive(component.Type);
 				}
 			}
@@ -870,12 +872,84 @@ namespace Lunex {
 			if (component.Type == ModelType::FromFile) {
 				ImGui::Spacing();
 
-				if (component.MeshModel) {
+				// Check if using MeshAsset (.lumesh)
+				if (component.HasMeshAsset()) {
+					auto meshAsset = component.GetMeshAsset();
+					
 					ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
 					ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
-					ImGui::BeginChild("##ModelInfo", ImVec2(-1, 145.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+					ImGui::BeginChild("##MeshAssetInfo", ImVec2(-1, 185.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
+					ImGui::Text("📦 MeshAsset");
+					ImGui::PopStyleColor();
+					
+					ImGui::SameLine(ImGui::GetContentRegionAvail().x - 80);
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+					ImGui::Text(".lumesh");
+					ImGui::PopStyleColor();
+
+					std::filesystem::path assetPath(meshAsset->GetPath().string());
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_ACCENT);
+					ImGui::Text("🗿 %s", assetPath.filename().string().c_str());
+					ImGui::PopStyleColor();
+
+					ImGui::Spacing();
+					ImGui::Separator();
+					ImGui::Spacing();
+
+					// Mesh info from metadata
+					const auto& metadata = meshAsset->GetMetadata();
+					
+					ImGui::Columns(2, nullptr, false);
+					ImGui::SetColumnWidth(0, 100.0f);
+					
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+					ImGui::Text("Submeshes"); ImGui::NextColumn();
+					ImGui::PopStyleColor();
+					ImGui::Text("%d", metadata.SubmeshCount); ImGui::NextColumn();
+
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+					ImGui::Text("Vertices"); ImGui::NextColumn();
+					ImGui::PopStyleColor();
+					ImGui::Text("%d", metadata.VertexCount); ImGui::NextColumn();
+
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+					ImGui::Text("Triangles"); ImGui::NextColumn();
+					ImGui::PopStyleColor();
+					ImGui::Text("%d", metadata.TriangleCount); ImGui::NextColumn();
+
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+					ImGui::Text("Source"); ImGui::NextColumn();
+					ImGui::PopStyleColor();
+					std::filesystem::path srcPath(meshAsset->GetSourcePath());
+					ImGui::Text("%s", srcPath.filename().string().c_str()); ImGui::NextColumn();
+					
+					ImGui::Columns(1);
+
+					ImGui::Spacing();
+					ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
+					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
+					if (ImGui::Button("Remove Mesh", ImVec2(-1, 0))) {
+						component.ClearMeshAsset();
+					}
+					ImGui::PopStyleColor(2);
+
+					ImGui::EndChild();
+					ImGui::PopStyleVar();
+					ImGui::PopStyleColor();
+				}
+				else if (component.MeshModel) {
+					// Legacy: Direct model loaded (not from MeshAsset)
+					ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
+					ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+					ImGui::BeginChild("##ModelInfo", ImVec2(-1, 185.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 					std::filesystem::path modelPath(component.FilePath);
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_WARNING);
+					ImGui::Text("⚠️ Legacy Model (not a MeshAsset)");
+					ImGui::PopStyleColor();
+					
 					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_ACCENT);
 					ImGui::Text("🗿 %s", modelPath.filename().string().c_str());
 					ImGui::PopStyleColor();
@@ -896,7 +970,7 @@ namespace Lunex {
 					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
 					ImGui::Text("Submeshes"); ImGui::NextColumn();
 					ImGui::PopStyleColor();
-					ImGui::Text("%d", component.MeshModel->GetMeshes().size()); ImGui::NextColumn();
+					ImGui::Text("%zu", component.MeshModel->GetMeshes().size()); ImGui::NextColumn();
 
 					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
 					ImGui::Text("Vertices"); ImGui::NextColumn();
@@ -923,11 +997,12 @@ namespace Lunex {
 					ImGui::PopStyleColor();
 				}
 				else {
+					// No model - show drop zone
 					ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_BG_MEDIUM);
 					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.30f, 1.0f));
 					ImGui::PushStyleColor(ImGuiCol_Border, UIStyle::COLOR_ACCENT);
 					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.5f);
-					ImGui::Button("📁 Drop 3D Model Here\n(.obj, .fbx, .gltf, .glb, .dae)", ImVec2(-1, 60.0f));
+					ImGui::Button("📁 Drop Mesh Asset Here\n(.lumesh, .obj, .fbx, .gltf, .glb, .dae)", ImVec2(-1, 60.0f));
 					ImGui::PopStyleVar();
 					ImGui::PopStyleColor(3);
 
@@ -935,9 +1010,21 @@ namespace Lunex {
 						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
 							ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
 							std::string ext = data->Extension;
-							if (ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb" || ext == ".dae") {
+							
+							if (ext == ".lumesh") {
+								// Load MeshAsset
+								auto meshAsset = MeshAsset::LoadFromFile(data->FilePath);
+								if (meshAsset) {
+									component.SetMeshAsset(meshAsset);
+									LNX_LOG_INFO("Loaded MeshAsset: {0}", data->FilePath);
+								} else {
+									LNX_LOG_ERROR("Failed to load MeshAsset: {0}", data->FilePath);
+								}
+							}
+							else if (ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb" || ext == ".dae") {
+								// Legacy: Load directly (for backwards compatibility)
 								component.LoadFromFile(data->FilePath);
-								LNX_LOG_INFO("Loaded model: {0}", data->FilePath);
+								LNX_LOG_INFO("Loaded model (legacy): {0}", data->FilePath);
 							}
 							else {
 								LNX_LOG_WARN("Unsupported model format: {0}", ext);
@@ -949,13 +1036,7 @@ namespace Lunex {
 			}
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-
-			SectionHeader("🎨", "Color Tint");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			PropertyColor4("Color", component.Color);
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-			});
-
+		});
 		// Material Component - NUEVO SISTEMA
 		DrawComponent<MaterialComponent>("✨ Material", entity, [&](auto& component) {
 			// ========== MATERIAL ASSET SECTION ==========

@@ -15,6 +15,7 @@
 #include "../Panels/InputSettingsPanel.h"
 #include "../Panels/GizmoSettingsPanel.h"
 #include "../Panels/JobSystemPanel.h"
+#include "../Panels/MeshImportModal.h"
 
 #include "Renderer/EditorCamera.h"
 
@@ -72,6 +73,14 @@ namespace Lunex {
 			// Camera Preview
 			void RenderCameraPreview(Entity cameraEntity);
 			
+			// Mesh Import
+			void OnModelDropped(const std::filesystem::path& modelPath);
+			void OnMeshAssetDropped(const std::filesystem::path& meshAssetPath);
+			void OnMeshImported(Ref<MeshAsset> meshAsset);
+			
+			// Prefab
+			void OnPrefabDropped(const std::filesystem::path& prefabPath);
+			
 		private:
 			OrthographicCameraController m_CameraController;
 			
@@ -119,6 +128,7 @@ namespace Lunex {
 			InputSettingsPanel m_InputSettingsPanel;
 			GizmoSettingsPanel m_GizmoSettingsPanel;
 			JobSystemPanel m_JobSystemPanel;
+			MeshImportModal m_MeshImportModal;
 			
 			// Editor resources
 			Ref<Texture2D> m_IconPlay, m_IconSimulate, m_IconStop;

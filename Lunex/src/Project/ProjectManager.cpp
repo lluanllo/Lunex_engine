@@ -82,6 +82,7 @@ namespace Lunex {
 		std::filesystem::create_directories(assetsPath / "Textures");
 		std::filesystem::create_directories(assetsPath / "Models");
 		std::filesystem::create_directories(assetsPath / "Materials");
+		std::filesystem::create_directories(assetsPath / "MeshAssets");  // For .lumesh files
 		std::filesystem::create_directories(assetsPath / "Shaders");
 		std::filesystem::create_directories(assetsPath / "Audio");
 		std::filesystem::create_directories(assetsPath / "Prefabs");

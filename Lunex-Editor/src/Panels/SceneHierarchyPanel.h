@@ -5,9 +5,11 @@
 #include "Scene/Scene.h"
 #include "Scene/Entity.h"
 #include "Renderer/Texture.h"
+#include "Asset/Prefab.h"
 
 #include <set>
 #include <vector>
+#include <functional>
 
 namespace Lunex {
 	class SceneHierarchyPanel {
@@ -29,6 +31,13 @@ namespace Lunex {
 		
 		// Active element (last selected entity)
 		Entity GetActiveEntity() const { return m_LastSelectedEntity; }
+		
+		// ========================================
+		// PREFAB SYSTEM
+		// ========================================
+		void CreatePrefabFromEntity(Entity entity);
+		void InstantiatePrefab(const std::filesystem::path& prefabPath);
+		void SetPrefabsDirectory(const std::filesystem::path& directory) { m_PrefabsDirectory = directory; }
 		
 		// ========================================
 		// PIVOT POINT CALCULATIONS (Blender-style)
@@ -86,6 +95,9 @@ namespace Lunex {
 		// Multi-selection
 		std::set<Entity> m_SelectedEntities;
 		Entity m_LastSelectedEntity;
+		
+		// Prefabs
+		std::filesystem::path m_PrefabsDirectory;
 		
 		// Iconos para la jerarquía
 		Ref<Texture2D> m_CameraIcon;
