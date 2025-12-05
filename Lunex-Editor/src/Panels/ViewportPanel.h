@@ -41,6 +41,11 @@ namespace Lunex {
 		void SetOnMeshAssetDropCallback(std::function<void(const std::filesystem::path&)> callback) {
 			m_OnMeshAssetDropCallback = callback;
 		}
+		
+		// Callback for .luprefab file drop (instantiates prefab)
+		void SetOnPrefabDropCallback(std::function<void(const std::filesystem::path&)> callback) {
+			m_OnPrefabDropCallback = callback;
+		}
 
 	private:
 		void RenderCameraPreview(Ref<Framebuffer> previewFramebuffer, Entity selectedEntity);
@@ -53,5 +58,6 @@ namespace Lunex {
 		std::function<void(const std::filesystem::path&)> m_OnSceneDropCallback;
 		std::function<void(const std::filesystem::path&)> m_OnModelDropCallback;
 		std::function<void(const std::filesystem::path&)> m_OnMeshAssetDropCallback;
+		std::function<void(const std::filesystem::path&)> m_OnPrefabDropCallback;
 	};
 }

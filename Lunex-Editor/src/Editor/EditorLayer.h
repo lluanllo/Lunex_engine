@@ -78,6 +78,9 @@ namespace Lunex {
 			void OnMeshAssetDropped(const std::filesystem::path& meshAssetPath);
 			void OnMeshImported(Ref<MeshAsset> meshAsset);
 			
+			// Prefab
+			void OnPrefabDropped(const std::filesystem::path& prefabPath);
+			
 		private:
 			OrthographicCameraController m_CameraController;
 			

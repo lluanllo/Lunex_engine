@@ -1,4 +1,5 @@
 ﻿#include "SceneHierarchyPanel.h"
+#include "ContentBrowserPanel.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -9,6 +10,7 @@
 #include <algorithm>
 
 #include "Scene/Components.h"
+#include "Asset/Prefab.h"
 
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
@@ -72,6 +74,16 @@ namespace Lunex {
 					Entity droppedEntity = *(Entity*)payload->Data;
 					UnparentEntity(droppedEntity);
 				}
+				
+				// Accept prefab drops from Content Browser
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+					ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+					std::string ext = data->Extension;
+					if (ext == ".luprefab") {
+						InstantiatePrefab(data->FilePath);
+					}
+				}
+				
 				ImGui::EndDragDropTarget();
 			}
 
@@ -268,6 +280,13 @@ namespace Lunex {
 			
 			if (ImGui::MenuItem("🔄 Duplicate", "Ctrl+D")) {
 				DuplicateEntity(entity);
+			}
+			
+			ImGui::Separator();
+			
+			// Prefab option
+			if (ImGui::MenuItem("📁 Create Prefab")) {
+				CreatePrefabFromEntity(entity);
 			}
 			
 			ImGui::Separator();
@@ -714,5 +733,92 @@ namespace Lunex {
 		}
 		
 		return (min + max) * 0.5f;
+	}
+
+	// ============================================================================
+	// PREFAB SYSTEM
+	// ============================================================================
+	
+	void SceneHierarchyPanel::CreatePrefabFromEntity(Entity entity) {
+		if (!entity) {
+			LNX_LOG_WARN("SceneHierarchyPanel::CreatePrefabFromEntity - No entity selected");
+			return;
+		}
+
+		// Create prefab from entity (including children)
+		Ref<Prefab> prefab = Prefab::CreateFromEntity(entity, true);
+		if (!prefab) {
+			LNX_LOG_ERROR("Failed to create prefab from entity");
+			return;
+		}
+
+		// Determine save path
+		std::filesystem::path prefabsDir = m_PrefabsDirectory;
+		if (prefabsDir.empty()) {
+			prefabsDir = g_AssetPath / "Prefabs";
+		}
+
+		// Ensure directory exists
+		if (!std::filesystem::exists(prefabsDir)) {
+			std::filesystem::create_directories(prefabsDir);
+		}
+
+		// Generate unique filename
+		std::string entityName = entity.GetComponent<TagComponent>().Tag;
+		std::filesystem::path prefabPath;
+		int counter = 1;
+		
+		do {
+			std::string filename = entityName;
+			if (counter > 1) {
+				filename += " (" + std::to_string(counter) + ")";
+			}
+			filename += ".luprefab";
+			prefabPath = prefabsDir / filename;
+			counter++;
+		} while (std::filesystem::exists(prefabPath));
+
+		// Save prefab
+		if (prefab->SaveToFile(prefabPath)) {
+			LNX_LOG_INFO("✓ Prefab created: {0}", prefabPath.filename().string());
+			LNX_LOG_INFO("  Location: {0}", prefabPath.string());
+			LNX_LOG_INFO("  Entities: {0}", prefab->GetEntityCount());
+		} else {
+			LNX_LOG_ERROR("Failed to save prefab: {0}", prefabPath.string());
+		}
+	}
+
+	void SceneHierarchyPanel::InstantiatePrefab(const std::filesystem::path& prefabPath) {
+		if (!m_Context) {
+			LNX_LOG_WARN("SceneHierarchyPanel::InstantiatePrefab - No scene context");
+			return;
+		}
+
+		if (!std::filesystem::exists(prefabPath)) {
+			LNX_LOG_ERROR("Prefab file not found: {0}", prefabPath.string());
+			return;
+		}
+
+		// Load prefab
+		Ref<Prefab> prefab = Prefab::LoadFromFile(prefabPath);
+		if (!prefab) {
+			LNX_LOG_ERROR("Failed to load prefab: {0}", prefabPath.string());
+			return;
+		}
+
+		// Instantiate at origin (or selected entity position)
+		glm::vec3 position(0.0f);
+		if (m_SelectionContext && m_SelectionContext.HasComponent<TransformComponent>()) {
+			position = m_SelectionContext.GetComponent<TransformComponent>().Translation;
+			position.x += 1.0f; // Offset slightly
+		}
+
+		Entity rootEntity = prefab->Instantiate(m_Context, position);
+		if (rootEntity) {
+			SelectEntity(rootEntity);
+			LNX_LOG_INFO("✓ Instantiated prefab: {0}", prefabPath.filename().string());
+		} else {
+			LNX_LOG_ERROR("Failed to instantiate prefab: {0}", prefabPath.string());
+		}
 	}
 }

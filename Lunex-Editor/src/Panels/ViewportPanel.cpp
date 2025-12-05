@@ -7,6 +7,7 @@
 #include "Scene/Components.h"
 #include "Math/Math.h"
 #include "Asset/MeshImporter.h"
+#include "Asset/Prefab.h"
 #include <glm/gtc/type_ptr.hpp>
 
 namespace Lunex {
@@ -53,6 +54,12 @@ namespace Lunex {
 				else if (ext == ".lumesh") {
 					if (m_OnMeshAssetDropCallback) {
 						m_OnMeshAssetDropCallback(filePath);
+					}
+				}
+				// Prefab files (.luprefab) - instantiate prefab
+				else if (ext == ".luprefab") {
+					if (m_OnPrefabDropCallback) {
+						m_OnPrefabDropCallback(filePath);
 					}
 				}
 				// 3D model files - open import modal

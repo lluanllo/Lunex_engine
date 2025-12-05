@@ -53,6 +53,9 @@ namespace Lunex {
 			UUID GetUUID() { return GetComponent<IDComponent>().ID; }
 			const std::string& GetName() { return GetComponent<TagComponent>().Tag; }
 			
+			// Get the scene this entity belongs to
+			Scene* GetScene() const { return m_Scene; }
+			
 			bool operator==(const Entity& other) const {
 				return m_EntityHandle == other.m_EntityHandle && m_Scene == other.m_Scene;
 			}

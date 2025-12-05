@@ -878,7 +878,7 @@ namespace Lunex {
 					
 					ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
 					ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
-					ImGui::BeginChild("##MeshAssetInfo", ImVec2(-1, 165.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+					ImGui::BeginChild("##MeshAssetInfo", ImVec2(-1, 185.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
 					ImGui::Text("📦 MeshAsset");
@@ -943,7 +943,7 @@ namespace Lunex {
 					// Legacy: Direct model loaded (not from MeshAsset)
 					ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
 					ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
-					ImGui::BeginChild("##ModelInfo", ImVec2(-1, 145.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+					ImGui::BeginChild("##ModelInfo", ImVec2(-1, 185.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 					std::filesystem::path modelPath(component.FilePath);
 					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_WARNING);
@@ -1035,11 +1035,6 @@ namespace Lunex {
 				}
 			}
 
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
-
-			SectionHeader("🎨", "Color Tint");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
-			PropertyColor4("Color", component.Color);
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
 		});
 		// Material Component - NUEVO SISTEMA

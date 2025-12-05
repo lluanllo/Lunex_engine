@@ -21,6 +21,7 @@
 // ✅ MeshAsset System
 #include "Asset/MeshAsset.h"
 #include "Asset/MeshImporter.h"
+#include "Asset/Prefab.h"
 
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
@@ -162,11 +163,15 @@ namespace Lunex {
 			OnMeshAssetDropped(path);
 		});
 		
+		m_ViewportPanel.SetOnPrefabDropCallback([this](const std::filesystem::path& path) {
+			OnPrefabDropped(path);
+		});
+		
 		m_MeshImportModal.SetOnImportCallback([this](Ref<MeshAsset> asset) {
 			OnMeshImported(asset);
 		});
 		
-		LNX_LOG_INFO("✅ MeshAsset import system configured");
+		LNX_LOG_INFO("✅ MeshAsset and Prefab import system configured");
 
 		// Configure menu bar panel
 		m_MenuBarPanel.SetOnNewProjectCallback([this]() { NewProject(); });
@@ -1442,5 +1447,35 @@ namespace Lunex {
 		
 		LNX_LOG_INFO("Created entity '{0}' with MeshAsset", entityName);
 		m_ConsolePanel.AddLog("Created mesh entity: " + entityName, LogLevel::Info, "Scene");
+	}
+	
+	void EditorLayer::OnPrefabDropped(const std::filesystem::path& prefabPath) {
+		if (m_SceneState != SceneState::Edit) {
+			LNX_LOG_WARN("Cannot instantiate prefabs while playing");
+			return;
+		}
+		
+		// Load the prefab
+		Ref<Prefab> prefab = Prefab::LoadFromFile(prefabPath);
+		if (!prefab) {
+			LNX_LOG_ERROR("Failed to load prefab: {0}", prefabPath.string());
+			m_ConsolePanel.AddLog("Failed to load prefab: " + prefabPath.filename().string(), LogLevel::Error, "Prefab");
+			return;
+		}
+		
+		// Instantiate the prefab at origin
+		Entity rootEntity = prefab->Instantiate(m_ActiveScene, glm::vec3(0.0f));
+		if (!rootEntity) {
+			LNX_LOG_ERROR("Failed to instantiate prefab: {0}", prefabPath.string());
+			m_ConsolePanel.AddLog("Failed to instantiate prefab: " + prefabPath.filename().string(), LogLevel::Error, "Prefab");
+			return;
+		}
+		
+		// Select the new entity
+		m_SceneHierarchyPanel.SetSelectedEntity(rootEntity);
+		
+		std::string prefabName = prefab->GetName();
+		LNX_LOG_INFO("Instantiated prefab '{0}' with {1} entities", prefabName, prefab->GetEntityCount());
+		m_ConsolePanel.AddLog("Instantiated prefab: " + prefabName, LogLevel::Info, "Scene");
 	}
 }

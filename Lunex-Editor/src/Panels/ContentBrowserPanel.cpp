@@ -3,6 +3,9 @@
 #include "Events/Event.h"
 #include "Events/FileDropEvent.h"
 #include "Renderer/MaterialRegistry.h"
+#include "Asset/MeshAsset.h"
+#include "Asset/Prefab.h"
+#include "Asset/AssetRegistry.h"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <sstream>
@@ -27,6 +30,7 @@ namespace Lunex {
 		m_ScriptIcon = Texture2D::Create("Resources/Icons/ContentBrowser/ScriptIcon.png");
 		m_MaterialIcon = Texture2D::Create("Resources/Icons/ContentBrowser/MaterialIcon.png");
 		m_MeshIcon = Texture2D::Create("Resources/Icons/ContentBrowser/MeshIcon.png");
+		m_PrefabIcon = Texture2D::Create("Resources/Icons/ContentBrowser/PrefabIcon.png");
 		
 		// Inicializar historial
 		m_DirectoryHistory.push_back(m_CurrentDirectory);
@@ -543,6 +547,8 @@ namespace Lunex {
 		if (extension == ".lunex") return m_SceneIcon ? m_SceneIcon : m_FileIcon;
 		if (extension == ".lumat") return m_MaterialIcon ? m_MaterialIcon : m_FileIcon;
 		if (extension == ".lumesh") return m_MeshIcon ? m_MeshIcon : m_FileIcon;
+		if (extension == ".luprefab") return m_PrefabIcon ? m_PrefabIcon : m_FileIcon;
+		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg")
 		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg") 
 			return m_TextureIcon ? m_TextureIcon : m_FileIcon;
 		if (extension == ".glsl" || extension == ".shader") 
@@ -912,6 +918,17 @@ namespace Lunex {
 						}
 						ImGui::Separator();
 						
+						// ✅ Opciones específicas para archivos .lumesh
+						std::string ext = path.extension().string();
+						std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+						
+						if (ext == ".lumesh" && m_SelectedItems.size() == 1) {
+							if (ImGui::MenuItem("Create Prefab")) {
+								CreatePrefabFromMesh(path);
+							}
+							ImGui::Separator();
+						}
+						
 						if (m_SelectedItems.size() == 1) {
 							if (ImGui::MenuItem("Rename")) {
 								m_ItemToRename = path;
@@ -996,13 +1013,13 @@ namespace Lunex {
 				// Filename label
 				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.85f, 1.0f));
 				
-				// ✅ Ocultar extensión .lumat para elegancia
+				// ✅ Ocultar extensión .lumat, .lumesh, .luprefab para elegancia
 				std::string displayName = filenameString;
 				std::filesystem::path filePath(filenameString);
 				std::string extension = filePath.extension().string();
 				std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 				
-				if (extension == ".lumat") {
+				if (extension == ".lumat" || extension == ".lumesh" || extension == ".luprefab") {
 					displayName = filePath.stem().string(); // Sin extensión
 				}
 				
@@ -1396,7 +1413,7 @@ extern "C"
 		ss << "  ID: " << id << "\n";
 		ss << "  Name: " << baseName << "\n";
 		ss << "Properties:\n";
-		ss << "  Albedo: [1, 1, 1, 1]\n";
+	 ss << "  Albedo: [1, 1, 1, 1]\n";
 		ss << "  Metallic: 0\n";
 		ss << "  Roughness: 0.5\n";
 		ss << "  Specular: 0.5\n";
@@ -1425,6 +1442,75 @@ extern "C"
 		LNX_LOG_INFO("");
 		LNX_LOG_INFO("Material path: {0}", materialPath.string());
 		LNX_LOG_INFO("==================================================");
+	}
+	
+	void ContentBrowserPanel::CreatePrefabFromMesh(const std::filesystem::path& meshAssetPath) {
+		// Load the mesh asset
+		auto meshAsset = MeshAsset::LoadFromFile(meshAssetPath);
+		if (!meshAsset) {
+			LNX_LOG_ERROR("Failed to load mesh asset: {0}", meshAssetPath.string());
+			return;
+		}
+		
+		// Create prefab with same name as mesh
+		std::string baseName = meshAssetPath.stem().string();
+		
+		// Find available name for prefab
+		int counter = 1;
+		std::filesystem::path prefabPath;
+		std::string prefabName = baseName;
+		do {
+			prefabName = baseName + (counter > 1 ? std::to_string(counter) : "");
+			std::string prefabFilename = prefabName + ".luprefab";
+			prefabPath = meshAssetPath.parent_path() / prefabFilename;
+			counter++;
+		} while (std::filesystem::exists(prefabPath));
+		
+		// Generate UUID for prefab
+		uint64_t prefabID = (uint64_t)rand() * (uint64_t)rand();
+		uint64_t entityID = (uint64_t)rand() * (uint64_t)rand();
+		
+		// Get relative path to mesh asset from assets folder
+		// Convert to forward slashes for YAML compatibility
+		auto relativeMeshPath = std::filesystem::relative(meshAssetPath, g_AssetPath);
+		std::string relativeMeshPathStr = relativeMeshPath.string();
+		std::replace(relativeMeshPathStr.begin(), relativeMeshPathStr.end(), '\\', '/');
+		
+		// Create prefab YAML content
+		std::stringstream ss;
+		ss << "Prefab:\n";
+		ss << "  Name: " << prefabName << "\n";
+		ss << "  Description: Prefab created from mesh " << baseName << "\n";
+		ss << "  RootEntityID: " << entityID << "\n";
+		ss << "  UUID: " << prefabID << "\n";
+		ss << "  OriginalTransform:\n";
+		ss << "    Position: [0, 0, 0]\n";
+		ss << "    Rotation: [0, 0, 0]\n";
+		ss << "    Scale: [1, 1, 1]\n";
+		ss << "Entities:\n";
+		ss << "  - EntityID: " << entityID << "\n";
+		ss << "    Tag: " << prefabName << "\n";
+		ss << "    LocalParentID: 0\n";
+		ss << "    LocalChildIDs: []\n";
+		ss << "    Components:\n";
+		ss << "      - Type: TransformComponent\n";
+		ss << "        Data: \"0,0,0;0,0,0;1,1,1\"\n";
+		ss << "      - Type: MeshComponent\n";
+		ss << "        Data: \"4;1,1,1,1;" << meshAsset->GetID() << ";" << relativeMeshPathStr << ";\"\n";
+		ss << "      - Type: MaterialComponent\n";
+		ss << "        Data: \"0;;0;1,1,1,1;0;0.5;0.5;0,0,0;0\"\n";
+		
+		// Write prefab file
+		std::ofstream prefabFile(prefabPath);
+		if (!prefabFile) {
+			LNX_LOG_ERROR("Failed to create prefab file: {0}", prefabPath.string());
+			return;
+		}
+		prefabFile << ss.str();
+		prefabFile.close();
+		
+		LNX_LOG_INFO("Created prefab '{0}' from mesh '{1}'", prefabName, baseName);
+		LNX_LOG_INFO("Prefab path: {0}", prefabPath.string());
 	}
 	
 	void ContentBrowserPanel::DeleteItem(const std::filesystem::path& path) {
@@ -1548,7 +1634,7 @@ extern "C"
 				// Copy file
 				std::filesystem::copy(sourcePath, destPath);
 				LNX_LOG_INFO("Imported {0} to folder {1}", sourcePath.filename().string(), targetFolder.filename().string());
-			}
+						}
 			catch (const std::exception& e) {
 				LNX_LOG_ERROR("Failed to import {0}: {1}", file, e.what());
 			}
@@ -1741,7 +1827,7 @@ extern "C"
 				}
 			}
 			catch (const std::exception& e) {
-			 LNX_LOG_ERROR("Failed to paste {0}: {1}", sourcePath.filename().string(), e.what());
+				LNX_LOG_ERROR("Failed to paste {0}: {1}", sourcePath.filename().string(), e.what());
 			}
 		}
 		
