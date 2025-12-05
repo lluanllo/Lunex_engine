@@ -23,9 +23,11 @@ namespace Lunex {
 			bool IsVSync() const override;
 			
 			virtual void* GetNativeWindow() const { return m_Window; }
+			void SetWindowIcon(const std::string& iconPath);
 		private:
 			virtual void Init(const WindowProps& props);
 			virtual void Shutdown();
+			void LoadWindowIcon(const std::string& iconPath);
 		private:
 			GLFWwindow* m_Window;
 			Scope<GraphicsContext> m_Context;

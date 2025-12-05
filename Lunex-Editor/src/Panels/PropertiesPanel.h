@@ -3,8 +3,12 @@
 #include "Core/Core.h"
 #include "Scene/Scene.h"
 #include "Scene/Entity.h"
+#include "Renderer/MaterialPreviewRenderer.h"
+#include <functional>
+#include <unordered_map>
 
 namespace Lunex {
+	class MaterialAsset;
 
 	class PropertiesPanel {
 	public:
@@ -15,16 +19,36 @@ namespace Lunex {
 		void SetSelectedEntity(Entity entity);
 
 		void OnImGuiRender();
+		
+		// Callback for opening material editor
+		void SetOnMaterialEditCallback(const std::function<void(Ref<MaterialAsset>)>& callback) {
+			m_OnMaterialEditCallback = callback;
+		}
+		
+		// Cache management for hot reloading
+		void InvalidateMaterialThumbnail(UUID assetID);
+		void ClearThumbnailCache();
 
 	private:
 		void DrawComponents(Entity entity);
 
 		template<typename T>
 		void DisplayAddComponentEntry(const std::string& entryName);
+		
+		// ===== THUMBNAIL SYSTEM =====
+		Ref<Texture2D> GetOrGenerateThumbnail(const Ref<MaterialAsset>& asset);
 
 	private:
 		Ref<Scene> m_Context;
 		Entity m_SelectedEntity;
+		
+		// Callback
+		std::function<void(Ref<MaterialAsset>)> m_OnMaterialEditCallback;
+		
+		// ===== THUMBNAIL CACHE =====
+		// Maps MaterialAsset UUID -> Standalone Texture
+		std::unordered_map<UUID, Ref<Texture2D>> m_ThumbnailCache;
+		Scope<MaterialPreviewRenderer> m_PreviewRenderer;
 	};
 
 }

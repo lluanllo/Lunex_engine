@@ -18,6 +18,11 @@
 // ✅ Input System
 #include "Input/InputManager.h"
 
+// ✅ MeshAsset System
+#include "Asset/MeshAsset.h"
+#include "Asset/MeshImporter.h"
+#include "Asset/Prefab.h"
+
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
 
@@ -31,6 +36,17 @@ namespace Lunex {
 
 	void EditorLayer::OnAttach() {
 		LNX_PROFILE_FUNCTION();
+		
+		// ========================================
+		// INITIALIZE JOB SYSTEM
+		// ========================================
+		JobSystemConfig jobConfig;
+		jobConfig.NumWorkers = std::thread::hardware_concurrency() - 1; // Reserve 1 for main thread
+		jobConfig.NumIOWorkers = 2;
+		jobConfig.EnableWorkStealing = true;
+		jobConfig.EnableProfiling = true;
+		JobSystem::Init(jobConfig);
+		LNX_LOG_INFO("JobSystem initialized with {0} workers", jobConfig.NumWorkers);
 		
 		// ✅ NEW: Initialize Input System
 		InputManager::Get().Initialize();
@@ -135,6 +151,27 @@ namespace Lunex {
 		m_ViewportPanel.SetOnSceneDropCallback([this](const std::filesystem::path& path) {
 			OpenScene(path);
 			});
+		
+		// ========================================
+		// MESH IMPORT CALLBACKS
+		// ========================================
+		m_ViewportPanel.SetOnModelDropCallback([this](const std::filesystem::path& path) {
+			OnModelDropped(path);
+		});
+		
+		m_ViewportPanel.SetOnMeshAssetDropCallback([this](const std::filesystem::path& path) {
+			OnMeshAssetDropped(path);
+		});
+		
+		m_ViewportPanel.SetOnPrefabDropCallback([this](const std::filesystem::path& path) {
+			OnPrefabDropped(path);
+		});
+		
+		m_MeshImportModal.SetOnImportCallback([this](Ref<MeshAsset> asset) {
+			OnMeshImported(asset);
+		});
+		
+		LNX_LOG_INFO("✅ MeshAsset and Prefab import system configured");
 
 		// Configure menu bar panel
 		m_MenuBarPanel.SetOnNewProjectCallback([this]() { NewProject(); });
@@ -150,6 +187,38 @@ namespace Lunex {
 		m_MenuBarPanel.SetOnExitCallback([this]() { Application::Get().Close(); });
 		
 		m_MenuBarPanel.SetOnOpenInputSettingsCallback([this]() { m_InputSettingsPanel.Open(); });
+		m_MenuBarPanel.SetOnOpenJobSystemPanelCallback([this]() { m_JobSystemPanel.Toggle(); });
+
+		// ========================================
+		// MATERIAL EDITOR PANEL CALLBACKS
+		// ========================================
+		
+		// 1. Content Browser -> Material Editor (double-click .umat files)
+		m_ContentBrowserPanel.SetOnMaterialOpenCallback([this](const std::filesystem::path& path) {
+			m_MaterialEditorPanel.OpenMaterial(path);
+		});
+		
+		// 2. Properties Panel -> Material Editor (Edit Material button)
+		m_PropertiesPanel.SetOnMaterialEditCallback([this](Ref<MaterialAsset> asset) {
+			m_MaterialEditorPanel.OpenMaterial(asset);
+		});
+		
+		// 3. Material Editor -> Content Browser & Properties Panel (hot reload when saved)
+		m_MaterialEditorPanel.SetOnMaterialSavedCallback([this](const std::filesystem::path& path) {
+			// Invalidate Content Browser thumbnail
+			m_ContentBrowserPanel.InvalidateMaterialThumbnail(path);
+			
+			// Also invalidate PropertiesPanel thumbnail cache for the material
+			// (we need to get the material's UUID to invalidate it)
+			auto material = MaterialRegistry::Get().LoadMaterial(path);
+			if (material) {
+				m_PropertiesPanel.InvalidateMaterialThumbnail(material->GetID());
+			}
+			
+			LNX_LOG_INFO("Hot reload: Material thumbnails invalidated for {0}", path.filename().string());
+		});
+		
+		LNX_LOG_INFO("✅ Material Editor Panel callbacks configured");
 
 		// Configure project creation dialog
 		m_ProjectCreationDialog.SetOnCreateCallback([this](const std::string& name, const std::filesystem::path& location) {
@@ -161,6 +230,13 @@ namespace Lunex {
 		fbSpec.Width = 1280;
 		fbSpec.Height = 720;
 		m_Framebuffer = Framebuffer::Create(fbSpec);
+
+		// Camera Preview Framebuffer (smaller size for performance)
+		Lunex::FramebufferSpecification previewFbSpec;
+		previewFbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::Depth };
+		previewFbSpec.Width = 400;
+		previewFbSpec.Height = 225; // 16:9 aspect ratio
+		m_CameraPreviewFramebuffer = Framebuffer::Create(previewFbSpec);
 
 		// Create initial project
 		ProjectManager::New();
@@ -257,6 +333,13 @@ namespace Lunex {
 
 	void EditorLayer::OnDetach() {
 		LNX_PROFILE_FUNCTION();
+		
+		// ========================================
+		// SHUTDOWN JOB SYSTEM
+		// ========================================
+		JobSystem::Get().WaitForAllJobs();
+		JobSystem::Shutdown();
+		LNX_LOG_INFO("JobSystem shut down");
 		
 		// ✅ NEW: Shutdown Input System
 		InputManager::Get().Shutdown();
@@ -542,6 +625,11 @@ namespace Lunex {
 	void EditorLayer::OnUpdate(Lunex::Timestep ts) {
 		LNX_PROFILE_FUNCTION();
 		
+		// ========================================
+		// FLUSH MAIN-THREAD COMMANDS (Job System)
+		// ========================================
+		JobSystem::Get().FlushMainThreadCommands(0);
+		
 		// ✅ NEW: Update Input System
 		InputManager::Get().Update(ts);
 
@@ -553,7 +641,7 @@ namespace Lunex {
 
 		// Resize
 		if (FramebufferSpecification spec = m_Framebuffer->GetSpecification();
-			m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f && // zero sized framebuffer is invalid
+			m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f &&
 			(spec.Width != m_ViewportSize.x || spec.Height != m_ViewportSize.y))
 		{
 			m_Framebuffer->Resize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
@@ -563,11 +651,14 @@ namespace Lunex {
 			m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 		}
 
-		// Render
+		// ========================================
+		// MAIN VIEWPORT RENDERING
+		// ========================================
 		Renderer2D::ResetStats();
-		Renderer3D::ResetStats();  // ✅ AÑADIDO: Reset stats del 3D también
+		Renderer3D::ResetStats();
 
 		m_Framebuffer->Bind();
+		RenderCommand::SetViewport(0, 0, (uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 		RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
 		RenderCommand::Clear();
 
@@ -596,7 +687,7 @@ namespace Lunex {
 		}
 		}
 
-		// ✅ ENTITY PICKING - Funciona para 2D Y 3D
+		// ✅ ENTITY PICKING
 		auto [mx, my] = ImGui::GetMousePos();
 		mx -= m_ViewportBounds[0].x;
 		my -= m_ViewportBounds[0].y;
@@ -610,12 +701,20 @@ namespace Lunex {
 			m_HoveredEntity = pixelData == -1 ? Entity() : Entity((entt::entity)pixelData, m_ActiveScene.get());
 		}
 
-		// Update stats panel with hovered entity
 		m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
+		m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
 
 		OnOverlayRender();
 
 		m_Framebuffer->Unbind();
+
+		// ========================================
+		// CAMERA PREVIEW RENDERING (after main scene, separate pass)
+		// ========================================
+		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
+		if (selectedEntity && selectedEntity.HasComponent<CameraComponent>() && m_SceneState == SceneState::Edit) {
+			RenderCameraPreview(selectedEntity);
+		}
 	}
 
 	void EditorLayer::OnImGuiRender() {
@@ -641,8 +740,10 @@ namespace Lunex {
 		if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode)
 			window_flags |= ImGuiWindowFlags_NoBackground;
 
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f,0.0f));
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 22.0f)); // Increase menu bar height for the owning window
 		ImGui::Begin("DockSpace Demo", &dockspaceOpen, window_flags);
+		ImGui::PopStyleVar(); // FramePadding for menu bar height
 		ImGui::PopStyleVar();
 
 		if (opt_fullscreen)
@@ -667,10 +768,13 @@ namespace Lunex {
 		m_SceneHierarchyPanel.OnImGuiRender();
 		m_PropertiesPanel.OnImGuiRender();
 		m_ContentBrowserPanel.OnImGuiRender();
+		m_MaterialEditorPanel.OnImGuiRender();
 		m_StatsPanel.OnImGuiRender();
 		m_SettingsPanel.OnImGuiRender();
 		m_ConsolePanel.OnImGuiRender();
-		m_InputSettingsPanel.OnImGuiRender(); // ✅ NEW: Input settings panel
+		m_InputSettingsPanel.OnImGuiRender();
+		m_JobSystemPanel.OnImGuiRender();
+		m_MeshImportModal.OnImGuiRender();  // NEW: Mesh import modal
 
 		// Render dialogs (on top)
 		m_ProjectCreationDialog.OnImGuiRender();
@@ -680,7 +784,13 @@ namespace Lunex {
 		// Sincronizar la entidad seleccionada con PropertiesPanel
 		m_PropertiesPanel.SetSelectedEntity(selectedEntity);
 		
-		m_ViewportPanel.OnImGuiRender(m_Framebuffer, m_SceneHierarchyPanel, m_EditorCamera,
+		// Pass camera preview framebuffer only if a camera is selected
+		Ref<Framebuffer> cameraPreview = nullptr;
+		if (selectedEntity && selectedEntity.HasComponent<CameraComponent>() && m_SceneState == SceneState::Edit) {
+			cameraPreview = m_CameraPreviewFramebuffer;
+		}
+		
+		m_ViewportPanel.OnImGuiRender(m_Framebuffer, cameraPreview, m_SceneHierarchyPanel, m_EditorCamera,
 			selectedEntity, m_GizmoType, m_ToolbarPanel,
 			m_SceneState, (bool)m_ActiveScene);
 		
@@ -730,7 +840,7 @@ namespace Lunex {
 
 		return false;
 	}
-	
+
 	bool EditorLayer::OnKeyReleased(KeyReleasedEvent& e) {
 		// Convert to KeyModifiers format
 		uint8_t modifiers = KeyModifiers::None;
@@ -752,19 +862,19 @@ namespace Lunex {
 		if (m_EditorCamera.IsFlyCameraActive()) {
 			return false; // Don't process clicks while flying
 		}
-		
+
 		// ✅ MULTI-SELECTION RAY PICKING (Blender-style)
 		if (e.GetMouseButton() == Mouse::ButtonLeft) {
 			if (m_ViewportPanel.IsViewportHovered() && !ImGuizmo::IsOver()) {
 				// ✅ Use Input system for modifier detection
 				bool shiftPressed = Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift);
 				bool ctrlPressed = Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl);
-				
+
 				if (m_HoveredEntity) {
 					if (shiftPressed) {
 						// Shift+Click: Add to selection (Blender-style)
 						const auto& selectedEntities = m_SceneHierarchyPanel.GetSelectedEntities();
-						
+
 						if (selectedEntities.empty()) {
 							// No selection yet, just select this entity
 							m_SceneHierarchyPanel.SetSelectedEntity(m_HoveredEntity);
@@ -1026,7 +1136,7 @@ namespace Lunex {
 		// Create project directory
 		std::filesystem::path projectPath = location / name;
 		std::filesystem::path projectFile = projectPath / "project.lunex";
-		
+
 		// Create new project
 		Ref<Project> project = ProjectManager::New();
 		project->SetName(name);
@@ -1035,17 +1145,20 @@ namespace Lunex {
 		project->GetConfig().Height = 1080;
 		project->GetConfig().VSync = true;
 		project->GetConfig().StartScene = "Scenes/SampleScene.lunex";
-		
+
 		// Save project (this will create directories and default scene)
 		if (!ProjectManager::SaveActive(projectFile)) {
 			LNX_LOG_ERROR("Failed to create project");
 			m_ConsolePanel.AddLog("Failed to create project: " + name, LogLevel::Error, "Project");
 			return;
 		}
-		
+
 		// Update Content Browser to show project assets
 		m_ContentBrowserPanel.SetRootDirectory(project->GetAssetDirectory());
 		
+		// Update Console Panel with project directory for terminal
+		m_ConsolePanel.SetProjectDirectory(project->GetProjectDirectory());
+
 		// Load the default scene
 		auto startScenePath = project->GetAssetFileSystemPath(project->GetConfig().StartScene);
 		if (std::filesystem::exists(startScenePath)) {
@@ -1055,7 +1168,7 @@ namespace Lunex {
 			// If default scene doesn't exist, create new empty scene
 			NewScene();
 		}
-		
+
 		UI_UpdateWindowTitle();
 		m_ConsolePanel.AddLog("Project created: " + name, LogLevel::Info, "Project");
 		LNX_LOG_INFO("Project created successfully at: {0}", projectPath.string());
@@ -1085,7 +1198,9 @@ namespace Lunex {
 
 		// Update Content Browser to show project assets
 		m_ContentBrowserPanel.SetRootDirectory(project->GetAssetDirectory());
-
+		
+		// Update Console Panel with project directory for terminal
+		m_ConsolePanel.SetProjectDirectory(project->GetProjectDirectory());
 
 		// Load start scene if specified
 		auto& config = project->GetConfig();
@@ -1178,4 +1293,204 @@ namespace Lunex {
 		}
 	}
 
+	void EditorLayer::RenderCameraPreview(Entity cameraEntity) {
+		if (!cameraEntity || !cameraEntity.HasComponent<CameraComponent>())
+			return;
+
+		auto& cameraComp = cameraEntity.GetComponent<CameraComponent>();
+		glm::mat4 cameraWorldTransform = m_ActiveScene->GetWorldTransform(cameraEntity);
+
+		uint32_t previewWidth = 320;
+		uint32_t previewHeight = 180;
+
+		auto previewSpec = m_CameraPreviewFramebuffer->GetSpecification();
+		if (previewSpec.Width != previewWidth || previewSpec.Height != previewHeight) {
+			m_CameraPreviewFramebuffer->Resize(previewWidth, previewHeight);
+		}
+
+		// ========================================
+		// SAVE CURRENT VIEWPORT STATE
+		// ========================================
+		int currentViewport[4];
+		RenderCommand::SaveViewport(currentViewport);
+
+		// ========================================
+		// RENDER CAMERA PREVIEW (Isolated)
+		// ========================================
+		m_CameraPreviewFramebuffer->Bind();
+		RenderCommand::SetViewport(0, 0, previewWidth, previewHeight);
+		RenderCommand::SetClearColor({ 0.15f, 0.15f, 0.18f, 1.0f });
+		RenderCommand::Clear();
+
+		// ========================================
+		// RENDER 3D MESHES ONLY (NO GRID, NO BILLBOARDS)
+		// ========================================
+		Renderer3D::BeginScene(cameraComp.Camera, cameraWorldTransform);
+		Renderer3D::UpdateLights(m_ActiveScene.get());
+
+		{
+			auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, MeshComponent>();
+			for (auto entityID : view) {
+				Entity e = { entityID, m_ActiveScene.get() };
+				auto& mesh = e.GetComponent<MeshComponent>();
+				glm::mat4 worldTransform = m_ActiveScene->GetWorldTransform(e);
+
+				if (e.HasComponent<MaterialComponent>()) {
+					auto& material = e.GetComponent<MaterialComponent>();
+					Renderer3D::DrawMesh(worldTransform, mesh, material, -1);
+				}
+				else {
+					Renderer3D::DrawModel(worldTransform, mesh.MeshModel, mesh.Color, -1);
+				}
+			}
+		}
+
+		Renderer3D::EndScene();
+
+		// ========================================
+		// RENDER 2D SPRITES ONLY (NO GRID, NO BILLBOARDS)
+		// ========================================
+		Renderer2D::BeginScene(cameraComp.Camera, cameraWorldTransform);
+
+		{
+			auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, SpriteRendererComponent>();
+			for (auto entityID : view) {
+				Entity e = { entityID, m_ActiveScene.get() };
+				auto& sprite = e.GetComponent<SpriteRendererComponent>();
+				glm::mat4 worldTransform = m_ActiveScene->GetWorldTransform(e);
+				Renderer2D::DrawSprite(worldTransform, sprite, -1);
+			}
+		}
+
+		Renderer2D::EndScene();
+
+		// ========================================
+		// RESTORE MAIN VIEWPORT STATE
+		// ========================================
+		m_CameraPreviewFramebuffer->Unbind();
+		RenderCommand::RestoreViewport(currentViewport);
+
+		// ========================================
+		// CRITICAL: RESTORE MAIN CAMERA (Editor or Runtime)
+		// ========================================
+		if (m_SceneState == SceneState::Edit) {
+			Renderer2D::BeginScene(m_EditorCamera);
+			Renderer2D::EndScene();
+
+			Renderer3D::BeginScene(m_EditorCamera);
+			Renderer3D::EndScene();
+		}
+		else if (m_SceneState == SceneState::Play) {
+			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
+			if (camera) {
+				auto& cameraComponent = camera.GetComponent<CameraComponent>();
+				glm::mat4 cameraTransform = camera.GetComponent<TransformComponent>().GetTransform();
+
+				Renderer2D::BeginScene(cameraComponent.Camera, cameraTransform);
+				Renderer2D::EndScene();
+
+				Renderer3D::BeginScene(cameraComponent.Camera, cameraTransform);
+				Renderer3D::EndScene();
+			}
+		}
+	}
+
+	// ============================================================================
+	// MESH IMPORT HANDLERS
+	// ============================================================================
+
+	void EditorLayer::OnModelDropped(const std::filesystem::path& modelPath) {
+		if (!MeshImporter::IsSupported(modelPath)) {
+			LNX_LOG_WARN("Unsupported model format: {0}", modelPath.extension().string());
+			m_ConsolePanel.AddLog("Unsupported model format: " + modelPath.extension().string(), LogLevel::Warning, "Import");
+			return;
+		}
+		
+		// Get the assets directory for output
+		auto project = ProjectManager::GetActiveProject();
+		std::filesystem::path outputDir = project ? project->GetAssetDirectory() : g_AssetPath;
+		
+		// Open the import modal
+		m_MeshImportModal.Open(modelPath, outputDir);
+		
+		LNX_LOG_INFO("Opening mesh import modal for: {0}", modelPath.filename().string());
+	}
+
+	void EditorLayer::OnMeshAssetDropped(const std::filesystem::path& meshAssetPath) {
+		if (m_SceneState != SceneState::Edit) {
+			LNX_LOG_WARN("Cannot create entities while playing");
+			return;
+		}
+		
+		// Load the MeshAsset
+		Ref<MeshAsset> meshAsset = MeshAsset::LoadFromFile(meshAssetPath);
+		if (!meshAsset) {
+			LNX_LOG_ERROR("Failed to load MeshAsset: {0}", meshAssetPath.string());
+			m_ConsolePanel.AddLog("Failed to load mesh: " + meshAssetPath.filename().string(), LogLevel::Error, "Asset");
+			return;
+		}
+		
+		// Create entity with the mesh
+		OnMeshImported(meshAsset);
+	}
+
+	void EditorLayer::OnMeshImported(Ref<MeshAsset> meshAsset) {
+		if (!meshAsset || m_SceneState != SceneState::Edit) {
+			return;
+		}
+		
+		// Create a new entity with the mesh
+		std::string entityName = meshAsset->GetName();
+		if (entityName.empty()) {
+			entityName = "Mesh";
+		}
+		
+		Entity newEntity = m_ActiveScene->CreateEntity(entityName);
+		
+		// Add MeshComponent and set the MeshAsset
+		auto& meshComp = newEntity.AddComponent<MeshComponent>();
+		meshComp.SetMeshAsset(meshAsset);
+		
+		// MaterialComponent is added automatically by MeshComponent
+		// but we ensure it exists
+		if (!newEntity.HasComponent<MaterialComponent>()) {
+			newEntity.AddComponent<MaterialComponent>();
+		}
+		
+		// Select the new entity
+		m_SceneHierarchyPanel.SetSelectedEntity(newEntity);
+		
+		LNX_LOG_INFO("Created entity '{0}' with MeshAsset", entityName);
+		m_ConsolePanel.AddLog("Created mesh entity: " + entityName, LogLevel::Info, "Scene");
+	}
+	
+	void EditorLayer::OnPrefabDropped(const std::filesystem::path& prefabPath) {
+		if (m_SceneState != SceneState::Edit) {
+			LNX_LOG_WARN("Cannot instantiate prefabs while playing");
+			return;
+		}
+		
+		// Load the prefab
+		Ref<Prefab> prefab = Prefab::LoadFromFile(prefabPath);
+		if (!prefab) {
+			LNX_LOG_ERROR("Failed to load prefab: {0}", prefabPath.string());
+			m_ConsolePanel.AddLog("Failed to load prefab: " + prefabPath.filename().string(), LogLevel::Error, "Prefab");
+			return;
+		}
+		
+		// Instantiate the prefab at origin
+		Entity rootEntity = prefab->Instantiate(m_ActiveScene, glm::vec3(0.0f));
+		if (!rootEntity) {
+			LNX_LOG_ERROR("Failed to instantiate prefab: {0}", prefabPath.string());
+			m_ConsolePanel.AddLog("Failed to instantiate prefab: " + prefabPath.filename().string(), LogLevel::Error, "Prefab");
+			return;
+		}
+		
+		// Select the new entity
+		m_SceneHierarchyPanel.SetSelectedEntity(rootEntity);
+		
+		std::string prefabName = prefab->GetName();
+		LNX_LOG_INFO("Instantiated prefab '{0}' with {1} entities", prefabName, prefab->GetEntityCount());
+		m_ConsolePanel.AddLog("Instantiated prefab: " + prefabName, LogLevel::Info, "Scene");
+	}
 }

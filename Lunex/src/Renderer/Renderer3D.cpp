@@ -4,6 +4,8 @@
 #include "Renderer/RenderCommand.h"
 #include "Renderer/UniformBuffer.h"
 #include "Renderer/StorageBuffer.h"
+#include "Renderer/MaterialRegistry.h"
+#include "Renderer/GridRenderer.h"
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
 #include "Log/Log.h"
@@ -102,10 +104,15 @@ namespace Lunex {
 			reinterpret_cast<Renderer3DData::LightsStorageData*>(s_Data.LightsBufferData.data());
 		header->NumLights = 0;
 		s_Data.LightsStorageBuffer->SetData(s_Data.LightsBufferData.data(), lightsBufferSize);
+		
+		// Initialize GridRenderer
+		GridRenderer::Init();
 	}
 
 	void Renderer3D::Shutdown() {
 		LNX_PROFILE_FUNCTION();
+		
+		GridRenderer::Shutdown();
 	}
 
 	void Renderer3D::BeginScene(const OrthographicCamera& camera) {
@@ -187,26 +194,81 @@ namespace Lunex {
 		s_Data.LightsStorageBuffer->SetData(s_Data.LightsBufferData.data(), dataSize);
 	}
 
+	// ============================================================================
+	// NEW MATERIAL SYSTEM - DrawMesh overloads
+	// ============================================================================
+
 	void Renderer3D::DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, int entityID) {
 		if (!meshComponent.MeshModel)
 			return;
 
-		DrawModel(transform, meshComponent.MeshModel, meshComponent.Color, entityID);
+		// Usar material por defecto si no hay MaterialComponent
+		auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
+		DrawModel(transform, meshComponent.MeshModel, defaultMaterial->GetAlbedo(), entityID);
 	}
 
 	void Renderer3D::DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, MaterialComponent& materialComponent, int entityID) {
-		if (!meshComponent.MeshModel)
+		if (!meshComponent.MeshModel || !materialComponent.Instance)
 			return;
 
-		DrawModel(transform, meshComponent.MeshModel, materialComponent, entityID);
+		const_cast<Model*>(meshComponent.MeshModel.get())->SetEntityID(entityID);
+
+		// Update Transform uniform buffer
+		s_Data.TransformBuffer.Transform = transform;
+		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
+
+		// Get material uniform data from MaterialInstance (con overrides aplicados)
+		auto uniformData = materialComponent.Instance->GetUniformData();
+
+		// Upload material data
+		s_Data.MaterialBuffer.Color = uniformData.Albedo;
+		s_Data.MaterialBuffer.Metallic = uniformData.Metallic;
+		s_Data.MaterialBuffer.Roughness = uniformData.Roughness;
+		s_Data.MaterialBuffer.Specular = uniformData.Specular;
+		s_Data.MaterialBuffer.EmissionIntensity = uniformData.EmissionIntensity;
+		s_Data.MaterialBuffer.EmissionColor = uniformData.EmissionColor;
+		s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
+
+		s_Data.MaterialBuffer.UseAlbedoMap = uniformData.UseAlbedoMap;
+		s_Data.MaterialBuffer.UseNormalMap = uniformData.UseNormalMap;
+		s_Data.MaterialBuffer.UseMetallicMap = uniformData.UseMetallicMap;
+		s_Data.MaterialBuffer.UseRoughnessMap = uniformData.UseRoughnessMap;
+		s_Data.MaterialBuffer.UseSpecularMap = uniformData.UseSpecularMap;
+		s_Data.MaterialBuffer.UseEmissionMap = uniformData.UseEmissionMap;
+		s_Data.MaterialBuffer.UseAOMap = uniformData.UseAOMap;
+
+		s_Data.MaterialBuffer.MetallicMultiplier = uniformData.MetallicMultiplier;
+		s_Data.MaterialBuffer.RoughnessMultiplier = uniformData.RoughnessMultiplier;
+		s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
+		s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
+
+		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
+
+		// Bind shader and textures
+		s_Data.MeshShader->Bind();
+		materialComponent.Instance->BindTextures();
+
+		// Draw the model
+		meshComponent.MeshModel->Draw(s_Data.MeshShader);
+
+		s_Data.Stats.DrawCalls++;
+		s_Data.Stats.MeshCount += (uint32_t)meshComponent.MeshModel->GetMeshes().size();
+
+		for (const auto& mesh : meshComponent.MeshModel->GetMeshes()) {
+			s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
+		}
 	}
 
+	// DEPRECATED: Este método mantiene compatibilidad con TextureComponent legacy
 	void Renderer3D::DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, MaterialComponent& materialComponent, TextureComponent& textureComponent, int entityID) {
-		if (!meshComponent.MeshModel)
-			return;
-
-		DrawModel(transform, meshComponent.MeshModel, materialComponent, textureComponent, entityID);
+		// Por compatibilidad temporal, renderizar con MaterialComponent ignorando TextureComponent
+		LNX_LOG_WARN("DrawMesh with TextureComponent is deprecated. Migrate to MaterialAsset.");
+		DrawMesh(transform, meshComponent, materialComponent, entityID);
 	}
+	
+	// ============================================================================
+	// DrawModel overloads (internal use)
+	// ============================================================================
 
 	void Renderer3D::DrawModel(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& color, int entityID) {
 		LNX_PROFILE_FUNCTION();
@@ -259,7 +321,7 @@ namespace Lunex {
 	void Renderer3D::DrawModel(const glm::mat4& transform, const Ref<Model>& model, MaterialComponent& materialComponent, int entityID) {
 		LNX_PROFILE_FUNCTION();
 
-		if (!model || model->GetMeshes().empty())
+		if (!model || model->GetMeshes().empty() || !materialComponent.Instance)
 			return;
 
 		const_cast<Model*>(model.get())->SetEntityID(entityID);
@@ -268,33 +330,38 @@ namespace Lunex {
 		s_Data.TransformBuffer.Transform = transform;
 		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
 
-		// Update Material uniform buffer with MaterialComponent values
-		auto& material = materialComponent.MaterialInstance;
-		s_Data.MaterialBuffer.Color = material->GetColor();
-		s_Data.MaterialBuffer.Metallic = material->GetMetallic();
-		s_Data.MaterialBuffer.Roughness = material->GetRoughness();
-		s_Data.MaterialBuffer.Specular = material->GetSpecular();
-		s_Data.MaterialBuffer.EmissionIntensity = material->GetEmissionIntensity();
-		s_Data.MaterialBuffer.EmissionColor = material->GetEmissionColor();
+		// Get material uniform data from MaterialInstance
+		auto uniformData = materialComponent.Instance->GetUniformData();
+
+		// Copy to s_Data.MaterialBuffer
+		s_Data.MaterialBuffer.Color = uniformData.Albedo;
+		s_Data.MaterialBuffer.Metallic = uniformData.Metallic;
+		s_Data.MaterialBuffer.Roughness = uniformData.Roughness;
+		s_Data.MaterialBuffer.Specular = uniformData.Specular;
+		s_Data.MaterialBuffer.EmissionIntensity = uniformData.EmissionIntensity;
+		s_Data.MaterialBuffer.EmissionColor = uniformData.EmissionColor;
 		s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
 
-		// No textures in this overload
-		s_Data.MaterialBuffer.UseAlbedoMap = 0;
-		s_Data.MaterialBuffer.UseNormalMap = 0;
-		s_Data.MaterialBuffer.UseMetallicMap = 0;
-		s_Data.MaterialBuffer.UseRoughnessMap = 0;
-		s_Data.MaterialBuffer.UseSpecularMap = 0;
-		s_Data.MaterialBuffer.UseEmissionMap = 0;
-		s_Data.MaterialBuffer.UseAOMap = 0;
-		s_Data.MaterialBuffer.MetallicMultiplier = 1.0f;
-		s_Data.MaterialBuffer.RoughnessMultiplier = 1.0f;
-		s_Data.MaterialBuffer.SpecularMultiplier = 1.0f;
-		s_Data.MaterialBuffer.AOMultiplier = 1.0f;
+		s_Data.MaterialBuffer.UseAlbedoMap = uniformData.UseAlbedoMap;
+		s_Data.MaterialBuffer.UseNormalMap = uniformData.UseNormalMap;
+		s_Data.MaterialBuffer.UseMetallicMap = uniformData.UseMetallicMap;
+		s_Data.MaterialBuffer.UseRoughnessMap = uniformData.UseRoughnessMap;
+		s_Data.MaterialBuffer.UseSpecularMap = uniformData.UseSpecularMap;
+		s_Data.MaterialBuffer.UseEmissionMap = uniformData.UseEmissionMap;
+		s_Data.MaterialBuffer.UseAOMap = uniformData.UseAOMap;
+
+		s_Data.MaterialBuffer.MetallicMultiplier = uniformData.MetallicMultiplier;
+		s_Data.MaterialBuffer.RoughnessMultiplier = uniformData.RoughnessMultiplier;
+		s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
+		s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
 
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
 
-		// Draw the model
+		// Bind shader and textures
 		s_Data.MeshShader->Bind();
+		materialComponent.Instance->BindTextures();
+
+		// Draw the model
 		model->Draw(s_Data.MeshShader);
 
 		s_Data.Stats.DrawCalls++;
@@ -305,6 +372,7 @@ namespace Lunex {
 		}
 	}
 
+	// DEPRECATED: Para compatibilidad con TextureComponent legacy
 	void Renderer3D::DrawModel(const glm::mat4& transform, const Ref<Model>& model, MaterialComponent& materialComponent, TextureComponent& textureComponent, int entityID) {
 		LNX_PROFILE_FUNCTION();
 
@@ -317,42 +385,37 @@ namespace Lunex {
 		s_Data.TransformBuffer.Transform = transform;
 		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
 
-		// Update Material uniform buffer with MaterialComponent values
-		auto& material = materialComponent.MaterialInstance;
-		s_Data.MaterialBuffer.Color = material->GetColor();
-		s_Data.MaterialBuffer.Metallic = material->GetMetallic();
-		s_Data.MaterialBuffer.Roughness = material->GetRoughness();
-		s_Data.MaterialBuffer.Specular = material->GetSpecular();
-		s_Data.MaterialBuffer.EmissionIntensity = material->GetEmissionIntensity();
-		s_Data.MaterialBuffer.EmissionColor = material->GetEmissionColor();
-		s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
+		// Get material from MaterialComponent (ignore TextureComponent - deprecated)
+		if (materialComponent.Instance) {
+			auto uniformData = materialComponent.Instance->GetUniformData();
+			
+			s_Data.MaterialBuffer.Color = uniformData.Albedo;
+			s_Data.MaterialBuffer.Metallic = uniformData.Metallic;
+			s_Data.MaterialBuffer.Roughness = uniformData.Roughness;
+			s_Data.MaterialBuffer.Specular = uniformData.Specular;
+			s_Data.MaterialBuffer.EmissionIntensity = uniformData.EmissionIntensity;
+			s_Data.MaterialBuffer.EmissionColor = uniformData.EmissionColor;
+			s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
 
-		// Set texture flags
-		s_Data.MaterialBuffer.UseAlbedoMap = textureComponent.HasAlbedo() ? 1 : 0;
-		s_Data.MaterialBuffer.UseNormalMap = textureComponent.HasNormal() ? 1 : 0;
-		s_Data.MaterialBuffer.UseMetallicMap = textureComponent.HasMetallic() ? 1 : 0;
-		s_Data.MaterialBuffer.UseRoughnessMap = textureComponent.HasRoughness() ? 1 : 0;
-		s_Data.MaterialBuffer.UseSpecularMap = textureComponent.HasSpecular() ? 1 : 0;
-		s_Data.MaterialBuffer.UseEmissionMap = textureComponent.HasEmission() ? 1 : 0;
-		s_Data.MaterialBuffer.UseAOMap = textureComponent.HasAO() ? 1 : 0;
+			s_Data.MaterialBuffer.UseAlbedoMap = uniformData.UseAlbedoMap;
+			s_Data.MaterialBuffer.UseNormalMap = uniformData.UseNormalMap;
+			s_Data.MaterialBuffer.UseMetallicMap = uniformData.UseMetallicMap;
+			s_Data.MaterialBuffer.UseRoughnessMap = uniformData.UseRoughnessMap;
+			s_Data.MaterialBuffer.UseSpecularMap = uniformData.UseSpecularMap;
+			s_Data.MaterialBuffer.UseEmissionMap = uniformData.UseEmissionMap;
+			s_Data.MaterialBuffer.UseAOMap = uniformData.UseAOMap;
 
-		// Set texture multipliers
-		s_Data.MaterialBuffer.MetallicMultiplier = textureComponent.MetallicMultiplier;
-		s_Data.MaterialBuffer.RoughnessMultiplier = textureComponent.RoughnessMultiplier;
-		s_Data.MaterialBuffer.SpecularMultiplier = textureComponent.SpecularMultiplier;
-		s_Data.MaterialBuffer.AOMultiplier = textureComponent.AOMultiplier;
+			s_Data.MaterialBuffer.MetallicMultiplier = uniformData.MetallicMultiplier;
+			s_Data.MaterialBuffer.RoughnessMultiplier = uniformData.RoughnessMultiplier;
+			s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
+			s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
 
-		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
+			s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
 
-		// Bind textures
-		s_Data.MeshShader->Bind();
-		if (textureComponent.AlbedoMap) textureComponent.AlbedoMap->Bind(0);
-		if (textureComponent.NormalMap) textureComponent.NormalMap->Bind(1);
-		if (textureComponent.MetallicMap) textureComponent.MetallicMap->Bind(2);
-		if (textureComponent.RoughnessMap) textureComponent.RoughnessMap->Bind(3);
-		if (textureComponent.SpecularMap) textureComponent.SpecularMap->Bind(4);
-		if (textureComponent.EmissionMap) textureComponent.EmissionMap->Bind(5);
-		if (textureComponent.AOMap) textureComponent.AOMap->Bind(6);
+			// Bind shader and textures from MaterialInstance
+			s_Data.MeshShader->Bind();
+			materialComponent.Instance->BindTextures();
+		}
 
 		// Draw the model
 		model->Draw(s_Data.MeshShader);

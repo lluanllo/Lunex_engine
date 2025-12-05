@@ -4,6 +4,7 @@
 #include "../Panels/SceneHierarchyPanel.h"
 #include "../Panels/PropertiesPanel.h"
 #include "../Panels/ContentBrowserPanel.h"
+#include "../Panels/MaterialEditorPanel.h"
 #include "../Panels/StatsPanel.h"
 #include "../Panels/SettingsPanel.h"
 #include "../Panels/ViewportPanel.h"
@@ -13,6 +14,8 @@
 #include "../Panels/ProjectCreationDialog.h"
 #include "../Panels/InputSettingsPanel.h"
 #include "../Panels/GizmoSettingsPanel.h"
+#include "../Panels/JobSystemPanel.h"
+#include "../Panels/MeshImportModal.h"
 
 #include "Renderer/EditorCamera.h"
 
@@ -67,6 +70,17 @@ namespace Lunex {
 			// UI Refresh
 			void UI_UpdateWindowTitle();
 			
+			// Camera Preview
+			void RenderCameraPreview(Entity cameraEntity);
+			
+			// Mesh Import
+			void OnModelDropped(const std::filesystem::path& modelPath);
+			void OnMeshAssetDropped(const std::filesystem::path& meshAssetPath);
+			void OnMeshImported(Ref<MeshAsset> meshAsset);
+			
+			// Prefab
+			void OnPrefabDropped(const std::filesystem::path& prefabPath);
+			
 		private:
 			OrthographicCameraController m_CameraController;
 			
@@ -74,6 +88,7 @@ namespace Lunex {
 			Ref<VertexArray> m_SquareVA;
 			Ref<Shader> m_FlatColorShader;
 			Ref<Framebuffer> m_Framebuffer;
+			Ref<Framebuffer> m_CameraPreviewFramebuffer;
 			
 			Ref<Scene> m_ActiveScene;
 			Ref<Scene> m_EditorScene;
@@ -102,6 +117,7 @@ namespace Lunex {
 			SceneHierarchyPanel m_SceneHierarchyPanel;
 			PropertiesPanel m_PropertiesPanel;
 			ContentBrowserPanel m_ContentBrowserPanel;
+			MaterialEditorPanel m_MaterialEditorPanel;
 			StatsPanel m_StatsPanel;
 			SettingsPanel m_SettingsPanel;
 			ViewportPanel m_ViewportPanel;
@@ -111,6 +127,8 @@ namespace Lunex {
 			ProjectCreationDialog m_ProjectCreationDialog;
 			InputSettingsPanel m_InputSettingsPanel;
 			GizmoSettingsPanel m_GizmoSettingsPanel;
+			JobSystemPanel m_JobSystemPanel;
+			MeshImportModal m_MeshImportModal;
 			
 			// Editor resources
 			Ref<Texture2D> m_IconPlay, m_IconSimulate, m_IconStop;

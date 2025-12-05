@@ -17,7 +17,8 @@ namespace Lunex {
 		ViewportPanel() = default;
 		~ViewportPanel() = default;
 
-		void OnImGuiRender(Ref<Framebuffer> framebuffer, SceneHierarchyPanel& hierarchyPanel,
+		void OnImGuiRender(Ref<Framebuffer> framebuffer, Ref<Framebuffer> cameraPreviewFramebuffer,
+			SceneHierarchyPanel& hierarchyPanel,
 			const EditorCamera& editorCamera, Entity selectedEntity, int gizmoType,
 			ToolbarPanel& toolbarPanel, SceneState sceneState, bool toolbarEnabled);
 
@@ -30,13 +31,33 @@ namespace Lunex {
 		void SetOnSceneDropCallback(std::function<void(const std::filesystem::path&)> callback) {
 			m_OnSceneDropCallback = callback;
 		}
+		
+		// Callback for 3D model file drop (triggers import modal)
+		void SetOnModelDropCallback(std::function<void(const std::filesystem::path&)> callback) {
+			m_OnModelDropCallback = callback;
+		}
+		
+		// Callback for .lumesh file drop (creates entity directly)
+		void SetOnMeshAssetDropCallback(std::function<void(const std::filesystem::path&)> callback) {
+			m_OnMeshAssetDropCallback = callback;
+		}
+		
+		// Callback for .luprefab file drop (instantiates prefab)
+		void SetOnPrefabDropCallback(std::function<void(const std::filesystem::path&)> callback) {
+			m_OnPrefabDropCallback = callback;
+		}
 
 	private:
+		void RenderCameraPreview(Ref<Framebuffer> previewFramebuffer, Entity selectedEntity);
+		
 		bool m_ViewportFocused = false;
 		bool m_ViewportHovered = false;
 		glm::vec2 m_ViewportSize = { 0.0f, 0.0f };
 		glm::vec2 m_ViewportBounds[2];
 
 		std::function<void(const std::filesystem::path&)> m_OnSceneDropCallback;
+		std::function<void(const std::filesystem::path&)> m_OnModelDropCallback;
+		std::function<void(const std::filesystem::path&)> m_OnMeshAssetDropCallback;
+		std::function<void(const std::filesystem::path&)> m_OnPrefabDropCallback;
 	};
 }

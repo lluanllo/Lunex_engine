@@ -5,8 +5,10 @@
 #include "ScriptableEntity.h"
 #include "Renderer/Renderer2D.h"
 #include "Renderer/Renderer3D.h"
+#include "Renderer/GridRenderer.h"
 #include "Renderer/RenderCommand.h"
 #include "Core/Input.h"
+#include "Core/JobSystem/JobSystem.h"  // ✅ Added for parallel physics
 
 #include "Scripting/ScriptingEngine.h"
 #include "Physics/Physics.h"
@@ -36,7 +38,7 @@ namespace Lunex {
 
 	Scene::~Scene() {
 		// El ScriptingEngine se destruirá automáticamente (unique_ptr)
-		
+
 		// Box2D v3.x: verificar si el mundo existe antes de destruir
 		if (B2_IS_NON_NULL(m_PhysicsWorld)) {
 			b2DestroyWorld(m_PhysicsWorld);
@@ -144,7 +146,7 @@ namespace Lunex {
 	void Scene::OnUpdateRuntime(Timestep ts) {
 		// Update scripts con deltaTime real
 		m_ScriptingEngine->OnScriptsUpdate(ts);
-		
+
 		// Native scripts
 		{
 			m_Registry.view<NativeScriptComponent>().each([=](auto entity, auto& nsc) {
@@ -157,68 +159,113 @@ namespace Lunex {
 				});
 		}
 
-		// Physics 2D
+		// ========================================
+		// PARALLELIZED PHYSICS 2D
+		// ========================================
 		{
 			// ✅ Box2D v3.x: Step con firma actualizada
 			b2World_Step(m_PhysicsWorld, ts, 4);
 
-			// Retrieve transform from Box2D
+			// ✅ PARALLEL: Retrieve transforms from Box2D across multiple threads
 			auto view = m_Registry.view<Rigidbody2DComponent>();
-			for (auto e : view) {
-				Entity entity = { e, this };
-				auto& transform = entity.GetComponent<TransformComponent>();
-				auto& rb2d = entity.GetComponent<Rigidbody2DComponent>();
+			std::vector<entt::entity> entities(view.begin(), view.end());
 
-				b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
-				b2Vec2 position = b2Body_GetPosition(bodyId);
-				b2Rot rotation = b2Body_GetRotation(bodyId);
+			if (!entities.empty()) {
+				// Use ParallelFor to distribute entity updates across workers
+				auto counter = JobSystem::Get().ParallelFor(
+					0,
+					static_cast<uint32_t>(entities.size()),
+					[this, &entities](uint32_t index) {
+						entt::entity e = entities[index];
+						Entity entity = { e, this };
 
-				transform.Translation.x = position.x;
-				transform.Translation.y = position.y;
-				transform.Rotation.z = b2Rot_GetAngle(rotation);
+						// Check if entity still has required components (thread-safe read)
+						if (!entity.HasComponent<TransformComponent>() || !entity.HasComponent<Rigidbody2DComponent>()) {
+							return;
+						}
+
+						auto& transform = entity.GetComponent<TransformComponent>();
+						auto& rb2d = entity.GetComponent<Rigidbody2DComponent>();
+
+						b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+						b2Vec2 position = b2Body_GetPosition(bodyId);
+						b2Rot rotation = b2Body_GetRotation(bodyId);
+
+						transform.Translation.x = position.x;
+						transform.Translation.y = position.y;
+						transform.Rotation.z = b2Rot_GetAngle(rotation);
+					},
+					64,  // Grain size: process 64 entities per job
+					JobPriority::High
+				);
+
+				// Wait for all physics updates to complete
+				JobSystem::Get().Wait(counter);
 			}
 		}
 
-		// Physics 3D
+		// ========================================
+		// PARALLELIZED PHYSICS 3D
+		// ========================================
 		{
 			// ✅ CRITICAL FIX: Use proper substeps and fixed timestep
-			// This prevents tunneling and ensures stable physics simulation
 			float fixedTimeStep = 1.0f / 60.0f; // 60 FPS physics
-			int maxSubSteps = 30; // ↑ Match updated PhysicsConfig
-			
+			int maxSubSteps = 30;
+
 			PhysicsCore::Get().GetWorld()->StepSimulation(ts, maxSubSteps, fixedTimeStep);
 
-			// Retrieve transforms from Bullet
+			// ✅ PARALLEL: Retrieve transforms from Bullet across multiple threads
 			auto view = m_Registry.view<TransformComponent, Rigidbody3DComponent>();
-			for (auto e : view) {
-				auto& transform = view.get<TransformComponent>(e);
-				auto& rb3d = view.get<Rigidbody3DComponent>(e);
+			std::vector<entt::entity> entities(view.begin(), view.end());
 
-				if (rb3d.RuntimeBody) {
-					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
-					
-					// ✅ NEW: Clamp velocity for heavy objects to prevent tunneling
-					if (rb3d.Mass > 10.0f) {
-						glm::vec3 velocity = body->GetLinearVelocity();
-						float speed = glm::length(velocity);
-						
-						// Max speed based on mass (heavier = slower max speed)
-						float maxSpeed = 50.0f / std::sqrt(rb3d.Mass / 10.0f);
-						
-						if (speed > maxSpeed) {
-							glm::vec3 clampedVelocity = glm::normalize(velocity) * maxSpeed;
-							body->SetLinearVelocity(clampedVelocity);
+			if (!entities.empty()) {
+				auto counter = JobSystem::Get().ParallelFor(
+					0,
+					static_cast<uint32_t>(entities.size()),
+					[this, &entities, &view](uint32_t index) {
+						entt::entity e = entities[index];
+
+						// Check if entity still valid (might have been destroyed)
+						if (!m_Registry.valid(e)) {
+							return;
 						}
-					}
-					
-					// Get position and rotation from physics
-					glm::vec3 position = body->GetPosition();
-					glm::quat rotation = body->GetRotation();
 
-					// Update transform
-					transform.Translation = position;
-					transform.Rotation = glm::eulerAngles(rotation);
-				}
+						// Get components (thread-safe if only reading/writing own entity)
+						auto& transform = view.get<TransformComponent>(e);
+						auto& rb3d = view.get<Rigidbody3DComponent>(e);
+
+						if (rb3d.RuntimeBody) {
+							RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+
+							// ✅ NEW: Clamp velocity for heavy objects to prevent tunneling
+							if (rb3d.Mass > 10.0f) {
+								glm::vec3 velocity = body->GetLinearVelocity();
+								float speed = glm::length(velocity);
+
+								// Max speed based on mass (heavier = slower max speed)
+								float maxSpeed = 50.0f / std::sqrt(rb3d.Mass / 10.0f);
+
+								if (speed > maxSpeed) {
+									glm::vec3 clampedVelocity = glm::normalize(velocity) * maxSpeed;
+									body->SetLinearVelocity(clampedVelocity);
+								}
+							}
+
+							// Get position and rotation from physics
+							glm::vec3 position = body->GetPosition();
+							glm::quat rotation = body->GetRotation();
+
+							// Update transform
+							transform.Translation = position;
+							transform.Rotation = glm::eulerAngles(rotation);
+						}
+					},
+					32,  // Grain size: process 32 3D physics entities per job
+					JobPriority::High
+				);
+
+				// Wait for all 3D physics updates to complete
+				JobSystem::Get().Wait(counter);
 			}
 		}
 
@@ -260,85 +307,13 @@ namespace Lunex {
 				}
 			}
 
-			// End current batch before rendering billboards to avoid texture slot conflicts
 			Renderer2D::EndScene();
-			
-			// Start fresh batch for billboards
-			Renderer2D::BeginScene(*mainCamera, cameraTransform);
 
-			// Render billboards (lights and cameras) sorted by distance
-			struct BillboardData {
-				glm::vec3 Position;
-				Ref<Texture2D> Texture;
-				int EntityID;
-				float Distance;
-				float Size;
-				int Priority; // 0 = luz (primero), 1 = cámara (después)
-			};
 			
-			std::vector<BillboardData> billboards;
-			// Extract camera position from transform matrix
-			glm::vec3 cameraPos = glm::vec3(cameraTransform[3]);
-			
-			// Collect light billboards
-			{
-				auto view = m_Registry.view<TransformComponent, LightComponent>();
-				for (auto entity : view) {
-					auto [transform, light] = view.get<TransformComponent, LightComponent>(entity);
-					
-					// Only add billboard if texture is valid and loaded
-					if (light.IconTexture && light.IconTexture->IsLoaded()) {
-						float distance = glm::length(cameraPos - transform.Translation);
-						billboards.push_back({ transform.Translation, light.IconTexture, (int)entity, distance, 0.5f, 0 });
-					}
-				}
-			}
-			
-			// Collect camera billboards
-			{
-				auto view = m_Registry.view<TransformComponent, CameraComponent>();
-				for (auto entity : view) {
-					auto [transform, cameraComp] = view.get<TransformComponent, CameraComponent>(entity);
-					
-					// Only add billboard if texture is valid and loaded
-					if (cameraComp.IconTexture && cameraComp.IconTexture->IsLoaded()) {
-						float distance = glm::length(cameraPos - transform.Translation);
-						// ✅ FIX: Use LARGER offset to prevent z-fighting
-						glm::vec3 toCamera = glm::normalize(cameraPos - transform.Translation);
-						glm::vec3 offsetPos = transform.Translation + toCamera * 0.1f; // Increased from 0.01f
-						billboards.push_back({ offsetPos, cameraComp.IconTexture, (int)entity, distance, 1.0f, 1 });
-					}
-				}
-			}
-			
-			// Sort billboards: first by distance (farthest first), then by priority
-			std::sort(billboards.begin(), billboards.end(), 
-				[](const BillboardData& a, const BillboardData& b) {
-					if (std::abs(a.Distance - b.Distance) < 0.01f) {
-						return a.Priority < b.Priority; // Luces antes que cámaras si están en la misma posición
-					}
-					return a.Distance > b.Distance; // Farthest first
-				});
-			
-			// ✅ FIX: For transparent billboards keep depth test enabled (so they are occluded by nearer opaque geometry)
-			// Disable ONLY depth writes to allow correct back-to-front blending
-			RenderCommand::SetDepthMask(false);
-			
-			// Render sorted billboards
-			for (const auto& billboard : billboards) {
-				Renderer2D::DrawBillboard(billboard.Position, billboard.Texture,
-					cameraPos, billboard.Size, billboard.EntityID);
-			}
-			
-			// Restore depth write
-			RenderCommand::SetDepthMask(true);
-
-			Renderer2D::EndScene();
-			
-			// Render 3D (SIN iconos de luz en runtime)
+			// Render 3D meshes
 			Renderer3D::BeginScene(*mainCamera, cameraTransform);
 
-			// Update lights before rendering meshes (para iluminación, pero iconos NO se renderizan)
+			// Update lights for rendering (lighting affects meshes, but icons are NOT rendered)
 			Renderer3D::UpdateLights(this);
 
 			{
@@ -347,14 +322,7 @@ namespace Lunex {
 					Entity e = { entity, this };
 					auto [transform, mesh] = view.get<TransformComponent, MeshComponent>(entity);
 
-					// Check for TextureComponent and MaterialComponent
-					if (e.HasComponent<TextureComponent>() && e.HasComponent<MaterialComponent>()) {
-						auto& texture = e.GetComponent<TextureComponent>();
-						auto& material = e.GetComponent<MaterialComponent>();
-						Renderer3D::DrawMesh(transform.GetTransform(), mesh, material, texture, (int)entity);
-					}
-					// Use MaterialComponent if available
-					else if (e.HasComponent<MaterialComponent>()) {
+					if (e.HasComponent<MaterialComponent>()) {
 						auto& material = e.GetComponent<MaterialComponent>();
 						Renderer3D::DrawMesh(transform.GetTransform(), mesh, material, (int)entity);
 					}
@@ -396,7 +364,7 @@ namespace Lunex {
 			// ✅ CRITICAL FIX: Use proper substeps and fixed timestep
 			float fixedTimeStep = 1.0f / 60.0f;
 			int maxSubSteps = 30;
-			
+
 			PhysicsCore::Get().GetWorld()->StepSimulation(ts, maxSubSteps, fixedTimeStep);
 
 			// Retrieve transforms from Bullet
@@ -407,20 +375,20 @@ namespace Lunex {
 
 				if (rb3d.RuntimeBody) {
 					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
-					
+
 					// ✅ NEW: Clamp velocity for heavy objects
 					if (rb3d.Mass > 10.0f) {
 						glm::vec3 velocity = body->GetLinearVelocity();
 						float speed = glm::length(velocity);
-						
+
 						float maxSpeed = 50.0f / std::sqrt(rb3d.Mass / 10.0f);
-						
+
 						if (speed > maxSpeed) {
 							glm::vec3 clampedVelocity = glm::normalize(velocity) * maxSpeed;
 							body->SetLinearVelocity(clampedVelocity);
 						}
 					}
-					
+
 					// Get position and rotation from physics
 					glm::vec3 position = body->GetPosition();
 					glm::quat rotation = body->GetRotation();
@@ -565,14 +533,22 @@ namespace Lunex {
 	}
 
 	void Scene::RenderScene(EditorCamera& camera) {
+
 		Renderer2D::BeginScene(camera);
+
+		// ========================================
+		// RENDER INFINITE GRID (after BeginScene, before entities)
+		// ========================================
+		GridRenderer::DrawGrid(camera);
 
 		// Draw sprites
 		{
 			auto group = m_Registry.group<TransformComponent>(entt::get<SpriteRendererComponent>);
 			for (auto entity : group) {
-				auto [transform, sprite] = group.get<TransformComponent, SpriteRendererComponent>(entity);
-				Renderer2D::DrawSprite(transform.GetTransform(), sprite, (int)entity);
+				Entity e = { entity, this };
+				auto& sprite = group.get<SpriteRendererComponent>(entity);
+				glm::mat4 worldTransform = GetWorldTransform(e);
+				Renderer2D::DrawSprite(worldTransform, sprite, (int)entity);
 			}
 		}
 
@@ -580,14 +556,16 @@ namespace Lunex {
 		{
 			auto view = m_Registry.view<TransformComponent, CircleRendererComponent>();
 			for (auto entity : view) {
-				auto [transform, circle] = view.get<TransformComponent, CircleRendererComponent>(entity);
-				Renderer2D::DrawCircle(transform.GetTransform(), circle.Color, circle.Thickness, circle.Fade, (int)entity);
+				Entity e = { entity, this };
+				auto& circle = view.get<CircleRendererComponent>(entity);
+				glm::mat4 worldTransform = GetWorldTransform(e);
+				Renderer2D::DrawCircle(worldTransform, circle.Color, circle.Thickness, circle.Fade, (int)entity);
 			}
 		}
 
 		// End current batch before rendering billboards to avoid texture slot conflicts
 		Renderer2D::EndScene();
-		
+
 		// Start fresh batch for billboards and frustums
 		Renderer2D::BeginScene(camera);
 
@@ -598,158 +576,133 @@ namespace Lunex {
 			int EntityID;
 			float Distance;
 			float Size;
-			int Priority; // 0 = luz (primero), 1 = cámara (después)
+			int Priority;
 		};
-		
+
 		std::vector<BillboardData> billboards;
 		glm::vec3 cameraPos = camera.GetPosition();
-		
+
 		// Collect light billboards
 		{
 			auto view = m_Registry.view<TransformComponent, LightComponent>();
 			for (auto entity : view) {
-				auto [transform, light] = view.get<TransformComponent, LightComponent>(entity);
-				
-				// Only add billboard if texture is valid and loaded
+				Entity e = { entity, this };
+				auto& light = view.get<LightComponent>(entity);
+				glm::mat4 worldTransform = GetWorldTransform(e);
+				glm::vec3 worldPos = glm::vec3(worldTransform[3]);
+
 				if (light.IconTexture && light.IconTexture->IsLoaded()) {
-					float distance = glm::length(cameraPos - transform.Translation);
-					billboards.push_back({ transform.Translation, light.IconTexture, (int)entity, distance, 0.5f, 0 });
+					float distance = glm::length(cameraPos - worldPos);
+					billboards.push_back({ worldPos, light.IconTexture, (int)entity, distance, 0.5f, 0 });
 				}
 			}
 		}
-		
+
 		// Collect camera billboards
 		{
 			auto view = m_Registry.view<TransformComponent, CameraComponent>();
 			for (auto entity : view) {
-				auto [transform, cameraComp] = view.get<TransformComponent, CameraComponent>(entity);
-				
-				// Only add billboard if texture is valid and loaded
+				Entity e = { entity, this };
+				auto& cameraComp = view.get<CameraComponent>(entity);
+				glm::mat4 worldTransform = GetWorldTransform(e);
+				glm::vec3 worldPos = glm::vec3(worldTransform[3]);
+
 				if (cameraComp.IconTexture && cameraComp.IconTexture->IsLoaded()) {
-					float distance = glm::length(cameraPos - transform.Translation);
-					// ✅ FIX: Use LARGER offset to prevent z-fighting
-					glm::vec3 toCamera = glm::normalize(cameraPos - transform.Translation);
-					glm::vec3 offsetPos = transform.Translation + toCamera * 0.1f; // Increased from 0.01f
+					float distance = glm::length(cameraPos - worldPos);
+					glm::vec3 toCamera = glm::normalize(cameraPos - worldPos);
+					glm::vec3 offsetPos = worldPos + toCamera * 0.1f;
 					billboards.push_back({ offsetPos, cameraComp.IconTexture, (int)entity, distance, 1.0f, 1 });
 				}
 			}
 		}
-		
-		// Sort billboards: first by distance (farthest first), then by priority
-		std::sort(billboards.begin(), billboards.end(), 
+
+		// Sort billboards
+		std::sort(billboards.begin(), billboards.end(),
 			[](const BillboardData& a, const BillboardData& b) {
 				if (std::abs(a.Distance - b.Distance) < 0.01f) {
-					return a.Priority < b.Priority; // Luces antes que cámaras si están en la misma posición
+					return a.Priority < b.Priority;
 				}
-				return a.Distance > b.Distance; // Farthest first
+				return a.Distance > b.Distance;
 			});
-		
-		// ✅ FIX: Disable BOTH depth writing AND depth testing for billboards
+
 		RenderCommand::SetDepthMask(false);
-		
-		// Render sorted billboards
+
 		for (const auto& billboard : billboards) {
 			Renderer2D::DrawBillboard(billboard.Position, billboard.Texture,
 				cameraPos, billboard.Size, billboard.EntityID);
 		}
-		
-		// ✅ Re-enable depth testing and writing
+
 		RenderCommand::SetDepthMask(true);
-		
+
 		// ========================================
 		// DRAW CAMERA FRUSTUMS (Editor only)
 		// ========================================
-		
-		// ✅ Save current line width and set thin lines for frustums
 		float previousLineWidth = Renderer2D::GetLineWidth();
-		Renderer2D::SetLineWidth(0.15f);  // Ultra-thin lines that stay thin at any distance
-		
+		Renderer2D::SetLineWidth(0.15f);
+
 		{
 			auto view = m_Registry.view<TransformComponent, CameraComponent>();
 			for (auto entity : view) {
-				auto [transform, cameraComp] = view.get<TransformComponent, CameraComponent>(entity);
-				
-				// Get camera projection and view matrices
+				Entity e = { entity, this };
+				auto& cameraComp = view.get<CameraComponent>(entity);
+				glm::mat4 worldTransform = GetWorldTransform(e);
+
 				glm::mat4 cameraProjection = cameraComp.Camera.GetProjection();
-				glm::mat4 cameraView = glm::inverse(transform.GetTransform());
-				
-				// ✅ Always use black color (ignored in DrawCameraFrustum since it uses hardcoded black)
+				glm::mat4 cameraView = glm::inverse(worldTransform);
+
 				glm::vec4 frustumColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-				
-				// Draw the frustum
 				Renderer2D::DrawCameraFrustum(cameraProjection, cameraView, frustumColor, (int)entity);
 			}
 		}
-		
+
 		// ========================================
 		// DRAW LIGHT GIZMOS (Editor only)
 		// ========================================
-		
 		{
 			auto view = m_Registry.view<TransformComponent, LightComponent>();
 			for (auto entity : view) {
-				auto [transform, light] = view.get<TransformComponent, LightComponent>(entity);
-				
-				// Use black color for gizmos
+				Entity e = { entity, this };
+				auto& light = view.get<LightComponent>(entity);
+				glm::mat4 worldTransform = GetWorldTransform(e);
+				glm::vec3 worldPos = glm::vec3(worldTransform[3]);
+
 				glm::vec4 gizmoColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-				
-				// Calculate light direction (forward vector from transform)
-				glm::mat4 transformMatrix = transform.GetTransform();
-				glm::vec3 forward = -glm::normalize(glm::vec3(transformMatrix[2]));  // -Z axis
-				
-				// Draw gizmo based on light type
+				glm::vec3 forward = -glm::normalize(glm::vec3(worldTransform[2]));
+
 				switch (light.GetType()) {
-					case LightType::Point: {
-						// Draw sphere showing radius of influence
-						Renderer2D::DrawPointLightGizmo(transform.Translation, light.GetRange(), gizmoColor, (int)entity);
-						break;
-					}
-					
-					case LightType::Directional: {
-						// Draw arrow showing direction
-						Renderer2D::DrawDirectionalLightGizmo(transform.Translation, forward, gizmoColor, (int)entity);
-						break;
-					}
-					
-					case LightType::Spot: {
-						// Draw cone showing direction, range, and angle
-						Renderer2D::DrawSpotLightGizmo(transform.Translation, forward, light.GetRange(), light.GetOuterConeAngle(), gizmoColor, (int)entity);
-						break;
-					}
+				case LightType::Point:
+					Renderer2D::DrawPointLightGizmo(worldPos, light.GetRange(), gizmoColor, (int)entity);
+					break;
+				case LightType::Directional:
+					Renderer2D::DrawDirectionalLightGizmo(worldPos, forward, gizmoColor, (int)entity);
+					break;
+				case LightType::Spot:
+					Renderer2D::DrawSpotLightGizmo(worldPos, forward, light.GetRange(), light.GetOuterConeAngle(), gizmoColor, (int)entity);
+					break;
 				}
 			}
 		}
-		
-		// ✅ Restore previous line width
-		Renderer2D::SetLineWidth(previousLineWidth);
 
+		Renderer2D::SetLineWidth(previousLineWidth);
 		Renderer2D::EndScene();
 
 		// Render 3D meshes
 		Renderer3D::BeginScene(camera);
-
-		// Update lights before rendering meshes
 		Renderer3D::UpdateLights(this);
 
 		{
 			auto view = m_Registry.view<TransformComponent, MeshComponent>();
 			for (auto entity : view) {
 				Entity e = { entity, this };
-				auto [transform, mesh] = view.get<TransformComponent, MeshComponent>(entity);
+				auto& mesh = view.get<MeshComponent>(entity);
+				glm::mat4 worldTransform = GetWorldTransform(e);
 
-				// Check for TextureComponent and MaterialComponent
-				if (e.HasComponent<TextureComponent>() && e.HasComponent<MaterialComponent>()) {
-					auto& texture = e.GetComponent<TextureComponent>();
+				if (e.HasComponent<MaterialComponent>()) {
 					auto& material = e.GetComponent<MaterialComponent>();
-					Renderer3D::DrawMesh(transform.GetTransform(), mesh, material, texture, (int)entity);
-				}
-				// Use MaterialComponent if available
-				else if (e.HasComponent<MaterialComponent>()) {
-					auto& material = e.GetComponent<MaterialComponent>();
-					Renderer3D::DrawMesh(transform.GetTransform(), mesh, material, (int)entity);
+					Renderer3D::DrawMesh(worldTransform, mesh, material, (int)entity);
 				}
 				else {
-					Renderer3D::DrawMesh(transform.GetTransform(), mesh, (int)entity);
+					Renderer3D::DrawModel(worldTransform, mesh.MeshModel, mesh.Color, (int)entity);
 				}
 			}
 		}
@@ -758,8 +711,52 @@ namespace Lunex {
 	}
 
 	void Scene::DuplicateEntity(Entity entity) {
+		if (!entity)
+			return;
+			
 		Entity newEntity = CreateEntity(entity.GetName());
 		CopyComponentIfExists(AllComponents{}, newEntity, entity);
+		
+		// Clear relationship on duplicated entity
+		if (newEntity.HasComponent<RelationshipComponent>()) {
+			newEntity.GetComponent<RelationshipComponent>() = RelationshipComponent{};
+		}
+		
+		// Recursively duplicate children
+		if (entity.HasComponent<RelationshipComponent>()) {
+			auto& rel = entity.GetComponent<RelationshipComponent>();
+			for (UUID childUUID : rel.ChildrenIDs) {
+				Entity child = GetEntityByUUID(childUUID);
+				if (child) {
+					DuplicateEntityWithParent(child, newEntity);
+				}
+			}
+		}
+	}
+	
+	void Scene::DuplicateEntityWithParent(Entity entity, Entity newParent) {
+		if (!entity)
+			return;
+			
+		Entity newEntity = CreateEntity(entity.GetName());
+		CopyComponentIfExists(AllComponents{}, newEntity, entity);
+		
+		// Clear and set new parent
+		if (newEntity.HasComponent<RelationshipComponent>()) {
+			newEntity.GetComponent<RelationshipComponent>() = RelationshipComponent{};
+		}
+		SetParent(newEntity, newParent);
+		
+		// Recursively duplicate children
+		if (entity.HasComponent<RelationshipComponent>()) {
+			auto& rel = entity.GetComponent<RelationshipComponent>();
+			for (UUID childUUID : rel.ChildrenIDs) {
+				Entity child = GetEntityByUUID(childUUID);
+				if (child) {
+					DuplicateEntityWithParent(child, newEntity);
+				}
+			}
+		}
 	}
 
 	template<typename T>
@@ -844,16 +841,16 @@ namespace Lunex {
 		config.Gravity = glm::vec3(0.0f, -9.81f, 0.0f);
 		config.FixedTimestep = 1.0f / 60.0f;
 		PhysicsCore::Get().Initialize(config);
-		
+
 		// Create rigid bodies for all entities with Rigidbody3DComponent
 		auto view = m_Registry.view<TransformComponent, Rigidbody3DComponent>();
 		for (auto e : view) {
 			auto& transform = view.get<TransformComponent>(e);
 			auto& rb3d = view.get<Rigidbody3DComponent>(e);
-			
+
 			// Determine collider type and apply scale
 			ColliderComponent* collider = new ColliderComponent();
-			
+
 			if (m_Registry.all_of<BoxCollider3DComponent>(e)) {
 				auto& bc3d = m_Registry.get<BoxCollider3DComponent>(e);
 				// ✅ Apply scale to half extents
@@ -864,7 +861,7 @@ namespace Lunex {
 			else if (m_Registry.all_of<SphereCollider3DComponent>(e)) {
 				auto& sc3d = m_Registry.get<SphereCollider3DComponent>(e);
 				// ✅ Apply uniform scale (use max component for sphere)
-				float scaledRadius = sc3d.Radius * std::max({transform.Scale.x, transform.Scale.y, transform.Scale.z});
+				float scaledRadius = sc3d.Radius * std::max({ transform.Scale.x, transform.Scale.y, transform.Scale.z });
 				collider->CreateSphereShape(scaledRadius);
 				collider->SetOffset(sc3d.Offset);
 			}
@@ -880,9 +877,9 @@ namespace Lunex {
 				// Default box collider
 				collider->CreateBoxShape(glm::vec3(0.5f) * transform.Scale);
 			}
-			
+
 			rb3d.RuntimeCollider = collider;
-			
+
 			// Create rigid body
 			PhysicsMaterial material;
 			material.Mass = rb3d.Mass;
@@ -896,9 +893,9 @@ namespace Lunex {
 			material.UseCCD = rb3d.UseCCD;
 			material.CcdMotionThreshold = rb3d.CcdMotionThreshold;
 			material.CcdSweptSphereRadius = rb3d.CcdSweptSphereRadius;
-			
+
 			glm::quat rotation = glm::quat(transform.Rotation);
-			
+
 			RigidBodyComponent* body = new RigidBodyComponent();
 			body->Create(
 				PhysicsCore::Get().GetWorld(),
@@ -907,14 +904,14 @@ namespace Lunex {
 				transform.Translation,
 				rotation
 			);
-			
+
 			// Apply constraints
 			body->SetLinearFactor(rb3d.LinearFactor);
 			body->SetAngularFactor(rb3d.AngularFactor);
-			
+
 			// Store user pointer for collision callbacks
 			body->GetRigidBody()->setUserPointer(reinterpret_cast<void*>(static_cast<intptr_t>(e)));
-			
+
 			rb3d.RuntimeBody = body;
 		}
 	}
@@ -924,20 +921,20 @@ namespace Lunex {
 		auto view = m_Registry.view<Rigidbody3DComponent>();
 		for (auto e : view) {
 			auto& rb3d = view.get<Rigidbody3DComponent>(e);
-			
+
 			if (rb3d.RuntimeBody) {
 				RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
 				body->Destroy(PhysicsCore::Get().GetWorld());
 				delete body;
 				rb3d.RuntimeBody = nullptr;
 			}
-			
+
 			if (rb3d.RuntimeCollider) {
 				delete static_cast<ColliderComponent*>(rb3d.RuntimeCollider);
 				rb3d.RuntimeCollider = nullptr;
 			}
 		}
-		
+
 		// Shutdown physics
 		PhysicsCore::Get().Shutdown();
 	}
@@ -961,5 +958,160 @@ namespace Lunex {
 
 	template<>
 	void Scene::OnComponentAdded<MeshCollider3DComponent>(Entity entity, MeshCollider3DComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<RelationshipComponent>(Entity entity, RelationshipComponent& component) {
+	}
+
+	// ========================================
+	// ENTITY HIERARCHY (Parent-Child)
+	// ========================================
+
+	Entity Scene::GetEntityByUUID(UUID uuid) {
+		auto view = m_Registry.view<IDComponent>();
+		for (auto e : view) {
+			if (view.get<IDComponent>(e).ID == uuid) {
+				return Entity{ e, this };
+			}
+		}
+		return Entity{};
+	}
+
+	void Scene::SetParent(Entity child, Entity parent) {
+		if (!child || child == parent)
+			return;
+
+		if (parent && IsAncestorOf(child, parent))
+			return;
+
+		UUID childUUID = child.GetComponent<IDComponent>().ID;
+
+		// Guardar la posición mundial actual del hijo antes de cambiar el parent
+		glm::vec3 childWorldPos = glm::vec3(0.0f);
+		if (child.HasComponent<TransformComponent>()) {
+			childWorldPos = glm::vec3(GetWorldTransform(child)[3]);
+		}
+
+		RemoveParent(child);
+
+		if (!child.HasComponent<RelationshipComponent>()) {
+			child.AddComponent<RelationshipComponent>();
+		}
+
+		auto& childRel = child.GetComponent<RelationshipComponent>();
+
+		if (parent) {
+			if (!parent.HasComponent<RelationshipComponent>()) {
+				parent.AddComponent<RelationshipComponent>();
+			}
+
+			UUID parentUUID = parent.GetComponent<IDComponent>().ID;
+			childRel.SetParent(parentUUID);
+			
+			auto& parentRel = parent.GetComponent<RelationshipComponent>();
+			parentRel.AddChild(childUUID);
+
+			// Ajustar la posición local del hijo para que mantenga su posición mundial
+			if (child.HasComponent<TransformComponent>() && parent.HasComponent<TransformComponent>()) {
+				glm::vec3 parentWorldPos = glm::vec3(GetWorldTransform(parent)[3]);
+				// Nueva posición local = posición mundial anterior - posición mundial del padre
+				child.GetComponent<TransformComponent>().Translation = childWorldPos - parentWorldPos;
+			}
+		}
+	}
+
+	void Scene::RemoveParent(Entity child) {
+		if (!child || !child.HasComponent<RelationshipComponent>())
+			return;
+
+		auto& childRel = child.GetComponent<RelationshipComponent>();
+		
+		if (!childRel.HasParent())
+			return;
+
+		// Guardar posición mundial actual antes de desemparentar
+		glm::vec3 childWorldPos = glm::vec3(0.0f);
+		if (child.HasComponent<TransformComponent>()) {
+			childWorldPos = glm::vec3(GetWorldTransform(child)[3]);
+		}
+
+		UUID childUUID = child.GetComponent<IDComponent>().ID;
+		UUID parentUUID = childRel.ParentID;
+
+		Entity parent = GetEntityByUUID(parentUUID);
+		if (parent && parent.HasComponent<RelationshipComponent>()) {
+			parent.GetComponent<RelationshipComponent>().RemoveChild(childUUID);
+		}
+
+		childRel.ClearParent();
+
+		// Restaurar posición mundial como posición local (ya no tiene padre)
+		if (child.HasComponent<TransformComponent>()) {
+			child.GetComponent<TransformComponent>().Translation = childWorldPos;
+		}
+	}
+
+	Entity Scene::GetParent(Entity entity) {
+		if (!entity || !entity.HasComponent<RelationshipComponent>())
+			return Entity{};
+
+		auto& rel = entity.GetComponent<RelationshipComponent>();
+		if (!rel.HasParent())
+			return Entity{};
+
+		return GetEntityByUUID(rel.ParentID);
+	}
+
+	std::vector<Entity> Scene::GetChildren(Entity entity) {
+		std::vector<Entity> children;
+
+		if (!entity || !entity.HasComponent<RelationshipComponent>())
+			return children;
+
+		auto& rel = entity.GetComponent<RelationshipComponent>();
+		for (UUID childUUID : rel.ChildrenIDs) {
+			Entity child = GetEntityByUUID(childUUID);
+			if (child) {
+				children.push_back(child);
+			}
+		}
+
+		return children;
+	}
+
+	bool Scene::IsAncestorOf(Entity potentialAncestor, Entity entity) {
+		if (!potentialAncestor || !entity)
+			return false;
+
+		Entity current = GetParent(entity);
+		while (current) {
+			if (current == potentialAncestor)
+				return true;
+			current = GetParent(current);
+		}
+
+		return false;
+	}
+
+	glm::mat4 Scene::GetWorldTransform(Entity entity) {
+		if (!entity || !entity.HasComponent<TransformComponent>())
+			return glm::mat4(1.0f);
+		
+		auto& transform = entity.GetComponent<TransformComponent>();
+		glm::mat4 localTransform = transform.GetTransform();
+		
+		Entity parent = GetParent(entity);
+		if (parent && parent.HasComponent<TransformComponent>()) {
+			// Solo heredar la posición del padre, no rotación/escala
+			auto& parentTransform = parent.GetComponent<TransformComponent>();
+			glm::vec3 parentWorldPos = glm::vec3(GetWorldTransform(parent)[3]);
+			
+			// Aplicar offset de posición del padre
+			glm::mat4 parentOffset = glm::translate(glm::mat4(1.0f), parentWorldPos);
+			return parentOffset * localTransform;
+		}
+		
+		return localTransform;
 	}
 }

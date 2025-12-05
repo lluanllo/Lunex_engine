@@ -4,9 +4,15 @@
 #include "Core/UUID.h"
 #include "Renderer/Texture.h"
 #include "Renderer/Model.h"
-#include "Renderer/Material.h"
 #include "Renderer/Light.h"
 #include "Log/Log.h"
+
+// NEW MATERIAL SYSTEM
+#include "Renderer/MaterialInstance.h"
+#include "Renderer/MaterialRegistry.h"
+
+// NEW MESH ASSET SYSTEM
+#include "Asset/MeshAsset.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -54,6 +60,11 @@ namespace Lunex {
 				* rotation
 				* glm::scale(glm::mat4(1.0f), Scale);
 		}
+		
+		// Get local transform matrix
+		glm::mat4 GetLocalTransform() const {
+			return GetTransform();
+		}
 	};
 
 	struct SpriteRendererComponent {
@@ -77,25 +88,57 @@ namespace Lunex {
 		CircleRendererComponent(const CircleRendererComponent&) = default;
 	};
 
+	// ========================================
+	// MESH COMPONENT - Updated with MeshAsset support
+	// ========================================
 	struct MeshComponent {
+		// Runtime model (loaded from primitive or MeshAsset)
 		Ref<Model> MeshModel;
+		
+		// Mesh source type
 		ModelType Type = ModelType::Cube;
+		
+		// ========== NEW: MeshAsset Support ==========
+		// Reference to MeshAsset for custom models
+		Ref<MeshAsset> Asset;
+		UUID MeshAssetID;
+		std::string MeshAssetPath;  // Path to .lumesh file
+		
+		// Legacy: Direct file path (deprecated, use MeshAsset instead)
 		std::string FilePath;
+		
+		// Tint color
 		glm::vec4 Color{ 1.0f, 1.0f, 1.0f, 1.0f };
 
 		MeshComponent() {
 			CreatePrimitive(ModelType::Cube);
 		}
 		
-		MeshComponent(const MeshComponent&) = default;
+		MeshComponent(const MeshComponent& other)
+			: MeshModel(other.MeshModel)
+			, Type(other.Type)
+			, Asset(other.Asset)
+			, MeshAssetID(other.MeshAssetID)
+			, MeshAssetPath(other.MeshAssetPath)
+			, FilePath(other.FilePath)
+			, Color(other.Color)
+		{
+		}
 		
 		MeshComponent(ModelType type)
 			: Type(type) {
 			CreatePrimitive(type);
 		}
 
+		// ========== PRIMITIVE CREATION ==========
+		
 		void CreatePrimitive(ModelType type) {
 			Type = type;
+			Asset = nullptr;
+			MeshAssetID = UUID(0);
+			MeshAssetPath.clear();
+			FilePath.clear();
+			
 			switch (type) {
 			case ModelType::Cube:
 				MeshModel = Model::CreateCube();
@@ -110,49 +153,338 @@ namespace Lunex {
 				MeshModel = Model::CreateCylinder();
 				break;
 			case ModelType::FromFile:
-				// Will be loaded from FilePath
+				// Will be loaded from Asset or FilePath
+				MeshModel = nullptr;
 				break;
 			}
 		}
 
+		// ========== NEW: MeshAsset API ==========
+		
+		// Set mesh from a MeshAsset
+		void SetMeshAsset(Ref<MeshAsset> meshAsset) {
+			if (!meshAsset) return;
+			
+			Asset = meshAsset;
+			MeshAssetID = meshAsset->GetID();
+			MeshAssetPath = meshAsset->GetPath().string();
+			Type = ModelType::FromFile;
+			FilePath.clear();  // Clear legacy path
+			
+			// Get the model from the asset
+			MeshModel = meshAsset->GetModel();
+		}
+		
+		// Set mesh from a .lumesh file path
+		void SetMeshAsset(const std::filesystem::path& assetPath) {
+			if (!std::filesystem::exists(assetPath)) {
+				LNX_LOG_WARN("MeshComponent::SetMeshAsset - File not found: {0}", assetPath.string());
+				return;
+			}
+			
+			// Check if it's a .lumesh file
+			if (assetPath.extension() == ".lumesh") {
+				Asset = MeshAsset::LoadFromFile(assetPath);
+				if (Asset) {
+					MeshAssetID = Asset->GetID();
+					MeshAssetPath = assetPath.string();
+					Type = ModelType::FromFile;
+					FilePath.clear();
+					MeshModel = Asset->GetModel();
+				}
+			}
+			else {
+				// Legacy: Direct model file - load directly
+				LoadFromFile(assetPath.string());
+			}
+		}
+		
+		// Get the current MeshAsset
+		Ref<MeshAsset> GetMeshAsset() const {
+			return Asset;
+		}
+		
+		// Clear the MeshAsset reference
+		void ClearMeshAsset() {
+			Asset = nullptr;
+			MeshAssetID = UUID(0);
+			MeshAssetPath.clear();
+			MeshModel = nullptr;
+			FilePath.clear();
+		}
+		
+		// Check if using a MeshAsset
+		bool HasMeshAsset() const {
+			return Asset != nullptr;
+		}
+		
+		// Get mesh metadata (from asset or calculated)
+		uint32_t GetVertexCount() const {
+			if (Asset) return Asset->GetVertexCount();
+			if (!MeshModel) return 0;
+			
+			uint32_t count = 0;
+			for (const auto& mesh : MeshModel->GetMeshes()) {
+				count += static_cast<uint32_t>(mesh->GetVertices().size());
+			}
+			return count;
+		}
+		
+		uint32_t GetTriangleCount() const {
+			if (Asset) return Asset->GetTriangleCount();
+			if (!MeshModel) return 0;
+			
+			uint32_t count = 0;
+			for (const auto& mesh : MeshModel->GetMeshes()) {
+				count += static_cast<uint32_t>(mesh->GetIndices().size()) / 3;
+			}
+			return count;
+		}
+		
+		uint32_t GetSubmeshCount() const {
+			if (Asset) return Asset->GetSubmeshCount();
+			return MeshModel ? static_cast<uint32_t>(MeshModel->GetMeshes().size()) : 0;
+		}
+
+		// ========== LEGACY: Direct file loading (deprecated) ==========
+		// Prefer using SetMeshAsset with a .lumesh file instead
+		
 		void LoadFromFile(const std::string& path) {
 			FilePath = path;
 			Type = ModelType::FromFile;
+			Asset = nullptr;
+			MeshAssetID = UUID(0);
+			MeshAssetPath.clear();
 			MeshModel = CreateRef<Model>(path);
+		}
+		
+		// ========== UTILITY ==========
+		
+		// Reload mesh from source
+		void Reload() {
+			if (Asset) {
+				Asset->ReloadModel();
+				MeshModel = Asset->GetModel();
+			}
+			else if (!FilePath.empty()) {
+				MeshModel = CreateRef<Model>(FilePath);
+			}
+		}
+		
+		// Check if mesh is valid and loaded
+		bool IsValid() const {
+			return MeshModel != nullptr && !MeshModel->GetMeshes().empty();
 		}
 	};
 
 	struct MaterialComponent {
-		Ref<Material> MaterialInstance;
-
-		MaterialComponent()
-			: MaterialInstance(CreateRef<Material>()) {
+		// ========== NUEVA ARQUITECTURA ==========
+		// Instancia del material (compartida o con overrides locales)
+		Ref<MaterialInstance> Instance;
+		
+		// UUID del MaterialAsset (para serialización y lookup)
+		UUID MaterialAssetID;
+		
+		// Path del asset (para UI y hot-reload)
+		std::string MaterialAssetPath;
+		
+		// Preview thumbnail (generado por MaterialPreviewRenderer)
+		Ref<Texture2D> PreviewThumbnail;
+		
+		// ========== CONSTRUCTORES ==========
+		
+		MaterialComponent() {
+			// Usar material por defecto del registry
+			auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
+			Instance = MaterialInstance::Create(defaultMaterial);
+			MaterialAssetID = defaultMaterial->GetID();
+			MaterialAssetPath = ""; // Material por defecto no tiene path
 		}
-
+		
 		MaterialComponent(const MaterialComponent& other)
-			: MaterialInstance(CreateRef<Material>(*other.MaterialInstance)) {
+			: MaterialAssetID(other.MaterialAssetID)
+			, MaterialAssetPath(other.MaterialAssetPath)
+			, PreviewThumbnail(other.PreviewThumbnail)
+		{
+			// Clone the instance to preserve local overrides
+			if (other.Instance) {
+				Instance = other.Instance->Clone();
+			}
+			else {
+				// Fallback to default material if source has no instance
+				auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
+				Instance = MaterialInstance::Create(defaultMaterial);
+			}
 		}
-
-		MaterialComponent(const glm::vec4& color)
-			: MaterialInstance(CreateRef<Material>(color)) {
+		
+		MaterialComponent& operator=(const MaterialComponent& other) {
+			if (this != &other) {
+				MaterialAssetID = other.MaterialAssetID;
+				MaterialAssetPath = other.MaterialAssetPath;
+				PreviewThumbnail = other.PreviewThumbnail;
+				
+				if (other.Instance) {
+					Instance = other.Instance->Clone();
+				}
+				else {
+					// Fallback to default material if source has no instance
+					auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
+					Instance = MaterialInstance::Create(defaultMaterial);
+				}
+			}
+			return *this;
 		}
-
-		// Material properties accessors
-		void SetColor(const glm::vec4& color) { MaterialInstance->SetColor(color); }
-		void SetMetallic(float metallic) { MaterialInstance->SetMetallic(metallic); }
-		void SetRoughness(float roughness) { MaterialInstance->SetRoughness(roughness); }
-		void SetSpecular(float specular) { MaterialInstance->SetSpecular(specular); }
-		void SetEmissionColor(const glm::vec3& color) { MaterialInstance->SetEmissionColor(color); }
-		void SetEmissionIntensity(float intensity) { MaterialInstance->SetEmissionIntensity(intensity); }
-
-		const glm::vec4& GetColor() const { return MaterialInstance->GetColor(); }
-		float GetMetallic() const { return MaterialInstance->GetMetallic(); }
-		float GetRoughness() const { return MaterialInstance->GetRoughness(); }
-		float GetSpecular() const { return MaterialInstance->GetSpecular(); }
-		const glm::vec3& GetEmissionColor() const { return MaterialInstance->GetEmissionColor(); }
-		float GetEmissionIntensity() const { return MaterialInstance->GetEmissionIntensity(); }
+		
+		MaterialComponent(Ref<MaterialAsset> asset) {
+			Instance = MaterialInstance::Create(asset);
+			MaterialAssetID = asset->GetID();
+			MaterialAssetPath = asset->GetPath().string();
+		}
+		
+		MaterialComponent(const std::filesystem::path& assetPath) {
+			auto asset = MaterialRegistry::Get().LoadMaterial(assetPath);
+			if (asset) {
+				Instance = MaterialInstance::Create(asset);
+				MaterialAssetID = asset->GetID();
+				MaterialAssetPath = assetPath.string();
+			} else {
+				// Fallback a material por defecto
+				auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
+				Instance = MaterialInstance::Create(defaultMaterial);
+				MaterialAssetID = defaultMaterial->GetID();
+				MaterialAssetPath = "";
+			}
+		}
+		
+		// ========== API DE MATERIAL ==========
+		
+		// Cambiar el MaterialAsset base (perderá overrides locales)
+		void SetMaterialAsset(Ref<MaterialAsset> asset) {
+			if (!asset) return;
+			
+			Instance->SetBaseAsset(asset);
+			MaterialAssetID = asset->GetID();
+			MaterialAssetPath = asset->GetPath().string();
+		}
+		
+		void SetMaterialAsset(const std::filesystem::path& assetPath) {
+			auto asset = MaterialRegistry::Get().LoadMaterial(assetPath);
+			if (asset) {
+				SetMaterialAsset(asset);
+			}
+		}
+		
+		// Obtener información del material
+		std::string GetMaterialName() const {
+			return Instance ? Instance->GetName() : "None";
+		}
+		
+		UUID GetAssetID() const {
+			return MaterialAssetID;
+		}
+		
+		const std::string& GetAssetPath() const {
+			return MaterialAssetPath;
+		}
+		
+		Ref<MaterialAsset> GetBaseAsset() const {
+			return Instance ? Instance->GetBaseAsset() : nullptr;
+		}
+		
+		// Verificar si hay overrides locales
+		bool HasLocalOverrides() const {
+			return Instance ? Instance->HasLocalOverrides() : false;
+		}
+		
+		// Resetear overrides (volver al asset base)
+		void ResetOverrides() {
+			if (Instance) {
+				Instance->ResetOverrides();
+			}
+		}
+		
+		// ========== PROPERTIES ACCESSORS (con override support) ==========
+		// Nota: `asOverride = true` para modificar solo esta instancia
+		//       `asOverride = false` para modificar el asset base (afecta a todos)
+		
+		void SetAlbedo(const glm::vec4& color, bool asOverride = true) {
+			if (Instance) Instance->SetAlbedo(color, asOverride);
+		}
+		
+		glm::vec4 GetAlbedo() const {
+			return Instance ? Instance->GetAlbedo() : glm::vec4(1.0f);
+		}
+		
+		void SetMetallic(float metallic, bool asOverride = true) {
+			if (Instance) Instance->SetMetallic(metallic, asOverride);
+		}
+		
+		float GetMetallic() const {
+			return Instance ? Instance->GetMetallic() : 0.0f;
+		}
+		
+		void SetRoughness(float roughness, bool asOverride = true) {
+			if (Instance) Instance->SetRoughness(roughness, asOverride);
+		}
+		
+		float GetRoughness() const {
+			return Instance ? Instance->GetRoughness() : 0.5f;
+		}
+		
+		void SetSpecular(float specular, bool asOverride = true) {
+			if (Instance) Instance->SetSpecular(specular, asOverride);
+		}
+		
+		float GetSpecular() const {
+			return Instance ? Instance->GetSpecular() : 0.5f;
+		}
+		
+		void SetEmissionColor(const glm::vec3& color, bool asOverride = true) {
+			if (Instance) Instance->SetEmissionColor(color, asOverride);
+		}
+		
+		glm::vec3 GetEmissionColor() const {
+			return Instance ? Instance->GetEmissionColor() : glm::vec3(0.0f);
+		}
+		
+		void SetEmissionIntensity(float intensity, bool asOverride = true) {
+			if (Instance) Instance->SetEmissionIntensity(intensity, asOverride);
+		}
+		
+		float GetEmissionIntensity() const {
+			return Instance ? Instance->GetEmissionIntensity() : 0.0f;
+		}
+		
+		// ========== LEGACY API (para compatibilidad temporal) ==========
+		// Deprecated: usar SetAlbedo/GetAlbedo en su lugar
+		void SetColor(const glm::vec4& color) { SetAlbedo(color); }
+		const glm::vec4 GetColor() const { return GetAlbedo(); }
 	};
-
+	
+	// ========================================
+	// DEPRECATED: TextureComponent
+	// ========================================
+	// ?? Este componente está OBSOLETO a partir de la nueva arquitectura de materiales
+	// 
+	// ANTES (sistema antiguo):
+	//   MaterialComponent - propiedades PBR
+	//   TextureComponent  - texturas PBR
+	//
+	// AHORA (sistema nuevo):
+	//   MaterialComponent - contiene MaterialInstance que incluye TODO:
+	//     - Propiedades PBR (metallic, roughness, etc.)
+	//     - Texturas PBR (albedo, normal, metallic, etc.)
+	//     - Multipliers y configuración avanzada
+	//
+	// MIGRACIÓN:
+	//   1. Crear o cargar un MaterialAsset (.lumat)
+	//   2. Asignar texturas al MaterialAsset
+	//   3. Asignar el MaterialAsset al MaterialComponent
+	//   4. Eliminar TextureComponent de la entidad
+	//
+	// Este componente se mantendrá temporalmente para compatibilidad con escenas antiguas,
+	// pero será eliminado en una versión futura.
+	// ========================================
 	struct TextureComponent {
 		// PBR Texture Maps
 		Ref<Texture2D> AlbedoMap;
@@ -527,6 +859,48 @@ namespace Lunex {
 		}
 	};
 
+	// ========================================
+	// RELATIONSHIP COMPONENT (Parent-Child Hierarchy)
+	// ========================================
+	struct RelationshipComponent {
+		UUID ParentID = 0;                    // UUID del padre (0 = sin padre, root)
+		std::vector<UUID> ChildrenIDs;        // UUIDs de los hijos
+		
+		RelationshipComponent() = default;
+		RelationshipComponent(const RelationshipComponent&) = default;
+		
+		bool HasParent() const { return ParentID != 0; }
+		bool HasChildren() const { return !ChildrenIDs.empty(); }
+		size_t GetChildCount() const { return ChildrenIDs.size(); }
+		
+		void AddChild(UUID childID) {
+			// Evitar duplicados
+			for (const auto& id : ChildrenIDs) {
+				if (id == childID) return;
+			}
+			ChildrenIDs.push_back(childID);
+		}
+		
+		void RemoveChild(UUID childID) {
+			ChildrenIDs.erase(
+				std::remove(ChildrenIDs.begin(), ChildrenIDs.end(), childID),
+				ChildrenIDs.end()
+			);
+		}
+		
+		void ClearChildren() {
+			ChildrenIDs.clear();
+		}
+		
+		void SetParent(UUID parentID) {
+			ParentID = parentID;
+		}
+		
+		void ClearParent() {
+			ParentID = 0;
+		}
+	};
+
 	template<typename... Component>
 	struct ComponentGroup
 	{
@@ -538,5 +912,6 @@ namespace Lunex {
 		Rigidbody2DComponent, BoxCollider2DComponent, CircleCollider2DComponent,
 		Rigidbody3DComponent, BoxCollider3DComponent, SphereCollider3DComponent, 
 		CapsuleCollider3DComponent, MeshCollider3DComponent,
-		MeshComponent, MaterialComponent, LightComponent, TextureComponent, ScriptComponent>;
+		MeshComponent, MaterialComponent, LightComponent, TextureComponent, ScriptComponent,
+		RelationshipComponent>;
 }

@@ -2,6 +2,7 @@
 #include "Application.h"
 
 #include "Renderer/Renderer.h"
+#include "Renderer/MaterialRegistry.h"
 
 #include "Input.h"
 
@@ -25,12 +26,27 @@ namespace Lunex{
 		
 		Renderer::Init();
 		
+		// ========================================
+		// Initialize Material System
+		// ========================================
+		// MaterialRegistry is a singleton that manages all material assets
+		// It creates the default material on first access
+		MaterialRegistry::Get(); // Initialize registry and create default material
+		LNX_LOG_INFO("? Material System initialized");
+		
 		m_ImGuiLayer = new ImGuiLayer;
 		PushOverlay(m_ImGuiLayer);
 	}
 	
 	Application::~Application() {
 		LNX_PROFILE_FUNCTION();
+		
+		// ========================================
+		// Shutdown Material System
+		// ========================================
+		MaterialRegistry::Get().ClearAll();
+		LNX_LOG_INFO("Material System shutdown");
+		
 		Renderer::Shutdown();
 	}
 	

@@ -5,6 +5,8 @@
 
 #include "glm/glm.hpp"
 
+#include <vector>
+
 namespace Lunex {
 	class   RendererAPI {
 		public:
@@ -17,6 +19,7 @@ namespace Lunex {
 			
 			virtual void Init() = 0;
 			virtual void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) = 0;
+			virtual void GetViewport(int* viewport) = 0;
 			virtual void SetClearColor(const glm::vec4& color) = 0;
 			virtual void Clear() = 0;
 			
@@ -25,6 +28,9 @@ namespace Lunex {
 			
 			virtual void SetLineWidth(float width) = 0;
 			virtual void SetDepthMask(bool enabled) = 0;
+			
+			// Framebuffer draw buffer control
+			virtual void SetDrawBuffers(const std::vector<uint32_t>& attachments) = 0;
 			
 			inline static API GetAPI() { return s_API; }
 			

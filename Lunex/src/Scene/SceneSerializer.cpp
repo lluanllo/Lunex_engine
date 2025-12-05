@@ -1,10 +1,12 @@
-#include "stpch.h"
+ï»¿#include "stpch.h"
 #include "SceneSerializer.h"
 
 #include "Entity.h"
 #include "Components.h"
+#include "Core/JobSystem/JobSystem.h"  // âœ… Added for parallel serialization
 
 #include <fstream>
+#include <sstream>  // âœ… Added for istringstream
 #include <unordered_map>
 #include <yaml-cpp/yaml.h>
 
@@ -315,8 +317,16 @@ namespace Lunex {
 			
 			auto& meshComponent = entity.GetComponent<MeshComponent>();
 			out << YAML::Key << "Type" << YAML::Value << (int)meshComponent.Type;
-			out << YAML::Key << "FilePath" << YAML::Value << meshComponent.FilePath;
 			out << YAML::Key << "Color" << YAML::Value << meshComponent.Color;
+			
+			// ===== NEW: MeshAsset serialization =====
+			if (meshComponent.HasMeshAsset()) {
+				out << YAML::Key << "MeshAssetID" << YAML::Value << (uint64_t)meshComponent.MeshAssetID;
+				out << YAML::Key << "MeshAssetPath" << YAML::Value << meshComponent.MeshAssetPath;
+			}
+			
+			// Legacy: Direct file path (for backwards compatibility)
+			out << YAML::Key << "FilePath" << YAML::Value << meshComponent.FilePath;
 			
 			out << YAML::EndMap; // MeshComponent
 		}
@@ -326,12 +336,27 @@ namespace Lunex {
 			out << YAML::BeginMap; // MaterialComponent
 			
 			auto& materialComponent = entity.GetComponent<MaterialComponent>();
-			out << YAML::Key << "Color" << YAML::Value << materialComponent.GetColor();
-			out << YAML::Key << "Metallic" << YAML::Value << materialComponent.GetMetallic();
-			out << YAML::Key << "Roughness" << YAML::Value << materialComponent.GetRoughness();
-			out << YAML::Key << "Specular" << YAML::Value << materialComponent.GetSpecular();
-			out << YAML::Key << "EmissionColor" << YAML::Value << materialComponent.GetEmissionColor();
-			out << YAML::Key << "EmissionIntensity" << YAML::Value << materialComponent.GetEmissionIntensity();
+			
+			// ===== NEW ARCHITECTURE: Serialize MaterialAsset reference =====
+			// Store UUID and path for MaterialAsset lookup
+			out << YAML::Key << "MaterialAssetID" << YAML::Value << (uint64_t)materialComponent.GetAssetID();
+			out << YAML::Key << "MaterialAssetPath" << YAML::Value << materialComponent.GetAssetPath();
+			
+			// ===== Serialize local overrides (if any) =====
+			// Only save overrides if they exist - this keeps the file clean
+			if (materialComponent.HasLocalOverrides()) {
+				out << YAML::Key << "HasLocalOverrides" << YAML::Value << true;
+				
+				// Save current property values (which include overrides)
+				out << YAML::Key << "Color" << YAML::Value << materialComponent.GetAlbedo();
+				out << YAML::Key << "Metallic" << YAML::Value << materialComponent.GetMetallic();
+				out << YAML::Key << "Roughness" << YAML::Value << materialComponent.GetRoughness();
+				out << YAML::Key << "Specular" << YAML::Value << materialComponent.GetSpecular();
+				out << YAML::Key << "EmissionColor" << YAML::Value << materialComponent.GetEmissionColor();
+				out << YAML::Key << "EmissionIntensity" << YAML::Value << materialComponent.GetEmissionIntensity();
+			} else {
+				out << YAML::Key << "HasLocalOverrides" << YAML::Value << false;
+			}
 			
 			out << YAML::EndMap; // MaterialComponent
 		}
@@ -379,7 +404,7 @@ namespace Lunex {
 			
 			auto& scriptComponent = entity.GetComponent<ScriptComponent>();
 			
-			// ===== SERIALIZAR MÚLTIPLES SCRIPTS =====
+			// ===== SERIALIZAR MÃšLTIPLES SCRIPTS =====
 			out << YAML::Key << "Scripts" << YAML::Value << YAML::BeginSeq;
 			for (size_t i = 0; i < scriptComponent.GetScriptCount(); i++) {
 				out << YAML::BeginMap;
@@ -390,10 +415,30 @@ namespace Lunex {
 			
 			out << YAML::Key << "AutoCompile" << YAML::Value << scriptComponent.AutoCompile;
 			
-			// No serializar CompiledDLLPaths ni runtime data (ScriptLoadedStates, ScriptPluginInstances)
-			// Estos se regenerarán al cargar
-			
 			out << YAML::EndMap; // ScriptComponent
+		}
+
+		// ========================================
+		// RELATIONSHIP COMPONENT (Parent-Child Hierarchy)
+		// ========================================
+		if (entity.HasComponent<RelationshipComponent>()) {
+			auto& rel = entity.GetComponent<RelationshipComponent>();
+			
+			// Only serialize if has parent or children
+			if (rel.HasParent() || rel.HasChildren()) {
+				out << YAML::Key << "RelationshipComponent";
+				out << YAML::BeginMap;
+				
+				out << YAML::Key << "ParentID" << YAML::Value << (uint64_t)rel.ParentID;
+				
+				out << YAML::Key << "ChildrenIDs" << YAML::Value << YAML::BeginSeq;
+				for (UUID childID : rel.ChildrenIDs) {
+					out << (uint64_t)childID;
+				}
+				out << YAML::EndSeq;
+				
+				out << YAML::EndMap;
+			}
 		}
 		
 		out << YAML::EndMap; // Entity
@@ -404,18 +449,22 @@ namespace Lunex {
 		out << YAML::BeginMap;
 		out << YAML::Key << "Scene" << YAML::Value << "Untitled";
 		out << YAML::Key << "Entities" << YAML::Value << YAML::BeginSeq;
+		
 		m_Scene->m_Registry.view<entt::entity>().each([&](auto entityID) {
-				Entity entity = { entityID, m_Scene.get() };
-				if (!entity)
-					return;
-				
-				SerializeEntity(out, entity);
-			});
+			Entity entity = { entityID, m_Scene.get() };
+			if (!entity)
+				return;
+
+			SerializeEntity(out, entity);
+		});
+		
 		out << YAML::EndSeq;
 		out << YAML::EndMap;
-		
+
 		std::ofstream fout(filepath);
 		fout << out.c_str();
+		
+		LNX_LOG_INFO("Scene serialized to: {0}", filepath);
 	}
 	
 	void SceneSerializer::SerializeRuntime(const std::string& filepath) {
@@ -452,7 +501,7 @@ namespace Lunex {
 				
 				LNX_LOG_TRACE("Deserialized entity with ID = {0}, name = {1}", uuid, name);
 				
-				// Si el ID ya apareció, generar uno nuevo único
+				// Si el ID ya apareciÃ³, generar uno nuevo Ãºnico
 				if (!seenIds.insert(uuid).second) {
 					uint64_t newUuid;
 					do {
@@ -598,7 +647,27 @@ namespace Lunex {
 					mc.Type = (ModelType)meshComponent["Type"].as<int>();
 					mc.Color = meshComponent["Color"].as<glm::vec4>();
 					
-					if (meshComponent["FilePath"]) {
+					// ===== NEW: MeshAsset deserialization =====
+					if (meshComponent["MeshAssetID"] && meshComponent["MeshAssetPath"]) {
+						uint64_t assetID = meshComponent["MeshAssetID"].as<uint64_t>();
+						std::string assetPath = meshComponent["MeshAssetPath"].as<std::string>();
+						
+						if (!assetPath.empty()) {
+							// Try to load MeshAsset from path
+							Ref<MeshAsset> meshAsset = MeshAsset::LoadFromFile(assetPath);
+							if (meshAsset) {
+								mc.SetMeshAsset(meshAsset);
+							}
+							else {
+								LNX_LOG_WARN("MeshAsset with UUID {0} at path '{1}' not found", assetID, assetPath);
+								// Store the path for potential later loading
+								mc.MeshAssetID = UUID(assetID);
+								mc.MeshAssetPath = assetPath;
+							}
+						}
+					}
+					// Legacy: Direct file path loading
+					else if (meshComponent["FilePath"]) {
 						mc.FilePath = meshComponent["FilePath"].as<std::string>();
 						if (!mc.FilePath.empty() && mc.Type == ModelType::FromFile) {
 							mc.LoadFromFile(mc.FilePath);
@@ -623,12 +692,64 @@ namespace Lunex {
 						mat = &deserializedEntity.AddComponent<MaterialComponent>();
 					}
 					
-					mat->SetColor(materialComponent["Color"].as<glm::vec4>());
-					mat->SetMetallic(materialComponent["Metallic"].as<float>());
-					mat->SetRoughness(materialComponent["Roughness"].as<float>());
-					mat->SetSpecular(materialComponent["Specular"].as<float>());
-					mat->SetEmissionColor(materialComponent["EmissionColor"].as<glm::vec3>());
-					mat->SetEmissionIntensity(materialComponent["EmissionIntensity"].as<float>());
+					// ===== NEW ARCHITECTURE: Load MaterialAsset by UUID/Path =====
+					if (materialComponent["MaterialAssetID"]) {
+						uint64_t assetID = materialComponent["MaterialAssetID"].as<uint64_t>();
+						UUID materialUUID(assetID);
+						
+						// Try to load material from registry by UUID
+						auto& registry = MaterialRegistry::Get();
+						Ref<MaterialAsset> materialAsset = registry.GetMaterial(materialUUID);
+						
+						// If not found by UUID, try loading by path
+						if (!materialAsset && materialComponent["MaterialAssetPath"]) {
+							std::string assetPath = materialComponent["MaterialAssetPath"].as<std::string>();
+							if (!assetPath.empty()) {
+								materialAsset = registry.LoadMaterial(assetPath);
+							}
+						}
+						
+						// If material asset was found, assign it
+						if (materialAsset) {
+							mat->SetMaterialAsset(materialAsset);
+						} else {
+							LNX_LOG_WARN("MaterialAsset with UUID {0} not found, using default material", assetID);
+							// Component will keep its default material from constructor
+						}
+					}
+					
+					// ===== Restore local overrides if present =====
+					if (materialComponent["HasLocalOverrides"] && materialComponent["HasLocalOverrides"].as<bool>()) {
+						// Apply overrides (asOverride = true to create local overrides)
+						if (materialComponent["Color"]) {
+							mat->SetAlbedo(materialComponent["Color"].as<glm::vec4>(), true);
+						}
+						if (materialComponent["Metallic"]) {
+							mat->SetMetallic(materialComponent["Metallic"].as<float>(), true);
+						}
+						if (materialComponent["Roughness"]) {
+							mat->SetRoughness(materialComponent["Roughness"].as<float>(), true);
+						}
+						if (materialComponent["Specular"]) {
+							mat->SetSpecular(materialComponent["Specular"].as<float>(), true);
+						}
+						if (materialComponent["EmissionColor"]) {
+							mat->SetEmissionColor(materialComponent["EmissionColor"].as<glm::vec3>(), true);
+						}
+						if (materialComponent["EmissionIntensity"]) {
+							mat->SetEmissionIntensity(materialComponent["EmissionIntensity"].as<float>(), true);
+						}
+					}
+					// ===== LEGACY COMPATIBILITY: Old format (no MaterialAssetID) =====
+					else if (!materialComponent["MaterialAssetID"] && materialComponent["Color"]) {
+						// Old scene format - apply values as overrides to default material
+						mat->SetAlbedo(materialComponent["Color"].as<glm::vec4>(), true);
+						mat->SetMetallic(materialComponent["Metallic"].as<float>(), true);
+						mat->SetRoughness(materialComponent["Roughness"].as<float>(), true);
+						mat->SetSpecular(materialComponent["Specular"].as<float>(), true);
+						mat->SetEmissionColor(materialComponent["EmissionColor"].as<glm::vec3>(), true);
+						mat->SetEmissionIntensity(materialComponent["EmissionIntensity"].as<float>(), true);
+					}
 				}
 
 				auto lightComponent = entity["LightComponent"];
@@ -719,9 +840,9 @@ namespace Lunex {
 				if (scriptComponent) {
 					auto& script = deserializedEntity.AddComponent<ScriptComponent>();
 					
-					// ===== DESERIALIZAR MÚLTIPLES SCRIPTS =====
+					// ===== DESERIALIZAR MÃšLTIPLES SCRIPTS =====
 					if (scriptComponent["Scripts"] && scriptComponent["Scripts"].IsSequence()) {
-						// Nuevo formato (múltiples scripts)
+						// Nuevo formato (mÃºltiples scripts)
 						for (auto scriptNode : scriptComponent["Scripts"]) {
 							if (scriptNode["ScriptPath"]) {
 								std::string scriptPath = scriptNode["ScriptPath"].as<std::string>();
@@ -732,7 +853,7 @@ namespace Lunex {
 						}
 					}
 					else if (scriptComponent["ScriptPath"]) {
-						// Formato antiguo (compatibilidad hacia atrás - un solo script)
+						// Formato antiguo (compatibilidad hacia atrÃ¡s - un solo script)
 						std::string scriptPath = scriptComponent["ScriptPath"].as<std::string>();
 						if (!scriptPath.empty()) {
 							script.AddScript(scriptPath);
@@ -742,19 +863,28 @@ namespace Lunex {
 					if (scriptComponent["AutoCompile"]) {
 						script.AutoCompile = scriptComponent["AutoCompile"].as<bool>();
 					}
+				}
+
+				// ========================================
+				// RELATIONSHIP COMPONENT (Parent-Child Hierarchy)
+				// ========================================
+				auto relationshipComponent = entity["RelationshipComponent"];
+				if (relationshipComponent) {
+					auto& rel = deserializedEntity.AddComponent<RelationshipComponent>();
 					
-					// Los datos de runtime se regenerarán al iniciar el play mode
-					// ScriptLoadedStates y ScriptPluginInstances ya están inicializados por AddScript()
+					if (relationshipComponent["ParentID"]) {
+						rel.ParentID = UUID(relationshipComponent["ParentID"].as<uint64_t>());
+					}
+					
+					if (relationshipComponent["ChildrenIDs"] && relationshipComponent["ChildrenIDs"].IsSequence()) {
+						for (auto childIDNode : relationshipComponent["ChildrenIDs"]) {
+							rel.ChildrenIDs.push_back(UUID(childIDNode.as<uint64_t>()));
+						}
+					}
 				}
 			}
 		}
 		
 		return true;
-	}
-	
-	bool SceneSerializer::DeserializeRuntime(const std::string& filepath) {
-		// Not implemented
-		LNX_CORE_ASSERT(false);
-		return false;
 	}
 }

@@ -1,4 +1,5 @@
 ﻿#include "SceneHierarchyPanel.h"
+#include "ContentBrowserPanel.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -9,6 +10,7 @@
 #include <algorithm>
 
 #include "Scene/Components.h"
+#include "Asset/Prefab.h"
 
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
@@ -16,17 +18,11 @@ namespace Lunex {
 	SceneHierarchyPanel::SceneHierarchyPanel(const Ref<Scene>& context) {
 		SetContext(context);
 
-		// Cargar iconos para la jerarquía
 		m_CameraIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/CameraIcon.png");
 		m_EntityIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/EntityIcon.png");
 		m_LightIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/LightIcon.png");
 		m_MeshIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/MeshIcon.png");
 		m_SpriteIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/SpriteIcon.png");
-
-		if (!m_CameraIcon)
-			LNX_LOG_WARN("Failed to load Camera Icon, using fallback");
-		if (!m_EntityIcon)
-			LNX_LOG_WARN("Failed to load Entity Icon, using fallback");
 	}
 
 	void SceneHierarchyPanel::SetContext(const Ref<Scene>& context) {
@@ -35,22 +31,16 @@ namespace Lunex {
 		m_SelectedEntities.clear();
 		m_EntityIndexCounter = 0;
 		m_IsRenaming = false;
+		m_DraggedEntity = {};
 	}
 
 	void SceneHierarchyPanel::OnImGuiRender() {
-		// ✅ REMOVED: HandleKeyboardShortcuts() - ahora es global vía InputManager
-		
-		// ===== ESTILO PROFESIONAL (BLENDER/UNREAL) =====
 		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.11f, 0.11f, 0.12f, 1.0f));
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.11f, 0.11f, 0.12f, 1.0f));
 		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.08f, 0.08f, 0.09f, 1.0f));
-		
-		// Header colors (selección)
 		ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.26f, 0.59f, 0.98f, 0.35f));
 		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.26f, 0.59f, 0.98f, 0.50f));
 		ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.26f, 0.59f, 0.98f, 0.65f));
-		
-		// Text colors
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.88f, 0.88f, 0.90f, 1.0f));
 		
 		ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 16.0f);
@@ -58,9 +48,7 @@ namespace Lunex {
 		
 		ImGui::Begin("Scene Hierarchy");
 
-		// ===== TOP BAR CON BOTONES =====
 		RenderTopBar();
-		
 		ImGui::Separator();
 		ImGui::Spacing();
 
@@ -69,24 +57,42 @@ namespace Lunex {
 			m_TotalEntities = 0;
 			m_VisibleEntities = 0;
 			
-			// Get sorted entities
-			auto entities = GetSortedEntities();
-			m_TotalEntities = (int)entities.size();
+			// Get only root entities (no parent)
+			auto rootEntities = GetSortedRootEntities();
+			m_TotalEntities = (int)m_Context->m_Registry.view<TagComponent>().size();
 			
-			// BeginChild para el área scrollable
 			ImGui::BeginChild("##EntityList", ImVec2(0, 0), false);
 			
-			for (auto entity : entities) {
-				DrawEntityNode(entity);
-				m_EntityIndexCounter++;
+			// Draw root entities (children are drawn recursively)
+			for (auto entity : rootEntities) {
+				DrawEntityNode(entity, 0);
 			}
 
-			// Click en área vacía para deseleccionar
+			// Drop target for root level (unparent)
+			if (ImGui::BeginDragDropTarget()) {
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENTITY_NODE")) {
+					Entity droppedEntity = *(Entity*)payload->Data;
+					UnparentEntity(droppedEntity);
+				}
+				
+				// Accept prefab drops from Content Browser
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+					ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+					std::string ext = data->Extension;
+					if (ext == ".luprefab") {
+						InstantiatePrefab(data->FilePath);
+					}
+				}
+				
+				ImGui::EndDragDropTarget();
+			}
+
+			// Click on empty area to deselect
 			if (ImGui::IsMouseClicked(0) && ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered()) {
 				ClearSelection();
 			}
 
-			// Context menu en área vacía
+			// Context menu for empty area
 			if (ImGui::BeginPopupContextWindow(nullptr, ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
 				ImGui::SeparatorText("Create");
 				
@@ -105,12 +111,6 @@ namespace Lunex {
 				if (ImGui::MenuItem("🗿 3D Object"))
 					CreateEntityWithComponent<MeshComponent>("Cube");
 				
-				ImGui::Separator();
-				
-				if (ImGui::MenuItem("📋 Paste", "Ctrl+V", false, false)) {
-					// TODO: Implement paste
-				}
-				
 				ImGui::EndPopup();
 			}
 			
@@ -127,10 +127,10 @@ namespace Lunex {
 		SelectEntity(entity);
 	}
 
-	void SceneHierarchyPanel::DrawEntityNode(Entity entity) {
+	void SceneHierarchyPanel::DrawEntityNode(Entity entity, int depth) {
 		auto& tag = entity.GetComponent<TagComponent>().Tag;
 
-		// ===== FILTRO DE BÚSQUEDA =====
+		// Search filter
 		if (m_SearchFilter[0] != '\0') {
 			std::string tagLower = tag;
 			std::string searchLower = m_SearchFilter;
@@ -144,166 +144,165 @@ namespace Lunex {
 
 		m_VisibleEntities++;
 
-		// ===== COLORES ALTERNOS (BLENDER STYLE) =====
-		ImU32 bgColor;
-		if (m_EntityIndexCounter % 2 == 0) {
-			bgColor = IM_COL32(28, 28, 30, 255);
-		} else {
-			bgColor = IM_COL32(32, 32, 34, 255);
+		// Check if has children
+		bool hasChildren = false;
+		if (entity.HasComponent<RelationshipComponent>()) {
+			hasChildren = entity.GetComponent<RelationshipComponent>().HasChildren();
 		}
 
-		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
-		flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-		flags |= ImGuiTreeNodeFlags_FramePadding;
+		// Alternate background colors
+		ImU32 bgColor = (m_EntityIndexCounter % 2 == 0) ? IM_COL32(28, 28, 30, 255) : IM_COL32(32, 32, 34, 255);
+		m_EntityIndexCounter++;
+
+		// Tree node flags
+		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_FramePadding;
 		
-		// Multi-selection support
+		if (!hasChildren) {
+			flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+		}
+		
 		if (IsEntitySelected(entity)) {
-		flags |= ImGuiTreeNodeFlags_Selected;
+			flags |= ImGuiTreeNodeFlags_Selected;
 		}
 
-		// Determinar icono según componentes (priority order)
+		// Determine icon
 		Ref<Texture2D> icon = m_EntityIcon;
-		
-		if (entity.HasComponent<CameraComponent>()) {
-			icon = m_CameraIcon ? m_CameraIcon : m_EntityIcon;
-		}
-		else if (entity.HasComponent<LightComponent>()) {
-			icon = m_LightIcon ? m_LightIcon : m_EntityIcon;
-		}
-		else if (entity.HasComponent<MeshComponent>()) {
-			icon = m_MeshIcon ? m_MeshIcon : m_EntityIcon;
-		}
-		else if (entity.HasComponent<SpriteRendererComponent>()) {
-			icon = m_SpriteIcon ? m_SpriteIcon : m_EntityIcon;
-		}
+		if (entity.HasComponent<CameraComponent>()) icon = m_CameraIcon ? m_CameraIcon : m_EntityIcon;
+		else if (entity.HasComponent<LightComponent>()) icon = m_LightIcon ? m_LightIcon : m_EntityIcon;
+		else if (entity.HasComponent<MeshComponent>()) icon = m_MeshIcon ? m_MeshIcon : m_EntityIcon;
+		else if (entity.HasComponent<SpriteRendererComponent>()) icon = m_SpriteIcon ? m_SpriteIcon : m_EntityIcon;
 
-		// ===== DIBUJAR FONDO ALTERNO =====
+		// Draw background
 		ImVec2 cursorScreenPos = ImGui::GetCursorScreenPos();
 		ImVec2 itemSize = ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFrameHeight());
-		
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
-		drawList->AddRectFilled(
-			cursorScreenPos,
-			ImVec2(cursorScreenPos.x + itemSize.x, cursorScreenPos.y + itemSize.y),
-			bgColor
-		);
+		drawList->AddRectFilled(cursorScreenPos, ImVec2(cursorScreenPos.x + itemSize.x, cursorScreenPos.y + itemSize.y), bgColor);
 
-		// ===== ICONO + TREE NODE / RENAME FIELD =====
+		// Indent based on depth
+		if (depth > 0) {
+			ImGui::Indent(depth * 16.0f);
+		}
+
+		// Icon
 		ImVec2 cursorPos = ImGui::GetCursorPos();
 		ImGui::SetCursorPosY(cursorPos.y + 2.0f);
 		
 		if (icon) {
 			float iconSize = 18.0f;
-			ImGui::Image(
-				(void*)(intptr_t)icon->GetRendererID(),
-				ImVec2(iconSize, iconSize),
-				ImVec2(0, 1),
-				ImVec2(1, 0)
-			);
+			ImGui::Image((void*)(intptr_t)icon->GetRendererID(), ImVec2(iconSize, iconSize), ImVec2(0, 1), ImVec2(1, 0));
 			ImGui::SameLine();
 			ImGui::SetCursorPosY(cursorPos.y);
 		}
 
-		// Rename inline mode
+		// Rename mode or tree node
 		bool isRenaming = (m_IsRenaming && m_EntityBeingRenamed == entity);
 		bool opened = false;
 		
 		if (isRenaming) {
-			// Inline rename field
 			ImGui::SetKeyboardFocusHere();
 			ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.18f, 0.40f, 0.65f, 0.3f));
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
 			
 			if (ImGui::InputText("##RenameEntity", m_RenameBuffer, sizeof(m_RenameBuffer), 
 				ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
-				// Apply rename
 				entity.GetComponent<TagComponent>().Tag = m_RenameBuffer;
 				m_IsRenaming = false;
-				LNX_LOG_INFO("Renamed entity to: {0}", m_RenameBuffer);
 			}
 			ImGui::PopStyleColor();
 			
-			// Cancel rename with Escape (handled in HandleKeyboardShortcuts)
 			if (!ImGui::IsItemActive() && !ImGui::IsItemFocused()) {
 				m_IsRenaming = false;
 			}
 		} else {
-			// Normal tree node
 			opened = ImGui::TreeNodeEx((void*)(uint64_t)(uint32_t)entity, flags, "%s", tag.c_str());
 		}
 
-		// ===== HOVER EFFECT =====
+		// Hover effect
 		if (ImGui::IsItemHovered() && !isRenaming) {
-			ImU32 hoverColor = IM_COL32(50, 50, 55, 180);
-			drawList->AddRectFilled(
-				cursorScreenPos,
-				ImVec2(cursorScreenPos.x + itemSize.x, cursorScreenPos.y + itemSize.y),
-				hoverColor
-			);
+			drawList->AddRectFilled(cursorScreenPos, ImVec2(cursorScreenPos.x + itemSize.x, cursorScreenPos.y + itemSize.y), IM_COL32(50, 50, 55, 180));
 		}
 
-		// ===== MULTI-SELECTION INTERACTIONS =====
+		// Click handling
 		if (ImGui::IsItemClicked() && !isRenaming) {
 			ImGuiIO& io = ImGui::GetIO();
-			
 			if (io.KeyCtrl) {
-				// Ctrl+Click: Toggle selection
 				ToggleEntitySelection(entity);
-			}
-			else if (io.KeyShift && m_LastSelectedEntity) {
-				// Shift+Click: Range selection
-				// TODO: Implement range selection between m_LastSelectedEntity and entity
-				SelectEntity(entity, false);
-			}
-			else {
-				// Normal click: Select this entity only
+			} else {
 				SelectEntity(entity, true);
 			}
 		}
 
-		// ===== DRAG & DROP SOURCE (MULTI-ENTITY SUPPORT) =====
-		if (ImGui::BeginDragDropSource()) {
-			if (m_SelectedEntities.size() > 1 && IsEntitySelected(entity)) {
-				// Multiple entities drag
-				ImGui::Text("📦 %d entities", (int)m_SelectedEntities.size());
-				// TODO: Set multi-entity payload
-			} else {
-				// Single entity drag
-				ImGui::SetDragDropPayload("ENTITY_NODE", &entity, sizeof(Entity));
-				ImGui::Text("📦 %s", tag.c_str());
-			}
+		// ========================================
+		// DRAG & DROP SOURCE
+		// ========================================
+		if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+			ImGui::SetDragDropPayload("ENTITY_NODE", &entity, sizeof(Entity));
+			ImGui::Text("📦 %s", tag.c_str());
+			m_DraggedEntity = entity;
 			ImGui::EndDragDropSource();
 		}
 
-		// ===== CONTEXT MENU (IMPROVED) =====
+		// ========================================
+		// DRAG & DROP TARGET (for parenting)
+		// ========================================
+		if (ImGui::BeginDragDropTarget()) {
+			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENTITY_NODE")) {
+				Entity droppedEntity = *(Entity*)payload->Data;
+				
+				// Don't parent to self
+				if (droppedEntity != entity) {
+					// Check if dropped entity is already a child of this entity
+					Entity currentParent = m_Context->GetParent(droppedEntity);
+					if (currentParent == entity) {
+						// Already a child - unparent it
+						UnparentEntity(droppedEntity);
+					}
+					else if (!m_Context->IsAncestorOf(droppedEntity, entity)) {
+						// Not a child and not an ancestor - parent it
+						SetEntityParent(droppedEntity, entity);
+					}
+				}
+			}
+			ImGui::EndDragDropTarget();
+		}
+
+		// Context menu
 		bool entityDeleted = false;
 		if (ImGui::BeginPopupContextItem()) {
-			// Show multi-selection info
-			if (m_SelectedEntities.size() > 1) {
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.26f, 0.59f, 0.98f, 1.0f));
-				ImGui::Text("📦 %d entities selected", (int)m_SelectedEntities.size());
-				ImGui::PopStyleColor();
-			} else {
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f));
-				ImGui::Text("📦 %s", tag.c_str());
-				ImGui::PopStyleColor();
-			}
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f));
+			ImGui::Text("📦 %s", tag.c_str());
+			ImGui::PopStyleColor();
 			ImGui::Separator();
 			
-			// Single entity operations
-			if (m_SelectedEntities.size() == 1) {
-				if (ImGui::MenuItem("✏️ Rename", "F2")) {
-					RenameEntity(entity);
+			if (ImGui::MenuItem("✏️ Rename", "F2")) {
+				RenameEntity(entity);
+			}
+			
+			if (ImGui::MenuItem("🔄 Duplicate", "Ctrl+D")) {
+				DuplicateEntity(entity);
+			}
+			
+			ImGui::Separator();
+			
+			// Prefab option
+			if (ImGui::MenuItem("📁 Create Prefab")) {
+				CreatePrefabFromEntity(entity);
+			}
+			
+			ImGui::Separator();
+			
+			// Hierarchy options
+			Entity parent = m_Context->GetParent(entity);
+			if (parent) {
+				if (ImGui::MenuItem("⬆️ Unparent")) {
+					UnparentEntity(entity);
 				}
 			}
 			
-			// Multi-entity operations
-			if (ImGui::MenuItem("🔄 Duplicate", "Ctrl+D")) {
-				DuplicateSelectedEntities();
-			}
-			
-			if (ImGui::MenuItem("📋 Copy", "Ctrl+C", false, false)) {
-				// TODO: Implement copy to clipboard
+			if (ImGui::MenuItem("📁 Create Child")) {
+				Entity child = m_Context->CreateEntity("Child");
+				SetEntityParent(child, entity);
+				SelectEntity(child);
 			}
 			
 			ImGui::Separator();
@@ -315,28 +314,42 @@ namespace Lunex {
 			ImGui::PopStyleColor();
 			
 			ImGui::Separator();
-			
-			// Additional info
 			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
 			ImGui::Text("UUID: %llu", (uint64_t)entity.GetComponent<IDComponent>().ID);
+			if (parent) {
+				ImGui::Text("Parent: %s", parent.GetComponent<TagComponent>().Tag.c_str());
+			}
 			ImGui::PopStyleColor();
 
 			ImGui::EndPopup();
 		}
 
-		// Highlight multi-selection
-		if (IsEntitySelected(entity) && m_SelectedEntities.size() > 1) {
-			ImU32 multiSelectColor = IM_COL32(90, 150, 255, 30);
-			drawList->AddRectFilled(
-				cursorScreenPos,
-				ImVec2(cursorScreenPos.x + itemSize.x, cursorScreenPos.y + itemSize.y),
-				multiSelectColor
-			);
+		// Unindent
+		if (depth > 0) {
+			ImGui::Unindent(depth * 16.0f);
 		}
 
-		// Eliminar entidad/entidades
+		// Draw children recursively if opened
+		if (opened && hasChildren) {
+			auto children = m_Context->GetChildren(entity);
+			for (auto child : children) {
+				DrawEntityNode(child, depth + 1);
+			}
+			ImGui::TreePop();
+		}
+
+		// Delete entity
 		if (entityDeleted) {
-			DeleteSelectedEntities();
+			// First unparent all children
+			auto children = m_Context->GetChildren(entity);
+			for (auto child : children) {
+				UnparentEntity(child);
+			}
+			
+			m_Context->DestroyEntity(entity);
+			if (m_SelectionContext == entity) {
+				ClearSelection();
+			}
 		}
 	}
 	
@@ -346,68 +359,36 @@ namespace Lunex {
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.26f, 0.59f, 0.98f, 0.4f));
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.26f, 0.59f, 0.98f, 0.6f));
 		
-		// Botón Create Entity
-		if (ImGui::Button("➕ Create Entity")) {
+		if (ImGui::Button("➕ Create")) {
 			ImGui::OpenPopup("CreateEntityPopup");
 		}
 		
-		if (ImGui::IsItemHovered()) {
-			ImGui::SetTooltip("Create new entity (Ctrl+N)");
-		}
-		
-		// Popup para crear entidades
 		if (ImGui::BeginPopup("CreateEntityPopup")) {
-			ImGui::SeparatorText("Create Entity");
-			
-			if (ImGui::MenuItem("📦 Empty Entity", "Ctrl+N"))
+			if (ImGui::MenuItem("📦 Empty Entity"))
 				m_Context->CreateEntity("Empty Entity");
-			
 			ImGui::Separator();
-			
 			if (ImGui::MenuItem("📷 Camera"))
 				CreateEntityWithComponent<CameraComponent>("Camera");
-			
 			if (ImGui::MenuItem("💡 Light"))
 				CreateEntityWithComponent<LightComponent>("Light");
-			
 			if (ImGui::MenuItem("🎨 Sprite"))
 				CreateEntityWithComponent<SpriteRendererComponent>("Sprite");
-			
 			if (ImGui::MenuItem("🗿 3D Object"))
 				CreateEntityWithComponent<MeshComponent>("Cube");
-			
 			ImGui::EndPopup();
 		}
 		
 		ImGui::SameLine();
 		
-		// Search bar funcional
 		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.14f, 0.14f, 0.15f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.18f, 0.18f, 0.19f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.26f, 0.59f, 0.98f, 0.3f));
 		ImGui::SetNextItemWidth(180);
 		ImGui::InputTextWithHint("##Search", "🔍 Search...", m_SearchFilter, 256);
-		ImGui::PopStyleColor(3);
+		ImGui::PopStyleColor();
 		
-		ImGui::SameLine();
-		
-		// Sort button
-		const char* sortModes[] = { "None", "Name", "Type" };
-		ImGui::SetNextItemWidth(80);
-		int currentSort = (int)m_SortMode;
-		if (ImGui::Combo("##Sort", &currentSort, sortModes, 3)) {
-			m_SortMode = (SortMode)currentSort;
-		}
-		
-		if (ImGui::IsItemHovered()) {
-			ImGui::SetTooltip("Sort entities");
-		}
-		
-		// Entity count display
 		ImGui::SameLine();
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
 		if (m_SelectedEntities.size() > 0) {
-			ImGui::Text("%d/%d selected", (int)m_SelectedEntities.size(), m_TotalEntities);
+			ImGui::Text("%d/%d", (int)m_SelectedEntities.size(), m_TotalEntities);
 		} else {
 			ImGui::Text("%d entities", m_TotalEntities);
 		}
@@ -418,17 +399,25 @@ namespace Lunex {
 	}
 	
 	// ============================================================================
-	// KEYBOARD SHORTCUTS
+	// HIERARCHY OPERATIONS
 	// ============================================================================
+	
+	void SceneHierarchyPanel::SetEntityParent(Entity child, Entity parent) {
+		m_Context->SetParent(child, parent);
+	}
+	
+	void SceneHierarchyPanel::UnparentEntity(Entity entity) {
+		m_Context->RemoveParent(entity);
+	}
 	
 	// ============================================================================
 	// SELECTION OPERATIONS
 	// ============================================================================
+	
 	void SceneHierarchyPanel::SelectEntity(Entity entity, bool clearPrevious) {
 		if (clearPrevious) {
 			m_SelectedEntities.clear();
 		}
-		
 		m_SelectionContext = entity;
 		m_SelectedEntities.insert(entity);
 		m_LastSelectedEntity = entity;
@@ -455,31 +444,13 @@ namespace Lunex {
 	
 	void SceneHierarchyPanel::SelectAll() {
 		m_SelectedEntities.clear();
-		
 		auto view = m_Context->m_Registry.view<TagComponent>();
 		for (auto entityID : view) {
-			Entity entity{ entityID, m_Context.get() };
-			
-			// Apply search filter
-			if (m_SearchFilter[0] != '\0') {
-				auto& tag = entity.GetComponent<TagComponent>().Tag;
-				std::string tagLower = tag;
-				std::string searchLower = m_SearchFilter;
-				std::transform(tagLower.begin(), tagLower.end(), tagLower.begin(), ::tolower);
-				std::transform(searchLower.begin(), searchLower.end(), searchLower.begin(), ::tolower);
-				
-				if (tagLower.find(searchLower) == std::string::npos)
-					continue;
-			}
-			
-			m_SelectedEntities.insert(entity);
+			m_SelectedEntities.insert(Entity{ entityID, m_Context.get() });
 		}
-		
 		if (!m_SelectedEntities.empty()) {
 			m_SelectionContext = *m_SelectedEntities.begin();
 		}
-		
-		LNX_LOG_INFO("Selected all {0} entities", m_SelectedEntities.size());
 	}
 	
 	bool SceneHierarchyPanel::IsEntitySelected(Entity entity) const {
@@ -488,10 +459,13 @@ namespace Lunex {
 	
 	void SceneHierarchyPanel::DeleteSelectedEntities() {
 		for (auto entity : m_SelectedEntities) {
+			// Unparent children first
+			auto children = m_Context->GetChildren(entity);
+			for (auto child : children) {
+				m_Context->RemoveParent(child);
+			}
 			m_Context->DestroyEntity(entity);
 		}
-		
-		LNX_LOG_INFO("Deleted {0} entities", m_SelectedEntities.size());
 		ClearSelection();
 	}
 	
@@ -509,7 +483,7 @@ namespace Lunex {
 	void SceneHierarchyPanel::DuplicateEntity(Entity entity) {
 		if (!entity)
 			return;
-			
+	
 		auto& tag = entity.GetComponent<TagComponent>().Tag;
 		
 		// ========================================
@@ -599,7 +573,7 @@ namespace Lunex {
 			} else {
 				// Doesn't exist, add it
 				newEntity.AddComponent<MaterialComponent>(entity.GetComponent<MaterialComponent>());
-			}
+	}
 		}
 		
 		if (entity.HasComponent<TextureComponent>()) {
@@ -662,23 +636,17 @@ namespace Lunex {
 	}
 	
 	void SceneHierarchyPanel::DuplicateSelectedEntities() {
-		std::vector<Entity> entitiesToDuplicate(m_SelectedEntities.begin(), m_SelectedEntities.end());
-		ClearSelection();
-		
-		for (auto entity : entitiesToDuplicate) {
+		std::vector<Entity> toDuplicate(m_SelectedEntities.begin(), m_SelectedEntities.end());
+		for (auto entity : toDuplicate) {
 			DuplicateEntity(entity);
 		}
 	}
 	
 	void SceneHierarchyPanel::RenameEntity(Entity entity) {
-		if (!entity)
-			return;
-			
+		if (!entity) return;
 		m_IsRenaming = true;
 		m_EntityBeingRenamed = entity;
-		
-		auto& tag = entity.GetComponent<TagComponent>().Tag;
-		strncpy_s(m_RenameBuffer, sizeof(m_RenameBuffer), tag.c_str(), _TRUNCATE);
+		strncpy_s(m_RenameBuffer, sizeof(m_RenameBuffer), entity.GetComponent<TagComponent>().Tag.c_str(), _TRUNCATE);
 	}
 	
 	void SceneHierarchyPanel::RenameSelectedEntity() {
@@ -688,51 +656,43 @@ namespace Lunex {
 	}
 	
 	// ============================================================================
-	// SORTING
+	// SORTING - Get only root entities
 	// ============================================================================
-	std::vector<Entity> SceneHierarchyPanel::GetSortedEntities() {
-		std::vector<Entity> entities;
+	
+	std::vector<Entity> SceneHierarchyPanel::GetSortedRootEntities() {
+		std::vector<Entity> rootEntities;
 		
 		auto view = m_Context->m_Registry.view<TagComponent>();
 		for (auto entityID : view) {
-			entities.push_back(Entity{ entityID, m_Context.get() });
+			Entity entity{ entityID, m_Context.get() };
+			
+			// Check if this entity has no parent (is root)
+			bool isRoot = true;
+			if (entity.HasComponent<RelationshipComponent>()) {
+				isRoot = !entity.GetComponent<RelationshipComponent>().HasParent();
+			}
+			
+			if (isRoot) {
+				rootEntities.push_back(entity);
+			}
 		}
 		
+		// Sort if needed
 		if (m_SortMode == SortMode::Name) {
-			std::sort(entities.begin(), entities.end(), [](Entity a, Entity b) {
+			std::sort(rootEntities.begin(), rootEntities.end(), [](Entity a, Entity b) {
 				return a.GetComponent<TagComponent>().Tag < b.GetComponent<TagComponent>().Tag;
 			});
 		}
-		else if (m_SortMode == SortMode::Type) {
-			std::sort(entities.begin(), entities.end(), [](Entity a, Entity b) {
-				// Sort by component type (Camera > Light > Mesh > Sprite > Others)
-				int priorityA = 100;
-				int priorityB = 100;
-				
-				if (a.HasComponent<CameraComponent>()) priorityA = 0;
-				else if (a.HasComponent<LightComponent>()) priorityA = 1;
-				else if (a.HasComponent<MeshComponent>()) priorityA = 2;
-				else if (a.HasComponent<SpriteRendererComponent>()) priorityA = 3;
-				
-				if (b.HasComponent<CameraComponent>()) priorityB = 0;
-				else if (b.HasComponent<LightComponent>()) priorityB = 1;
-				else if (b.HasComponent<MeshComponent>()) priorityB = 2;
-				else if (b.HasComponent<SpriteRendererComponent>()) priorityB = 3;
-				
-				return priorityA < priorityB;
-			});
-		}
 		
-		return entities;
+		return rootEntities;
 	}
 	
 	// ============================================================================
-	// PIVOT POINT CALCULATIONS (Blender-style)
-	// ============================================================================	
+	// PIVOT POINT CALCULATIONS
+	// ============================================================================
 	
 	glm::vec3 SceneHierarchyPanel::CalculateMedianPoint() const {
-		if (m_SelectedEntities.empty())
-			return glm::vec3(0.0f);
+		if (m_SelectedEntities.empty()) return glm::vec3(0.0f);
 		
 		glm::vec3 sum(0.0f);
 		int count = 0;
@@ -748,21 +708,15 @@ namespace Lunex {
 	}
 	
 	glm::vec3 SceneHierarchyPanel::CalculateActiveElementPosition() const {
-		// Return position of last selected entity (active element)
-		// Create non-const copy to access members
 		Entity activeEntity = m_LastSelectedEntity;
-		
 		if (activeEntity && activeEntity.HasComponent<TransformComponent>()) {
 			return activeEntity.GetComponent<TransformComponent>().Translation;
 		}
-		
-		// Fallback to median point if no active element
 		return CalculateMedianPoint();
 	}
 	
 	glm::vec3 SceneHierarchyPanel::CalculateBoundingBoxCenter() const {
-		if (m_SelectedEntities.empty())
-			return glm::vec3(0.0f);
+		if (m_SelectedEntities.empty()) return glm::vec3(0.0f);
 		
 		glm::vec3 min(FLT_MAX);
 		glm::vec3 max(-FLT_MAX);
@@ -771,8 +725,6 @@ namespace Lunex {
 			if (entity.HasComponent<TransformComponent>()) {
 				const auto& transform = entity.GetComponent<TransformComponent>();
 				glm::vec3 pos = transform.Translation;
-				
-				// Simple bounding box (could be improved with actual mesh bounds)
 				glm::vec3 halfExtents = transform.Scale * 0.5f;
 				
 				min = glm::min(min, pos - halfExtents);
@@ -781,5 +733,92 @@ namespace Lunex {
 		}
 		
 		return (min + max) * 0.5f;
+	}
+
+	// ============================================================================
+	// PREFAB SYSTEM
+	// ============================================================================
+	
+	void SceneHierarchyPanel::CreatePrefabFromEntity(Entity entity) {
+		if (!entity) {
+			LNX_LOG_WARN("SceneHierarchyPanel::CreatePrefabFromEntity - No entity selected");
+			return;
+		}
+
+		// Create prefab from entity (including children)
+		Ref<Prefab> prefab = Prefab::CreateFromEntity(entity, true);
+		if (!prefab) {
+			LNX_LOG_ERROR("Failed to create prefab from entity");
+			return;
+		}
+
+		// Determine save path
+		std::filesystem::path prefabsDir = m_PrefabsDirectory;
+		if (prefabsDir.empty()) {
+			prefabsDir = g_AssetPath / "Prefabs";
+		}
+
+		// Ensure directory exists
+		if (!std::filesystem::exists(prefabsDir)) {
+			std::filesystem::create_directories(prefabsDir);
+		}
+
+		// Generate unique filename
+		std::string entityName = entity.GetComponent<TagComponent>().Tag;
+		std::filesystem::path prefabPath;
+		int counter = 1;
+		
+		do {
+			std::string filename = entityName;
+			if (counter > 1) {
+				filename += " (" + std::to_string(counter) + ")";
+			}
+			filename += ".luprefab";
+			prefabPath = prefabsDir / filename;
+			counter++;
+		} while (std::filesystem::exists(prefabPath));
+
+		// Save prefab
+		if (prefab->SaveToFile(prefabPath)) {
+			LNX_LOG_INFO("✓ Prefab created: {0}", prefabPath.filename().string());
+			LNX_LOG_INFO("  Location: {0}", prefabPath.string());
+			LNX_LOG_INFO("  Entities: {0}", prefab->GetEntityCount());
+		} else {
+			LNX_LOG_ERROR("Failed to save prefab: {0}", prefabPath.string());
+		}
+	}
+
+	void SceneHierarchyPanel::InstantiatePrefab(const std::filesystem::path& prefabPath) {
+		if (!m_Context) {
+			LNX_LOG_WARN("SceneHierarchyPanel::InstantiatePrefab - No scene context");
+			return;
+		}
+
+		if (!std::filesystem::exists(prefabPath)) {
+			LNX_LOG_ERROR("Prefab file not found: {0}", prefabPath.string());
+			return;
+		}
+
+		// Load prefab
+		Ref<Prefab> prefab = Prefab::LoadFromFile(prefabPath);
+		if (!prefab) {
+			LNX_LOG_ERROR("Failed to load prefab: {0}", prefabPath.string());
+			return;
+		}
+
+		// Instantiate at origin (or selected entity position)
+		glm::vec3 position(0.0f);
+		if (m_SelectionContext && m_SelectionContext.HasComponent<TransformComponent>()) {
+			position = m_SelectionContext.GetComponent<TransformComponent>().Translation;
+			position.x += 1.0f; // Offset slightly
+		}
+
+		Entity rootEntity = prefab->Instantiate(m_Context, position);
+		if (rootEntity) {
+			SelectEntity(rootEntity);
+			LNX_LOG_INFO("✓ Instantiated prefab: {0}", prefabPath.filename().string());
+		} else {
+			LNX_LOG_ERROR("Failed to instantiate prefab: {0}", prefabPath.string());
+		}
 	}
 }

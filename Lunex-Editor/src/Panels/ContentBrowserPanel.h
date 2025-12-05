@@ -1,10 +1,14 @@
 #pragma once
 
 #include "Renderer/Texture.h"
+#include "Renderer/MaterialPreviewRenderer.h"
+#include "Renderer/MaterialAsset.h"
+#include "Renderer/MaterialRegistry.h"
 #include <filesystem>
 #include <vector>
 #include <set>
 #include <unordered_map>
+#include <functional>
 #include <imgui.h>
 #include <imgui_internal.h>
 
@@ -34,6 +38,19 @@ namespace Lunex {
 		void SetRootDirectory(const std::filesystem::path& directory);
 
 		const std::filesystem::path& GetCurrentDirectory() const { return m_CurrentDirectory; }
+		
+		// ========================================
+		// CALLBACKS
+		// ========================================
+		void SetOnMaterialOpenCallback(const std::function<void(const std::filesystem::path&)>& callback) {
+			m_OnMaterialOpenCallback = callback;
+		}
+		
+		// ========================================
+		// CACHE MANAGEMENT
+		// ========================================
+		void InvalidateMaterialThumbnail(const std::filesystem::path& materialPath);
+		void RefreshAllThumbnails();
 		
 		// ========================================
 		// PUBLIC API FOR GLOBAL SHORTCUTS
@@ -68,6 +85,8 @@ namespace Lunex {
 		void CreateNewFolder();
 		void CreateNewScene();
 		void CreateNewScript();
+		void CreateNewMaterial();
+		void CreatePrefabFromMesh(const std::filesystem::path& meshAssetPath);
 		void DeleteItem(const std::filesystem::path& path);
 		void RenameItem(const std::filesystem::path& oldPath);
 		void DuplicateItem(const std::filesystem::path& path);
@@ -136,9 +155,16 @@ namespace Lunex {
 		Ref<Texture2D> m_ShaderIcon;
 		Ref<Texture2D> m_AudioIcon;
 		Ref<Texture2D> m_ScriptIcon;
+		Ref<Texture2D> m_MaterialIcon;
+		Ref<Texture2D> m_MeshIcon;  // Icon for .lumesh files
+		Ref<Texture2D> m_PrefabIcon;  // Icon for .luprefab files
 
 		// Texture preview cache
 		std::unordered_map<std::string, Ref<Texture2D>> m_TextureCache;
+		
+		// Material preview renderer and cache (stores standalone textures, not framebuffer IDs)
+		Scope<MaterialPreviewRenderer> m_MaterialPreviewRenderer;
+		std::unordered_map<std::string, Ref<Texture2D>> m_MaterialThumbnailCache;
 
 		// Item positions for selection rectangle
 		std::unordered_map<std::string, ImRect> m_ItemBounds;
@@ -147,5 +173,8 @@ namespace Lunex {
 		enum class ClipboardOperation { None, Copy, Cut };
 		ClipboardOperation m_ClipboardOperation = ClipboardOperation::None;
 		std::vector<std::filesystem::path> m_ClipboardItems;
+		
+		// Callbacks
+		std::function<void(const std::filesystem::path&)> m_OnMaterialOpenCallback;
 	};
 }

@@ -41,6 +41,10 @@ namespace Lunex {
 	void OpenGLRendererAPI::SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
 		glViewport(x, y, width, height);
 	}
+
+    void OpenGLRendererAPI::GetViewport(int* viewport) {
+        glGetIntegerv(GL_VIEWPORT, viewport);
+    }
 	
 	void OpenGLRendererAPI::SetClearColor(const glm::vec4& color) {
 		glClearColor(color.r, color.g, color.b, color.a);
@@ -67,5 +71,21 @@ namespace Lunex {
 	
 	void OpenGLRendererAPI::SetDepthMask(bool enabled) {
 		glDepthMask(enabled ? GL_TRUE : GL_FALSE);
+	}
+	
+	void OpenGLRendererAPI::SetDrawBuffers(const std::vector<uint32_t>& attachments) {
+		if (attachments.empty()) {
+			glDrawBuffer(GL_NONE);
+			return;
+		}
+		
+		std::vector<GLenum> glAttachments;
+		glAttachments.reserve(attachments.size());
+		
+		for (uint32_t attachment : attachments) {
+			glAttachments.push_back(GL_COLOR_ATTACHMENT0 + attachment);
+		}
+		
+		glDrawBuffers(static_cast<GLsizei>(glAttachments.size()), glAttachments.data());
 	}
 }
