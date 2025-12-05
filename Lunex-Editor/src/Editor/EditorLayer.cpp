@@ -1113,6 +1113,9 @@ namespace Lunex {
 
 		// Update Content Browser to show project assets
 		m_ContentBrowserPanel.SetRootDirectory(project->GetAssetDirectory());
+		
+		// Update Console Panel with project directory for terminal
+		m_ConsolePanel.SetProjectDirectory(project->GetProjectDirectory());
 
 		// Load the default scene
 		auto startScenePath = project->GetAssetFileSystemPath(project->GetConfig().StartScene);
@@ -1153,7 +1156,9 @@ namespace Lunex {
 
 		// Update Content Browser to show project assets
 		m_ContentBrowserPanel.SetRootDirectory(project->GetAssetDirectory());
-
+		
+		// Update Console Panel with project directory for terminal
+		m_ConsolePanel.SetProjectDirectory(project->GetProjectDirectory());
 
 		// Load start scene if specified
 		auto& config = project->GetConfig();
