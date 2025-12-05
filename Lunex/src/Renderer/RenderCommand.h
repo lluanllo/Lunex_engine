@@ -13,6 +13,10 @@ namespace Lunex {
 				s_RendererAPI->SetViewport(x, y, width, height);
 			}
 			
+			static void GetViewport(int* viewport) {
+				s_RendererAPI->GetViewport(viewport);
+			}
+			
 			static void SetClearColor(const glm::vec4& color) {
 				s_RendererAPI->SetClearColor(color);
 			}
@@ -40,6 +44,16 @@ namespace Lunex {
 			static void SetDrawBuffers(const std::vector<uint32_t>& attachments) {
 				s_RendererAPI->SetDrawBuffers(attachments);
 			}
+			
+			// Viewport helper: save/restore
+			static void SaveViewport(int outViewport[4]) {
+				s_RendererAPI->GetViewport(outViewport);
+			}
+			
+			static void RestoreViewport(int viewport[4]) {
+				s_RendererAPI->SetViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+			}
+			
 		private:
 			static Scope<RendererAPI> s_RendererAPI;
 	};

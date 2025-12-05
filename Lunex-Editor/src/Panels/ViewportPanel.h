@@ -17,7 +17,8 @@ namespace Lunex {
 		ViewportPanel() = default;
 		~ViewportPanel() = default;
 
-		void OnImGuiRender(Ref<Framebuffer> framebuffer, SceneHierarchyPanel& hierarchyPanel,
+		void OnImGuiRender(Ref<Framebuffer> framebuffer, Ref<Framebuffer> cameraPreviewFramebuffer,
+			SceneHierarchyPanel& hierarchyPanel,
 			const EditorCamera& editorCamera, Entity selectedEntity, int gizmoType,
 			ToolbarPanel& toolbarPanel, SceneState sceneState, bool toolbarEnabled);
 
@@ -32,6 +33,8 @@ namespace Lunex {
 		}
 
 	private:
+		void RenderCameraPreview(Ref<Framebuffer> previewFramebuffer, Entity selectedEntity);
+		
 		bool m_ViewportFocused = false;
 		bool m_ViewportHovered = false;
 		glm::vec2 m_ViewportSize = { 0.0f, 0.0f };

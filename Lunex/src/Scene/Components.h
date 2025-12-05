@@ -57,6 +57,11 @@ namespace Lunex {
 				* rotation
 				* glm::scale(glm::mat4(1.0f), Scale);
 		}
+		
+		// Get local transform matrix
+		glm::mat4 GetLocalTransform() const {
+			return GetTransform();
+		}
 	};
 
 	struct SpriteRendererComponent {
@@ -149,14 +154,38 @@ namespace Lunex {
 			MaterialAssetPath = ""; // Material por defecto no tiene path
 		}
 		
-		MaterialComponent(const MaterialComponent& other) {
-			// Crear nueva instancia del mismo asset base
+		MaterialComponent(const MaterialComponent& other)
+			: MaterialAssetID(other.MaterialAssetID)
+			, MaterialAssetPath(other.MaterialAssetPath)
+			, PreviewThumbnail(other.PreviewThumbnail)
+		{
+			// Clone the instance to preserve local overrides
 			if (other.Instance) {
-				Instance = MaterialInstance::Create(other.Instance->GetBaseAsset());
+				Instance = other.Instance->Clone();
+			}
+			else {
+				// Fallback to default material if source has no instance
+				auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
+				Instance = MaterialInstance::Create(defaultMaterial);
+			}
+		}
+		
+		MaterialComponent& operator=(const MaterialComponent& other) {
+			if (this != &other) {
 				MaterialAssetID = other.MaterialAssetID;
 				MaterialAssetPath = other.MaterialAssetPath;
 				PreviewThumbnail = other.PreviewThumbnail;
+				
+				if (other.Instance) {
+					Instance = other.Instance->Clone();
+				}
+				else {
+					// Fallback to default material if source has no instance
+					auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
+					Instance = MaterialInstance::Create(defaultMaterial);
+				}
 			}
+			return *this;
 		}
 		
 		MaterialComponent(Ref<MaterialAsset> asset) {
@@ -683,6 +712,48 @@ namespace Lunex {
 		}
 	};
 
+	// ========================================
+	// RELATIONSHIP COMPONENT (Parent-Child Hierarchy)
+	// ========================================
+	struct RelationshipComponent {
+		UUID ParentID = 0;                    // UUID del padre (0 = sin padre, root)
+		std::vector<UUID> ChildrenIDs;        // UUIDs de los hijos
+		
+		RelationshipComponent() = default;
+		RelationshipComponent(const RelationshipComponent&) = default;
+		
+		bool HasParent() const { return ParentID != 0; }
+		bool HasChildren() const { return !ChildrenIDs.empty(); }
+		size_t GetChildCount() const { return ChildrenIDs.size(); }
+		
+		void AddChild(UUID childID) {
+			// Evitar duplicados
+			for (const auto& id : ChildrenIDs) {
+				if (id == childID) return;
+			}
+			ChildrenIDs.push_back(childID);
+		}
+		
+		void RemoveChild(UUID childID) {
+			ChildrenIDs.erase(
+				std::remove(ChildrenIDs.begin(), ChildrenIDs.end(), childID),
+				ChildrenIDs.end()
+			);
+		}
+		
+		void ClearChildren() {
+			ChildrenIDs.clear();
+		}
+		
+		void SetParent(UUID parentID) {
+			ParentID = parentID;
+		}
+		
+		void ClearParent() {
+			ParentID = 0;
+		}
+	};
+
 	template<typename... Component>
 	struct ComponentGroup
 	{
@@ -694,5 +765,6 @@ namespace Lunex {
 		Rigidbody2DComponent, BoxCollider2DComponent, CircleCollider2DComponent,
 		Rigidbody3DComponent, BoxCollider3DComponent, SphereCollider3DComponent, 
 		CapsuleCollider3DComponent, MeshCollider3DComponent,
-		MeshComponent, MaterialComponent, LightComponent, TextureComponent, ScriptComponent>;
+		MeshComponent, MaterialComponent, LightComponent, TextureComponent, ScriptComponent,
+		RelationshipComponent>;
 }

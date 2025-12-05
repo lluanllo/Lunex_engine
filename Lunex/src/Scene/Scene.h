@@ -41,6 +41,17 @@ namespace Lunex {
 			
 			Entity GetPrimaryCameraEntity();
 			
+			// ========================================
+			// ENTITY HIERARCHY (Parent-Child)
+			// ========================================
+			void SetParent(Entity child, Entity parent);
+			void RemoveParent(Entity child);
+			Entity GetParent(Entity entity);
+			std::vector<Entity> GetChildren(Entity entity);
+			bool IsAncestorOf(Entity potentialAncestor, Entity entity);
+			Entity GetEntityByUUID(UUID uuid);
+			glm::mat4 GetWorldTransform(Entity entity);
+			
 			template<typename... Components>
 			auto GetAllEntitiesWith() {
 				return m_Registry.view<Components...>();
@@ -57,6 +68,9 @@ namespace Lunex {
 			void OnPhysics3DStop();
 			
 			void RenderScene(EditorCamera& camera);
+			
+			// Helper for recursive duplication
+			void DuplicateEntityWithParent(Entity entity, Entity newParent);
 			
 		private:
 			entt::registry m_Registry;

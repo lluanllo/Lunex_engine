@@ -11,7 +11,8 @@
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
 
-	void ViewportPanel::OnImGuiRender(Ref<Framebuffer> framebuffer, SceneHierarchyPanel& hierarchyPanel,
+	void ViewportPanel::OnImGuiRender(Ref<Framebuffer> framebuffer, Ref<Framebuffer> cameraPreviewFramebuffer,
+		SceneHierarchyPanel& hierarchyPanel,
 		const EditorCamera& editorCamera, Entity selectedEntity, int gizmoType,
 		ToolbarPanel& toolbarPanel, SceneState sceneState, bool toolbarEnabled) {
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
@@ -93,11 +94,56 @@ namespace Lunex {
 			}
 		}
 
+		// ========================================
+		// CAMERA PREVIEW (Bottom-right corner)
+		// ========================================
+		if (cameraPreviewFramebuffer && selectedEntity && selectedEntity.HasComponent<CameraComponent>()) {
+			RenderCameraPreview(cameraPreviewFramebuffer, selectedEntity);
+		}
+
 		ImGui::End();
 		ImGui::PopStyleVar();
 
 		// Renderizar toolbar flotante DESPUÉS del viewport y gizmos
 		// El toolbar debe renderizarse al final para estar encima de todo
 		toolbarPanel.OnImGuiRender(sceneState, toolbarEnabled, m_ViewportBounds[0], m_ViewportSize);
+	}
+
+	void ViewportPanel::RenderCameraPreview(Ref<Framebuffer> previewFramebuffer, Entity selectedEntity) {
+		// Preview size (aspect ratio 16:9)
+		float previewWidth = 320.0f;
+		float previewHeight = 180.0f;
+		float padding = 16.0f;
+		
+		// Calculate position (bottom-right corner of viewport)
+		ImVec2 previewPos = ImVec2(
+			m_ViewportBounds[1].x - previewWidth - padding,
+			m_ViewportBounds[1].y - previewHeight - padding
+		);
+		
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		
+		// Draw shadow (offset behind the image)
+		float shadowOffset = 4.0f;
+		float shadowBlur = 8.0f;
+		ImVec2 shadowMin = ImVec2(previewPos.x + shadowOffset, previewPos.y + shadowOffset);
+		ImVec2 shadowMax = ImVec2(previewPos.x + previewWidth + shadowOffset + shadowBlur, 
+								  previewPos.y + previewHeight + shadowOffset + shadowBlur);
+		drawList->AddRectFilled(shadowMin, shadowMax, IM_COL32(0, 0, 0, 100), 6.0f);
+		
+		// Draw camera preview image
+		uint64_t textureID = previewFramebuffer->GetColorAttachmentRendererID();
+		ImVec2 imageMin = previewPos;
+		ImVec2 imageMax = ImVec2(previewPos.x + previewWidth, previewPos.y + previewHeight);
+		
+		drawList->AddImage(
+			reinterpret_cast<void*>(textureID),
+			imageMin,
+			imageMax,
+			ImVec2(0, 1), ImVec2(1, 0)  // Flip Y
+		);
+		
+		// Subtle border
+		drawList->AddRect(imageMin, imageMax, IM_COL32(60, 60, 70, 150), 0.0f, 0, 1.0f);
 	}
 }

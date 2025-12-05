@@ -407,98 +407,56 @@ namespace Lunex {
 			
 			out << YAML::Key << "AutoCompile" << YAML::Value << scriptComponent.AutoCompile;
 			
-			// No serializar CompiledDLLPaths ni runtime data (ScriptLoadedStates, ScriptPluginInstances)
-			// Estos se regenerarán al cargar
-			
 			out << YAML::EndMap; // ScriptComponent
+		}
+
+		// ========================================
+		// RELATIONSHIP COMPONENT (Parent-Child Hierarchy)
+		// ========================================
+		if (entity.HasComponent<RelationshipComponent>()) {
+			auto& rel = entity.GetComponent<RelationshipComponent>();
+			
+			// Only serialize if has parent or children
+			if (rel.HasParent() || rel.HasChildren()) {
+				out << YAML::Key << "RelationshipComponent";
+				out << YAML::BeginMap;
+				
+				out << YAML::Key << "ParentID" << YAML::Value << (uint64_t)rel.ParentID;
+				
+				out << YAML::Key << "ChildrenIDs" << YAML::Value << YAML::BeginSeq;
+				for (UUID childID : rel.ChildrenIDs) {
+					out << (uint64_t)childID;
+				}
+				out << YAML::EndSeq;
+				
+				out << YAML::EndMap;
+			}
 		}
 		
 		out << YAML::EndMap; // Entity
 	}
 	
 	void SceneSerializer::Serialize(const std::string& filepath) {
-		// ===== PARALLELIZED ENTITY SERIALIZATION =====
-		LNX_LOG_INFO("🚀 Starting parallel scene serialization...");
+		YAML::Emitter out;
+		out << YAML::BeginMap;
+		out << YAML::Key << "Scene" << YAML::Value << "Untitled";
+		out << YAML::Key << "Entities" << YAML::Value << YAML::BeginSeq;
 		
-		// Collect all entities
-		std::vector<Entity> entities;
 		m_Scene->m_Registry.view<entt::entity>().each([&](auto entityID) {
 			Entity entity = { entityID, m_Scene.get() };
-			if (entity) {
-				entities.push_back(entity);
-			}
+			if (!entity)
+				return;
+
+			SerializeEntity(out, entity);
 		});
 		
-		if (entities.empty()) {
-			LNX_LOG_WARN("No entities to serialize");
-			YAML::Emitter out;
-			out << YAML::BeginMap;
-			out << YAML::Key << "Scene" << YAML::Value << "Untitled";
-			out << YAML::Key << "Entities" << YAML::Value << YAML::BeginSeq;
-			out << YAML::EndSeq;
-			out << YAML::EndMap;
-			
-			std::ofstream fout(filepath);
-			fout << out.c_str();
-			return;
-		}
-		
-		LNX_LOG_INFO("Serializing {0} entities in parallel...", entities.size());
-		
-		// Create per-thread buffers for entity YAML strings
-		auto entityBuffers = std::make_shared<std::vector<std::string>>(entities.size());
-		
-		// ✅ PARALLEL: Serialize each entity to its own string buffer
-		auto counter = JobSystem::Get().ParallelFor(
-			0,
-			static_cast<uint32_t>(entities.size()),
-			[&entities, entityBuffers](uint32_t index) {
-				Entity entity = entities[index];
-				
-				// Each thread gets its own YAML emitter (thread-safe)
-				YAML::Emitter out;
-				SerializeEntity(out, entity);
-				
-				// Store serialized YAML as string
-				(*entityBuffers)[index] = std::string(out.c_str());
-			},
-			64,  // Grain size: 64 entities per job
-			JobPriority::High
-		);
-		
-		// Wait for all entities to be serialized
-		JobSystem::Get().Wait(counter);
-		
-		LNX_LOG_INFO("✅ Parallel serialization complete, merging results...");
-		
-		// ===== MERGE: Combine all entity strings into final file =====
+		out << YAML::EndSeq;
+		out << YAML::EndMap;
+
 		std::ofstream fout(filepath);
+		fout << out.c_str();
 		
-		// Write header manually
-		fout << "Scene: Untitled\n";
-		fout << "Entities:\n";
-		
-		// Append each entity's YAML string (they already include proper indentation)
-		for (const auto& entityYaml : *entityBuffers) {
-			if (!entityYaml.empty()) {
-				// Add proper indentation for each line (2 spaces for YAML sequence items)
-				std::istringstream stream(entityYaml);
-				std::string line;
-				bool firstLine = true;
-				while (std::getline(stream, line)) {
-					if (firstLine) {
-						fout << "  " << line << "\n";  // First line gets list marker indentation
-						firstLine = false;
-					} else {
-						fout << "  " << line << "\n";  // Subsequent lines maintain indentation
-					}
-				}
-			}
-		}
-		
-		fout.close();
-		
-		LNX_LOG_INFO("✅ Scene serialized to: {0}", filepath);
+		LNX_LOG_INFO("Scene serialized to: {0}", filepath);
 	}
 	
 	void SceneSerializer::SerializeRuntime(const std::string& filepath) {
@@ -877,9 +835,24 @@ namespace Lunex {
 					if (scriptComponent["AutoCompile"]) {
 						script.AutoCompile = scriptComponent["AutoCompile"].as<bool>();
 					}
+				}
+
+				// ========================================
+				// RELATIONSHIP COMPONENT (Parent-Child Hierarchy)
+				// ========================================
+				auto relationshipComponent = entity["RelationshipComponent"];
+				if (relationshipComponent) {
+					auto& rel = deserializedEntity.AddComponent<RelationshipComponent>();
 					
-					// Los datos de runtime se regenerarán al iniciar el play mode
-					// ScriptLoadedStates y ScriptPluginInstances ya están inicializados por AddScript()
+					if (relationshipComponent["ParentID"]) {
+						rel.ParentID = UUID(relationshipComponent["ParentID"].as<uint64_t>());
+					}
+					
+					if (relationshipComponent["ChildrenIDs"] && relationshipComponent["ChildrenIDs"].IsSequence()) {
+						for (auto childIDNode : relationshipComponent["ChildrenIDs"]) {
+							rel.ChildrenIDs.push_back(UUID(childIDNode.as<uint64_t>()));
+						}
+					}
 				}
 			}
 		}

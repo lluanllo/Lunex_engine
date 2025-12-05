@@ -14,11 +14,14 @@ namespace Lunex {
 		// Crear instancia desde un MaterialAsset
 		MaterialInstance(Ref<MaterialAsset> baseAsset);
 		
-		// Crear instancia desde un archivo .lumat
+		// Crear instancia desde un archivo .umat
 		static Ref<MaterialInstance> Create(const std::filesystem::path& assetPath);
 		
 		// Crear instancia desde un MaterialAsset existente
 		static Ref<MaterialInstance> Create(Ref<MaterialAsset> baseAsset);
+		
+		// Clone this instance (preserves all overrides)
+		Ref<MaterialInstance> Clone() const;
 
 		~MaterialInstance() = default;
 

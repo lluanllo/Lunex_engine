@@ -53,7 +53,7 @@ namespace Lunex {
 		void ToggleEntitySelection(Entity entity);
 
 	private:
-		void DrawEntityNode(Entity entity);
+		void DrawEntityNode(Entity entity, int depth = 0);
 		void RenderTopBar();
 		
 		// Selection operations
@@ -63,9 +63,13 @@ namespace Lunex {
 		void DuplicateEntity(Entity entity);
 		void RenameEntity(Entity entity);
 		
+		// Hierarchy operations
+		void SetEntityParent(Entity child, Entity parent);
+		void UnparentEntity(Entity entity);
+		
 		// Sorting
 		enum class SortMode { None, Name, Type };
-		std::vector<Entity> GetSortedEntities();
+		std::vector<Entity> GetSortedRootEntities();  // Only root entities (no parent)
 		
 		template<typename T>
 		void CreateEntityWithComponent(const std::string& name) {
@@ -105,5 +109,8 @@ namespace Lunex {
 		// Statistics
 		int m_TotalEntities = 0;
 		int m_VisibleEntities = 0;
+		
+		// Drag & drop for parenting
+		Entity m_DraggedEntity;
 	};
 }
