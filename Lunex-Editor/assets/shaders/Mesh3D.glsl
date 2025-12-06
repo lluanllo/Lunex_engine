@@ -31,17 +31,14 @@ void main() {
 	vec4 worldPos = u_Transform * vec4(a_Position, 1.0);
 	Output.FragPos = worldPos.xyz;
 	
-	// Optimized normal matrix calculation
 	mat3 normalMatrix = mat3(transpose(inverse(u_Transform)));
 	vec3 N = normalize(normalMatrix * a_Normal);
 	Output.Normal = N;
 	Output.TexCoords = a_TexCoords;
 	
-	// Enhanced TBN with proper handedness handling
 	vec3 T = normalize(normalMatrix * a_Tangent);
 	T = normalize(T - dot(T, N) * N);
 	vec3 B = normalize(normalMatrix * a_Bitangent);
-	// Ensure orthogonality and handedness
 	B = normalize(B - dot(B, N) * N - dot(B, T) * T);
 	Output.TBN = mat3(T, B, N);
 	
@@ -118,106 +115,159 @@ layout (binding = 4) uniform sampler2D u_SpecularMap;
 layout (binding = 5) uniform sampler2D u_EmissionMap;
 layout (binding = 6) uniform sampler2D u_AOMap;
 
-// ============ CONSTANTS ============
+// ============ ENHANCED CONSTANTS ============
 const float PI = 3.14159265359;
 const float EPSILON = 0.00001;
 const float MIN_ROUGHNESS = 0.045;
 const float MIN_DIELECTRIC_F0 = 0.04;
 
-// ============ ENHANCED PBR FUNCTIONS ============
+// Light parameters for realistic falloff
+const float LIGHT_FALLOFF_BIAS = 0.0001;
+const float SHADOW_BIAS = 0.001;
 
-// GGX/Trowbridge-Reitz Normal Distribution Function
+// ============ ADVANCED PBR FUNCTIONS ============
+
+// Optimized GGX with numerical stability improvements
 float D_GGX(float NdotH, float roughness) {
 	float a = roughness * roughness;
 	float a2 = a * a;
 	float NdotH2 = NdotH * NdotH;
 	
-	float denom = NdotH2 * (a2 - 1.0) + 1.0;
+	float nom = a2;
+	float denom = (NdotH2 * (a2 - 1.0) + 1.0);
 	denom = PI * denom * denom;
 	
-	return a2 / max(denom, EPSILON);
+	return nom / max(denom, EPSILON);
 }
 
-// Smith's Joint Approximation with Height-Correlated G2
+// Height-Correlated Smith G2 (most accurate for multiple lights)
 float V_SmithGGXCorrelated(float NdotV, float NdotL, float roughness) {
 	float a2 = roughness * roughness;
 	
-	float GGXV = NdotL * sqrt(NdotV * NdotV * (1.0 - a2) + a2);
-	float GGXL = NdotV * sqrt(NdotL * NdotL * (1.0 - a2) + a2);
+	float lambdaV = NdotL * sqrt((-NdotV * a2 + NdotV) * NdotV + a2);
+	float lambdaL = NdotV * sqrt((-NdotL * a2 + NdotL) * NdotL + a2);
 	
-	return 0.5 / max(GGXV + GGXL, EPSILON);
+	return 0.5 / max(lambdaV + lambdaL, EPSILON);
 }
 
-// Schlick-GGX with improved edge cases
-float G_SchlickGGX(float NdotV, float roughness) {
-	float r = roughness + 1.0;
-	float k = (r * r) / 8.0;
-	
-	return NdotV / max(NdotV * (1.0 - k) + k, EPSILON);
-}
-
-float G_Smith(float NdotV, float NdotL, float roughness) {
-	return G_SchlickGGX(NdotV, roughness) * G_SchlickGGX(NdotL, roughness);
-}
-
-// Fresnel-Schlick with spherical gaussian approximation
-vec3 F_Schlick(float VdotH, vec3 F0) {
-	float f = pow(1.0 - VdotH, 5.0);
+// Fresnel-Schlick with improved edge case handling
+vec3 F_Schlick(float cosTheta, vec3 F0) {
+	float f = pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 	return F0 + (1.0 - F0) * f;
 }
 
-// Enhanced Fresnel with roughness (for IBL)
-vec3 F_SchlickRoughness(float NdotV, vec3 F0, float roughness) {
-	float smoothness = 1.0 - roughness;
-	return F0 + (max(vec3(smoothness), F0) - F0) * pow(clamp(1.0 - NdotV, 0.0, 1.0), 5.0);
+// Fresnel with roughness compensation for IBL
+vec3 F_SchlickRoughness(float cosTheta, vec3 F0, float roughness) {
+	return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-// Energy-conserving wrapped diffuse for better subsurface appearance
-vec3 DiffuseLambert(vec3 albedo) {
+// ============ ADVANCED DIFFUSE MODELS ============
+
+// Lambertian (fastest, good for rough surfaces)
+vec3 Diffuse_Lambert(vec3 albedo) {
 	return albedo / PI;
 }
 
-// Burley/Disney Diffuse BRDF (optional, more accurate but expensive)
-float Fd_Burley(float NdotV, float NdotL, float LdotH, float roughness) {
-	float f90 = 0.5 + 2.0 * roughness * LdotH * LdotH;
+// Burley/Disney Diffuse (AAA standard, better subsurface)
+float Diffuse_Burley(float NdotV, float NdotL, float LdotH, float roughness) {
+	float f90 = 0.5 + 2.0 * LdotH * LdotH * roughness;
 	float lightScatter = 1.0 + (f90 - 1.0) * pow(1.0 - NdotL, 5.0);
 	float viewScatter = 1.0 + (f90 - 1.0) * pow(1.0 - NdotV, 5.0);
 	return lightScatter * viewScatter / PI;
 }
 
-// ============ ADVANCED LIGHTING FEATURES ============
+// Oren-Nayar (best for very rough/matte surfaces like clay, concrete)
+float Diffuse_OrenNayar(float NdotV, float NdotL, float LdotV, float roughness) {
+	float s = LdotV - NdotL * NdotV;
+	float t = mix(1.0, max(NdotL, NdotV), step(0.0, s));
+	
+	float sigma2 = roughness * roughness;
+	float A = 1.0 - 0.5 * (sigma2 / (sigma2 + 0.33));
+	float B = 0.45 * sigma2 / (sigma2 + 0.09);
+	
+	return max(0.0, NdotL) * (A + B * s / t) / PI;
+}
 
-// Distance-based attenuation with smooth windowing function
-float GetDistanceAttenuation(float distance, float range) {
+// ============ PHYSICALLY-BASED LIGHT ATTENUATION ============
+
+// Inverse square law with realistic windowing
+float GetPhysicalAttenuation(float distance, float range) {
 	if (range <= 0.0) return 1.0;
 	
-	// Smooth window function (better than hard cutoff)
-	float distRatio = distance / range;
-	float window = pow(max(1.0 - pow(distRatio, 4.0), 0.0), 2.0);
+	// Physically accurate inverse square
+	float attenuation = 1.0 / max(distance * distance + LIGHT_FALLOFF_BIAS, EPSILON);
 	
-	// Physical inverse square falloff
-	float attenuation = 1.0 / max(distance * distance, 0.0001);
+	// Smooth window function (prevents harsh cutoff)
+	float distRatio = min(distance / range, 1.0);
+	float window = pow(max(1.0 - pow(distRatio, 4.0), 0.0), 2.0);
 	
 	return attenuation * window;
 }
 
-// Enhanced spot light cone with smoother falloff
+// Alternative: UE4-style attenuation (more artist-friendly)
+float GetUE4Attenuation(float distance, float radius) {
+	float d = distance / max(radius, EPSILON);
+	float d2 = d * d;
+	float d4 = d2 * d2;
+	
+	float falloff = clamp(1.0 - d4, 0.0, 1.0);
+	falloff = falloff * falloff;
+	
+	return falloff / (distance * distance + 1.0);
+}
+
+// Improved spotlight attenuation with penumbra
 float GetSpotAttenuation(vec3 L, vec3 spotDir, float innerCone, float outerCone) {
 	float cosAngle = dot(-L, spotDir);
-	float epsilon = innerCone - outerCone;
-	float spotFactor = clamp((cosAngle - outerCone) / max(epsilon, EPSILON), 0.0, 1.0);
+	float epsilon = max(innerCone - outerCone, EPSILON);
+	float intensity = clamp((cosAngle - outerCone) / epsilon, 0.0, 1.0);
 	
-	// Smoothstep for better visual quality
-	return spotFactor * spotFactor * (3.0 - 2.0 * spotFactor);
+	// Hermite smoothstep for natural falloff
+	return intensity * intensity * (3.0 - 2.0 * intensity);
+}
+
+// ============ REALISTIC AMBIENT OCCLUSION ============
+
+// Multi-bounce AO approximation (more realistic than single-bounce)
+float GetMultiBounceAO(float ao, vec3 albedo) {
+	vec3 a = 2.0 * albedo - 0.33;
+	vec3 b = -4.8 * albedo + 0.64;
+	vec3 c = 2.75 * albedo + 0.69;
+	
+	float x = ao;
+	vec3 aoMultiBounce = max(vec3(x), ((x * a + b) * x + c) * x);
+	
+	return dot(aoMultiBounce, vec3(0.333));
+}
+
+// Bent normal approximation for directional AO
+float GetDirectionalAO(float ao, vec3 N, vec3 bentNormal) {
+	float bentFactor = max(dot(N, bentNormal), 0.0);
+	return mix(ao, 1.0, bentFactor * 0.5);
+}
+
+// ============ ADVANCED LIGHTING FEATURES ============
+
+// Soft shadows approximation (for area lights simulation)
+float GetSoftShadow(vec3 L, float NdotL, float lightRadius) {
+	// Simulate penumbra based on light size
+	float softness = lightRadius * (1.0 - NdotL);
+	return smoothstep(-softness, softness, NdotL);
+}
+
+// Distance-based light intensity scaling (energy conservation)
+vec3 GetLightIntensity(vec3 color, float intensity, float distance, float radius) {
+	// Energy conservation: larger lights are less intense per area
+	float energyScale = 1.0 / max(radius * radius, 1.0);
+	return color * intensity * energyScale;
 }
 
 // ============ MAIN LIGHTING CALCULATION ============
 
-vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, float roughness, vec3 fragPos) {
+vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, float roughness, vec3 fragPos, float ao) {
 	vec3 Lo = vec3(0.0);
-	float NdotV = max(dot(N, V), 0.0);
+	float NdotV = max(dot(N, V), EPSILON);
 	
-	// Clamp to actual light count for safety
 	int lightCount = min(u_NumLights, MAX_LIGHTS);
 	
 	for (int i = 0; i < lightCount; i++) {
@@ -225,39 +275,54 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 		int lightType = int(light.Position.w);
 		
 		vec3 L;
-		vec3 radiance = light.Color.rgb * light.Color.a;
+		vec3 radiance;
 		float attenuation = 1.0;
+		float lightRadius = 0.1; // Default light radius for soft shadows
 		
 		// ========== LIGHT TYPE PROCESSING ==========
 		if (lightType == 0) {
-			// Directional Light
+			// Directional Light (Sun/Moon)
 			L = normalize(-light.Direction.xyz);
-		}
-		else if (lightType == 1) {
-			// Point Light
+			radiance = light.Color.rgb * light.Color.a;
+			lightRadius = 0.0; // Hard shadows for directional
+			
+		} else if (lightType == 1) {
+			// Point Light (physically accurate)
 			vec3 lightVec = light.Position.xyz - fragPos;
 			float distance = length(lightVec);
-			L = lightVec / distance;
+			L = lightVec / max(distance, EPSILON);
 			
 			float range = light.Params.x;
 			if (range > 0.0 && distance > range) continue;
 			
-			attenuation = GetDistanceAttenuation(distance, range);
-		}
-		else if (lightType == 2) {
-			// Spot Light
+			// Use physical attenuation (more realistic)
+			attenuation = GetPhysicalAttenuation(distance, range);
+			
+			// Energy-conserved intensity
+			radiance = GetLightIntensity(light.Color.rgb, light.Color.a, distance, max(range * 0.1, 0.1));
+			lightRadius = max(range * 0.05, 0.05); // 5% of range for soft shadows
+			
+		} else if (lightType == 2) {
+			// Spot Light (flashlight, stage light)
 			vec3 lightVec = light.Position.xyz - fragPos;
 			float distance = length(lightVec);
-			L = lightVec / distance;
+			L = lightVec / max(distance, EPSILON);
 			
 			float range = light.Params.x;
 			if (range > 0.0 && distance > range) continue;
 			
-			attenuation = GetDistanceAttenuation(distance, range);
+			// Physical attenuation
+			attenuation = GetPhysicalAttenuation(distance, range);
 			
+			// Spotlight cone
 			vec3 spotDir = normalize(light.Direction.xyz);
 			float spotAtten = GetSpotAttenuation(L, spotDir, light.Params.y, light.Params.z);
 			attenuation *= spotAtten;
+			
+			if (attenuation < EPSILON) continue;
+			
+			radiance = GetLightIntensity(light.Color.rgb, light.Color.a, distance, max(range * 0.1, 0.1));
+			lightRadius = max(range * 0.08, 0.08); // Slightly larger for spots
 		}
 		
 		if (attenuation < EPSILON) continue;
@@ -269,55 +334,94 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 		float NdotH = max(dot(N, H), 0.0);
 		float VdotH = max(dot(V, H), 0.0);
 		float LdotH = max(dot(L, H), 0.0);
+		float LdotV = max(dot(L, V), 0.0);
 		
-		// Specular BRDF (Cook-Torrance)
+		// Early exit if light is behind surface
+		if (NdotL < EPSILON) continue;
+		
+		// Soft shadow approximation
+		float shadowFactor = GetSoftShadow(L, NdotL, lightRadius);
+		
+		// ========== SPECULAR TERM (Cook-Torrance) ==========
 		float D = D_GGX(NdotH, roughness);
 		float V_term = V_SmithGGXCorrelated(NdotV, NdotL, roughness);
 		vec3 F = F_Schlick(VdotH, F0);
 		
 		vec3 specular = D * V_term * F;
 		
-		// Diffuse BRDF (Energy-conserving Lambert or Burley)
+		// ========== DIFFUSE TERM (Burley for realism) ==========
 		vec3 kS = F;
 		vec3 kD = (1.0 - kS) * (1.0 - metallic);
 		
-		// Use Burley diffuse for better quality
-		float diffuseFactor = Fd_Burley(NdotV, NdotL, LdotH, roughness);
-		vec3 diffuse = kD * albedo * diffuseFactor;
+		// Use Burley diffuse for AAA quality
+		float burley = Diffuse_Burley(NdotV, NdotL, LdotH, roughness);
+		vec3 diffuse = kD * albedo * burley;
 		
-		// Accumulate lighting
-		radiance *= attenuation;
-		Lo += (diffuse + specular) * radiance * NdotL;
+		// Alternative: Use Oren-Nayar for very rough materials (roughness > 0.7)
+		// float orenNayar = Diffuse_OrenNayar(NdotV, NdotL, LdotV, roughness);
+		// vec3 diffuse = kD * albedo * orenNayar;
+		
+		// ========== MICRO-OCCLUSION ==========
+		// Darken crevices where light can't reach (AO affects lighting)
+		float microOcclusion = mix(1.0, ao, 0.5); // 50% AO influence on direct lighting
+		
+		// ========== ACCUMULATE LIGHTING ==========
+		radiance *= attenuation * shadowFactor;
+		Lo += (diffuse + specular) * radiance * NdotL * microOcclusion;
 	}
 	
 	return Lo;
 }
 
-// ============ IMPROVED AMBIENT/IBL APPROXIMATION ============
+// ============ ENHANCED AMBIENT LIGHTING ============
 
 vec3 CalculateAmbient(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, float roughness, float ao) {
-	float NdotV = max(dot(N, V), 0.0);
+	float NdotV = max(dot(N, V), EPSILON);
 	
-	// Enhanced Fresnel for IBL
+	// ========== AMBIENT OCCLUSION ==========
+	// Multi-bounce AO for more realistic light scattering
+	float aoMultiBounce = GetMultiBounceAO(ao, albedo);
+	
+	// ========== FRESNEL FOR IBL ==========
 	vec3 F = F_SchlickRoughness(NdotV, F0, roughness);
 	vec3 kS = F;
 	vec3 kD = (1.0 - kS) * (1.0 - metallic);
 	
-	// Improved ambient term with better energy conservation
-	vec3 ambientDiffuse = albedo * kD;
+	// ========== DIFFUSE AMBIENT ==========
+	// Hemisphere lighting approximation (sky + ground)
+	float skyFactor = N.y * 0.5 + 0.5; // -1 to 1 → 0 to 1
+	vec3 skyColor = vec3(0.4, 0.5, 0.6) * 0.8; // Cool blue-ish sky
+	vec3 groundColor = vec3(0.3, 0.25, 0.2) * 0.3; // Warm brown ground
+	vec3 hemisphereLight = mix(groundColor, skyColor, skyFactor);
 	
-	// Simple specular ambient (in real AAA this would be IBL probes/reflections)
-	vec3 ambientSpecular = F * (1.0 - roughness) * 0.02;
+	vec3 ambientDiffuse = albedo * kD * hemisphereLight * aoMultiBounce;
 	
-	vec3 ambient = (ambientDiffuse + ambientSpecular) * ao;
+	// ========== SPECULAR AMBIENT (IBL Approximation) ==========
+	// Fake reflection probe using view-dependent fresnel
+	vec3 R = reflect(-V, N);
+	float horizonFade = pow(max(R.y, 0.0), 0.5); // Fade toward horizon
 	
-	// Scale ambient based on scene (typical AAA value)
-	return ambient * 0.03;
+	vec3 ambientSpecular = F * mix(groundColor, skyColor, horizonFade) * (1.0 - roughness) * ao;
+	ambientSpecular *= 0.15; // Scale down specular ambient
+	
+	// ========== SUBSURFACE SCATTERING APPROXIMATION ==========
+	// Add subtle subsurface for non-metals (skin, wax, marble)
+	float subsurface = 0.0;
+	if (metallic < 0.5) {
+		float thickness = 1.0 - ao; // Approximate thickness from AO
+		subsurface = pow(thickness, 2.0) * (1.0 - metallic) * 0.1;
+		ambientDiffuse += albedo * subsurface * skyColor;
+	}
+	
+	// ========== FINAL AMBIENT ==========
+	vec3 ambient = ambientDiffuse + ambientSpecular;
+	
+	// Boost ambient slightly for better visibility in dark scenes
+	return ambient * 1.2;
 }
 
-// ============ TONE MAPPING OPTIONS ============
+// ============ TONE MAPPING (UNCHANGED) ============
 
-// ACES Filmic Tone Mapping (industry standard)
 vec3 ACESFilm(vec3 x) {
 	float a = 2.51;
 	float b = 0.03;
@@ -327,23 +431,11 @@ vec3 ACESFilm(vec3 x) {
 	return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
 }
 
-// Uncharted 2 Tone Mapping
-vec3 Uncharted2Tonemap(vec3 x) {
-	float A = 0.15;
-	float B = 0.50;
-	float C = 0.10;
-	float D = 0.20;
-	float E = 0.02;
-	float F = 0.30;
-	return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
-}
-
 // ============ MAIN FRAGMENT SHADER ============
 
 void main() {
 	// ========== TEXTURE SAMPLING ==========
 	
-	// Albedo with proper sRGB conversion
 	vec3 albedo;
 	float alpha = u_Color.a;
 	if (u_UseAlbedoMap != 0) {
@@ -354,7 +446,6 @@ void main() {
 		albedo = pow(u_Color.rgb, vec3(2.2));
 	}
 	
-	// Normal mapping with proper unpacking
 	vec3 N;
 	if (u_UseNormalMap != 0) {
 		vec3 normalMap = texture(u_NormalMap, Input.TexCoords).rgb;
@@ -364,7 +455,6 @@ void main() {
 		N = normalize(Input.Normal);
 	}
 	
-	// Material properties
 	float metallic = u_Metallic;
 	if (u_UseMetallicMap != 0) {
 		metallic = clamp(texture(u_MetallicMap, Input.TexCoords).r * u_MetallicMultiplier, 0.0, 1.0);
@@ -390,15 +480,14 @@ void main() {
 	
 	vec3 V = normalize(u_ViewPos - Input.FragPos);
 	
-	// Calculate F0 (base reflectance at normal incidence)
 	vec3 F0 = vec3(MIN_DIELECTRIC_F0);
 	F0 = mix(F0, albedo, metallic);
 	F0 = mix(F0 * specular, F0, metallic);
 	
-	// Direct lighting
-	vec3 directLighting = CalculateDirectLighting(N, V, F0, albedo, metallic, roughness, Input.FragPos);
+	// Direct lighting with enhanced realism
+	vec3 directLighting = CalculateDirectLighting(N, V, F0, albedo, metallic, roughness, Input.FragPos, ao);
 	
-	// Ambient/IBL approximation
+	// Improved ambient/IBL
 	vec3 ambient = CalculateAmbient(N, V, F0, albedo, metallic, roughness, ao);
 	
 	// ========== EMISSION ==========
@@ -414,23 +503,15 @@ void main() {
 			emission = emissionTex * u_EmissionColor * u_EmissionIntensity;
 		}
 		
-		// Calculate luminance for emissive light contribution
 		emissiveLuminance = dot(emission, vec3(0.2126, 0.7152, 0.0722));
 	}
 	
-	// ========== EMISSIVE SURFACE AS AREA LIGHT ==========
-	// Surfaces with emission contribute diffuse lighting to the scene
-	vec3 emissiveContribution = vec3(0.0);
+	// ========== EMISSIVE CONTRIBUTION ==========
 	
+	vec3 emissiveContribution = vec3(0.0);
 	if (emissiveLuminance > EPSILON) {
-		// Treat emissive surface as a virtual area light
-		// This simulates light bouncing from emissive surfaces
-		vec3 emissiveLight = emission * 0.25; // Scale factor for indirect contribution
-		
-		// Apply to diffuse component based on normal orientation
+		vec3 emissiveLight = emission * 0.3;
 		float upwardBias = max(dot(N, vec3(0.0, 1.0, 0.0)), 0.0) * 0.5 + 0.5;
-		
-		// Add ambient-like contribution from emission
 		float kD = (1.0 - metallic);
 		emissiveContribution = albedo * emissiveLight * kD * upwardBias * ao;
 	}
@@ -439,7 +520,7 @@ void main() {
 	
 	vec3 color = ambient + directLighting + emission + emissiveContribution;
 	
-	// Tone mapping (ACES for AAA look)
+	// Tone mapping
 	color = ACESFilm(color);
 	
 	// Gamma correction

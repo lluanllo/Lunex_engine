@@ -4,6 +4,7 @@
 #include "Renderer/MaterialPreviewRenderer.h"
 #include "Renderer/MaterialAsset.h"
 #include "Renderer/MaterialRegistry.h"
+#include "Asset/MeshAsset.h"
 #include <filesystem>
 #include <vector>
 #include <set>
@@ -165,6 +166,9 @@ namespace Lunex {
 		// Material preview renderer and cache (stores standalone textures, not framebuffer IDs)
 		Scope<MaterialPreviewRenderer> m_MaterialPreviewRenderer;
 		std::unordered_map<std::string, Ref<Texture2D>> m_MaterialThumbnailCache;
+		
+		// Mesh/Prefab preview cache (3D model thumbnails)
+		std::unordered_map<std::string, Ref<Texture2D>> m_MeshThumbnailCache;
 
 		// Item positions for selection rectangle
 		std::unordered_map<std::string, ImRect> m_ItemBounds;
