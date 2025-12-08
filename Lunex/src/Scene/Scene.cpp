@@ -6,6 +6,7 @@
 #include "Renderer/Renderer2D.h"
 #include "Renderer/Renderer3D.h"
 #include "Renderer/GridRenderer.h"
+#include "Renderer/SkyboxRenderer.h"  // NEW: Skybox rendering
 #include "Renderer/RenderCommand.h"
 #include "Core/Input.h"
 #include "Core/JobSystem/JobSystem.h"  // ✅ Added for parallel physics
@@ -286,6 +287,11 @@ namespace Lunex {
 		}
 
 		if (mainCamera) {
+			// ========================================
+			// RENDER GLOBAL SKYBOX (Runtime)
+			// ========================================
+			SkyboxRenderer::RenderGlobalSkybox(*mainCamera, cameraTransform);
+
 			// Render 2D
 			Renderer2D::BeginScene(*mainCamera, cameraTransform);
 
@@ -533,6 +539,11 @@ namespace Lunex {
 	}
 
 	void Scene::RenderScene(EditorCamera& camera) {
+
+		// ========================================
+		// RENDER GLOBAL SKYBOX FIRST (controlled by SettingsPanel)
+		// ========================================
+		SkyboxRenderer::RenderGlobalSkybox(camera);
 
 		Renderer2D::BeginScene(camera);
 
@@ -962,6 +973,10 @@ namespace Lunex {
 
 	template<>
 	void Scene::OnComponentAdded<RelationshipComponent>(Entity entity, RelationshipComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<EnvironmentComponent>(Entity entity, EnvironmentComponent& component) {
 	}
 
 	// ========================================

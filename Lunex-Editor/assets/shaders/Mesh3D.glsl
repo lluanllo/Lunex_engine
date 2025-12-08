@@ -115,15 +115,28 @@ layout (binding = 4) uniform sampler2D u_SpecularMap;
 layout (binding = 5) uniform sampler2D u_EmissionMap;
 layout (binding = 6) uniform sampler2D u_AOMap;
 
+// ============ IBL SAMPLERS ============
+layout (binding = 8) uniform samplerCube u_IrradianceMap;
+layout (binding = 9) uniform samplerCube u_PrefilteredMap;
+layout (binding = 10) uniform sampler2D u_BRDFLUT;
+
+// ============ IBL UNIFORM ============
+layout(std140, binding = 5) uniform IBLData {
+	float u_IBLIntensity;
+	float u_IBLRotation;
+	int u_UseIBL;
+	float _iblPadding;
+};
+
 // ============ ENHANCED CONSTANTS ============
 const float PI = 3.14159265359;
 const float EPSILON = 0.00001;
 const float MIN_ROUGHNESS = 0.045;
 const float MIN_DIELECTRIC_F0 = 0.04;
+const float MAX_REFLECTION_LOD = 4.0;
 
 // Light parameters for realistic falloff
 const float LIGHT_FALLOFF_BIAS = 0.0001;
-const float SHADOW_BIAS = 0.001;
 
 // ============ ADVANCED PBR FUNCTIONS ============
 
@@ -373,51 +386,72 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 	return Lo;
 }
 
-// ============ ENHANCED AMBIENT LIGHTING ============
+// ============ IBL AMBIENT LIGHTING ============
 
-vec3 CalculateAmbient(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, float roughness, float ao) {
+vec3 CalculateIBLAmbient(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, float roughness, float ao) {
 	float NdotV = max(dot(N, V), EPSILON);
 	
-	// ========== AMBIENT OCCLUSION ==========
-	// Multi-bounce AO for more realistic light scattering
-	float aoMultiBounce = GetMultiBounceAO(ao, albedo);
-	
-	// ========== FRESNEL FOR IBL ==========
+	// Fresnel for IBL
 	vec3 F = F_SchlickRoughness(NdotV, F0, roughness);
 	vec3 kS = F;
 	vec3 kD = (1.0 - kS) * (1.0 - metallic);
 	
-	// ========== DIFFUSE AMBIENT ==========
-	// Hemisphere lighting approximation (sky + ground)
-	float skyFactor = N.y * 0.5 + 0.5; // -1 to 1 → 0 to 1
-	vec3 skyColor = vec3(0.4, 0.5, 0.6) * 0.8; // Cool blue-ish sky
-	vec3 groundColor = vec3(0.3, 0.25, 0.2) * 0.3; // Warm brown ground
+	// Apply IBL rotation
+	float cosR = cos(u_IBLRotation);
+	float sinR = sin(u_IBLRotation);
+	vec3 rotatedN = vec3(
+		cosR * N.x - sinR * N.z,
+		N.y,
+		sinR * N.x + cosR * N.z
+	);
+	
+	// Diffuse IBL from irradiance map
+	vec3 irradiance = texture(u_IrradianceMap, rotatedN).rgb;
+	vec3 diffuseIBL = irradiance * albedo * kD;
+	
+	// Specular IBL from prefiltered map + BRDF LUT
+	vec3 R = reflect(-V, N);
+	vec3 rotatedR = vec3(
+		cosR * R.x - sinR * R.z,
+		R.y,
+		sinR * R.x + cosR * R.z
+	);
+	
+	float lod = roughness * MAX_REFLECTION_LOD;
+	vec3 prefilteredColor = textureLod(u_PrefilteredMap, rotatedR, lod).rgb;
+	
+	vec2 brdf = texture(u_BRDFLUT, vec2(NdotV, roughness)).rg;
+	vec3 specularIBL = prefilteredColor * (F * brdf.x + brdf.y);
+	
+	// Combine with intensity and AO
+	vec3 ambient = (diffuseIBL + specularIBL) * u_IBLIntensity * ao;
+	
+	return ambient;
+}
+
+// ============ FALLBACK AMBIENT (No IBL) ============
+
+vec3 CalculateFallbackAmbient(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, float roughness, float ao) {
+	float NdotV = max(dot(N, V), EPSILON);
+	
+	vec3 F = F_SchlickRoughness(NdotV, F0, roughness);
+	vec3 kS = F;
+	vec3 kD = (1.0 - kS) * (1.0 - metallic);
+	
+	// Hemisphere lighting approximation
+	float skyFactor = N.y * 0.5 + 0.5;
+	vec3 skyColor = vec3(0.4, 0.5, 0.6) * 0.6;
+	vec3 groundColor = vec3(0.3, 0.25, 0.2) * 0.2;
 	vec3 hemisphereLight = mix(groundColor, skyColor, skyFactor);
 	
-	vec3 ambientDiffuse = albedo * kD * hemisphereLight * aoMultiBounce;
+	vec3 ambientDiffuse = albedo * kD * hemisphereLight * ao;
 	
-	// ========== SPECULAR AMBIENT (IBL Approximation) ==========
-	// Fake reflection probe using view-dependent fresnel
+	// Fake specular ambient
 	vec3 R = reflect(-V, N);
-	float horizonFade = pow(max(R.y, 0.0), 0.5); // Fade toward horizon
+	float horizonFade = pow(max(R.y, 0.0), 0.5);
+	vec3 ambientSpecular = F * mix(groundColor, skyColor, horizonFade) * (1.0 - roughness) * ao * 0.1;
 	
-	vec3 ambientSpecular = F * mix(groundColor, skyColor, horizonFade) * (1.0 - roughness) * ao;
-	ambientSpecular *= 0.15; // Scale down specular ambient
-	
-	// ========== SUBSURFACE SCATTERING APPROXIMATION ==========
-	// Add subtle subsurface for non-metals (skin, wax, marble)
-	float subsurface = 0.0;
-	if (metallic < 0.5) {
-		float thickness = 1.0 - ao; // Approximate thickness from AO
-		subsurface = pow(thickness, 2.0) * (1.0 - metallic) * 0.1;
-		ambientDiffuse += albedo * subsurface * skyColor;
-	}
-	
-	// ========== FINAL AMBIENT ==========
-	vec3 ambient = ambientDiffuse + ambientSpecular;
-	
-	// Boost ambient slightly for better visibility in dark scenes
-	return ambient * 1.2;
+	return (ambientDiffuse + ambientSpecular) * 1.2;
 }
 
 // ============ TONE MAPPING (UNCHANGED) ============
@@ -484,11 +518,16 @@ void main() {
 	F0 = mix(F0, albedo, metallic);
 	F0 = mix(F0 * specular, F0, metallic);
 	
-	// Direct lighting with enhanced realism
+	// Direct lighting
 	vec3 directLighting = CalculateDirectLighting(N, V, F0, albedo, metallic, roughness, Input.FragPos, ao);
 	
-	// Improved ambient/IBL
-	vec3 ambient = CalculateAmbient(N, V, F0, albedo, metallic, roughness, ao);
+	// Ambient/IBL lighting
+	vec3 ambient;
+	if (u_UseIBL != 0) {
+		ambient = CalculateIBLAmbient(N, V, F0, albedo, metallic, roughness, ao);
+	} else {
+		ambient = CalculateFallbackAmbient(N, V, F0, albedo, metallic, roughness, ao);
+	}
 	
 	// ========== EMISSION ==========
 	

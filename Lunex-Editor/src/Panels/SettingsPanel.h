@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include <glm/glm.hpp>
+
 namespace Lunex {
 	class SettingsPanel {
 	public:
@@ -17,5 +20,8 @@ namespace Lunex {
 	private:
 		bool m_ShowPhysicsColliders = false;
 		bool m_ShowPhysics3DColliders = false;
+		
+		// Skybox settings cache for UI
+		std::string m_HDRIPath;
 	};
 }

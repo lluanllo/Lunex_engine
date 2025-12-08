@@ -441,6 +441,27 @@ namespace Lunex {
 			}
 		}
 		
+		// ========================================
+		// ENVIRONMENT COMPONENT (Skybox/HDRI/IBL)
+		// ========================================
+		if (entity.HasComponent<EnvironmentComponent>()) {
+			out << YAML::Key << "EnvironmentComponent";
+			out << YAML::BeginMap; // EnvironmentComponent
+			
+			auto& envComp = entity.GetComponent<EnvironmentComponent>();
+			out << YAML::Key << "HDRIPath" << YAML::Value << envComp.HDRIPath;
+			out << YAML::Key << "IsActive" << YAML::Value << envComp.IsActive;
+			out << YAML::Key << "RenderSkybox" << YAML::Value << envComp.RenderSkybox;
+			out << YAML::Key << "UseForLighting" << YAML::Value << envComp.UseForLighting;
+			out << YAML::Key << "CubemapResolution" << YAML::Value << envComp.CubemapResolution;
+			out << YAML::Key << "Intensity" << YAML::Value << envComp.GetIntensity();
+			out << YAML::Key << "Rotation" << YAML::Value << envComp.GetRotation();
+			out << YAML::Key << "Tint" << YAML::Value << envComp.GetTint();
+			out << YAML::Key << "Blur" << YAML::Value << envComp.GetBlur();
+			
+			out << YAML::EndMap; // EnvironmentComponent
+		}
+		
 		out << YAML::EndMap; // Entity
 	}
 	
@@ -881,6 +902,48 @@ namespace Lunex {
 							rel.ChildrenIDs.push_back(UUID(childIDNode.as<uint64_t>()));
 						}
 					}
+				}
+
+				// ========================================
+				// ENVIRONMENT COMPONENT (Skybox/HDRI/IBL)
+				// ========================================
+				auto environmentComponent = entity["EnvironmentComponent"];
+				if (environmentComponent) {
+					auto& envComp = deserializedEntity.AddComponent<EnvironmentComponent>();
+					
+					// Load settings first (before loading HDRI to set resolution)
+					if (environmentComponent["CubemapResolution"])
+						envComp.CubemapResolution = environmentComponent["CubemapResolution"].as<uint32_t>();
+					
+					if (environmentComponent["IsActive"])
+						envComp.IsActive = environmentComponent["IsActive"].as<bool>();
+					
+					if (environmentComponent["RenderSkybox"])
+						envComp.RenderSkybox = environmentComponent["RenderSkybox"].as<bool>();
+					
+					if (environmentComponent["UseForLighting"])
+						envComp.UseForLighting = environmentComponent["UseForLighting"].as<bool>();
+					
+					// Load HDRI if path is specified
+					if (environmentComponent["HDRIPath"]) {
+						std::string hdriPath = environmentComponent["HDRIPath"].as<std::string>();
+						if (!hdriPath.empty()) {
+							envComp.LoadHDRI(hdriPath);
+						}
+					}
+					
+					// Apply environment settings (after loading)
+					if (environmentComponent["Intensity"])
+						envComp.SetIntensity(environmentComponent["Intensity"].as<float>());
+					
+					if (environmentComponent["Rotation"])
+						envComp.SetRotation(environmentComponent["Rotation"].as<float>());
+					
+					if (environmentComponent["Tint"])
+						envComp.SetTint(environmentComponent["Tint"].as<glm::vec3>());
+					
+					if (environmentComponent["Blur"])
+						envComp.SetBlur(environmentComponent["Blur"].as<float>());
 				}
 			}
 		}
