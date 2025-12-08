@@ -4,6 +4,7 @@
 #include "Platform/OpenGL/OpenGLShader.h"
 #include "Renderer2D.h"
 #include "Renderer3D.h"
+#include "TextureCompression.h"
 
 namespace Lunex {
 	
@@ -14,11 +15,23 @@ namespace Lunex {
 		RenderCommand::Init();
 		Renderer2D::Init();
 		Renderer3D::Init();
+		
+		// Initialize texture compression system
+		TextureCompressor::Get().Initialize();
+		
+		// Log compression status
+		if (TextureCompressionConfig::IsKTXAvailable()) {
+			LNX_LOG_INFO("Texture Compression: KTX enabled - textures will be compressed automatically");
+		}
+		else {
+			LNX_LOG_WARN("Texture Compression: KTX not available - using uncompressed textures");
+		}
 	}
 	
 	void Renderer::Shutdown() {
 		Renderer2D::Shutdown();
 		Renderer3D::Shutdown();
+		TextureCompressor::Get().Shutdown();
 	}
 	
 	void Renderer::onWindowResize(uint32_t width, uint32_t height) {

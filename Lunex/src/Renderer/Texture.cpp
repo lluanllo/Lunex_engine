@@ -1,5 +1,6 @@
 #include "stpch.h"
 #include "Texture.h"
+#include "TextureCompression.h"
 
 #include "Renderer.h"
 #include "Platform/OpenGL/OpenGLTexture.h"
@@ -19,6 +20,26 @@ namespace Lunex {
 		switch (Renderer::GetAPI()) {
 			case RendererAPI::API::None:    LNX_CORE_ASSERT(false, "RendererAPI::None is currently not supported!"); return nullptr;
 			case RendererAPI::API::OpenGL:  return CreateRef<OpenGLTexture2D>(path);
+		}
+		
+		LNX_CORE_ASSERT(false, "Unknown RendererAPI!");
+		return nullptr;
+	}
+	
+	Ref<Texture2D> Texture2D::Create(const std::string& path, const TextureImportSettings& settings) {
+		switch (Renderer::GetAPI()) {
+			case RendererAPI::API::None:    LNX_CORE_ASSERT(false, "RendererAPI::None is currently not supported!"); return nullptr;
+			case RendererAPI::API::OpenGL:  return CreateRef<OpenGLTexture2D>(path, settings);
+		}
+		
+		LNX_CORE_ASSERT(false, "Unknown RendererAPI!");
+		return nullptr;
+	}
+	
+	Ref<Texture2D> Texture2D::CreateCompressed(const CompressedTextureData& compressedData) {
+		switch (Renderer::GetAPI()) {
+			case RendererAPI::API::None:    LNX_CORE_ASSERT(false, "RendererAPI::None is currently not supported!"); return nullptr;
+			case RendererAPI::API::OpenGL:  return CreateRef<OpenGLTexture2D>(compressedData);
 		}
 		
 		LNX_CORE_ASSERT(false, "Unknown RendererAPI!");
