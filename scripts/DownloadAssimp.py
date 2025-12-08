@@ -9,12 +9,12 @@ def download_file(url, destination):
     print(f"Descargando desde: {url}")
     
     def reporthook(count, block_size, total_size):
-     percent = int(count * block_size * 100 / total_size)
+        percent = int(count * block_size * 100 / total_size)
         sys.stdout.write(f"\r{percent}% completado")
         sys.stdout.flush()
     
     urllib.request.urlretrieve(url, destination, reporthook)
-  print("\n? Descarga completada")
+    print("\n? Descarga completada")
 
 def extract_zip(zip_path, extract_to):
     """Extrae un archivo ZIP"""
@@ -43,19 +43,19 @@ def setup_assimp_prebuilt():
     
     print("IMPORTANTE:")
     print("Este script necesita que descargues manualmente las librerías precompiladas.")
-  print()
+    print()
     print("Sigue estos pasos:")
     print()
     print("1. Ve a: https://github.com/assimp/assimp/releases/latest")
     print()
     print("2. Busca y descarga uno de estos archivos:")
- print("   - assimp-windows-x64.zip")
+    print("   - assimp-windows-x64.zip")
     print("   - assimp-sdk-{version}-setup.exe (ejecutalo y anota donde se instala)")
     print("   - O busca archivos que contengan 'vc143' o 'vs2022'")
     print()
     print("3. Necesitas estos archivos específicos:")
     print("   Debug:")
-print("     - assimp-vc143-mtd.lib")
+    print("     - assimp-vc143-mtd.lib")
     print("     - assimp-vc143-mtd.dll")
     print("   Release:")
     print("     - assimp-vc143-mt.lib")
@@ -85,21 +85,21 @@ print("     - assimp-vc143-mtd.lib")
     
     missing_files = []
     for file in required_files:
-if not os.path.exists(file):
-       missing_files.append(file)
+        if not os.path.exists(file):
+            missing_files.append(file)
     
     if missing_files:
         print()
         print("? ERROR: Faltan algunos archivos:")
         for file in missing_files:
-       print(f"  - {file}")
-   print()
+            print(f"  - {file}")
+        print()
         print("Por favor, copia todos los archivos necesarios y vuelve a ejecutar este script.")
         return False
     
     print()
     print("="*60)
- print("? Assimp configurado correctamente!")
+    print("? Assimp configurado correctamente!")
     print("="*60)
     print()
     print("Archivos encontrados:")
@@ -118,7 +118,7 @@ if __name__ == "__main__":
         setup_assimp_prebuilt()
     except Exception as e:
         print(f"\n? Error: {e}")
-import traceback
+        import traceback
         traceback.print_exc()
     
-  input("\nPresiona Enter para salir...")
+    input("\nPresiona Enter para salir...")
