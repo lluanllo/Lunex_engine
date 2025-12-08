@@ -6,6 +6,7 @@
 #include "Renderer/StorageBuffer.h"
 #include "Renderer/MaterialRegistry.h"
 #include "Renderer/GridRenderer.h"
+#include "Renderer/SkyboxRenderer.h"
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
 #include "Log/Log.h"
@@ -49,6 +50,13 @@ namespace Lunex {
 			float SpecularMultiplier;
 			float AOMultiplier;
 		};
+		
+		struct IBLUniformData {
+			float Intensity;
+			float Rotation;
+			int UseIBL;
+			float _padding;
+		};
 
 		// Dynamic light buffer structure
 		struct LightsStorageData {
@@ -60,6 +68,7 @@ namespace Lunex {
 		CameraData CameraBuffer;
 		TransformData TransformBuffer;
 		MaterialUniformData MaterialBuffer;
+		IBLUniformData IBLBuffer;
 		
 		// Dynamic light buffer
 		std::vector<uint8_t> LightsBufferData;
@@ -69,11 +78,15 @@ namespace Lunex {
 		Ref<UniformBuffer> CameraUniformBuffer;
 		Ref<UniformBuffer> TransformUniformBuffer;
 		Ref<UniformBuffer> MaterialUniformBuffer;
+		Ref<UniformBuffer> IBLUniformBuffer;
 		Ref<StorageBuffer> LightsStorageBuffer;
 
 		Ref<Shader> MeshShader;
 
 		glm::vec3 CameraPosition = { 0.0f, 0.0f, 0.0f };
+		
+		// Current environment for IBL
+		Ref<EnvironmentMap> CurrentEnvironment;
 
 		Renderer3D::Statistics Stats;
 	};
@@ -89,6 +102,7 @@ namespace Lunex {
 		s_Data.CameraUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::CameraData), 0);
 		s_Data.TransformUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::TransformData), 1);
 		s_Data.MaterialUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::MaterialUniformData), 2);
+		s_Data.IBLUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::IBLUniformData), 5);
 		
 		// Create storage buffer for lights (header + 10000 lights)
 		uint32_t lightsBufferSize = sizeof(Renderer3DData::LightsStorageData) + 
@@ -104,6 +118,12 @@ namespace Lunex {
 			reinterpret_cast<Renderer3DData::LightsStorageData*>(s_Data.LightsBufferData.data());
 		header->NumLights = 0;
 		s_Data.LightsStorageBuffer->SetData(s_Data.LightsBufferData.data(), lightsBufferSize);
+		
+		// Initialize IBL buffer with defaults (no IBL)
+		s_Data.IBLBuffer.UseIBL = 0;
+		s_Data.IBLBuffer.Intensity = 1.0f;
+		s_Data.IBLBuffer.Rotation = 0.0f;
+		s_Data.IBLUniformBuffer->SetData(&s_Data.IBLBuffer, sizeof(Renderer3DData::IBLUniformData));
 		
 		// Initialize GridRenderer
 		GridRenderer::Init();
@@ -121,6 +141,14 @@ namespace Lunex {
 		s_Data.CameraBuffer.ViewProjection = camera.GetViewProjectionMatrix();
 		s_Data.CameraPosition = glm::vec3(0.0f);
 		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(Renderer3DData::CameraData));
+		
+		// Bind global environment if available
+		auto globalEnv = SkyboxRenderer::GetGlobalEnvironment();
+		if (globalEnv && globalEnv->IsLoaded()) {
+			BindEnvironment(globalEnv);
+		} else {
+			UnbindEnvironment();
+		}
 	}
 
 	void Renderer3D::BeginScene(const Camera& camera, const glm::mat4& transform) {
@@ -129,6 +157,14 @@ namespace Lunex {
 		s_Data.CameraBuffer.ViewProjection = camera.GetProjection() * glm::inverse(transform);
 		s_Data.CameraPosition = glm::vec3(transform[3]);
 		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(Renderer3DData::CameraData));
+		
+		// Bind global environment if available
+		auto globalEnv = SkyboxRenderer::GetGlobalEnvironment();
+		if (globalEnv && globalEnv->IsLoaded()) {
+			BindEnvironment(globalEnv);
+		} else {
+			UnbindEnvironment();
+		}
 	}
 
 	void Renderer3D::BeginScene(const EditorCamera& camera) {
@@ -137,10 +173,54 @@ namespace Lunex {
 		s_Data.CameraBuffer.ViewProjection = camera.GetViewProjection();
 		s_Data.CameraPosition = camera.GetPosition();
 		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(Renderer3DData::CameraData));
+		
+		// Bind global environment if available
+		auto globalEnv = SkyboxRenderer::GetGlobalEnvironment();
+		if (globalEnv && globalEnv->IsLoaded()) {
+			BindEnvironment(globalEnv);
+		} else {
+			UnbindEnvironment();
+		}
 	}
 
 	void Renderer3D::EndScene() {
 		LNX_PROFILE_FUNCTION();
+	}
+	
+	void Renderer3D::BindEnvironment(const Ref<EnvironmentMap>& environment) {
+		if (!environment || !environment->IsLoaded()) {
+			UnbindEnvironment();
+			return;
+		}
+		
+		s_Data.CurrentEnvironment = environment;
+		
+		// Bind IBL textures (irradiance=8, prefiltered=9, brdfLUT=10)
+		if (environment->GetIrradianceMap()) {
+			environment->GetIrradianceMap()->Bind(8);
+		}
+		if (environment->GetPrefilteredMap()) {
+			environment->GetPrefilteredMap()->Bind(9);
+		}
+		if (environment->GetBRDFLUT()) {
+			environment->GetBRDFLUT()->Bind(10);
+		}
+		
+		// Update IBL uniform buffer
+		s_Data.IBLBuffer.UseIBL = 1;
+		s_Data.IBLBuffer.Intensity = environment->GetIntensity();
+		s_Data.IBLBuffer.Rotation = environment->GetRotation();
+		s_Data.IBLUniformBuffer->SetData(&s_Data.IBLBuffer, sizeof(Renderer3DData::IBLUniformData));
+	}
+	
+	void Renderer3D::UnbindEnvironment() {
+		s_Data.CurrentEnvironment = nullptr;
+		
+		// Disable IBL in shader
+		s_Data.IBLBuffer.UseIBL = 0;
+		s_Data.IBLBuffer.Intensity = 1.0f;
+		s_Data.IBLBuffer.Rotation = 0.0f;
+		s_Data.IBLUniformBuffer->SetData(&s_Data.IBLBuffer, sizeof(Renderer3DData::IBLUniformData));
 	}
 
 	void Renderer3D::UpdateLights(Scene* scene) {

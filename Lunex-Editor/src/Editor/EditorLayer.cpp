@@ -23,6 +23,9 @@
 #include "Asset/MeshImporter.h"
 #include "Asset/Prefab.h"
 
+// ✅ Skybox Renderer for camera preview
+#include "Renderer/SkyboxRenderer.h"
+
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
 
@@ -1300,8 +1303,21 @@ namespace Lunex {
 		auto& cameraComp = cameraEntity.GetComponent<CameraComponent>();
 		glm::mat4 cameraWorldTransform = m_ActiveScene->GetWorldTransform(cameraEntity);
 
+		// ========================================
+		// CALCULATE PREVIEW SIZE WITH CORRECT ASPECT RATIO
+		// ========================================
+		// Use the camera's aspect ratio to avoid distortion
+		float cameraAspect = cameraComp.Camera.GetAspectRatio();
+		if (cameraAspect <= 0.0f) {
+			cameraAspect = 16.0f / 9.0f; // Default fallback
+		}
+		
+		// Base preview width, calculate height from camera aspect ratio
 		uint32_t previewWidth = 320;
-		uint32_t previewHeight = 180;
+		uint32_t previewHeight = static_cast<uint32_t>(previewWidth / cameraAspect);
+		
+		// Clamp height to reasonable bounds
+		previewHeight = std::clamp(previewHeight, 100u, 400u);
 
 		auto previewSpec = m_CameraPreviewFramebuffer->GetSpecification();
 		if (previewSpec.Width != previewWidth || previewSpec.Height != previewHeight) {
@@ -1323,7 +1339,12 @@ namespace Lunex {
 		RenderCommand::Clear();
 
 		// ========================================
-		// RENDER 3D MESHES ONLY (NO GRID, NO BILLBOARDS)
+		// RENDER SKYBOX FIRST (before geometry)
+		// ========================================
+		SkyboxRenderer::RenderGlobalSkybox(cameraComp.Camera, cameraWorldTransform);
+
+		// ========================================
+		// RENDER 3D MESHES (NO GRID, NO BILLBOARDS)
 		// ========================================
 		Renderer3D::BeginScene(cameraComp.Camera, cameraWorldTransform);
 		Renderer3D::UpdateLights(m_ActiveScene.get());
@@ -1348,7 +1369,7 @@ namespace Lunex {
 		Renderer3D::EndScene();
 
 		// ========================================
-		// RENDER 2D SPRITES ONLY (NO GRID, NO BILLBOARDS)
+		// RENDER 2D SPRITES (NO GRID, NO BILLBOARDS)
 		// ========================================
 		Renderer2D::BeginScene(cameraComp.Camera, cameraWorldTransform);
 
