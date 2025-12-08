@@ -33,12 +33,24 @@ namespace Lunex {
 				s_RendererAPI->DrawLines(vertexArray, vertexCount);
 			}
 			
+			static void DrawArrays(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) {
+				s_RendererAPI->DrawArrays(vertexArray, vertexCount);
+			}
+			
 			static void SetLineWidth(float width) {
 				s_RendererAPI->SetLineWidth(width);
 			}
 			
 			static void SetDepthMask(bool enabled) {
 				s_RendererAPI->SetDepthMask(enabled);
+			}
+			
+			static void SetDepthFunc(DepthFunc func) {
+				s_RendererAPI->SetDepthFunc(func);
+			}
+			
+			static DepthFunc GetDepthFunc() {
+				return s_RendererAPI->GetDepthFunc();
 			}
 			
 			static void SetDrawBuffers(const std::vector<uint32_t>& attachments) {

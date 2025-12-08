@@ -4,6 +4,21 @@
 #include <glad/glad.h>
 
 namespace Lunex {
+	
+	static GLenum DepthFuncToGL(DepthFunc func) {
+		switch (func) {
+			case DepthFunc::Less:         return GL_LESS;
+			case DepthFunc::LessEqual:    return GL_LEQUAL;
+			case DepthFunc::Greater:      return GL_GREATER;
+			case DepthFunc::GreaterEqual: return GL_GEQUAL;
+			case DepthFunc::Equal:        return GL_EQUAL;
+			case DepthFunc::NotEqual:     return GL_NOTEQUAL;
+			case DepthFunc::Always:       return GL_ALWAYS;
+			case DepthFunc::Never:        return GL_NEVER;
+		}
+		return GL_LESS;
+	}
+	
 	void OpenGLMessageCallback(
 		unsigned source,
 		unsigned type,
@@ -65,12 +80,26 @@ namespace Lunex {
 		glDrawArrays(GL_LINES, 0, vertexCount);
 	}
 	
+	void OpenGLRendererAPI::DrawArrays(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) {
+		vertexArray->Bind();
+		glDrawArrays(GL_TRIANGLES, 0, vertexCount);
+	}
+	
 	void OpenGLRendererAPI::SetLineWidth(float width) {
 		glLineWidth(width);
 	}
 	
 	void OpenGLRendererAPI::SetDepthMask(bool enabled) {
 		glDepthMask(enabled ? GL_TRUE : GL_FALSE);
+	}
+	
+	void OpenGLRendererAPI::SetDepthFunc(DepthFunc func) {
+		m_CurrentDepthFunc = func;
+		glDepthFunc(DepthFuncToGL(func));
+	}
+	
+	DepthFunc OpenGLRendererAPI::GetDepthFunc() {
+		return m_CurrentDepthFunc;
 	}
 	
 	void OpenGLRendererAPI::SetDrawBuffers(const std::vector<uint32_t>& attachments) {

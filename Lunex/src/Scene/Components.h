@@ -5,6 +5,7 @@
 #include "Renderer/Texture.h"
 #include "Renderer/Model.h"
 #include "Renderer/Light.h"
+#include "Renderer/EnvironmentMap.h"  // NEW: Environment map support
 #include "Log/Log.h"
 
 // NEW MATERIAL SYSTEM
@@ -901,6 +902,137 @@ namespace Lunex {
 		}
 	};
 
+	// ========================================
+	// ENVIRONMENT COMPONENT (Skybox/HDRI/IBL)
+	// ========================================
+	// 
+	// Provides Image-Based Lighting (IBL) for the scene.
+	// Only ONE EnvironmentComponent should be active per scene.
+	// If multiple exist, the first one found will be used.
+	// ========================================
+	struct EnvironmentComponent {
+		// The environment map (contains cubemap, irradiance, prefiltered maps)
+		Ref<EnvironmentMap> Environment;
+		
+		// Path to the HDRI file (for serialization)
+		std::string HDRIPath;
+		
+		// Is this the active environment? (only one can be active)
+		bool IsActive = true;
+		
+		// Render as skybox background?
+		bool RenderSkybox = true;
+		
+		// Use for IBL lighting?
+		bool UseForLighting = true;
+		
+		// Resolution for cubemap (higher = better quality, more VRAM)
+		uint32_t CubemapResolution = 1024;
+		
+		EnvironmentComponent() {
+			Environment = CreateRef<EnvironmentMap>();
+		}
+		
+		EnvironmentComponent(const EnvironmentComponent& other)
+			: Environment(other.Environment)
+			, HDRIPath(other.HDRIPath)
+			, IsActive(other.IsActive)
+			, RenderSkybox(other.RenderSkybox)
+			, UseForLighting(other.UseForLighting)
+			, CubemapResolution(other.CubemapResolution)
+		{
+		}
+		
+		EnvironmentComponent(const std::string& hdriPath, uint32_t resolution = 1024)
+			: HDRIPath(hdriPath)
+			, CubemapResolution(resolution)
+		{
+			Environment = CreateRef<EnvironmentMap>();
+			if (!hdriPath.empty()) {
+				LoadHDRI(hdriPath);
+			}
+		}
+		
+		// ========== LOADING ==========
+		
+		bool LoadHDRI(const std::string& path) {
+			HDRIPath = path;
+			if (!Environment) {
+				Environment = CreateRef<EnvironmentMap>();
+			}
+			bool success = Environment->LoadFromHDRI(path, CubemapResolution);
+			if (success) {
+				LNX_LOG_INFO("Environment loaded: {0}", path);
+			} else {
+				LNX_LOG_ERROR("Failed to load environment: {0}", path);
+			}
+			return success;
+		}
+		
+		bool LoadFromFaces(const std::array<std::string, 6>& facePaths) {
+			if (!Environment) {
+				Environment = CreateRef<EnvironmentMap>();
+			}
+			bool success = Environment->LoadFromFaces(facePaths);
+			if (success) {
+				HDRIPath = facePaths[0]; // Use first face as identifier
+			}
+			return success;
+		}
+		
+		// ========== SETTINGS ==========
+		
+		void SetIntensity(float intensity) {
+			if (Environment) Environment->SetIntensity(intensity);
+		}
+		
+		float GetIntensity() const {
+			return Environment ? Environment->GetIntensity() : 1.0f;
+		}
+		
+		void SetRotation(float rotationDegrees) {
+			if (Environment) Environment->SetRotation(glm::radians(rotationDegrees));
+		}
+		
+		float GetRotation() const {
+			return Environment ? glm::degrees(Environment->GetRotation()) : 0.0f;
+		}
+		
+		void SetTint(const glm::vec3& tint) {
+			if (Environment) Environment->SetTint(tint);
+		}
+		
+		glm::vec3 GetTint() const {
+			return Environment ? Environment->GetTint() : glm::vec3(1.0f);
+		}
+		
+		void SetBlur(float blur) {
+			if (Environment) Environment->SetBlur(blur);
+		}
+		
+		float GetBlur() const {
+			return Environment ? Environment->GetBlur() : 0.0f;
+		}
+		
+		// ========== STATE ==========
+		
+		bool IsLoaded() const {
+			return Environment && Environment->IsLoaded();
+		}
+		
+		Ref<TextureCube> GetEnvironmentMap() const {
+			return Environment ? Environment->GetEnvironmentMap() : nullptr;
+		}
+		
+		Ref<TextureCube> GetIrradianceMap() const {
+			return Environment ? Environment->GetIrradianceMap() : nullptr;
+		}
+		
+		Ref<TextureCube> GetPrefilteredMap() const {
+			return Environment ? Environment->GetPrefilteredMap() : nullptr;
+		}
+	};
+
 	template<typename... Component>
 	struct ComponentGroup
 	{
@@ -913,5 +1045,5 @@ namespace Lunex {
 		Rigidbody3DComponent, BoxCollider3DComponent, SphereCollider3DComponent, 
 		CapsuleCollider3DComponent, MeshCollider3DComponent,
 		MeshComponent, MaterialComponent, LightComponent, TextureComponent, ScriptComponent,
-		RelationshipComponent>;
+		RelationshipComponent, EnvironmentComponent>;  // Added EnvironmentComponent
 }

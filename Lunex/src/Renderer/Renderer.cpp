@@ -4,6 +4,7 @@
 #include "Platform/OpenGL/OpenGLShader.h"
 #include "Renderer2D.h"
 #include "Renderer3D.h"
+#include "SkyboxRenderer.h"  // NEW: Skybox rendering
 #include "TextureCompression.h"
 
 namespace Lunex {
@@ -15,6 +16,7 @@ namespace Lunex {
 		RenderCommand::Init();
 		Renderer2D::Init();
 		Renderer3D::Init();
+		SkyboxRenderer::Init();  // NEW: Initialize skybox renderer
 		
 		// Initialize texture compression system
 		TextureCompressor::Get().Initialize();
@@ -31,6 +33,7 @@ namespace Lunex {
 	void Renderer::Shutdown() {
 		Renderer2D::Shutdown();
 		Renderer3D::Shutdown();
+		SkyboxRenderer::Shutdown();  // NEW: Shutdown skybox renderer
 		TextureCompressor::Get().Shutdown();
 	}
 	

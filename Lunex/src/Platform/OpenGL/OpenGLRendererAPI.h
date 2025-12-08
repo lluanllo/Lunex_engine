@@ -14,10 +14,16 @@ namespace Lunex {
 			
 			virtual void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0) override;
 			virtual void DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) override;
+			virtual void DrawArrays(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) override;
 			
 			virtual void SetLineWidth(float width) override;
 			virtual void SetDepthMask(bool enabled) override;
+			virtual void SetDepthFunc(DepthFunc func) override;
+			virtual DepthFunc GetDepthFunc() override;
 			
 			virtual void SetDrawBuffers(const std::vector<uint32_t>& attachments) override;
+			
+		private:
+			DepthFunc m_CurrentDepthFunc = DepthFunc::Less;
 	};
 }

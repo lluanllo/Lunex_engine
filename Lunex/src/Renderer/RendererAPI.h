@@ -8,7 +8,19 @@
 #include <vector>
 
 namespace Lunex {
-	class   RendererAPI {
+	
+	enum class DepthFunc {
+		Less = 0,
+		LessEqual,
+		Greater,
+		GreaterEqual,
+		Equal,
+		NotEqual,
+		Always,
+		Never
+	};
+	
+	class RendererAPI {
 		public:
 			enum class API {
 				None = 0, OpenGL = 1
@@ -25,9 +37,12 @@ namespace Lunex {
 			
 			virtual void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0) = 0;
 			virtual void DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) = 0;
+			virtual void DrawArrays(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) = 0;
 			
 			virtual void SetLineWidth(float width) = 0;
 			virtual void SetDepthMask(bool enabled) = 0;
+			virtual void SetDepthFunc(DepthFunc func) = 0;
+			virtual DepthFunc GetDepthFunc() = 0;
 			
 			// Framebuffer draw buffer control
 			virtual void SetDrawBuffers(const std::vector<uint32_t>& attachments) = 0;
