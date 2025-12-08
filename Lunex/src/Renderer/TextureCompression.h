@@ -99,7 +99,8 @@ namespace Lunex {
 	
 	struct TextureCompressionConfig {
 		// Enable automatic compression for all textures loaded with Create(path)
-		bool EnableAutoCompression = true;
+		// NOTE: Only effective if KTX-Software is installed
+		bool EnableAutoCompression = false;  // Disabled by default - enable only when KTX is installed
 		
 		// Default compression format (BC7 recommended for desktop)
 		TextureCompressionFormat DefaultFormat = TextureCompressionFormat::BC7;

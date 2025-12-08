@@ -40,7 +40,7 @@ namespace Lunex {
 			
 		private:
 			std::string m_Path;
-			bool m_IsLoaded = true;
+			bool m_IsLoaded = false;  // Changed from true to false - textures start as not loaded
 			uint32_t m_Width, m_Height;
 			uint32_t m_RendererID;
 			GLenum m_InternalFormat, m_DataFormat;

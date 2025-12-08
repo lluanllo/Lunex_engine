@@ -25,27 +25,36 @@ namespace Lunex {
 	OpenGLTexture2D::OpenGLTexture2D(const std::string& path) : m_Path(path) {
 		LNX_PROFILE_FUNCTION();
 		
+		m_IsLoaded = false;  // Start as not loaded until we successfully load
+		m_Width = 0;
+		m_Height = 0;
+		m_RendererID = 0;
+		
 		// ========================================================================
-		// AUTO-COMPRESSION: Use global config to determine if we should compress
+		// AUTO-COMPRESSION: Only attempt if KTX is actually available
 		// ========================================================================
 		auto& config = TextureCompressionConfig::Get();
 		
-		if (config.EnableAutoCompression && config.IsKTXAvailable()) {
-			// Use compression pipeline
+		// Only try compression if KTX is available and auto-compression is enabled
+		if (config.EnableAutoCompression && TextureCompressionConfig::IsKTXAvailable()) {
 			TextureImportSettings settings = config.GetDefaultSettings();
 			
-			auto& compressor = TextureCompressor::Get();
-			if (!compressor.IsInitialized()) {
-				compressor.Initialize();
+			// Only compress if format is not None (meaning KTX determined compression is possible)
+			if (settings.CompressionFormat != TextureCompressionFormat::None) {
+				auto& compressor = TextureCompressor::Get();
+				if (!compressor.IsInitialized()) {
+					compressor.Initialize();
+				}
+				
+				// Try to load from cache or compress
+				CompressedTextureData compressedData = compressor.CompressFromFile(path, settings);
+				if (compressedData.IsValid()) {
+					LoadFromCompressedData(compressedData);
+					return;
+				}
+				// If compression failed, fall through to standard loading
+				LNX_LOG_TRACE("Compression failed for {0}, falling back to standard loading", path);
 			}
-			
-			// Try to load from cache or compress
-			CompressedTextureData compressedData = compressor.CompressFromFile(path, settings);
-			if (compressedData.IsValid()) {
-				LoadFromCompressedData(compressedData);
-				return;
-			}
-			// If compression failed, fall through to standard loading
 		}
 		
 		// ========================================================================
@@ -125,6 +134,14 @@ namespace Lunex {
 			
 			stbi_image_free(data);
 		}
+		else {
+			// Failed to load texture - log error and ensure state is clean
+			LNX_LOG_ERROR("Failed to load texture: {0} - {1}", path, stbi_failure_reason());
+			m_IsLoaded = false;
+			m_Width = 0;
+			m_Height = 0;
+			m_RendererID = 0;
+		}
 	}
 	
 	OpenGLTexture2D::OpenGLTexture2D(const std::string& path, const TextureImportSettings& settings) 
@@ -132,8 +149,14 @@ namespace Lunex {
 	{
 		LNX_PROFILE_FUNCTION();
 		
-		// Try to load from compressed cache first
-		if (settings.UseCache && settings.CompressionFormat != TextureCompressionFormat::None) {
+		m_IsLoaded = false;  // Start as not loaded
+		m_Width = 0;
+		m_Height = 0;
+		m_RendererID = 0;
+		
+		// Try to load from compressed cache first - only if KTX is available
+		if (settings.UseCache && settings.CompressionFormat != TextureCompressionFormat::None 
+			&& TextureCompressionConfig::IsKTXAvailable()) {
 			auto& compressor = TextureCompressor::Get();
 			if (!compressor.IsInitialized()) {
 				compressor.Initialize();
@@ -218,6 +241,14 @@ namespace Lunex {
 			}
 			
 			stbi_image_free(data);
+		}
+		else {
+			// Failed to load texture
+			LNX_LOG_ERROR("Failed to load texture: {0} - {1}", path, stbi_failure_reason());
+			m_IsLoaded = false;
+			m_Width = 0;
+			m_Height = 0;
+			m_RendererID = 0;
 		}
 	}
 	
