@@ -45,6 +45,8 @@ namespace Lunex {
 		out << YAML::Key << "Intensity" << YAML::Value << ssrSettings.Intensity;
 		out << YAML::Key << "RoughnessThreshold" << YAML::Value << ssrSettings.RoughnessThreshold;
 		out << YAML::Key << "EdgeFade" << YAML::Value << ssrSettings.EdgeFade;
+		out << YAML::Key << "UseEnvironmentFallback" << YAML::Value << ssrSettings.UseEnvironmentFallback;
+		out << YAML::Key << "EnvironmentIntensity" << YAML::Value << ssrSettings.EnvironmentIntensity;
 		out << YAML::EndMap;
 		
 		// ? Input Bindings
@@ -110,6 +112,8 @@ namespace Lunex {
 			if (ssrNode["Intensity"]) ssrSettings.Intensity = ssrNode["Intensity"].as<float>();
 			if (ssrNode["RoughnessThreshold"]) ssrSettings.RoughnessThreshold = ssrNode["RoughnessThreshold"].as<float>();
 			if (ssrNode["EdgeFade"]) ssrSettings.EdgeFade = ssrNode["EdgeFade"].as<float>();
+			if (ssrNode["UseEnvironmentFallback"]) ssrSettings.UseEnvironmentFallback = ssrNode["UseEnvironmentFallback"].as<bool>();
+			if (ssrNode["EnvironmentIntensity"]) ssrSettings.EnvironmentIntensity = ssrNode["EnvironmentIntensity"].as<float>();
 			
 			SSRRenderer::SetSettings(ssrSettings);
 			LNX_LOG_INFO("Loaded SSR settings from project (Enabled: {0})", ssrSettings.Enabled);

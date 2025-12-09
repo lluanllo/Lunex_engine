@@ -6,6 +6,7 @@
 #include "VertexArray.h"
 #include "Log/Log.h"
 
+#include <glad/glad.h>
 #include <glm/gtc/matrix_inverse.hpp>
 
 namespace Lunex {
@@ -37,20 +38,23 @@ namespace Lunex {
 		
 		// SSR Uniform data structure (must match shader layout)
 		struct SSRUniformData {
-			glm::mat4 ViewMatrix;
-			glm::mat4 ProjectionMatrix;
-			glm::mat4 InvProjectionMatrix;
-			glm::vec2 ViewSize;
-			float MaxDistance;
-			float Resolution;
-			float Thickness;
-			float StepSize;
-			int MaxSteps;
-			float Intensity;
-			float RoughnessThreshold;
-			float EdgeFade;
-			int Enabled;
-			float _padding;
+			glm::mat4 ViewMatrix;          // offset 0
+			glm::mat4 ProjectionMatrix;    // offset 64
+			glm::mat4 InvProjectionMatrix; // offset 128
+			glm::mat4 InvViewMatrix;       // offset 192
+			glm::vec2 ViewSize;            // offset 256
+			float MaxDistance;             // offset 264
+			float Resolution;              // offset 268
+			float Thickness;               // offset 272
+			float StepSize;                // offset 276
+			int MaxSteps;                  // offset 280
+			float Intensity;               // offset 284
+			float RoughnessThreshold;      // offset 288
+			float EdgeFade;                // offset 292
+			int Enabled;                   // offset 296
+			int UseEnvironmentFallback;    // offset 300
+			float EnvironmentIntensity;    // offset 304
+			float _padding;                // offset 308
 		};
 		
 		// Composite Uniform data (binding = 7)
@@ -116,7 +120,7 @@ namespace Lunex {
 		
 		s_Data.QuadVAO->AddVertexBuffer(s_Data.QuadVBO);
 		
-		// Create uniform buffers
+		// Create uniform buffers (size matches new struct)
 		s_Data.SSRUniformBuffer = UniformBuffer::Create(sizeof(SSRRendererData::SSRUniformData), 6);
 		s_Data.CompositeUniformBuffer = UniformBuffer::Create(sizeof(SSRRendererData::CompositeUniformData), 7);
 		
@@ -187,20 +191,16 @@ namespace Lunex {
 	void SSRRenderer::Resize(uint32_t width, uint32_t height) {
 		if (width == 0 || height == 0) return;
 		
-		// Apply resolution scale
-		uint32_t scaledWidth = static_cast<uint32_t>(width * s_Data.Settings.Resolution);
-		uint32_t scaledHeight = static_cast<uint32_t>(height * s_Data.Settings.Resolution);
-		
 		// Ensure minimum size
-		scaledWidth = std::max(scaledWidth, 1u);
-		scaledHeight = std::max(scaledHeight, 1u);
+		width = std::max(width, 1u);
+		height = std::max(height, 1u);
 		
-		if (scaledWidth == s_Data.CurrentWidth && scaledHeight == s_Data.CurrentHeight) {
+		if (width == s_Data.CurrentWidth && height == s_Data.CurrentHeight) {
 			return; // No resize needed
 		}
 		
-		s_Data.CurrentWidth = scaledWidth;
-		s_Data.CurrentHeight = scaledHeight;
+		s_Data.CurrentWidth = width;
+		s_Data.CurrentHeight = height;
 		
 		CreateResources();
 	}
@@ -217,6 +217,7 @@ namespace Lunex {
 		s_Data.UniformData.ViewMatrix = viewMatrix;
 		s_Data.UniformData.ProjectionMatrix = projectionMatrix;
 		s_Data.UniformData.InvProjectionMatrix = glm::inverse(projectionMatrix);
+		s_Data.UniformData.InvViewMatrix = glm::inverse(viewMatrix);
 		s_Data.UniformData.ViewSize = viewportSize;
 		s_Data.UniformData.MaxDistance = s_Data.Settings.MaxDistance;
 		s_Data.UniformData.Resolution = s_Data.Settings.Resolution;
@@ -227,6 +228,8 @@ namespace Lunex {
 		s_Data.UniformData.RoughnessThreshold = s_Data.Settings.RoughnessThreshold;
 		s_Data.UniformData.EdgeFade = s_Data.Settings.EdgeFade;
 		s_Data.UniformData.Enabled = s_Data.Settings.Enabled ? 1 : 0;
+		s_Data.UniformData.UseEnvironmentFallback = s_Data.Settings.UseEnvironmentFallback ? 1 : 0;
+		s_Data.UniformData.EnvironmentIntensity = s_Data.Settings.EnvironmentIntensity;
 		s_Data.UniformData._padding = 0.0f;
 		
 		s_Data.SSRUniformBuffer->SetData(&s_Data.UniformData, sizeof(SSRRendererData::SSRUniformData));
@@ -240,6 +243,7 @@ namespace Lunex {
 		uint32_t sceneColorTexture,
 		uint32_t sceneDepthTexture,
 		uint32_t sceneNormalTexture,
+		uint32_t environmentMap,
 		const glm::mat4& viewMatrix,
 		const glm::mat4& projectionMatrix,
 		const glm::vec2& viewportSize
@@ -252,7 +256,7 @@ namespace Lunex {
 			return;
 		}
 		
-		// Resize if needed (use full resolution, not scaled)
+		// Resize if needed
 		uint32_t width = static_cast<uint32_t>(viewportSize.x);
 		uint32_t height = static_cast<uint32_t>(viewportSize.y);
 		
@@ -284,6 +288,12 @@ namespace Lunex {
 		RenderCommand::BindTexture(0, sceneColorTexture);
 		RenderCommand::BindTexture(1, sceneDepthTexture);
 		RenderCommand::BindTexture(2, sceneNormalTexture);
+		
+		// Bind environment cubemap if available
+		if (environmentMap != 0) {
+			glActiveTexture(GL_TEXTURE3);
+			glBindTexture(GL_TEXTURE_CUBE_MAP, environmentMap);
+		}
 		
 		// Disable depth testing for fullscreen pass
 		RenderCommand::SetDepthMask(false);

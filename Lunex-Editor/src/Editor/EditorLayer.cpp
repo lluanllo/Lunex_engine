@@ -729,11 +729,19 @@ namespace Lunex {
 				// Unbind framebuffer to read from it
 				m_Framebuffer->Unbind();
 				
+				// Get environment map for SSR fallback
+				uint32_t environmentMapID = 0;
+				auto globalEnv = SkyboxRenderer::GetGlobalEnvironment();
+				if (globalEnv && globalEnv->IsLoaded() && globalEnv->GetPrefilteredMap()) {
+					environmentMapID = globalEnv->GetPrefilteredMap()->GetRendererID();
+				}
+				
 				// Run SSR pass - outputs to SSRRenderer's internal framebuffer
 				SSRRenderer::Render(
 					m_Framebuffer->GetColorAttachmentRendererID(0),  // Scene color
 					m_Framebuffer->GetDepthAttachmentRendererID(),   // Depth
 					m_Framebuffer->GetColorAttachmentRendererID(2),  // Normals + Reflectivity
+					environmentMapID,                                 // Environment map for fallback
 					viewMatrix,
 					projMatrix,
 					m_ViewportSize

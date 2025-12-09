@@ -211,9 +211,9 @@ namespace Lunex {
 					ImGui::SetTooltip("Maximum ray march iterations (higher = better quality, slower)");
 				}
 				
-				ImGui::DragFloat("Thickness", &ssr.Thickness, 0.001f, 0.001f, 1.0f, "%.3f");
+				ImGui::DragFloat("Thickness", &ssr.Thickness, 0.01f, 0.01f, 2.0f, "%.3f");
 				if (ImGui::IsItemHovered()) {
-					ImGui::SetTooltip("Depth comparison threshold for hit detection");
+					ImGui::SetTooltip("Depth comparison threshold for hit detection (higher = more tolerant)");
 				}
 				
 				ImGui::SliderFloat("Resolution", &ssr.Resolution, 0.25f, 1.0f, "%.2f");
@@ -248,6 +248,26 @@ namespace Lunex {
 				
 				ImGui::Separator();
 				
+				// Environment Fallback
+				ImGui::Text("Environment Fallback");
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+				
+				ImGui::Checkbox("Use Skybox Fallback", &ssr.UseEnvironmentFallback);
+				if (ImGui::IsItemHovered()) {
+					ImGui::SetTooltip("When SSR doesn't find a hit, use the environment/skybox for reflection");
+				}
+				
+				if (ssr.UseEnvironmentFallback) {
+					ImGui::SliderFloat("Fallback Intensity", &ssr.EnvironmentIntensity, 0.0f, 2.0f, "%.2f");
+					if (ImGui::IsItemHovered()) {
+						ImGui::SetTooltip("Intensity of environment reflections when SSR misses");
+					}
+				}
+				
+				ImGui::PopStyleColor();
+				
+				ImGui::Separator();
+				
 				// Debug
 				ImGui::Checkbox("Debug Mode", &ssr.DebugMode);
 				if (ImGui::IsItemHovered()) {
@@ -262,21 +282,21 @@ namespace Lunex {
 					ssr.MaxDistance = 50.0f;
 					ssr.MaxSteps = 64;
 					ssr.Resolution = 0.5f;
-					ssr.Thickness = 0.1f;
+					ssr.Thickness = 0.5f;
 				}
 				ImGui::SameLine();
 				if (ImGui::Button("Medium Quality")) {
 					ssr.MaxDistance = 100.0f;
 					ssr.MaxSteps = 128;
 					ssr.Resolution = 0.75f;
-					ssr.Thickness = 0.05f;
+					ssr.Thickness = 0.2f;
 				}
 				ImGui::SameLine();
 				if (ImGui::Button("High Quality")) {
 					ssr.MaxDistance = 200.0f;
 					ssr.MaxSteps = 256;
 					ssr.Resolution = 1.0f;
-					ssr.Thickness = 0.02f;
+					ssr.Thickness = 0.1f;
 				}
 			}
 		}

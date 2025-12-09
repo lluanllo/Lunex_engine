@@ -567,13 +567,46 @@ void main() {
 	
 	// ========== SSR DATA OUTPUT ==========
 	// Write world-space normal (packed to 0-1 range) + reflectivity mask
-	// Reflectivity based on metallic and inverse roughness
-	float reflectivity = metallic * (1.0 - roughness);
-	// Also add some reflectivity for smooth dielectrics
-	reflectivity = max(reflectivity, (1.0 - roughness) * 0.3);
-	
+	// 
+	// Reflectivity formula:
+	// - Metallic surfaces: Always high reflectivity (modulated by smoothness)
+	// - Dielectric surfaces: Fresnel-based reflectivity + specular multiplier
+	// - Rough surfaces reduce mirror-like reflection
+
+	float smoothness = 1.0 - roughness;
+	float smoothness2 = smoothness * smoothness;
+
+	// Calculate scalar F0 (base reflectivity at normal incidence) for SSR intensity
+	// For dielectrics: 0.04 (default) scaled by specular
+	// For metals: high base intensity
+	float dielectricF0_scalar = 0.04 * specular;
+	float metallicF0_scalar = 0.9; // Metals have high F0 intensity
+	float F0_scalar = mix(dielectricF0_scalar, metallicF0_scalar, metallic);
+
+	// Fresnel at grazing angles - scalar version (angle-dependent intensity)
+	float NdotV = max(dot(N, V), 0.0);
+
+	// Schlick Fresnel approximation (scalar)
+	float oneMinusCos = 1.0 - NdotV;
+	float oneMinusCos5 = oneMinusCos * oneMinusCos * oneMinusCos * oneMinusCos * oneMinusCos;
+	float fresnel_scalar = F0_scalar + (1.0 - F0_scalar) * oneMinusCos5;
+
+	// Final reflectivity combines:
+	// - Fresnel-based reflectivity (angle-dependent)
+	// - Smoothness (rough surfaces scatter light)
+	// - Metallic boost (metals always reflect)
+	float reflectivity = fresnel_scalar * smoothness2;
+
+	// Metallic surfaces have guaranteed high reflectivity
+	reflectivity = mix(reflectivity, smoothness2 * 0.9 + 0.1, metallic);
+
+	// Specular boost for very smooth non-metallic surfaces (glass, water)
+	float specularBoost = specular * smoothness2 * (1.0 - metallic) * 0.3;
+	reflectivity = min(reflectivity + specularBoost, 1.0);
+
 	// Pack normal from [-1,1] to [0,1]
 	vec3 packedNormal = N * 0.5 + 0.5;
+
 	o_NormalReflectivity = vec4(packedNormal, reflectivity);
 }
 

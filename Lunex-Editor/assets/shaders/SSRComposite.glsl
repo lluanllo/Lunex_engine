@@ -2,7 +2,7 @@
 
 // ============================================================================
 // SSR COMPOSITE SHADER
-// Blends SSR result with scene color
+// Blends SSR result with scene color using physically-based blending
 // Only writes to color attachment (0), entity ID and normals are preserved
 // ============================================================================
 
@@ -38,9 +38,36 @@ void main() {
     vec4 sceneColor = texture(u_SceneColor, v_TexCoord);
     vec4 ssrColor = texture(u_SSRResult, v_TexCoord);
     
-    // SSR result already has intensity baked in
-    // Just blend additively based on SSR alpha
-    vec3 finalColor = mix(sceneColor.rgb, ssrColor.rgb, ssrColor.a * u_Intensity);
+    // SSR alpha represents confidence/coverage of the reflection
+    float reflectionWeight = ssrColor.a * u_Intensity;
+    
+    // If no reflection, output scene color unchanged
+    if (reflectionWeight < 0.001) {
+        FragColor = sceneColor;
+        return;
+    }
+    
+    // Physically-based reflection blending:
+    // Reflections add light to the surface (additive for dielectrics)
+    // But for metals, reflections replace the base color (multiplicative/lerp)
+    // Since we don't have metallic info here, use a hybrid approach:
+    // - Low confidence SSR: additive (environment reflections)
+    // - High confidence SSR: replacement (mirror reflections)
+    
+    // Additive component - adds reflection on top of scene
+    vec3 additiveResult = sceneColor.rgb + ssrColor.rgb * reflectionWeight * 0.5;
+    
+    // Replacement component - blends reflection with scene
+    vec3 replaceResult = mix(sceneColor.rgb, ssrColor.rgb, reflectionWeight * 0.7);
+    
+    // Blend between additive and replacement based on SSR confidence
+    // High alpha (strong hit) = more replacement, low alpha = more additive
+    vec3 finalColor = mix(additiveResult, replaceResult, ssrColor.a);
+    
+    // Energy conservation - prevent over-brightening
+    // Allow up to 1.5x brightness for HDR headroom
+    float maxBrightness = max(max(sceneColor.r, sceneColor.g), sceneColor.b) * 1.5 + 0.5;
+    finalColor = min(finalColor, vec3(maxBrightness));
     
     FragColor = vec4(finalColor, sceneColor.a);
 }

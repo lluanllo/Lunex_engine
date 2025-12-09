@@ -15,19 +15,23 @@ namespace Lunex {
 	// ============================================================================
 	
 	struct SSRSettings {
-		bool Enabled = true;  // Enabled by default for testing
+		bool Enabled = false;  // Disabled by default
 		
 		// Quality settings
 		float MaxDistance = 100.0f;        // Maximum ray travel distance
 		float Resolution = 1.0f;           // Resolution scale (0.5 = half res)
-		float Thickness = 0.1f;            // Depth comparison thickness
+		float Thickness = 1.0f;            // Depth comparison thickness (increased from 0.1)
 		float StepSize = 1.0f;             // Step size multiplier
 		int MaxSteps = 128;                // Maximum ray march steps
 		
 		// Visual settings
-		float Intensity = 1.0f;            // Reflection intensity
+		float Intensity = 1.5f;            // Reflection intensity (increased from 1.0)
 		float RoughnessThreshold = 0.5f;   // Max roughness for SSR
 		float EdgeFade = 0.1f;             // Screen edge fade
+		
+		// Environment fallback
+		bool UseEnvironmentFallback = false; // Use cubemap when SSR misses (off by default)
+		float EnvironmentIntensity = 0.5f;   // Environment reflection intensity
 		
 		// Debug
 		bool DebugMode = false;            // Show SSR only
@@ -56,6 +60,7 @@ namespace Lunex {
 		//   - sceneColorTexture: Final rendered scene color (after lighting)
 		//   - sceneDepthTexture: Scene depth buffer
 		//   - sceneNormalTexture: World-space normals + reflection mask in alpha
+		//   - environmentMap: Cubemap for fallback reflections (0 if none)
 		//   - viewMatrix: Camera view matrix
 		//   - projectionMatrix: Camera projection matrix
 		//   - viewportSize: Current viewport dimensions
@@ -63,6 +68,7 @@ namespace Lunex {
 			uint32_t sceneColorTexture,
 			uint32_t sceneDepthTexture,
 			uint32_t sceneNormalTexture,
+			uint32_t environmentMap,
 			const glm::mat4& viewMatrix,
 			const glm::mat4& projectionMatrix,
 			const glm::vec2& viewportSize
