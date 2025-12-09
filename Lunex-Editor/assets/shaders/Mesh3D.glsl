@@ -50,6 +50,7 @@ void main() {
 
 layout(location = 0) out vec4 FragColor;
 layout(location = 1) out int o_EntityID;
+layout(location = 2) out vec4 o_NormalReflectivity;  // RGB: Normal (world space), A: Reflectivity mask
 
 struct VertexOutput {
 	vec3 FragPos;
@@ -370,10 +371,6 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 		float burley = Diffuse_Burley(NdotV, NdotL, LdotH, roughness);
 		vec3 diffuse = kD * albedo * burley;
 		
-		// Alternative: Use Oren-Nayar for very rough materials (roughness > 0.7)
-		// float orenNayar = Diffuse_OrenNayar(NdotV, NdotL, LdotV, roughness);
-		// vec3 diffuse = kD * albedo * orenNayar;
-		
 		// ========== MICRO-OCCLUSION ==========
 		// Darken crevices where light can't reach (AO affects lighting)
 		float microOcclusion = mix(1.0, ao, 0.5); // 50% AO influence on direct lighting
@@ -454,7 +451,7 @@ vec3 CalculateFallbackAmbient(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metall
 	return (ambientDiffuse + ambientSpecular) * 1.2;
 }
 
-// ============ TONE MAPPING (UNCHANGED) ============
+// ============ TONE MAPPING ============
 
 vec3 ACESFilm(vec3 x) {
 	float a = 2.51;
@@ -567,6 +564,17 @@ void main() {
 	
 	FragColor = vec4(color, alpha);
 	o_EntityID = v_EntityID;
+	
+	// ========== SSR DATA OUTPUT ==========
+	// Write world-space normal (packed to 0-1 range) + reflectivity mask
+	// Reflectivity based on metallic and inverse roughness
+	float reflectivity = metallic * (1.0 - roughness);
+	// Also add some reflectivity for smooth dielectrics
+	reflectivity = max(reflectivity, (1.0 - roughness) * 0.3);
+	
+	// Pack normal from [-1,1] to [0,1]
+	vec3 packedNormal = N * 0.5 + 0.5;
+	o_NormalReflectivity = vec4(packedNormal, reflectivity);
 }
 
 #endif

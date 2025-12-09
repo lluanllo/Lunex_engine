@@ -57,6 +57,11 @@ namespace Lunex {
 				s_RendererAPI->SetDrawBuffers(attachments);
 			}
 			
+			// Texture binding
+			static void BindTexture(uint32_t slot, uint32_t textureID) {
+				s_RendererAPI->BindTexture(slot, textureID);
+			}
+			
 			// Viewport helper: save/restore
 			static void SaveViewport(int outViewport[4]) {
 				s_RendererAPI->GetViewport(outViewport);

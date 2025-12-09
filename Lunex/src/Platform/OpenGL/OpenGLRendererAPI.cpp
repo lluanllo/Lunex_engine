@@ -117,4 +117,9 @@ namespace Lunex {
 		
 		glDrawBuffers(static_cast<GLsizei>(glAttachments.size()), glAttachments.data());
 	}
+	
+	void OpenGLRendererAPI::BindTexture(uint32_t slot, uint32_t textureID) {
+		glActiveTexture(GL_TEXTURE0 + slot);
+		glBindTexture(GL_TEXTURE_2D, textureID);
+	}
 }

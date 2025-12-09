@@ -333,9 +333,10 @@ namespace Lunex {
 		
 		result.Width = width;
 		result.Height = height;
-		result.Format = settings.CompressionFormat;
+		// When KTX is not available, we store raw data, so format must be None
+		result.Format = TextureCompressionFormat::None;
 		result.IsSRGB = settings.IsSRGB;
-		result.InternalFormat = GetGLInternalFormat(settings.CompressionFormat, settings.IsSRGB);
+		result.InternalFormat = GetGLInternalFormat(TextureCompressionFormat::None, settings.IsSRGB);
 		
 		// Without KTX: just store raw data
 		size_t dataSize = width * height * channels;
@@ -364,6 +365,15 @@ namespace Lunex {
 		const TextureImportSettings& settings
 	) {
 		CompressedTextureData result;
+		
+		// If KTX is not available and actual compression is requested, return invalid
+		// This will cause the caller to fall back to standard texture loading
+#if !KTX_ENABLED
+		if (settings.CompressionFormat != TextureCompressionFormat::None) {
+			// KTX not available - can't compress, return invalid to trigger fallback
+			return result;
+		}
+#endif
 		
 		// Check cache first
 		if (settings.UseCache && !settings.ForceRecompress) {

@@ -2,6 +2,7 @@
 #include "ProjectSerializer.h"
 
 #include "Log/Log.h"
+#include "Renderer/SSRRenderer.h"
 #include <fstream>
 #include <yaml-cpp/yaml.h>
 
@@ -32,7 +33,21 @@ namespace Lunex {
 		out << YAML::Key << "VSync" << YAML::Value << config.VSync;
 		out << YAML::EndMap;
 		
-		// ? NEW: Serialize Input Bindings
+		// ? NEW: Serialize SSR Settings
+		out << YAML::Key << "SSR" << YAML::Value;
+		out << YAML::BeginMap;
+		SSRSettings& ssrSettings = SSRRenderer::GetSettings();
+		out << YAML::Key << "Enabled" << YAML::Value << ssrSettings.Enabled;
+		out << YAML::Key << "MaxDistance" << YAML::Value << ssrSettings.MaxDistance;
+		out << YAML::Key << "Resolution" << YAML::Value << ssrSettings.Resolution;
+		out << YAML::Key << "Thickness" << YAML::Value << ssrSettings.Thickness;
+		out << YAML::Key << "MaxSteps" << YAML::Value << ssrSettings.MaxSteps;
+		out << YAML::Key << "Intensity" << YAML::Value << ssrSettings.Intensity;
+		out << YAML::Key << "RoughnessThreshold" << YAML::Value << ssrSettings.RoughnessThreshold;
+		out << YAML::Key << "EdgeFade" << YAML::Value << ssrSettings.EdgeFade;
+		out << YAML::EndMap;
+		
+		// ? Input Bindings
 		out << YAML::Key << "InputBindings" << YAML::Value;
 		out << YAML::BeginSeq;
 		for (const auto& binding : config.InputBindings) {
@@ -83,7 +98,24 @@ namespace Lunex {
 			m_Project->m_Config.VSync = settings["VSync"].as<bool>();
 		}
 		
-		// ? NEW: Deserialize Input Bindings
+		// ? NEW: Deserialize SSR Settings
+		auto ssrNode = projectNode["SSR"];
+		if (ssrNode) {
+			SSRSettings ssrSettings;
+			if (ssrNode["Enabled"]) ssrSettings.Enabled = ssrNode["Enabled"].as<bool>();
+			if (ssrNode["MaxDistance"]) ssrSettings.MaxDistance = ssrNode["MaxDistance"].as<float>();
+			if (ssrNode["Resolution"]) ssrSettings.Resolution = ssrNode["Resolution"].as<float>();
+			if (ssrNode["Thickness"]) ssrSettings.Thickness = ssrNode["Thickness"].as<float>();
+			if (ssrNode["MaxSteps"]) ssrSettings.MaxSteps = ssrNode["MaxSteps"].as<int>();
+			if (ssrNode["Intensity"]) ssrSettings.Intensity = ssrNode["Intensity"].as<float>();
+			if (ssrNode["RoughnessThreshold"]) ssrSettings.RoughnessThreshold = ssrNode["RoughnessThreshold"].as<float>();
+			if (ssrNode["EdgeFade"]) ssrSettings.EdgeFade = ssrNode["EdgeFade"].as<float>();
+			
+			SSRRenderer::SetSettings(ssrSettings);
+			LNX_LOG_INFO("Loaded SSR settings from project (Enabled: {0})", ssrSettings.Enabled);
+		}
+		
+		// ? Deserialize Input Bindings
 		auto inputBindings = projectNode["InputBindings"];
 		if (inputBindings) {
 			m_Project->m_Config.InputBindings.clear();

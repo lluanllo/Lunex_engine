@@ -23,6 +23,8 @@ namespace Lunex {
 			
 			virtual void SetDrawBuffers(const std::vector<uint32_t>& attachments) override;
 			
+			virtual void BindTexture(uint32_t slot, uint32_t textureID) override;
+			
 		private:
 			DepthFunc m_CurrentDepthFunc = DepthFunc::Less;
 	};

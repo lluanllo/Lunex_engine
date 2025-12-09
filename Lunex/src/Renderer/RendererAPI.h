@@ -47,6 +47,9 @@ namespace Lunex {
 			// Framebuffer draw buffer control
 			virtual void SetDrawBuffers(const std::vector<uint32_t>& attachments) = 0;
 			
+			// Texture binding
+			virtual void BindTexture(uint32_t slot, uint32_t textureID) = 0;
+			
 			inline static API GetAPI() { return s_API; }
 			
 	    private:

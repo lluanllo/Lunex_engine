@@ -26,6 +26,9 @@
 // ✅ Skybox Renderer for camera preview
 #include "Renderer/SkyboxRenderer.h"
 
+// ✅ SSR Renderer
+#include "Renderer/SSRRenderer.h"
+
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
 
@@ -229,7 +232,12 @@ namespace Lunex {
 		});
 
 		Lunex::FramebufferSpecification fbSpec;
-		fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
+		fbSpec.Attachments = { 
+			FramebufferTextureFormat::RGBA16F,        // 0: HDR Scene Color
+			FramebufferTextureFormat::RED_INTEGER,    // 1: Entity ID
+			FramebufferTextureFormat::RGBA16F,        // 2: Normals + Reflectivity (for SSR)
+			FramebufferTextureFormat::Depth 
+		};
 		fbSpec.Width = 1280;
 		fbSpec.Height = 720;
 		m_Framebuffer = Framebuffer::Create(fbSpec);
@@ -667,6 +675,9 @@ namespace Lunex {
 
 		// Clear our entity ID attachment to -1
 		m_Framebuffer->ClearAttachment(1, -1);
+		
+		// Clear normals attachment to black (no reflection)
+		m_Framebuffer->ClearAttachment(2, 0);
 
 		switch (m_SceneState) {
 		case SceneState::Edit: {
@@ -688,6 +699,55 @@ namespace Lunex {
 			m_ActiveScene->OnUpdateRuntime(ts);
 			break;
 		}
+		}
+		
+		// ========================================
+		// SSR PASS (Screen Space Reflections)
+		// ========================================
+		if (SSRRenderer::IsEnabled() && m_ViewportSize.x > 0 && m_ViewportSize.y > 0) {
+			// Get camera matrices
+			glm::mat4 viewMatrix = glm::mat4(1.0f);
+			glm::mat4 projMatrix = glm::mat4(1.0f);
+			bool hasValidCamera = false;
+			
+			if (m_SceneState == SceneState::Play) {
+				Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
+				if (camera && camera.HasComponent<CameraComponent>() && camera.HasComponent<TransformComponent>()) {
+					auto& cameraComp = camera.GetComponent<CameraComponent>();
+					auto& transform = camera.GetComponent<TransformComponent>();
+					viewMatrix = glm::inverse(transform.GetTransform());
+					projMatrix = cameraComp.Camera.GetProjection();
+					hasValidCamera = true;
+				}
+			} else {
+				viewMatrix = m_EditorCamera.GetViewMatrix();
+				projMatrix = m_EditorCamera.GetProjection();
+				hasValidCamera = true;
+			}
+			
+			if (hasValidCamera) {
+				// Unbind framebuffer to read from it
+				m_Framebuffer->Unbind();
+				
+				// Run SSR pass - outputs to SSRRenderer's internal framebuffer
+				SSRRenderer::Render(
+					m_Framebuffer->GetColorAttachmentRendererID(0),  // Scene color
+					m_Framebuffer->GetDepthAttachmentRendererID(),   // Depth
+					m_Framebuffer->GetColorAttachmentRendererID(2),  // Normals + Reflectivity
+					viewMatrix,
+					projMatrix,
+					m_ViewportSize
+				);
+				
+				// Re-bind main framebuffer
+				m_Framebuffer->Bind();
+				
+				// Composite SSR result back to main framebuffer
+				SSRRenderer::Composite(
+					m_Framebuffer->GetColorAttachmentRendererID(0),
+					m_ViewportSize
+				);
+			}
 		}
 
 		// ✅ ENTITY PICKING

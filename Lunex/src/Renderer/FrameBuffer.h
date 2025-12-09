@@ -7,12 +7,17 @@ namespace Lunex {
 	enum class FramebufferTextureFormat {
 		None = 0,
 		
-		// Color
+		// Color formats
 		RGBA8,
+		RGBA16F,          // HDR color
+		RGBA32F,          // High precision HDR
+		RG16F,            // 2-component float (normals XY)
+		RGB16F,           // 3-component float (normals, positions)
 		RED_INTEGER,
 		
 		// Depth/stencil
 		DEPTH24STENCIL8,
+		DEPTH32F,         // High precision depth
 		
 		// Defaults
 		Depth = DEPTH24STENCIL8
@@ -58,6 +63,7 @@ namespace Lunex {
 			virtual void ClearAttachment(uint32_t attachmentIndex, int value) = 0;
 			
 			virtual uint32_t GetColorAttachmentRendererID(uint32_t index = 0) const = 0;
+			virtual uint32_t GetDepthAttachmentRendererID() const = 0;
 			
 			virtual const FramebufferSpecification& GetSpecification() const = 0;
 			

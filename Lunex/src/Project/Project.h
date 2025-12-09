@@ -16,6 +16,20 @@ namespace Lunex {
 		std::string ActionName;
 	};
 	
+	/**
+	 * SSRSettingsConfig - SSR settings for project serialization
+	 */
+	struct SSRSettingsConfig {
+		bool Enabled = false;
+		float MaxDistance = 100.0f;
+		float Resolution = 1.0f;
+		float Thickness = 0.1f;
+		int MaxSteps = 128;
+		float Intensity = 1.0f;
+		float RoughnessThreshold = 0.5f;
+		float EdgeFade = 0.1f;
+	};
+	
 	struct ProjectConfig {
 		std::string Name = "Untitled";
 		
@@ -30,6 +44,9 @@ namespace Lunex {
 		
 		// ? NEW: Input Bindings
 		std::vector<InputBindingEntry> InputBindings;
+		
+		// ? NEW: SSR Settings
+		SSRSettingsConfig SSR;
 		
 		// Serialization version
 		uint32_t Version = 1;

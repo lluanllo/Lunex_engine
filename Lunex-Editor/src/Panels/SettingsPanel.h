@@ -4,6 +4,10 @@
 #include <glm/glm.hpp>
 
 namespace Lunex {
+	
+	// Forward declaration
+	struct SSRSettings;
+	
 	class SettingsPanel {
 	public:
 		SettingsPanel() = default;
@@ -18,6 +22,15 @@ namespace Lunex {
 		void SetShowPhysics3DColliders(bool show) { m_ShowPhysics3DColliders = show; }
 
 	private:
+		// Tab rendering functions
+		void RenderWorldTab();
+		void RenderPhysicsTab();
+		void RenderRenderTab();
+		
+		// Tab state
+		int m_CurrentTab = 0;
+		
+		// Physics debug
 		bool m_ShowPhysicsColliders = false;
 		bool m_ShowPhysics3DColliders = false;
 		
