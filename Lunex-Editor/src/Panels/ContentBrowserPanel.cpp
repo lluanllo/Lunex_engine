@@ -37,9 +37,14 @@ namespace Lunex {
 		m_HistoryIndex = 0;
 		
 		// ✅ Initialize material preview renderer for thumbnails
+		// Materials: 160x160 resolution with blue background #6EC1FF
 		m_MaterialPreviewRenderer = CreateScope<MaterialPreviewRenderer>();
-		m_MaterialPreviewRenderer->SetResolution(128, 128); // Thumbnail size
+		m_MaterialPreviewRenderer->SetResolution(160, 160);
 		m_MaterialPreviewRenderer->SetAutoRotate(false);
+		m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.432f, 0.757f, 1.0f, 1.0f)); // #6EC1FF
+		
+		// ✅ FIXED: Lower camera slightly to center material sphere better
+		m_MaterialPreviewRenderer->SetCameraPosition(glm::vec3(0.0f, -0.3f, 2.5f));
 	}
 
 	void ContentBrowserPanel::SetRootDirectory(const std::filesystem::path& directory) {
@@ -68,7 +73,7 @@ namespace Lunex {
 		ImGui::PushStyleColor(ImGuiCol_BorderShadow, ImVec4(0.0f, 0.0f, 0.0f, 0.6f));       // Sombras
 		
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-		ImGui::Begin("Content Browser");
+		ImGui::Begin("Content Browser", NULL, ImGuiWindowFlags_MenuBar);
 		ImGui::PopStyleVar();
 		
 		RenderTopBar();
@@ -476,6 +481,35 @@ namespace Lunex {
 					std::filesystem::path sourcePath(data->FilePath);
 					std::filesystem::path destPath = m_BaseDirectory / sourcePath.filename();
 					
+				try {
+					if (sourcePath != destPath && !std::filesystem::exists(destPath)) {
+						std::filesystem::rename(sourcePath, destPath);
+						LNX_LOG_INFO("Moved {0} to Assets", sourcePath.filename().string());
+					}
+				}
+				catch (const std::exception& e) {
+					LNX_LOG_ERROR("Failed to move {0}: {1}", 
+						sourcePath.filename().string(), e.what());
+				}
+			}
+		}
+		
+		// Accept multiple items
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
+			"CONTENT_BROWSER_ITEMS", 
+			ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+			
+			if (payload->IsDelivery()) {
+				std::string payloadData = (const char*)payload->Data;
+				std::stringstream ss(payloadData);
+				std::string line;
+				
+				while (std::getline(ss, line)) {
+					if (line.empty()) continue;
+					
+					std::filesystem::path sourcePath = std::filesystem::path(g_AssetPath) / line;
+					std::filesystem::path destPath = m_BaseDirectory / sourcePath.filename();
+					
 					try {
 						if (sourcePath != destPath && !std::filesystem::exists(destPath)) {
 							std::filesystem::rename(sourcePath, destPath);
@@ -487,65 +521,36 @@ namespace Lunex {
 							sourcePath.filename().string(), e.what());
 					}
 				}
-			}
-			
-			// Accept multiple items
-			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
-				"CONTENT_BROWSER_ITEMS", 
-				ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
 				
-				if (payload->IsDelivery()) {
-					std::string payloadData = (const char*)payload->Data;
-					std::stringstream ss(payloadData);
-					std::string line;
-					
-					while (std::getline(ss, line)) {
-						if (line.empty()) continue;
-						
-						std::filesystem::path sourcePath = std::filesystem::path(g_AssetPath) / line;
-						std::filesystem::path destPath = m_BaseDirectory / sourcePath.filename();
-						
-						try {
-							if (sourcePath != destPath && !std::filesystem::exists(destPath)) {
-								std::filesystem::rename(sourcePath, destPath);
-								LNX_LOG_INFO("Moved {0} to Assets", sourcePath.filename().string());
-							}
-						}
-						catch (const std::exception& e) {
-							LNX_LOG_ERROR("Failed to move {0}: {1}", 
-								sourcePath.filename().string(), e.what());
-						}
-					}
-					
-					ClearSelection();
-				}
-			}
-			
-			ImGui::EndDragDropTarget();
-		}
-		
-		if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
-			if (m_CurrentDirectory != m_BaseDirectory) {
-				m_HistoryIndex++;
-				if (m_HistoryIndex < (int)m_DirectoryHistory.size()) {
-					m_DirectoryHistory.erase(
-						m_DirectoryHistory.begin() + m_HistoryIndex,
-						m_DirectoryHistory.end()
-					);
-				}
-				m_DirectoryHistory.push_back(m_BaseDirectory);
-				m_CurrentDirectory = m_BaseDirectory;
+				ClearSelection();
 			}
 		}
 		
-		if (rootOpened) {
-			displayDirectoryTree(m_BaseDirectory);
-			ImGui::TreePop();
-		}
-		
-		ImGui::PopStyleColor(4);
-		ImGui::PopStyleVar(2);
+		ImGui::EndDragDropTarget();
 	}
+	
+	if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
+		if (m_CurrentDirectory != m_BaseDirectory) {
+			m_HistoryIndex++;
+			if (m_HistoryIndex < (int)m_DirectoryHistory.size()) {
+				m_DirectoryHistory.erase(
+					m_DirectoryHistory.begin() + m_HistoryIndex,
+					m_DirectoryHistory.end()
+				);
+			}
+			m_DirectoryHistory.push_back(m_BaseDirectory);
+			m_CurrentDirectory = m_BaseDirectory;
+		}
+	}
+	
+	if (rootOpened) {
+		displayDirectoryTree(m_BaseDirectory);
+		ImGui::TreePop();
+	}
+	
+	ImGui::PopStyleColor(4);
+	ImGui::PopStyleVar(2);
+}
 	
 	Ref<Texture2D> ContentBrowserPanel::GetIconForFile(const std::filesystem::path& path) {
 		std::string extension = path.extension().string();
@@ -571,7 +576,7 @@ namespace Lunex {
 		std::string extension = path.extension().string();
 		std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 		
-		// ✅ Material files - render sphere preview
+		// ✅ Material files - render sphere preview (with disk caching)
 		if (extension == ".lumat") {
 			std::string pathStr = path.string();
 			
@@ -581,12 +586,12 @@ namespace Lunex {
 				return it->second;
 			}
 			
-			// Load and render material preview to a standalone texture
+			// ✅ Use disk-cached thumbnails for faster loading
 			try {
 				auto material = MaterialRegistry::Get().LoadMaterial(path);
 				if (material && m_MaterialPreviewRenderer) {
-					// Use RenderToTexture to get a standalone cached texture
-					Ref<Texture2D> thumbnail = m_MaterialPreviewRenderer->RenderToTexture(material);
+					// Use cached thumbnail system (loads from disk if available)
+					Ref<Texture2D> thumbnail = m_MaterialPreviewRenderer->GetOrGenerateCachedThumbnail(path, material);
 					if (thumbnail) {
 						m_MaterialThumbnailCache[pathStr] = thumbnail;
 						return thumbnail;
@@ -600,7 +605,7 @@ namespace Lunex {
 			return m_MaterialIcon ? m_MaterialIcon : m_FileIcon;
 		}
 		
-		// ✅ Mesh Asset files (.lumesh) - render 3D preview
+		// ✅ Mesh Asset files (.lumesh) - render 3D preview with angled camera and new background
 		if (extension == ".lumesh") {
 			std::string pathStr = path.string();
 			
@@ -618,6 +623,14 @@ namespace Lunex {
 					Ref<Model> originalModel = m_MaterialPreviewRenderer->GetPreviewModel();
 					m_MaterialPreviewRenderer->SetPreviewModel(meshAsset->GetModel());
 					
+					// ✅ Save original state
+					auto originalCameraPos = m_MaterialPreviewRenderer->GetCameraPosition();
+					auto originalBgColor = m_MaterialPreviewRenderer->GetBackgroundColor();
+					
+					// ✅ FIXED: Set better camera angle and background color #7297C2
+					m_MaterialPreviewRenderer->SetCameraPosition(glm::vec3(2.0f, 1.2f, 2.5f));
+					m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.447f, 0.592f, 0.761f, 1.0f)); // #7297C2
+					
 					// Create a default gray material for mesh preview
 					auto defaultMaterial = CreateRef<MaterialAsset>("MeshPreview");
 					defaultMaterial->SetAlbedo(glm::vec4(0.7f, 0.7f, 0.7f, 1.0f));
@@ -627,7 +640,9 @@ namespace Lunex {
 					// Render the mesh with default material
 					Ref<Texture2D> thumbnail = m_MaterialPreviewRenderer->RenderToTexture(defaultMaterial);
 					
-					// Restore original preview model (sphere)
+					// ✅ Restore original state
+					m_MaterialPreviewRenderer->SetCameraPosition(originalCameraPos);
+					m_MaterialPreviewRenderer->SetBackgroundColor(originalBgColor);
 					m_MaterialPreviewRenderer->SetPreviewModel(originalModel);
 					
 					if (thumbnail) {
@@ -643,7 +658,7 @@ namespace Lunex {
 			return m_MeshIcon ? m_MeshIcon : m_FileIcon;
 		}
 		
-		// ✅ Prefab files (.luprefab) - render 3D preview of root mesh
+		// ✅ Prefab files (.luprefab) - render 3D preview with angled camera and new background
 		if (extension == ".luprefab") {
 			std::string pathStr = path.string();
 			
@@ -678,9 +693,17 @@ namespace Lunex {
 									if (std::filesystem::exists(fullMeshPath)) {
 										auto meshAsset = MeshAsset::LoadFromFile(fullMeshPath);
 										if (meshAsset && meshAsset->GetModel()) {
-											// Render mesh preview
+											// Render mesh preview with angled camera
 											Ref<Model> originalModel = m_MaterialPreviewRenderer->GetPreviewModel();
 											m_MaterialPreviewRenderer->SetPreviewModel(meshAsset->GetModel());
+											
+											// ✅ Save original state
+											auto originalCameraPos = m_MaterialPreviewRenderer->GetCameraPosition();
+											auto originalBgColor = m_MaterialPreviewRenderer->GetBackgroundColor();
+											
+											// ✅ FIXED: Better camera angle and background color #7297C2
+											m_MaterialPreviewRenderer->SetCameraPosition(glm::vec3(2.2f, 1.5f, 2.8f));
+											m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.447f, 0.592f, 0.761f, 1.0f)); // #7297C2
 											
 											auto defaultMaterial = CreateRef<MaterialAsset>("PrefabPreview");
 											defaultMaterial->SetAlbedo(glm::vec4(0.6f, 0.65f, 0.7f, 1.0f));
@@ -689,6 +712,9 @@ namespace Lunex {
 											
 											Ref<Texture2D> thumbnail = m_MaterialPreviewRenderer->RenderToTexture(defaultMaterial);
 											
+											// ✅ Restore original state
+											m_MaterialPreviewRenderer->SetCameraPosition(originalCameraPos);
+											m_MaterialPreviewRenderer->SetBackgroundColor(originalBgColor);
 											m_MaterialPreviewRenderer->SetPreviewModel(originalModel);
 											
 											if (thumbnail) {
@@ -738,16 +764,38 @@ namespace Lunex {
 		return GetIconForFile(path);
 	}
 	
+	// ============================================================================
+	// HELPER: Get asset type label for display (like "MATERIAL", "MESH", etc.)
+	// ============================================================================
+	std::string ContentBrowserPanel::GetAssetTypeLabel(const std::filesystem::path& path) {
+		if (std::filesystem::is_directory(path)) {
+			return "FOLDER";
+		}
+		
+		std::string extension = path.extension().string();
+		std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+		
+		if (extension == ".lumat") return "MATERIAL";
+		if (extension == ".lumesh") return "MESH";
+		if (extension == ".luprefab") return "PREFAB";
+		if (extension == ".lunex") return "SCENE";
+		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg") return "TEXTURE";
+		if (extension == ".glsl" || extension == ".shader") return "SHADER";
+		if (extension == ".wav" || extension == ".mp3" || extension == ".ogg") return "AUDIO";
+		if (extension == ".cpp" || extension == ".h" || extension == ".cs") return "SCRIPT";
+		
+		return "FILE";
+	}
+	
 	void ContentBrowserPanel::RenderFileGrid() {
 		ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(8, 8));
 		ImGui::BeginChild("FileGridContent", ImVec2(0, -28), false);
 		
 		// Track if mouse is hovering over the file grid
 		m_IsHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
-		m_HoveredFolder.clear(); // Reset hovered folder
-		m_ItemBounds.clear(); // Reset item bounds
+		m_HoveredFolder.clear();
+		m_ItemBounds.clear();
 		
-		// Agregar padding lateral al contenido
 		ImGui::Indent(16.0f);
 		
 		// Handle selection rectangle
@@ -784,14 +832,13 @@ namespace Lunex {
 		int columnCount = (int)(panelWidth / cellSize);
 		if (columnCount < 1) columnCount = 1;
 		
-		// Grid sin separadores visibles
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(m_Padding, m_Padding + 8));
 		
 		if (ImGui::BeginTable("FileGridTable", columnCount, ImGuiTableFlags_None)) {
 			
 			// Filtrar por búsqueda
 			std::string searchQuery = m_SearchBuffer;
-		 std::transform(searchQuery.begin(), searchQuery.end(), searchQuery.begin(), ::tolower);
+			std::transform(searchQuery.begin(), searchQuery.end(), searchQuery.begin(), ::tolower);
 			
 			// Colores para efectos visuales del grid
 			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
@@ -818,44 +865,154 @@ namespace Lunex {
 				ImGui::TableSetColumnIndex(itemIndex % columnCount);
 				
 				ImGui::PushID(filenameString.c_str());
-				
 				ImGui::BeginGroup();
 				
 				Ref<Texture2D> icon = directoryEntry.is_directory() ? m_DirectoryIcon : GetThumbnailForFile(path);
 				
-				// Render the item
-				float iconSize = m_ThumbnailSize;
+				// ============================================================================
+				// RENDERING SYSTEM
+				// ============================================================================
+				float cardWidth = m_ThumbnailSize;
+				float cardHeight; // Will be set based on type (folder or file)
+				ImVec2 cardMin, cardMax; // Bounds for interaction
+				
 				ImVec2 cursorPos = ImGui::GetCursorScreenPos();
 				ImDrawList* drawList = ImGui::GetWindowDrawList();
-				float rounding = 8.0f;
-				float padding = 2.0f;
 				
-				// Marco de fondo
-				ImU32 bgColor = IM_COL32(30, 30, 30, 255);
-				drawList->AddRectFilled(
-					ImVec2(cursorPos.x - padding, cursorPos.y - padding),
-					ImVec2(cursorPos.x + iconSize + padding, cursorPos.y + iconSize + padding),
-					bgColor, rounding
-				);
+				float cardRounding = 6.0f;
+				float cardPadding = 8.0f;
 				
-				// Draw icon/thumbnail
-				if (icon) {
-					drawList->AddImageRounded(
-						(ImTextureID)(uintptr_t)icon->GetRendererID(),
-						cursorPos,
-						ImVec2(cursorPos.x + iconSize, cursorPos.y + iconSize),
-						ImVec2(0, 1), ImVec2(1, 0),
-						IM_COL32(255, 255, 255, 255),
-						rounding
+				if (directoryEntry.is_directory()) {
+					// ========================================
+					// FOLDERS: NO CARD - ONLY SHADOW
+					// ========================================
+					cardHeight = m_ThumbnailSize + 30.0f; // Icon + name
+					cardMin = ImVec2(cursorPos.x, cursorPos.y);
+					cardMax = ImVec2(cursorPos.x + cardWidth, cursorPos.y + cardHeight);
+					
+					float iconSize = m_ThumbnailSize;
+					ImVec2 iconPos = ImVec2(cursorPos.x, cursorPos.y);
+					
+					// ✅ FOLDER ICON (no background card)
+					if (icon) {
+						drawList->AddImage(
+							(ImTextureID)(uintptr_t)icon->GetRendererID(),
+							iconPos,
+							ImVec2(iconPos.x + iconSize, iconPos.y + iconSize),
+							ImVec2(0, 1), ImVec2(1, 0)
+						);
+					}
+					
+					// ✅ FOLDER NAME
+					float textAreaY = iconPos.y + iconSize + 4.0f;
+					std::string displayName = filenameString;
+					
+					const int maxChars = 15;
+					if (displayName.length() > maxChars) {
+						displayName = displayName.substr(0, maxChars - 2) + "..";
+					}
+					
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.95f, 0.95f, 1.0f));
+					float nameWidth = ImGui::CalcTextSize(displayName.c_str()).x;
+					float nameOffsetX = (cardWidth - nameWidth) * 0.5f;
+					drawList->AddText(
+						ImVec2(cursorPos.x + nameOffsetX, textAreaY),
+						IM_COL32(245, 245, 245, 255),
+						displayName.c_str()
 					);
+					ImGui::PopStyleColor();
 				}
+				else {
+					// ========================================
+					// FILES: SOFT GAUSSIAN SHADOW ON CARD
+					// ========================================
+					cardHeight = m_ThumbnailSize + 50.0f;
+					cardMin = ImVec2(cursorPos.x, cursorPos.y);
+					cardMax = ImVec2(cursorPos.x + cardWidth, cursorPos.y + cardHeight);
+					
+					// ===== CARD BACKGROUND (más contraste) =====
+					ImU32 cardBgColor = IM_COL32(45, 45, 48, 255);
+					
+					// ✅ SOMBRA DEBAJO DE LA CARD
+					ImVec2 shadowOffset = ImVec2(3.0f, 3.0f);
+					ImVec2 shadowMin = ImVec2(cardMin.x + shadowOffset.x, cardMin.y + shadowOffset.y);
+					ImVec2 shadowMax = ImVec2(cardMax.x + shadowOffset.x, cardMax.y + shadowOffset.y);
+					drawList->AddRectFilled(shadowMin, shadowMax, IM_COL32(0, 0, 0, 80), cardRounding);
+					
+					// Card background
+					drawList->AddRectFilled(cardMin, cardMax, cardBgColor, cardRounding);
+					
+					// ===== ICON/THUMBNAIL AREA =====
+					float iconSize = cardWidth - (cardPadding * 2);
+					ImVec2 iconMin = ImVec2(cursorPos.x + cardPadding, cursorPos.y + cardPadding);
+					ImVec2 iconMax = ImVec2(iconMin.x + iconSize, iconMin.y + iconSize);
+					
+					// Icon background (más contraste)
+					ImU32 iconBgColor = IM_COL32(55, 55, 58, 255);
+					drawList->AddRectFilled(iconMin, iconMax, iconBgColor, 4.0f);
+					
+					// Draw icon/thumbnail
+					if (icon) {
+						drawList->AddImageRounded(
+							(ImTextureID)(uintptr_t)icon->GetRendererID(),
+							iconMin,
+							iconMax,
+							ImVec2(0, 1), ImVec2(1, 0),
+							IM_COL32(255, 255, 255, 255),
+							4.0f
+						);
+					}
+					
+					// ===== TEXT AREA =====
+					float textAreaY = iconMax.y + 4.0f;
+					
+					// Asset name
+					std::string displayName = filenameString;
+					std::filesystem::path filePath(filenameString);
+					std::string extension = filePath.extension().string();
+					std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+					
+					// Hide extensions for engine assets
+					if (extension == ".lumat" || extension == ".lumesh" || extension == ".luprefab") {
+						displayName = filePath.stem().string();
+					}
+					
+					// Truncate if too long
+					const int maxChars = 15;
+					if (displayName.length() > maxChars) {
+						displayName = displayName.substr(0, maxChars - 2) + "..";
+					}
+					
+					// Draw name (centered, white)
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.95f, 0.95f, 1.0f));
+					float nameWidth = ImGui::CalcTextSize(displayName.c_str()).x;
+					float nameOffsetX = (cardWidth - nameWidth) * 0.5f;
+					drawList->AddText(
+						ImVec2(cursorPos.x + nameOffsetX, textAreaY),
+						IM_COL32(245, 245, 245, 255),
+						displayName.c_str()
+					);
+					ImGui::PopStyleColor();
+					
+					// ✅ Asset type label SOLO para archivos (no carpetas)
+					std::string typeLabel = GetAssetTypeLabel(path);
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.52f, 1.0f));
+					float typeWidth = ImGui::CalcTextSize(typeLabel.c_str()).x;
+					float typeOffsetX = (cardWidth - typeWidth) * 0.5f;
+					drawList->AddText(
+						ImVec2(cursorPos.x + typeOffsetX, textAreaY + 16.0f),
+						IM_COL32(128, 128, 132, 255),
+						typeLabel.c_str()
+					);
+					ImGui::PopStyleColor();
+				}
+
+				// ===== INVISIBLE BUTTON FOR INTERACTION (common for both folders and files) =====
+				ImGui::SetCursorScreenPos(cardMin);
+				ImGui::InvisibleButton(filenameString.c_str(), ImVec2(cardWidth, cardHeight));
 				
-				// Botón invisible
-				ImGui::SetCursorScreenPos(cursorPos);
-				ImGui::InvisibleButton(filenameString.c_str(), ImVec2(iconSize, iconSize));
-				
-				// Store item bounds
-				m_ItemBounds[path.string()] = ImRect(cursorPos, ImVec2(cursorPos.x + iconSize, cursorPos.y + iconSize));
+				// Store item bounds for selection rectangle
+				m_ItemBounds[path.string()] = ImRect(cardMin, cardMax);
 				
 				// Selection rectangle check
 				if (m_IsSelecting) {
@@ -871,24 +1028,20 @@ namespace Lunex {
 					}
 				}
 				
-				// ============ CLICK HANDLING - FIXED ============
+				// Click handling
 				if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-					bool isCtrlDown = ImGui::GetIO().KeyCtrl;
-					bool isShiftDown = ImGui::GetIO().KeyShift;
+					bool ctrlDown = ImGui::GetIO().KeyCtrl;
+					bool shiftDown = ImGui::GetIO().KeyShift;
 					
-					if (isCtrlDown) {
-						// Ctrl: toggle selection
+					if (ctrlDown) {
 						ToggleSelection(path);
 						m_LastSelectedItem = path;
 					}
-					else if (isShiftDown && !m_LastSelectedItem.empty()) {
-						// Shift: select range
+					else if (shiftDown && !m_LastSelectedItem.empty()) {
 						SelectRange(m_LastSelectedItem, path);
 						m_LastSelectedItem = path;
 					}
 					else {
-						// Normal click: mantener selección si ya está seleccionado
-						// Esto permite arrastrar múltiples items
 						if (!IsSelected(path)) {
 							ClearSelection();
 							AddToSelection(path);
@@ -898,7 +1051,26 @@ namespace Lunex {
 					m_IsSelecting = false;
 				}
 				
-				// Track hovered folder
+				// Visual effects
+				if (ImGui::IsItemHovered()) {
+					ImU32 hoverColor = IM_COL32(60, 60, 65, 255);
+					drawList->AddRect(cardMin, cardMax, hoverColor, cardRounding, 0, 2.0f);
+				}
+				
+				if (IsSelected(path)) {
+					ImU32 selectedColor = IM_COL32(66, 150, 250, 255);
+					drawList->AddRect(cardMin, cardMax, selectedColor, cardRounding, 0, 2.5f);
+					ImU32 selectedFill = IM_COL32(66, 150, 250, 40);
+					drawList->AddRectFilled(cardMin, cardMax, selectedFill, cardRounding);
+				}
+				
+				if (directoryEntry.is_directory() && ImGui::IsDragDropActive()) {
+					if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) {
+						ImU32 dropTargetColor = IM_COL32(90, 150, 255, 255);
+						drawList->AddRect(cardMin, cardMax, dropTargetColor, cardRounding, 0, 3.0f);
+					}
+				}
+				
 				if (directoryEntry.is_directory() && ImGui::IsItemHovered()) {
 					m_HoveredFolder = path;
 				}
@@ -928,9 +1100,9 @@ namespace Lunex {
 						strncpy_s(payload.FilePath, fullPath.string().c_str(), _TRUNCATE);
 						strncpy_s(payload.RelativePath, relativePath.string().c_str(), _TRUNCATE);
 						
-						std::string extension = path.extension().string();
-						std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
-						strncpy_s(payload.Extension, extension.c_str(), _TRUNCATE);
+						std::string dragExt = path.extension().string();
+						std::transform(dragExt.begin(), dragExt.end(), dragExt.begin(), ::tolower);
+						strncpy_s(payload.Extension, dragExt.c_str(), _TRUNCATE);
 						
 						payload.IsDirectory = directoryEntry.is_directory();
 						payload.ItemCount = 1;
@@ -948,17 +1120,34 @@ namespace Lunex {
 				if (directoryEntry.is_directory()) {
 					if (ImGui::BeginDragDropTarget()) {
 						// Single item
-						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
-							"CONTENT_BROWSER_ITEM", ImGuiDragDropFlags_AcceptBeforeDelivery)) {
+						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+							ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+							std::filesystem::path sourcePath(data->FilePath);
+							std::filesystem::path destPath = path / sourcePath.filename();
 							
-							bool shouldAccept = ImGui::IsMouseHoveringRect(
-								ImVec2(cursorPos.x - padding, cursorPos.y - padding),
-								ImVec2(cursorPos.x + iconSize + padding, cursorPos.y + iconSize + padding)
-							);
+							try {
+								if (sourcePath != destPath && !std::filesystem::exists(destPath)) {
+									std::filesystem::rename(sourcePath, destPath);
+									LNX_LOG_INFO("Moved {0} to {1}", 
+										sourcePath.filename().string(), path.filename().string());
+								}
+							}
+							catch (const std::exception& e) {
+								LNX_LOG_ERROR("Failed to move {0}: {1}", 
+									sourcePath.filename().string(), e.what());
+							}
+						}
+						
+						// Multiple items
+						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEMS")) {
+							std::string payloadData = (const char*)payload->Data;
+							std::stringstream ss(payloadData);
+						 std::string line;
 							
-							if (shouldAccept && payload->IsDelivery()) {
-								ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
-								std::filesystem::path sourcePath(data->FilePath);
+							while (std::getline(ss, line)) {
+								if (line.empty()) continue;
+
+								std::filesystem::path sourcePath = std::filesystem::path(g_AssetPath) / line;
 								std::filesystem::path destPath = path / sourcePath.filename();
 								
 								try {
@@ -973,78 +1162,11 @@ namespace Lunex {
 										sourcePath.filename().string(), e.what());
 								}
 							}
-						}
-						
-						// Multiple items
-						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
-							"CONTENT_BROWSER_ITEMS", ImGuiDragDropFlags_AcceptBeforeDelivery)) {
-								
-							bool shouldAccept = ImGui::IsMouseHoveringRect(
-								ImVec2(cursorPos.x - padding, cursorPos.y - padding),
-								ImVec2(cursorPos.x + iconSize + padding, cursorPos.y + iconSize + padding)
-							);
-
-							if (shouldAccept && payload->IsDelivery()) {
-								std::string payloadData = (const char*)payload->Data;
-								std::stringstream ss(payloadData);
-								std::string line;
-								
-								while (std::getline(ss, line)) {
-									if (line.empty()) continue;
-
-									std::filesystem::path sourcePath = std::filesystem::path(g_AssetPath) / line;
-								 std::filesystem::path destPath = path / sourcePath.filename();
-									
-									try {
-										if (sourcePath != destPath && !std::filesystem::exists(destPath)) {
-											std::filesystem::rename(sourcePath, destPath);
-											LNX_LOG_INFO("Moved {0} to {1}", 
-												sourcePath.filename().string(), path.filename().string());
-										}
-									}
-									catch (const std::exception& e) {
-										LNX_LOG_ERROR("Failed to move {0}: {1}", 
-											sourcePath.filename().string(), e.what());
-									}
-								}
-								
-								ClearSelection();
-							}
+							
+							ClearSelection();
 						}
 						
 						ImGui::EndDragDropTarget();
-					}
-				}
-				
-				// Visual effects
-				if (ImGui::IsItemHovered()) {
-					ImU32 borderColor = IM_COL32(100, 100, 100, 200);
-					drawList->AddRect(
-						ImVec2(cursorPos.x - padding, cursorPos.y - padding),
-						ImVec2(cursorPos.x + iconSize + padding, cursorPos.y + iconSize + padding),
-						borderColor, rounding, 0, 2.0f
-					);
-				}
-				
-				// Highlight selected
-				if (IsSelected(path)) {
-					ImU32 selectedColor = IM_COL32(90, 150, 255, 180);
-					drawList->AddRect(
-						ImVec2(cursorPos.x - padding - 1, cursorPos.y - padding - 1),
-						ImVec2(cursorPos.x + iconSize + padding + 1, cursorPos.y + iconSize + padding + 1),
-						selectedColor, rounding, 0, 2.5f
-					);
-				}
-				
-				// Drop target highlight
-				if (directoryEntry.is_directory() && ImGui::IsDragDropActive()) {
-					if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) {
-						ImU32 dropTargetColor = IM_COL32(90, 150, 255, 255);
-						drawList->AddRect(
-							ImVec2(cursorPos.x - padding - 2, cursorPos.y - padding - 2),
-							ImVec2(cursorPos.x + iconSize + padding + 2, cursorPos.y + iconSize + padding + 2),
-							dropTargetColor, rounding, 0, 3.0f
-						);
 					}
 				}
 				
@@ -1066,11 +1188,11 @@ namespace Lunex {
 					}
 					ImGui::Separator();
 					
-					// ✅ Opciones específicas para archivos .lumesh
-					std::string ext = path.extension().string();
-					std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+					// Opciones específicas para archivos .lumesh
+					std::string menuExt = path.extension().string();
+					std::transform(menuExt.begin(), menuExt.end(), menuExt.begin(), ::tolower);
 					
-					if (ext == ".lumesh" && m_SelectedItems.size() == 1) {
+					if (menuExt == ".lumesh" && m_SelectedItems.size() == 1) {
 						if (ImGui::MenuItem("Create Prefab")) {
 							CreatePrefabFromMesh(path);
 						}
@@ -1104,7 +1226,7 @@ namespace Lunex {
 						if (directoryEntry.is_directory()) {
 							if (ImGui::MenuItem("Open in File Explorer")) {
 								std::string command = "explorer " + path.string();
-							 system(command.c_str());
+								system(command.c_str());
 							}
 						}
 					}
@@ -1112,7 +1234,7 @@ namespace Lunex {
 					ImGui::EndPopup();
 				}
 				
-				// Double click to open folder
+				// Double click to open folder or file
 				if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
 					if (directoryEntry.is_directory()) {
 						m_HistoryIndex++;
@@ -1126,30 +1248,29 @@ namespace Lunex {
 						m_CurrentDirectory = path;
 					}
 					else {
-						// Double click en archivo - abrir según el tipo
-						std::string extension = path.extension().string();
-						std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+						// Double click on file - open based on type
+						std::string dblExt = path.extension().string();
+						std::transform(dblExt.begin(), dblExt.end(), dblExt.begin(), ::tolower);
 						
 						// Material files - open in MaterialEditorPanel
-						if (extension == ".lumat") {
+						if (dblExt == ".lumat") {
 							if (m_OnMaterialOpenCallback) {
 								m_OnMaterialOpenCallback(path);
 							} else {
 								LNX_LOG_WARN("Material editor not connected - cannot open {0}", path.filename().string());
 							}
 						}
-						// Scripts C++ - abrir en Visual Studio
-						else if (extension == ".cpp" || extension == ".h" || extension == ".hpp" || extension == ".c") {
+						// Scripts C++ - open in Visual Studio
+						else if (dblExt == ".cpp" || dblExt == ".h" || dblExt == ".hpp" || dblExt == ".c") {
 							std::string command = "cmd /c start \"\" \"" + path.string() + "\"";
 							system(command.c_str());
 							LNX_LOG_INFO("Opening script in editor: {0}", path.filename().string());
 						}
-						// Scenes - cargar en editor (TODO: implementar carga de escena)
-						else if (extension == ".lunex") {
+						// Scenes - load in editor
+						else if (dblExt == ".lunex") {
 							LNX_LOG_INFO("Double-clicked scene: {0}", path.filename().string());
-							// TODO: Emit event to load scene in editor
 						}
-						// Otros archivos - abrir con programa por defecto
+						// Other files - open with default program
 						else {
 							std::string command = "cmd /c start \"\" \"" + path.string() + "\"";
 						 system(command.c_str());
@@ -1157,56 +1278,24 @@ namespace Lunex {
 					}
 				}
 				
-				// Filename label
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.85f, 1.0f));
-				
-				// ✅ Ocultar extensión .lumat, .lumesh, .luprefab para elegancia
-				std::string displayName = filenameString;
-				std::filesystem::path filePath(filenameString);
-			 std::string extension = filePath.extension().string();
-				std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
-				
-				if (extension == ".lumat" || extension == ".lumesh" || extension == ".luprefab") {
-					displayName = filePath.stem().string(); // Sin extensión
-				}
-				
-				const int maxChars = 18;
-				if (displayName.length() > maxChars) {
-					displayName = displayName.substr(0, maxChars - 3) + "...";
-				}
-				
-				float textWidth = ImGui::CalcTextSize(displayName.c_str()).x;
-				float offsetX = (m_ThumbnailSize - textWidth) * 0.5f;
-				if (offsetX > 0) {
-					ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offsetX);
-				}
-				ImGui::TextWrapped("%s", displayName.c_str());
-				
-				ImGui::PopStyleColor();
 				ImGui::EndGroup();
 				ImGui::PopID();
 				
 				itemIndex++;
 			}
 			
-			// IMPORTANTE: Agregar deselección en área vacía DESPUÉS del loop, ANTES de EndTable()
 			// Deselect when clicking empty space
-			bool isCtrlDown = ImGui::GetIO().KeyCtrl;
-			bool isShiftDown = ImGui::GetIO().KeyShift;
 			if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && 
-				!ImGui::IsAnyItemHovered() && !isCtrlDown && !isShiftDown && !m_IsSelecting) {
+				!ImGui::IsAnyItemHovered() && !ImGui::GetIO().KeyCtrl && !ImGui::GetIO().KeyShift && !m_IsSelecting) {
 				ClearSelection();
 			}
 			
-			// Pop los colores que se hicieron push al inicio del table
 			ImGui::PopStyleColor(3);
 			
 			ImGui::EndTable();
 		}
 		
 		ImGui::PopStyleVar();
-		
-		// Remover el indent al final
 		ImGui::Unindent(16.0f);
 		
 		// Draw selection rectangle
@@ -1250,7 +1339,7 @@ namespace Lunex {
 		ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 170);
 		ImGui::SetCursorPosY(6);
 		ImGui::SetNextItemWidth(160);
-		ImGui::SliderFloat("##Size", &m_ThumbnailSize, 60, 128);
+		ImGui::SliderFloat("##Size", &m_ThumbnailSize, 64, 160); // ✅ Rango ajustado: 64-160 (antes 60-128)
 		ImGui::EndChild();
 		
 		ImGui::PopStyleColor(4);
@@ -1390,6 +1479,7 @@ namespace Lunex {
 			ImGui::EndPopup();
 		}
 	}
+	
 	
 
 	
@@ -1553,13 +1643,13 @@ extern "C"
 			counter++;
 		} while (std::filesystem::exists(materialPath));
 		
-		// Generate random ID for material
-		uint64_t materialID = (uint64_t)rand() * (uint64_t)rand();
+		// ✅ FIX: Use proper UUID generation instead of rand()
+		UUID materialID = UUID(); // Proper UUID generation
 		
 		// Create material file with default PBR values (proper YAML format)
 		std::stringstream ss;
 		ss << "Material:\n";
-		ss << "  ID: " << materialID << "\n";
+		ss << "  ID: " << (uint64_t)materialID << "\n";
 		ss << "  Name: " << baseName << "\n";
 		ss << "Properties:\n";
 		ss << "  Albedo: [1, 1, 1, 1]\n";
@@ -1590,6 +1680,7 @@ extern "C"
 		LNX_LOG_INFO("3. Assign to MeshRenderer components");
 		LNX_LOG_INFO("");
 		LNX_LOG_INFO("Material path: {0}", materialPath.string());
+		LNX_LOG_INFO("Material UUID: {0}", (uint64_t)materialID);
 		LNX_LOG_INFO("==================================================");
 	}
 	
@@ -1624,9 +1715,9 @@ extern "C"
 			counter++;
 		} while (std::filesystem::exists(prefabPath));
 		
-		// Generate UUID for prefab
-		uint64_t prefabID = (uint64_t)rand() * (uint64_t)rand();
-		uint64_t entityID = (uint64_t)rand() * (uint64_t)rand();
+		// ✅ FIX: Use proper UUID generation instead of rand()
+		UUID prefabID = UUID();
+		UUID entityID = UUID();
 		
 		// Get relative path to mesh asset from assets folder
 		// Convert to forward slashes for YAML compatibility
@@ -1639,14 +1730,14 @@ extern "C"
 		ss << "Prefab:\n";
 		ss << "  Name: " << prefabName << "\n";
 		ss << "  Description: Prefab created from mesh " << baseName << "\n";
-		ss << "  RootEntityID: " << entityID << "\n";
-		ss << "  UUID: " << prefabID << "\n";
+		ss << "  RootEntityID: " << (uint64_t)entityID << "\n";
+		ss << "  UUID: " << (uint64_t)prefabID << "\n";
 		ss << "  OriginalTransform:\n";
 		ss << "    Position: [0, 0, 0]\n";
 		ss << "    Rotation: [0, 0, 0]\n";
-	 ss << "    Scale: [1, 1, 1]\n";
+		ss << "    Scale: [1, 1, 1]\n";
 		ss << "Entities:\n";
-		ss << "  - EntityID: " << entityID << "\n";
+		ss << "  - EntityID: " << (uint64_t)entityID << "\n";
 		ss << "    Tag: " << prefabName << "\n";
 		ss << "    LocalParentID: 0\n";
 		ss << "    LocalChildIDs: []\n";
@@ -1654,7 +1745,7 @@ extern "C"
 		ss << "      - Type: TransformComponent\n";
 		ss << "        Data: \"0,0,0;0,0,0;1,1,1\"\n";
 		ss << "      - Type: MeshComponent\n";
-		ss << "        Data: \"4;1,1,1,1;" << meshAsset->GetID() << ";" << relativeMeshPathStr << ";\"\n";
+		ss << "        Data: \"4;1,1,1,1;" << (uint64_t)meshAsset->GetID() << ";" << relativeMeshPathStr << ";\"\n";
 		ss << "      - Type: MaterialComponent\n";
 		ss << "        Data: \"0;;0;1,1,1,1;0;0.5;0.5;0,0,0;0\"\n";
 		
@@ -1669,6 +1760,7 @@ extern "C"
 		
 		LNX_LOG_INFO("Created prefab '{0}' from mesh '{1}'", prefabName, baseName);
 		LNX_LOG_INFO("Prefab saved to: {0}", prefabPath.string());
+		LNX_LOG_INFO("Prefab UUID: {0}", (uint64_t)prefabID);
 	}
 	
 	void ContentBrowserPanel::DeleteItem(const std::filesystem::path& path) {
@@ -1703,11 +1795,11 @@ extern "C"
 				return;
 			}
 			
-		 // ✅ SPECIAL HANDLING FOR .lumat FILES - Update internal name
-			std::string oldExtension = oldPath.extension().string();
-			std::transform(oldExtension.begin(), oldExtension.end(), oldExtension.begin(), ::tolower);
-			
-			if (oldExtension == ".lumat") {
+		// ✅ SPECIAL HANDLING FOR . Lumpur MATERIALS - Update internal name
+		std::string oldExtension = oldPath.extension().string();
+		std::transform(oldExtension.begin(), oldExtension.end(), oldExtension.begin(), ::tolower);
+		 
+		if (oldExtension == ".lumat") {
 				// Load material, update name, save it
 				auto material = MaterialRegistry::Get().LoadMaterial(oldPath);
 				if (material) {
@@ -1809,6 +1901,12 @@ extern "C"
 		if (it != m_MaterialThumbnailCache.end()) {
 			m_MaterialThumbnailCache.erase(it);
 			LNX_LOG_INFO("Invalidated thumbnail cache for: {0}", materialPath.filename().string());
+		}
+	}
+	
+	void ContentBrowserPanel::InvalidateThumbnailDiskCache(const std::filesystem::path& materialPath) {
+		if (m_MaterialPreviewRenderer) {
+			m_MaterialPreviewRenderer->InvalidateCachedThumbnail(materialPath);
 		}
 	}
 	
