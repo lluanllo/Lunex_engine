@@ -48,6 +48,7 @@ namespace Lunex {
 		void SetLightIntensity(float intensity) { m_LightIntensity = intensity; }
 		void SetLightColor(const glm::vec3& color) { m_LightColor = color; }
 		void SetBackgroundColor(const glm::vec4& color) { m_BackgroundColor = color; }
+		glm::vec4 GetBackgroundColor() const { return m_BackgroundColor; }
 
 		// Rotación automática del preview
 		void SetAutoRotate(bool enabled) { m_AutoRotate = enabled; }

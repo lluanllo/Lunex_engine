@@ -39,9 +39,12 @@ namespace Lunex {
 		// ✅ Initialize material preview renderer for thumbnails
 		// Materials: 160x160 resolution with blue background #6EC1FF
 		m_MaterialPreviewRenderer = CreateScope<MaterialPreviewRenderer>();
-		m_MaterialPreviewRenderer->SetResolution(160, 160); // ✅ Larger thumbnails for materials
+		m_MaterialPreviewRenderer->SetResolution(160, 160);
 		m_MaterialPreviewRenderer->SetAutoRotate(false);
-		m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.432f, 0.757f, 1.0f, 1.0f)); // ✅ #6EC1FF
+		m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.432f, 0.757f, 1.0f, 1.0f)); // #6EC1FF
+		
+		// ✅ FIXED: Lower camera slightly to center material sphere better
+		m_MaterialPreviewRenderer->SetCameraPosition(glm::vec3(0.0f, -0.3f, 2.5f));
 	}
 
 	void ContentBrowserPanel::SetRootDirectory(const std::filesystem::path& directory) {
@@ -602,7 +605,7 @@ namespace Lunex {
 			return m_MaterialIcon ? m_MaterialIcon : m_FileIcon;
 		}
 		
-		// ✅ Mesh Asset files (.lumesh) - render 3D preview with angled camera
+		// ✅ Mesh Asset files (.lumesh) - render 3D preview with angled camera and new background
 		if (extension == ".lumesh") {
 			std::string pathStr = path.string();
 			
@@ -620,12 +623,13 @@ namespace Lunex {
 					Ref<Model> originalModel = m_MaterialPreviewRenderer->GetPreviewModel();
 					m_MaterialPreviewRenderer->SetPreviewModel(meshAsset->GetModel());
 					
-					// ✅ Adjust camera for better mesh viewing angle
-					// Save original camera position
-					auto originalCameraPos = glm::vec3(0.0f, 0.0f, 2.5f); // Material default
+					// ✅ Save original state
+					auto originalCameraPos = m_MaterialPreviewRenderer->GetCameraPosition();
+					auto originalBgColor = m_MaterialPreviewRenderer->GetBackgroundColor();
 					
-					// Set angled camera for mesh preview (better 3D perception)
-					m_MaterialPreviewRenderer->SetCameraPosition(glm::vec3(1.5f, 1.0f, 2.0f));
+					// ✅ FIXED: Set better camera angle and background color #7297C2
+					m_MaterialPreviewRenderer->SetCameraPosition(glm::vec3(2.0f, 1.2f, 2.5f));
+					m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.447f, 0.592f, 0.761f, 1.0f)); // #7297C2
 					
 					// Create a default gray material for mesh preview
 					auto defaultMaterial = CreateRef<MaterialAsset>("MeshPreview");
@@ -636,8 +640,9 @@ namespace Lunex {
 					// Render the mesh with default material
 					Ref<Texture2D> thumbnail = m_MaterialPreviewRenderer->RenderToTexture(defaultMaterial);
 					
-					// ✅ Restore original camera and model
+					// ✅ Restore original state
 					m_MaterialPreviewRenderer->SetCameraPosition(originalCameraPos);
+					m_MaterialPreviewRenderer->SetBackgroundColor(originalBgColor);
 					m_MaterialPreviewRenderer->SetPreviewModel(originalModel);
 					
 					if (thumbnail) {
@@ -653,7 +658,7 @@ namespace Lunex {
 			return m_MeshIcon ? m_MeshIcon : m_FileIcon;
 		}
 		
-		// ✅ Prefab files (.luprefab) - render 3D preview with angled camera
+		// ✅ Prefab files (.luprefab) - render 3D preview with angled camera and new background
 		if (extension == ".luprefab") {
 			std::string pathStr = path.string();
 			
@@ -692,9 +697,13 @@ namespace Lunex {
 											Ref<Model> originalModel = m_MaterialPreviewRenderer->GetPreviewModel();
 											m_MaterialPreviewRenderer->SetPreviewModel(meshAsset->GetModel());
 											
-											// ✅ Better isometric angle for prefabs (more 3D depth)
-											auto originalCameraPos = glm::vec3(0.0f, 0.0f, 2.5f);
-											m_MaterialPreviewRenderer->SetCameraPosition(glm::vec3(2.0f, 1.5f, 2.0f));
+											// ✅ Save original state
+											auto originalCameraPos = m_MaterialPreviewRenderer->GetCameraPosition();
+											auto originalBgColor = m_MaterialPreviewRenderer->GetBackgroundColor();
+											
+											// ✅ FIXED: Better camera angle and background color #7297C2
+											m_MaterialPreviewRenderer->SetCameraPosition(glm::vec3(2.2f, 1.5f, 2.8f));
+											m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.447f, 0.592f, 0.761f, 1.0f)); // #7297C2
 											
 											auto defaultMaterial = CreateRef<MaterialAsset>("PrefabPreview");
 											defaultMaterial->SetAlbedo(glm::vec4(0.6f, 0.65f, 0.7f, 1.0f));
@@ -703,8 +712,9 @@ namespace Lunex {
 											
 											Ref<Texture2D> thumbnail = m_MaterialPreviewRenderer->RenderToTexture(defaultMaterial);
 											
-											// ✅ Restore camera and model
+											// ✅ Restore original state
 											m_MaterialPreviewRenderer->SetCameraPosition(originalCameraPos);
+											m_MaterialPreviewRenderer->SetBackgroundColor(originalBgColor);
 											m_MaterialPreviewRenderer->SetPreviewModel(originalModel);
 											
 											if (thumbnail) {
@@ -860,84 +870,131 @@ namespace Lunex {
 				Ref<Texture2D> icon = directoryEntry.is_directory() ? m_DirectoryIcon : GetThumbnailForFile(path);
 				
 				// ============================================================================
-				// HAZEL-STYLE CARD RENDERING
+				// RENDERING SYSTEM
 				// ============================================================================
 				float cardWidth = m_ThumbnailSize;
-				float cardHeight = m_ThumbnailSize + 50.0f; // Icon + name + type label
+				float cardHeight; // Will be set based on type (folder or file)
+				ImVec2 cardMin, cardMax; // Bounds for interaction
+				
 				ImVec2 cursorPos = ImGui::GetCursorScreenPos();
 				ImDrawList* drawList = ImGui::GetWindowDrawList();
 				
 				float cardRounding = 6.0f;
 				float cardPadding = 8.0f;
 				
-				// ===== CARD BACKGROUND (más contraste) =====
-				ImU32 cardBgColor = IM_COL32(45, 45, 48, 255); // ✅ Más claro que antes (35->45)
-				ImVec2 cardMin = ImVec2(cursorPos.x, cursorPos.y);
-				ImVec2 cardMax = ImVec2(cursorPos.x + cardWidth, cursorPos.y + cardHeight);
-				
-				// ✅ SOMBRA DEBAJO DE LA CARD
-				ImVec2 shadowOffset = ImVec2(3.0f, 3.0f);
-				ImVec2 shadowMin = ImVec2(cardMin.x + shadowOffset.x, cardMin.y + shadowOffset.y);
-				ImVec2 shadowMax = ImVec2(cardMax.x + shadowOffset.x, cardMax.y + shadowOffset.y);
-				drawList->AddRectFilled(shadowMin, shadowMax, IM_COL32(0, 0, 0, 80), cardRounding);
-				
-				// Card background
-				drawList->AddRectFilled(cardMin, cardMax, cardBgColor, cardRounding);
-				
-				// ===== ICON/THUMBNAIL AREA =====
-				float iconSize = cardWidth - (cardPadding * 2);
-				ImVec2 iconMin = ImVec2(cursorPos.x + cardPadding, cursorPos.y + cardPadding);
-				ImVec2 iconMax = ImVec2(iconMin.x + iconSize, iconMin.y + iconSize);
-				
-				// Icon background (más contraste)
-				ImU32 iconBgColor = IM_COL32(55, 55, 58, 255); // ✅ Más claro (45->55)
-				drawList->AddRectFilled(iconMin, iconMax, iconBgColor, 4.0f);
-				
-				// Draw icon/thumbnail
-				if (icon) {
-					drawList->AddImageRounded(
-						(ImTextureID)(uintptr_t)icon->GetRendererID(),
-						iconMin,
-						iconMax,
-						ImVec2(0, 1), ImVec2(1, 0),
-						IM_COL32(255, 255, 255, 255),
-						4.0f
+				if (directoryEntry.is_directory()) {
+					// ========================================
+					// FOLDERS: NO CARD - ONLY SHADOW
+					// ========================================
+					cardHeight = m_ThumbnailSize + 30.0f; // Icon + name
+					cardMin = ImVec2(cursorPos.x, cursorPos.y);
+					cardMax = ImVec2(cursorPos.x + cardWidth, cursorPos.y + cardHeight);
+					
+					float iconSize = m_ThumbnailSize;
+					ImVec2 iconPos = ImVec2(cursorPos.x, cursorPos.y);
+					
+					// ✅ FOLDER ICON (no background card)
+					if (icon) {
+						drawList->AddImage(
+							(ImTextureID)(uintptr_t)icon->GetRendererID(),
+							iconPos,
+							ImVec2(iconPos.x + iconSize, iconPos.y + iconSize),
+							ImVec2(0, 1), ImVec2(1, 0)
+						);
+					}
+					
+					// ✅ FOLDER NAME
+					float textAreaY = iconPos.y + iconSize + 4.0f;
+					std::string displayName = filenameString;
+					
+					const int maxChars = 15;
+					if (displayName.length() > maxChars) {
+						displayName = displayName.substr(0, maxChars - 2) + "..";
+					}
+					
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.95f, 0.95f, 1.0f));
+					float nameWidth = ImGui::CalcTextSize(displayName.c_str()).x;
+					float nameOffsetX = (cardWidth - nameWidth) * 0.5f;
+					drawList->AddText(
+						ImVec2(cursorPos.x + nameOffsetX, textAreaY),
+						IM_COL32(245, 245, 245, 255),
+						displayName.c_str()
 					);
+					ImGui::PopStyleColor();
 				}
-				
-				// ===== TEXT AREA =====
-				float textAreaY = iconMax.y + 4.0f;
-				
-				// Asset name
-				std::string displayName = filenameString;
-				std::filesystem::path filePath(filenameString);
-				std::string extension = filePath.extension().string();
-				std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
-				
-				// Hide extensions for engine assets
-				if (extension == ".lumat" || extension == ".lumesh" || extension == ".luprefab") {
-					displayName = filePath.stem().string();
-				}
-				
-				// Truncate if too long
-				const int maxChars = 15;
-				if (displayName.length() > maxChars) {
-					displayName = displayName.substr(0, maxChars - 2) + "..";
-				}
-				
-				// Draw name (centered, white)
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.95f, 0.95f, 1.0f));
-				float nameWidth = ImGui::CalcTextSize(displayName.c_str()).x;
-				float nameOffsetX = (cardWidth - nameWidth) * 0.5f;
-				drawList->AddText(
-					ImVec2(cursorPos.x + nameOffsetX, textAreaY),
-					IM_COL32(245, 245, 245, 255),
-					displayName.c_str()
-				);
-				ImGui::PopStyleColor();
-				
-				// ✅ Asset type label SOLO para archivos (no carpetas)
-				if (!directoryEntry.is_directory()) {
+				else {
+					// ========================================
+					// FILES: SOFT GAUSSIAN SHADOW ON CARD
+					// ========================================
+					cardHeight = m_ThumbnailSize + 50.0f;
+					cardMin = ImVec2(cursorPos.x, cursorPos.y);
+					cardMax = ImVec2(cursorPos.x + cardWidth, cursorPos.y + cardHeight);
+					
+					// ===== CARD BACKGROUND (más contraste) =====
+					ImU32 cardBgColor = IM_COL32(45, 45, 48, 255);
+					
+					// ✅ SOMBRA DEBAJO DE LA CARD
+					ImVec2 shadowOffset = ImVec2(3.0f, 3.0f);
+					ImVec2 shadowMin = ImVec2(cardMin.x + shadowOffset.x, cardMin.y + shadowOffset.y);
+					ImVec2 shadowMax = ImVec2(cardMax.x + shadowOffset.x, cardMax.y + shadowOffset.y);
+					drawList->AddRectFilled(shadowMin, shadowMax, IM_COL32(0, 0, 0, 80), cardRounding);
+					
+					// Card background
+					drawList->AddRectFilled(cardMin, cardMax, cardBgColor, cardRounding);
+					
+					// ===== ICON/THUMBNAIL AREA =====
+					float iconSize = cardWidth - (cardPadding * 2);
+					ImVec2 iconMin = ImVec2(cursorPos.x + cardPadding, cursorPos.y + cardPadding);
+					ImVec2 iconMax = ImVec2(iconMin.x + iconSize, iconMin.y + iconSize);
+					
+					// Icon background (más contraste)
+					ImU32 iconBgColor = IM_COL32(55, 55, 58, 255);
+					drawList->AddRectFilled(iconMin, iconMax, iconBgColor, 4.0f);
+					
+					// Draw icon/thumbnail
+					if (icon) {
+						drawList->AddImageRounded(
+							(ImTextureID)(uintptr_t)icon->GetRendererID(),
+							iconMin,
+							iconMax,
+							ImVec2(0, 1), ImVec2(1, 0),
+							IM_COL32(255, 255, 255, 255),
+							4.0f
+						);
+					}
+					
+					// ===== TEXT AREA =====
+					float textAreaY = iconMax.y + 4.0f;
+					
+					// Asset name
+					std::string displayName = filenameString;
+					std::filesystem::path filePath(filenameString);
+					std::string extension = filePath.extension().string();
+					std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+					
+					// Hide extensions for engine assets
+					if (extension == ".lumat" || extension == ".lumesh" || extension == ".luprefab") {
+						displayName = filePath.stem().string();
+					}
+					
+					// Truncate if too long
+					const int maxChars = 15;
+					if (displayName.length() > maxChars) {
+						displayName = displayName.substr(0, maxChars - 2) + "..";
+					}
+					
+					// Draw name (centered, white)
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.95f, 0.95f, 1.0f));
+					float nameWidth = ImGui::CalcTextSize(displayName.c_str()).x;
+					float nameOffsetX = (cardWidth - nameWidth) * 0.5f;
+					drawList->AddText(
+						ImVec2(cursorPos.x + nameOffsetX, textAreaY),
+						IM_COL32(245, 245, 245, 255),
+						displayName.c_str()
+					);
+					ImGui::PopStyleColor();
+					
+					// ✅ Asset type label SOLO para archivos (no carpetas)
 					std::string typeLabel = GetAssetTypeLabel(path);
 					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.52f, 1.0f));
 					float typeWidth = ImGui::CalcTextSize(typeLabel.c_str()).x;
@@ -950,7 +1007,7 @@ namespace Lunex {
 					ImGui::PopStyleColor();
 				}
 
-				// ===== INVISIBLE BUTTON FOR INTERACTION =====
+				// ===== INVISIBLE BUTTON FOR INTERACTION (common for both folders and files) =====
 				ImGui::SetCursorScreenPos(cardMin);
 				ImGui::InvisibleButton(filenameString.c_str(), ImVec2(cardWidth, cardHeight));
 				
@@ -1085,7 +1142,7 @@ namespace Lunex {
 						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEMS")) {
 							std::string payloadData = (const char*)payload->Data;
 							std::stringstream ss(payloadData);
-							std::string line;
+						 std::string line;
 							
 							while (std::getline(ss, line)) {
 								if (line.empty()) continue;
@@ -1216,7 +1273,7 @@ namespace Lunex {
 						// Other files - open with default program
 						else {
 							std::string command = "cmd /c start \"\" \"" + path.string() + "\"";
-							system(command.c_str());
+						 system(command.c_str());
 						}
 					}
 				}
@@ -1738,11 +1795,11 @@ extern "C"
 				return;
 			}
 			
-		 // ✅ SPECIAL HANDLING FOR .lumat FILES - Update internal name
-			std::string oldExtension = oldPath.extension().string();
-			std::transform(oldExtension.begin(), oldExtension.end(), oldExtension.begin(), ::tolower);
-			
-			if (oldExtension == ".lumat") {
+		// ✅ SPECIAL HANDLING FOR . Lumpur MATERIALS - Update internal name
+		std::string oldExtension = oldPath.extension().string();
+		std::transform(oldExtension.begin(), oldExtension.end(), oldExtension.begin(), ::tolower);
+		 
+		if (oldExtension == ".lumat") {
 				// Load material, update name, save it
 				auto material = MaterialRegistry::Get().LoadMaterial(oldPath);
 				if (material) {
