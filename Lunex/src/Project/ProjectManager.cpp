@@ -3,9 +3,38 @@
 #include "ProjectSerializer.h"
 
 #include "Log/Log.h"
+#include "Asset/AssetDatabase.h"
 #include <filesystem>
 
 namespace Lunex {
+	// ============================================================================
+	// STATIC ASSET DATABASE INSTANCE
+	// ============================================================================
+	static AssetDatabase s_AssetDatabase;
+	
+	// ============================================================================
+	// ASSET DATABASE INITIALIZATION
+	// ============================================================================
+	
+	static void InitializeAssetDatabase(Ref<Project> project) {
+		if (!project) {
+			LNX_LOG_ERROR("Cannot initialize AssetDatabase - project is null");
+			return;
+		}
+		
+		// Initialize AssetDatabase
+		// This will:
+		// - Create .lnxast if it doesn't exist (and scan all assets)
+		// - Load .lnxast if it exists
+		s_AssetDatabase.Initialize(project->GetProjectDirectory(), project->GetAssetDirectory());
+		
+		LNX_LOG_INFO("AssetDatabase initialized with {0} assets", s_AssetDatabase.GetAssetCount());
+	}
+	
+	// ============================================================================
+	// PROJECT MANAGEMENT
+	// ============================================================================
+	
 	Ref<Project> ProjectManager::New() {
 		Project::s_ActiveProject = CreateRef<Project>();
 		return Project::s_ActiveProject;
@@ -29,6 +58,9 @@ namespace Lunex {
 			LNX_LOG_WARN("Asset directory not found, creating: {0}", project->m_AssetDirectory.string());
 			CreateProjectDirectories(project->m_ProjectDirectory);
 		}
+		
+		// ? Initialize AssetDatabase (auto-creates if missing, loads if exists)
+		InitializeAssetDatabase(project);
 		
 		Project::s_ActiveProject = project;
 		LNX_LOG_INFO("Project loaded: {0}", project->m_Config.Name);
@@ -63,6 +95,9 @@ namespace Lunex {
 			LNX_LOG_ERROR("Failed to save project: {0}", path.string());
 			return false;
 		}
+		
+		// ? Initialize AssetDatabase for new project (scans default scene and assets)
+		InitializeAssetDatabase(Project::s_ActiveProject);
 		
 		LNX_LOG_INFO("Project saved successfully: {0}", path.string());
 		return true;
@@ -166,6 +201,27 @@ Entities:
 		}
 		
 		LNX_LOG_INFO("Default scene created: {0}", scenePath.string());
+	}
+	
+	// ============================================================================
+	// ASSET DATABASE ACCESS
+	// ============================================================================
+	
+	AssetDatabase& ProjectManager::GetAssetDatabase() {
+		return s_AssetDatabase;
+	}
+	
+	// ============================================================================
+	// ASSET DATABASE UTILITIES
+	// ============================================================================
+	
+	void ProjectManager::RefreshAssetDatabase() {
+		if (Project::s_ActiveProject) {
+			LNX_LOG_INFO("Refreshing AssetDatabase...");
+			s_AssetDatabase.ScanAssets();
+			s_AssetDatabase.SaveDatabase();
+			LNX_LOG_INFO("AssetDatabase refreshed: {0} assets", s_AssetDatabase.GetAssetCount());
+		}
 	}
 
 } // namespace Lunex

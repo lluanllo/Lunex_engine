@@ -9,6 +9,7 @@
 #include "Renderer/Light.h"
 #include "Renderer/Texture.h"
 #include <glm/glm.hpp>
+#include <filesystem>
 
 // Forward declarations
 namespace Lunex {
@@ -39,6 +40,10 @@ namespace Lunex {
 		void SetPreviewModel(Ref<Model> model);
 		Ref<Model> GetPreviewModel() const { return m_PreviewModel; }
 
+		// ? NEW: Camera positioning for mesh/prefab thumbnails
+		void SetCameraPosition(const glm::vec3& position);
+		glm::vec3 GetCameraPosition() const;
+
 		// Configurar iluminación del preview
 		void SetLightIntensity(float intensity) { m_LightIntensity = intensity; }
 		void SetLightColor(const glm::vec3& color) { m_LightColor = color; }
@@ -67,6 +72,16 @@ namespace Lunex {
 
 		// Generar thumbnail estático (no se actualiza automáticamente)
 		Ref<Texture2D> GenerateThumbnail(Ref<MaterialAsset> material, uint32_t size = 256);
+
+		// ? NEW: Disk caching for thumbnails
+		// Load thumbnail from cache or generate if missing/outdated
+		Ref<Texture2D> GetOrGenerateCachedThumbnail(const std::filesystem::path& materialPath, Ref<MaterialAsset> material);
+		
+		// Clear disk cache for a specific material
+		void InvalidateCachedThumbnail(const std::filesystem::path& materialPath);
+		
+		// Clear all disk cache
+		void ClearThumbnailCache();
 
 		// ========== UPDATE ==========
 
@@ -111,6 +126,13 @@ namespace Lunex {
 		
 		// Copy framebuffer content to a standalone texture
 		Ref<Texture2D> CopyFramebufferToTexture();
+
+		// ? NEW: Disk cache helpers
+		std::filesystem::path GetThumbnailCachePath() const;
+		std::filesystem::path GetThumbnailPath(const std::filesystem::path& materialPath) const;
+		bool IsThumbnailValid(const std::filesystem::path& thumbnailPath, const std::filesystem::path& materialPath) const;
+		bool SaveThumbnailToDisk(const std::filesystem::path& thumbnailPath, Ref<Texture2D> thumbnail);
+		Ref<Texture2D> LoadThumbnailFromDisk(const std::filesystem::path& thumbnailPath);
 	};
 
 }

@@ -23,6 +23,9 @@
 #include "Asset/MeshImporter.h"
 #include "Asset/Prefab.h"
 
+// ✅ AssetDatabase
+#include "Asset/AssetDatabase.h"
+
 // ✅ Skybox Renderer for camera preview
 #include "Renderer/SkyboxRenderer.h"
 
@@ -208,8 +211,11 @@ namespace Lunex {
 		
 		// 3. Material Editor -> Content Browser & Properties Panel (hot reload when saved)
 		m_MaterialEditorPanel.SetOnMaterialSavedCallback([this](const std::filesystem::path& path) {
-			// Invalidate Content Browser thumbnail
+			// Invalidate Content Browser thumbnail (memory cache)
 			m_ContentBrowserPanel.InvalidateMaterialThumbnail(path);
+			
+			// ✅ Invalidate disk cache so thumbnail is regenerated
+			m_ContentBrowserPanel.InvalidateThumbnailDiskCache(path);
 			
 			// Also invalidate PropertiesPanel thumbnail cache for the material
 			// (we need to get the material's UUID to invalidate it)
@@ -326,6 +332,68 @@ namespace Lunex {
 				auto stats = Renderer2D::GetStats();
 				m_ConsolePanel.AddLog("FPS: " + std::to_string(1.0f / ImGui::GetIO().DeltaTime), LogLevel::Info, "Performance");
 				m_ConsolePanel.AddLog("Draw Calls: " + std::to_string(stats.DrawCalls), LogLevel::Info, "Performance");
+			});
+		
+		// ✅ NEW: AssetDatabase commands
+		m_ConsolePanel.RegisterCommand("refresh_assets", "Refresh the asset database", "refresh_assets",
+			[this](const std::vector<std::string>& args) {
+				auto project = ProjectManager::GetActiveProject();
+				if (!project) {
+					m_ConsolePanel.AddLog("No active project", LogLevel::Warning, "Assets");
+					return;
+				}
+				
+				m_ConsolePanel.AddLog("Refreshing AssetDatabase...", LogLevel::Info, "Assets");
+				ProjectManager::RefreshAssetDatabase();
+				
+				auto& db = ProjectManager::GetAssetDatabase();
+				m_ConsolePanel.AddLog("AssetDatabase refreshed: " + std::to_string(db.GetAssetCount()) + " assets", LogLevel::Info, "Assets");
+			});
+		
+		m_ConsolePanel.RegisterCommand("list_assets", "List all assets in the database", "list_assets [type]",
+			[this](const std::vector<std::string>& args) {
+				auto project = ProjectManager::GetActiveProject();
+				if (!project) {
+					m_ConsolePanel.AddLog("No active project", LogLevel::Warning, "Assets");
+					return;
+				}
+				
+				auto& db = ProjectManager::GetAssetDatabase();
+				const auto& assets = db.GetAllAssets();
+				
+				if (assets.empty()) {
+					m_ConsolePanel.AddLog("No assets found in database", LogLevel::Info, "Assets");
+					return;
+				}
+				
+				m_ConsolePanel.AddLog("Assets in database:", LogLevel::Info, "Assets");
+				
+				// Filter by type if specified
+				std::string typeFilter = "";
+				if (!args.empty()) {
+					typeFilter = args[0];
+					std::transform(typeFilter.begin(), typeFilter.end(), typeFilter.begin(), ::tolower);
+				}
+				
+				int count = 0;
+				for (const auto& [id, entry] : assets) {
+					// Apply filter if specified
+					if (!typeFilter.empty()) {
+						std::string typeName = AssetTypeToString(entry.Type);
+						std::string lowerTypeName = typeName;
+						std::transform(lowerTypeName.begin(), lowerTypeName.end(), lowerTypeName.begin(), ::tolower);
+						
+						if (lowerTypeName.find(typeFilter) == std::string::npos) {
+							continue;
+						}
+					}
+					
+					std::string msg = "  [" + std::string(AssetTypeToString(entry.Type)) + "] " + entry.Name;
+					m_ConsolePanel.AddLog(msg, LogLevel::Info, "Assets");
+					count++;
+				}
+				
+				m_ConsolePanel.AddLog("Total: " + std::to_string(count) + " assets", LogLevel::Info, "Assets");
 			});
 
 		m_ConsolePanel.AddLog("Lunex Editor initialized", LogLevel::Info, "System");
