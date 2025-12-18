@@ -37,9 +37,11 @@ namespace Lunex {
 		m_HistoryIndex = 0;
 		
 		// ✅ Initialize material preview renderer for thumbnails
+		// Materials: 160x160 resolution with blue background #6EC1FF
 		m_MaterialPreviewRenderer = CreateScope<MaterialPreviewRenderer>();
-		m_MaterialPreviewRenderer->SetResolution(128, 128); // Thumbnail size
+		m_MaterialPreviewRenderer->SetResolution(160, 160); // ✅ Larger thumbnails for materials
 		m_MaterialPreviewRenderer->SetAutoRotate(false);
+		m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.432f, 0.757f, 1.0f, 1.0f)); // ✅ #6EC1FF
 	}
 
 	void ContentBrowserPanel::SetRootDirectory(const std::filesystem::path& directory) {
@@ -690,15 +692,15 @@ namespace Lunex {
 											Ref<Model> originalModel = m_MaterialPreviewRenderer->GetPreviewModel();
 											m_MaterialPreviewRenderer->SetPreviewModel(meshAsset->GetModel());
 											
-											// ✅ Angled camera for prefab preview
+											// ✅ Better isometric angle for prefabs (more 3D depth)
 											auto originalCameraPos = glm::vec3(0.0f, 0.0f, 2.5f);
-											m_MaterialPreviewRenderer->SetCameraPosition(glm::vec3(1.5f, 1.0f, 2.0f));
+											m_MaterialPreviewRenderer->SetCameraPosition(glm::vec3(2.0f, 1.5f, 2.0f));
 											
 											auto defaultMaterial = CreateRef<MaterialAsset>("PrefabPreview");
 											defaultMaterial->SetAlbedo(glm::vec4(0.6f, 0.65f, 0.7f, 1.0f));
 											defaultMaterial->SetMetallic(0.0f);
 											defaultMaterial->SetRoughness(0.4f);
-											;
+											
 											Ref<Texture2D> thumbnail = m_MaterialPreviewRenderer->RenderToTexture(defaultMaterial);
 											
 											// ✅ Restore camera and model
