@@ -102,14 +102,6 @@ namespace RHI {
 	// RHI DEVICE CONVENIENCE METHODS
 	// ============================================================================
 	
-	RHIDevice* RHIDevice::Get() {
-		return s_Instance;
-	}
-	
-	RHIContext* RHIContext::Get() {
-		return s_Instance;
-	}
-	
 	Ref<RHIBuffer> RHIDevice::CreateVertexBuffer(const void* data, uint64_t size, uint32_t stride, BufferUsage usage) {
 		BufferCreateInfo info;
 		info.Type = BufferType::Vertex;

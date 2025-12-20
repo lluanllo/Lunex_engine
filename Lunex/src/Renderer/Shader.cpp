@@ -1,44 +1,22 @@
 #include "stpch.h"
 #include "Shader.h"
-
-#include <glad/glad.h>
-
-#include "Renderer/Renderer.h"
-#include "Platform/OpenGL/OpenGLShader.h"
+#include "RHI/RHIShader.h"
 
 namespace Lunex {
 	
 	Ref<Shader> Shader::Create(const std::string& filepath) {
-		switch (Renderer::GetAPI()) {
-			case RendererAPI::API::None:    LNX_CORE_ASSERT(false, "RendererAPI::None is currently not supported!");
-			case RendererAPI::API::OpenGL:  return std::make_shared<OpenGLShader>(filepath);
-		}
-		
-		LNX_CORE_ASSERT(false, "Unknown RendererAPI!");
-		return nullptr;
+		auto rhiShader = RHI::RHIShader::CreateFromFile(filepath);
+		return CreateRef<Shader>(rhiShader);
 	}
 	
 	Ref<Shader> Shader::Create(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc) {
-		switch (Renderer::GetAPI()) {
-			case RendererAPI::API::None:    LNX_CORE_ASSERT(false, "RendererAPI::None is currently not supported!");
-			case RendererAPI::API::OpenGL:  return std::make_shared<OpenGLShader>(name, vertexSrc, fragmentSrc);
-		}
-		
-		LNX_CORE_ASSERT(false, "Unknown RendererAPI!");
-		return nullptr;
+		auto rhiShader = RHI::RHIShader::CreateFromSource(name, vertexSrc, fragmentSrc);
+		return CreateRef<Shader>(rhiShader);
 	}
 	
-	// ========================================
-	// COMPUTE SHADER FACTORY
-	// ========================================
 	Ref<Shader> Shader::CreateCompute(const std::string& filepath) {
-		switch (Renderer::GetAPI()) {
-			case RendererAPI::API::None:    LNX_CORE_ASSERT(false, "RendererAPI::None is currently not supported!");
-			case RendererAPI::API::OpenGL:  return std::make_shared<OpenGLShader>(filepath, true); // true = compute shader
-		}
-		
-		LNX_CORE_ASSERT(false, "Unknown RendererAPI!");
-		return nullptr;
+		auto rhiShader = RHI::RHIShader::CreateComputeFromFile(filepath);
+		return CreateRef<Shader>(rhiShader);
 	}
 	
 	void ShaderLibrary::Add(const Ref<Shader>& shader) {
@@ -52,7 +30,7 @@ namespace Lunex {
 	}
 	
 	Ref<Shader> ShaderLibrary::Load(const std::string& filepath) {
-		auto shader = Ref<Shader>(Shader::Create(filepath));
+		auto shader = Shader::Create(filepath);
 		Add(shader);
 		return shader;
 	}

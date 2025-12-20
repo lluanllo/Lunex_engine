@@ -123,7 +123,7 @@ namespace Lunex {
 		// Run setup to declare resources
 		RenderPassBuilder builder;
 		builder.m_Graph = this;
-		builder.m_Pass = pass.get();
+		builder.m_Pass = static_cast<void*>(pass.get());
 		builder.SetName(name);
 		
 		if (setup) {
@@ -151,7 +151,7 @@ namespace Lunex {
 		
 		RenderPassBuilder builder;
 		builder.m_Graph = this;
-		builder.m_Pass = pass.get();
+		builder.m_Pass = static_cast<void*>(pass.get());
 		builder.SetName(name);
 		
 		if (setup) {

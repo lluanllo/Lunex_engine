@@ -15,17 +15,7 @@
 #include "RHITypes.h"
 #include <unordered_map>
 #include <variant>
-
-// Forward declare GLM types
-namespace glm {
-	template<typename T, int N> struct vec;
-	using vec2 = vec<float, 2>;
-	using vec3 = vec<float, 3>;
-	using vec4 = vec<float, 4>;
-	template<typename T, int C, int R> struct mat;
-	using mat3 = mat<float, 3, 3>;
-	using mat4 = mat<float, 4, 4>;
-}
+#include <glm/glm.hpp>
 
 namespace Lunex {
 namespace RHI {

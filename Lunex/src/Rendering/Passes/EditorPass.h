@@ -6,6 +6,7 @@
  */
 
 #include "Rendering/RenderPass.h"
+#include <glm/glm.hpp>
 
 namespace Lunex {
 

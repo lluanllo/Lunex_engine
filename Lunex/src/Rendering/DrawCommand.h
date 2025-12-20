@@ -12,7 +12,10 @@
 
 #include "Core/Core.h"
 #include "RHI/RHI.h"
-#include <glm/glm.hpp>
+
+#include <glm/glm.hpp>  // ? ADD THIS
+#include <cstdint>
+#include <vector>
 
 namespace Lunex {
 

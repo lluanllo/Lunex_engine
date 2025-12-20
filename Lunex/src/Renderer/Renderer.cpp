@@ -1,10 +1,9 @@
 #include "stpch.h"
 
 #include "Renderer.h"
-#include "Platform/OpenGL/OpenGLShader.h"
 #include "Renderer2D.h"
 #include "Renderer3D.h"
-#include "SkyboxRenderer.h"  // NEW: Skybox rendering
+#include "SkyboxRenderer.h"
 #include "TextureCompression.h"
 
 namespace Lunex {
@@ -16,12 +15,11 @@ namespace Lunex {
 		RenderCommand::Init();
 		Renderer2D::Init();
 		Renderer3D::Init();
-		SkyboxRenderer::Init();  // NEW: Initialize skybox renderer
+		SkyboxRenderer::Init();
 		
 		// Initialize texture compression system
 		TextureCompressor::Get().Initialize();
 		
-		// Log compression status
 		if (TextureCompressionConfig::IsKTXAvailable()) {
 			LNX_LOG_INFO("Texture Compression: KTX enabled - textures will be compressed automatically");
 		}

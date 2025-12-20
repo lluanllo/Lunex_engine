@@ -252,48 +252,54 @@ namespace RHI {
 		
 		/**
 		 * @brief Get the global context instance
+		 * @return The current active context
 		 */
-		static RHIContext* Get();
+		static RHIContext* Get() { return s_Instance; }  
 		
 	protected:
 		static RHIContext* s_Instance;
-	};
-
-	// ============================================================================
-	// SCOPED DEBUG GROUP
-	// ============================================================================
-	
-	/**
-	 * @class ScopedDebugGroup
-	 * @brief RAII helper for GPU debug groups
-	 * 
-	 * Usage:
-	 *   {
-	 *       ScopedDebugGroup group("Shadow Pass");
-	 *       // ... rendering code ...
-	 *   } // Automatically pops the group
-	 */
-	class ScopedDebugGroup {
-	public:
-		explicit ScopedDebugGroup(const std::string& name) {
-			if (RHIContext::Get()) {
-				RHIContext::Get()->PushDebugGroup(name);
-			}
-		}
+		RHIContext() = default;
 		
-		~ScopedDebugGroup() {
-			if (RHIContext::Get()) {
-				RHIContext::Get()->PopDebugGroup();
-			}
-		}
-		
-		// Non-copyable
-		ScopedDebugGroup(const ScopedDebugGroup&) = delete;
-		ScopedDebugGroup& operator=(const ScopedDebugGroup&) = delete;
+		// Allow RHI module to access s_Instance
+		friend void Shutdown();
+		friend bool Initialize(GraphicsAPI api, void* windowHandle);
 	};
-
-	// Macro for easy debug group usage
-	#define RHI_DEBUG_GROUP(name) ::Lunex::RHI::ScopedDebugGroup _debugGroup##__LINE__(name)
 
 } // namespace RHI
 } // namespace Lunex
+
+// ============================================================================
+// SCOPED DEBUG GROUP
+// ============================================================================
+	
+/**
+ * @class ScopedDebugGroup
+ * @brief RAII helper for GPU debug groups
+ * 
+ * Usage:
+ *   {
+ *       ScopedDebugGroup group("Shadow Pass");
+ *       // ... rendering code ...
+ *   } // Automatically pops the group
+ */
+class ScopedDebugGroup {
+public:
+	explicit ScopedDebugGroup(const std::string& name) {
+		if (Lunex::RHI::RHIContext::Get()) {
+			Lunex::RHI::RHIContext::Get()->PushDebugGroup(name);
+		}
+	}
+	
+	~ScopedDebugGroup() {
+		if (Lunex::RHI::RHIContext::Get()) {
+			Lunex::RHI::RHIContext::Get()->PopDebugGroup();
+		}
+	}
+	
+	// Non-copyable
+	ScopedDebugGroup(const ScopedDebugGroup&) = delete;
+	ScopedDebugGroup& operator=(const ScopedDebugGroup&) = delete;
+};
+
+// Macro for easy debug group usage
+#define RHI_DEBUG_GROUP(name) ::ScopedDebugGroup _debugGroup##__LINE__(name)

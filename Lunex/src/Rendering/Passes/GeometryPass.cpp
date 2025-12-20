@@ -86,8 +86,8 @@ namespace Lunex {
 			auto& transform = entity.GetComponent<TransformComponent>();
 			auto& mesh = entity.GetComponent<MeshComponent>();
 			
-			// Skip if no mesh
-			if (!mesh.MeshAsset) continue;
+			// Skip if no mesh (TODO: Need to implement MeshAsset integration)
+			// if (!mesh.MeshAsset) continue;
 			
 			// TODO: Frustum culling here
 			
@@ -99,7 +99,7 @@ namespace Lunex {
 			// 4. Add to draw list
 			
 			// Placeholder: We need to integrate with the existing Model/Mesh system
-			LNX_LOG_TRACE("GeometryPass: Would render mesh for entity {0}", entity.GetUUID());
+			LNX_LOG_TRACE("GeometryPass: Would render mesh for entity {0}", static_cast<uint64_t>(entity.GetUUID()));
 		}
 	}
 	

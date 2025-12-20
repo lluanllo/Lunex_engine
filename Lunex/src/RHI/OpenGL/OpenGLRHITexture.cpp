@@ -3,6 +3,37 @@
 #include "OpenGLRHIDevice.h"
 #include "Log/Log.h"
 
+// Fallback defines for missing GLAD extensions
+#ifndef GLAD_GL_KHR_debug
+#define GLAD_GL_KHR_debug 0
+#endif
+
+#ifndef GLAD_GL_EXT_texture_filter_anisotropic
+#define GLAD_GL_EXT_texture_filter_anisotropic 0
+#define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x84FE
+#define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
+#endif
+
+#ifndef GLAD_GL_EXT_texture_compression_s3tc
+#define GLAD_GL_EXT_texture_compression_s3tc 0
+#define GL_COMPRESSED_RGB_S3TC_DXT1_EXT 0x83F0
+#define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 0x83F1
+#define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 0x83F2
+#define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
+#define GL_COMPRESSED_SRGB_S3TC_DXT1_EXT 0x8C4C
+#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT 0x8C4D
+#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT 0x8C4E
+#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT 0x8C4F
+#endif
+
+#ifndef GLAD_GL_ARB_ES3_compatibility
+#define GLAD_GL_ARB_ES3_compatibility 0
+#endif
+
+#ifndef GLAD_GL_KHR_texture_compression_astc_ldr
+#define GLAD_GL_KHR_texture_compression_astc_ldr 0
+#endif
+
 namespace Lunex {
 namespace RHI {
 

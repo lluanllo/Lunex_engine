@@ -66,8 +66,10 @@ namespace Lunex {
 	
 	class   BufferLayout {
 		public:
-			BufferLayout(const std::initializer_list<BufferElement> element)
-				: m_Elements(element) {
+			BufferLayout() = default;
+			
+			BufferLayout(const std::initializer_list<BufferElement>& elements)
+				: m_Elements(elements) {
 				CalculateOffsetAndStride();
 			}
 			

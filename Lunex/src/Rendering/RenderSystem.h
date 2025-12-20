@@ -23,6 +23,8 @@
 #include "Scene/Scene.h"
 #include "Renderer/EditorCamera.h"
 
+#include <glm/glm.hpp>  // ? ADD THIS
+
 namespace Lunex {
 
 	// Forward declarations

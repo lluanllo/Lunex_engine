@@ -283,6 +283,11 @@ namespace RHI {
 		virtual void Bind() const = 0;
 		
 		/**
+		 * @brief Unbind the compute pipeline
+		 */
+		virtual void Unbind() const = 0;
+		
+		/**
 		 * @brief Dispatch compute work
 		 */
 		virtual void Dispatch(uint32_t groupsX, uint32_t groupsY, uint32_t groupsZ) const = 0;

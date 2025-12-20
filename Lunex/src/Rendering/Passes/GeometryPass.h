@@ -7,6 +7,7 @@
 
 #include "Rendering/RenderPass.h"
 #include "Scene/Components.h"
+#include <glm/glm.hpp> // ? ADD THIS
 
 namespace Lunex {
 

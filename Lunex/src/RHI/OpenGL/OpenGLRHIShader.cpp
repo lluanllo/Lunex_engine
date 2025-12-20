@@ -1,32 +1,177 @@
 #include "stpch.h"
 #include "OpenGLRHIShader.h"
 #include "Log/Log.h"
+
 #include <fstream>
 #include <sstream>
 #include <glm/gtc/type_ptr.hpp>
+
+// SPIR-V compilation
+#include <shaderc/shaderc.hpp>
+#include <spirv_cross/spirv_cross.hpp>
+#include <spirv_cross/spirv_glsl.hpp>
+
+// Fallback defines for missing GLAD extensions
+#ifndef GLAD_GL_KHR_debug
+#define GLAD_GL_KHR_debug 0
+#endif
 
 namespace Lunex {
 namespace RHI {
 
 	// ============================================================================
-	// OPENGL RHI SHADER IMPLEMENTATION
+	// UTILITY FUNCTIONS
 	// ============================================================================
 	
-	OpenGLRHIShader::OpenGLRHIShader(const std::string& filePath) {
-		m_FilePath = filePath;
+	static shaderc_shader_kind GLStageToShaderC(GLenum stage) {
+		switch (stage) {
+			case GL_VERTEX_SHADER:   return shaderc_glsl_vertex_shader;
+			case GL_FRAGMENT_SHADER: return shaderc_glsl_fragment_shader;
+			case GL_COMPUTE_SHADER:  return shaderc_glsl_compute_shader;
+		}
+		LNX_CORE_ASSERT(false, "Unknown shader stage");
+		return shaderc_glsl_vertex_shader;
+	}
+
+	std::filesystem::path OpenGLRHIShader::GetCacheDirectory() {
+		return "assets/cache/shader/rhi";
+	}
+	
+	void OpenGLRHIShader::CreateCacheDirectoryIfNeeded() {
+		auto dir = GetCacheDirectory();
+		if (!std::filesystem::exists(dir)) {
+			std::filesystem::create_directories(dir);
+		}
+	}
+	
+	const char* OpenGLRHIShader::GetVulkanCacheExtension(GLenum stage) {
+		switch (stage) {
+			case GL_VERTEX_SHADER:   return ".cached_vulkan.vert";
+			case GL_FRAGMENT_SHADER: return ".cached_vulkan.frag";
+			case GL_COMPUTE_SHADER:  return ".cached_vulkan.comp";
+		}
+		return ".cached_vulkan.unknown";
+	}
+	
+	const char* OpenGLRHIShader::GetOpenGLCacheExtension(GLenum stage) {
+		switch (stage) {
+			case GL_VERTEX_SHADER:   return ".cached_opengl.vert";
+			case GL_FRAGMENT_SHADER: return ".cached_opengl.frag";
+			case GL_COMPUTE_SHADER:  return ".cached_opengl.comp";
+		}
+		return ".cached_opengl.unknown";
+	}
+	
+	const char* OpenGLRHIShader::StageToString(GLenum stage) {
+		switch (stage) {
+			case GL_VERTEX_SHADER:   return "VERTEX";
+			case GL_FRAGMENT_SHADER: return "FRAGMENT";
+			case GL_COMPUTE_SHADER:  return "COMPUTE";
+		}
+		return "UNKNOWN";
+	}
+
+	// ============================================================================
+	// CONSTRUCTOR - FROM FILE (Graphics shader with #ifdef VERTEX/FRAGMENT)
+	// ============================================================================
+	
+	OpenGLRHIShader::OpenGLRHIShader(const std::string& filePath)
+		: m_FilePath(filePath)
+	{
+		CreateCacheDirectoryIfNeeded();
 		
 		// Extract name from path
 		auto lastSlash = filePath.find_last_of("/\\");
 		auto lastDot = filePath.rfind('.');
-		m_Name = filePath.substr(lastSlash + 1, lastDot - lastSlash - 1);
+		lastSlash = (lastSlash == std::string::npos) ? 0 : lastSlash + 1;
+		m_Name = filePath.substr(lastSlash, lastDot - lastSlash);
 		
-		CompileFromFile(filePath);
+		// Read source
+		std::string source = ReadFile(filePath);
+		if (source.empty()) {
+			LNX_LOG_ERROR("RHIShader: Failed to read file: {0}", filePath);
+			return;
+		}
+		
+		// Prepare sources with defines for #ifdef processing
+		std::unordered_map<GLenum, std::string> shaderSources;
+		shaderSources[GL_VERTEX_SHADER] = InsertDefineAfterVersion(source, "#define VERTEX");
+		shaderSources[GL_FRAGMENT_SHADER] = InsertDefineAfterVersion(source, "#define FRAGMENT");
+		
+		// Compile through SPIR-V pipeline
+		CompileOrGetVulkanBinaries(shaderSources);
+		CompileOrGetOpenGLBinaries();
+		CreateProgram();
+		
+		if (m_ProgramID) {
+			m_Stages = ShaderStage::VertexFragment;
+			LNX_LOG_INFO("RHIShader '{0}' created successfully", m_Name);
+		}
 	}
+	
+	// ============================================================================
+	// CONSTRUCTOR - FROM SEPARATE SOURCES
+	// ============================================================================
 	
 	OpenGLRHIShader::OpenGLRHIShader(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc)
 		: m_Name(name)
 	{
-		CompileFromSource(vertexSrc, fragmentSrc);
+		CreateCacheDirectoryIfNeeded();
+		
+		std::unordered_map<GLenum, std::string> shaderSources;
+		shaderSources[GL_VERTEX_SHADER] = vertexSrc;
+		shaderSources[GL_FRAGMENT_SHADER] = fragmentSrc;
+		
+		CompileOrGetVulkanBinaries(shaderSources);
+		CompileOrGetOpenGLBinaries();
+		CreateProgram();
+		
+		if (m_ProgramID) {
+			m_Stages = ShaderStage::VertexFragment;
+			LNX_LOG_INFO("RHIShader '{0}' created successfully", m_Name);
+		}
+	}
+	
+	// ============================================================================
+	// CONSTRUCTOR - COMPUTE SHADER
+	// ============================================================================
+	
+	OpenGLRHIShader::OpenGLRHIShader(const std::string& filePath, bool isCompute)
+		: m_FilePath(filePath), m_IsCompute(true)
+	{
+		CreateCacheDirectoryIfNeeded();
+		
+		// Extract name
+		auto lastSlash = filePath.find_last_of("/\\");
+		auto lastDot = filePath.rfind('.');
+		lastSlash = (lastSlash == std::string::npos) ? 0 : lastSlash + 1;
+		m_Name = filePath.substr(lastSlash, lastDot - lastSlash);
+		
+		std::string source = ReadFile(filePath);
+		if (source.empty()) {
+			LNX_LOG_ERROR("RHIShader: Failed to read compute shader: {0}", filePath);
+			return;
+		}
+		
+		std::unordered_map<GLenum, std::string> shaderSources;
+		shaderSources[GL_COMPUTE_SHADER] = InsertDefineAfterVersion(source, "#define COMPUTE");
+		
+		CompileOrGetVulkanBinaries(shaderSources);
+		CompileOrGetOpenGLBinaries();
+		CreateProgram();
+		
+		if (m_ProgramID) {
+			m_Stages = ShaderStage::Compute;
+			
+			// Query work group size
+			GLint workGroupSize[3];
+			glGetProgramiv(m_ProgramID, GL_COMPUTE_WORK_GROUP_SIZE, workGroupSize);
+			m_WorkGroupSize[0] = static_cast<uint32_t>(workGroupSize[0]);
+			m_WorkGroupSize[1] = static_cast<uint32_t>(workGroupSize[1]);
+			m_WorkGroupSize[2] = static_cast<uint32_t>(workGroupSize[2]);
+			
+			LNX_LOG_INFO("RHIShader '{0}' (compute) created successfully", m_Name);
+		}
 	}
 	
 	OpenGLRHIShader::~OpenGLRHIShader() {
@@ -35,164 +180,237 @@ namespace RHI {
 		}
 	}
 	
-	void OpenGLRHIShader::CompileFromFile(const std::string& filePath) {
-		std::string source = ReadFile(filePath);
-		if (source.empty()) {
-			LNX_LOG_ERROR("Failed to read shader file: {0}", filePath);
-			return;
-		}
-		
-		std::string vertexSrc, fragmentSrc;
-		ParseShaderSource(source, vertexSrc, fragmentSrc);
-		CompileFromSource(vertexSrc, fragmentSrc);
-	}
-	
-	void OpenGLRHIShader::CompileFromSource(const std::string& vertexSrc, const std::string& fragmentSrc) {
-		GLuint vertexShader = CompileShader(GL_VERTEX_SHADER, vertexSrc);
-		GLuint fragmentShader = CompileShader(GL_FRAGMENT_SHADER, fragmentSrc);
-		
-		if (vertexShader && fragmentShader) {
-			LinkProgram(vertexShader, fragmentShader);
-			m_Stages = ShaderStage::VertexFragment;
-			Reflect();
-		}
-		
-		if (vertexShader) glDeleteShader(vertexShader);
-		if (fragmentShader) glDeleteShader(fragmentShader);
-	}
-	
-	GLuint OpenGLRHIShader::CompileShader(GLenum type, const std::string& source) {
-		GLuint shader = glCreateShader(type);
-		const char* src = source.c_str();
-		glShaderSource(shader, 1, &src, nullptr);
-		glCompileShader(shader);
-		
-		GLint success;
-		glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-		if (!success) {
-			GLint length;
-			glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
-			std::vector<char> log(length);
-			glGetShaderInfoLog(shader, length, nullptr, log.data());
-			
-			const char* typeStr = type == GL_VERTEX_SHADER ? "Vertex" : 
-								  type == GL_FRAGMENT_SHADER ? "Fragment" : "Compute";
-			LNX_LOG_ERROR("{0} shader compilation failed in {1}:\n{2}", typeStr, m_Name, log.data());
-			
-			glDeleteShader(shader);
-			return 0;
-		}
-		
-		return shader;
-	}
-	
-	void OpenGLRHIShader::LinkProgram(GLuint vertexShader, GLuint fragmentShader) {
-		m_ProgramID = glCreateProgram();
-		glAttachShader(m_ProgramID, vertexShader);
-		glAttachShader(m_ProgramID, fragmentShader);
-		glLinkProgram(m_ProgramID);
-		
-		GLint success;
-		glGetProgramiv(m_ProgramID, GL_LINK_STATUS, &success);
-		if (!success) {
-			GLint length;
-			glGetProgramiv(m_ProgramID, GL_INFO_LOG_LENGTH, &length);
-			std::vector<char> log(length);
-			glGetProgramInfoLog(m_ProgramID, length, nullptr, log.data());
-			
-			LNX_LOG_ERROR("Shader link failed for {0}:\n{1}", m_Name, log.data());
-			
-			glDeleteProgram(m_ProgramID);
-			m_ProgramID = 0;
-		}
-	}
-	
-	void OpenGLRHIShader::Reflect() {
-		if (!m_ProgramID) return;
-		
-		// Get active uniforms
-		GLint uniformCount;
-		glGetProgramiv(m_ProgramID, GL_ACTIVE_UNIFORMS, &uniformCount);
-		
-		for (GLint i = 0; i < uniformCount; i++) {
-			char name[256];
-			GLsizei length;
-			GLint size;
-			GLenum type;
-			glGetActiveUniform(m_ProgramID, i, sizeof(name), &length, &size, &type, name);
-			
-			ShaderUniform uniform;
-			uniform.Name = name;
-			uniform.Location = glGetUniformLocation(m_ProgramID, name);
-			uniform.ArraySize = size;
-			
-			// Convert GL type to our type
-			switch (type) {
-				case GL_FLOAT: uniform.Type = DataType::Float; break;
-				case GL_FLOAT_VEC2: uniform.Type = DataType::Float2; break;
-				case GL_FLOAT_VEC3: uniform.Type = DataType::Float3; break;
-				case GL_FLOAT_VEC4: uniform.Type = DataType::Float4; break;
-				case GL_INT: uniform.Type = DataType::Int; break;
-				case GL_INT_VEC2: uniform.Type = DataType::Int2; break;
-				case GL_INT_VEC3: uniform.Type = DataType::Int3; break;
-				case GL_INT_VEC4: uniform.Type = DataType::Int4; break;
-				case GL_FLOAT_MAT3: uniform.Type = DataType::Mat3; break;
-				case GL_FLOAT_MAT4: uniform.Type = DataType::Mat4; break;
-				case GL_BOOL: uniform.Type = DataType::Bool; break;
-				case GL_SAMPLER_2D: case GL_SAMPLER_CUBE: 
-					uniform.Type = DataType::Int; break;
-				default: uniform.Type = DataType::None; break;
-			}
-			
-			m_Reflection.Uniforms.push_back(uniform);
-		}
-		
-		// Get samplers
-		for (const auto& u : m_Reflection.Uniforms) {
-			if (u.Name.find("u_") == 0 || u.Name.find("sampler") != std::string::npos) {
-				ShaderSampler sampler;
-				sampler.Name = u.Name;
-				sampler.Binding = u.Location;
-				m_Reflection.Samplers.push_back(sampler);
-			}
-		}
-	}
+	// ============================================================================
+	// FILE READING
+	// ============================================================================
 	
 	std::string OpenGLRHIShader::ReadFile(const std::string& filePath) {
+		if (filePath.empty()) return "";
+		
+		if (!std::filesystem::exists(filePath)) {
+			LNX_LOG_ERROR("RHIShader: File not found: {0}", filePath);
+			return "";
+		}
+		
 		std::ifstream file(filePath, std::ios::binary);
-		if (!file) return "";
+		if (!file) {
+			LNX_LOG_ERROR("RHIShader: Cannot open file: {0}", filePath);
+			return "";
+		}
 		
 		std::stringstream ss;
 		ss << file.rdbuf();
 		return ss.str();
 	}
 	
-	void OpenGLRHIShader::ParseShaderSource(const std::string& source, std::string& vertexSrc, std::string& fragmentSrc) {
-		// Parse #type directives
-		const char* typeToken = "#type";
-		size_t typeTokenLength = strlen(typeToken);
-		size_t pos = source.find(typeToken, 0);
+	std::string OpenGLRHIShader::InsertDefineAfterVersion(const std::string& source, const std::string& defineLine) {
+		size_t versionPos = source.find("#version");
 		
-		while (pos != std::string::npos) {
-			size_t eol = source.find_first_of("\r\n", pos);
-			size_t begin = pos + typeTokenLength + 1;
-			std::string type = source.substr(begin, eol - begin);
+		if (versionPos == std::string::npos) {
+			return "#version 450 core\n" + defineLine + "\n" + source;
+		}
+		
+		size_t eolPos = source.find('\n', versionPos);
+		if (eolPos == std::string::npos) {
+			return source + "\n" + defineLine;
+		}
+		
+		std::string result = source.substr(0, eolPos + 1);
+		result += defineLine;
+		if (!defineLine.empty() && defineLine.back() != '\n') {
+			result += '\n';
+		}
+		result += source.substr(eolPos + 1);
+		
+		return result;
+	}
+	
+	// ============================================================================
+	// SPIR-V COMPILATION PIPELINE
+	// ============================================================================
+	
+	void OpenGLRHIShader::CompileOrGetVulkanBinaries(const std::unordered_map<GLenum, std::string>& shaderSources) {
+		shaderc::Compiler compiler;
+		shaderc::CompileOptions options;
+		options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
+		options.SetOptimizationLevel(shaderc_optimization_level_performance);
+		
+		auto cacheDir = GetCacheDirectory();
+		m_VulkanSPIRV.clear();
+		
+		for (auto&& [stage, source] : shaderSources) {
+			std::filesystem::path shaderPath = m_FilePath.empty() ? m_Name : m_FilePath;
+			std::filesystem::path cachePath = cacheDir / (shaderPath.filename().string() + GetVulkanCacheExtension(stage));
 			
-			size_t nextLinePos = source.find_first_not_of("\r\n", eol);
-			size_t nextTypePos = source.find(typeToken, nextLinePos);
-			
-			std::string shaderSource = (nextTypePos == std::string::npos) ? 
-				source.substr(nextLinePos) : source.substr(nextLinePos, nextTypePos - nextLinePos);
-			
-			if (type == "vertex") {
-				vertexSrc = shaderSource;
-			} else if (type == "fragment" || type == "pixel") {
-				fragmentSrc = shaderSource;
+			// Try loading from cache
+			bool cacheLoaded = false;
+			if (std::filesystem::exists(cachePath)) {
+				std::ifstream in(cachePath, std::ios::binary);
+				if (in) {
+					in.seekg(0, std::ios::end);
+					size_t size = in.tellg();
+					if (size > 0 && size % sizeof(uint32_t) == 0) {
+						in.seekg(0, std::ios::beg);
+						m_VulkanSPIRV[stage].resize(size / sizeof(uint32_t));
+						in.read(reinterpret_cast<char*>(m_VulkanSPIRV[stage].data()), size);
+						cacheLoaded = in.good() && !m_VulkanSPIRV[stage].empty();
+					}
+				}
 			}
 			
-			pos = nextTypePos;
+			if (!cacheLoaded) {
+				// Compile to Vulkan SPIR-V
+				if (source.empty()) {
+					LNX_LOG_ERROR("RHIShader: Empty source for stage {0}", StageToString(stage));
+					continue;
+				}
+				
+				std::string sourceName = m_FilePath.empty() ? m_Name : m_FilePath;
+				shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
+					source, GLStageToShaderC(stage), sourceName.c_str(), options
+				);
+				
+				if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
+					LNX_LOG_ERROR("RHIShader SPIR-V compilation failed ({0}):\n{1}", 
+						StageToString(stage), module.GetErrorMessage());
+					continue;
+				}
+				
+				m_VulkanSPIRV[stage] = std::vector<uint32_t>(module.cbegin(), module.cend());
+				
+				// Save to cache
+				std::ofstream out(cachePath, std::ios::binary | std::ios::trunc);
+				if (out) {
+					out.write(reinterpret_cast<const char*>(m_VulkanSPIRV[stage].data()),
+							  m_VulkanSPIRV[stage].size() * sizeof(uint32_t));
+				}
+			}
+			
+			// Reflect
+			if (!m_VulkanSPIRV[stage].empty()) {
+				ReflectStage(stage, m_VulkanSPIRV[stage]);
+			}
 		}
 	}
+	
+	void OpenGLRHIShader::CompileOrGetOpenGLBinaries() {
+		m_OpenGLSPIRV.clear();
+		m_OpenGLSourceCode.clear();
+		
+		for (auto&& [stage, spirv] : m_VulkanSPIRV) {
+			if (spirv.empty()) continue;
+			
+			// Cross-compile Vulkan SPIR-V to GLSL
+			try {
+				spirv_cross::CompilerGLSL glslCompiler(spirv);
+				
+				spirv_cross::CompilerGLSL::Options glslOptions;
+				glslOptions.version = 450;
+				glslOptions.es = false;
+				glslOptions.vulkan_semantics = false;
+				glslCompiler.set_common_options(glslOptions);
+				
+				m_OpenGLSourceCode[stage] = glslCompiler.compile();
+			}
+			catch (const std::exception& e) {
+				LNX_LOG_ERROR("RHIShader SPIR-V cross-compilation failed ({0}): {1}", 
+					StageToString(stage), e.what());
+			}
+		}
+	}
+	
+	void OpenGLRHIShader::CreateProgram() {
+		m_ProgramID = glCreateProgram();
+		
+		std::vector<GLuint> shaderIDs;
+		
+		for (auto&& [stage, source] : m_OpenGLSourceCode) {
+			if (source.empty()) continue;
+			
+			GLuint shaderID = glCreateShader(stage);
+			shaderIDs.push_back(shaderID);
+			
+			const char* src = source.c_str();
+			glShaderSource(shaderID, 1, &src, nullptr);
+			glCompileShader(shaderID);
+			
+			GLint success;
+			glGetShaderiv(shaderID, GL_COMPILE_STATUS, &success);
+			if (!success) {
+				GLint length;
+				glGetShaderiv(shaderID, GL_INFO_LOG_LENGTH, &length);
+				std::vector<char> log(length);
+				glGetShaderInfoLog(shaderID, length, nullptr, log.data());
+				LNX_LOG_ERROR("RHIShader compilation failed ({0} - {1}):\n{2}", 
+					m_Name, StageToString(stage), log.data());
+				glDeleteShader(shaderID);
+				shaderIDs.pop_back();
+				continue;
+			}
+			
+			glAttachShader(m_ProgramID, shaderID);
+		}
+		
+		// Link
+		glLinkProgram(m_ProgramID);
+		
+		GLint linked;
+		glGetProgramiv(m_ProgramID, GL_LINK_STATUS, &linked);
+		if (!linked) {
+			GLint length;
+			glGetProgramiv(m_ProgramID, GL_INFO_LOG_LENGTH, &length);
+			std::vector<char> log(length);
+			glGetProgramInfoLog(m_ProgramID, length, nullptr, log.data());
+			LNX_LOG_ERROR("RHIShader link failed ({0}):\n{1}", m_Name, log.data());
+			
+			glDeleteProgram(m_ProgramID);
+			m_ProgramID = 0;
+		}
+		
+		// Cleanup shaders
+		for (GLuint id : shaderIDs) {
+			glDetachShader(m_ProgramID, id);
+			glDeleteShader(id);
+		}
+	}
+	
+	void OpenGLRHIShader::ReflectStage(GLenum stage, const std::vector<uint32_t>& spirvData) {
+		try {
+			spirv_cross::Compiler compiler(spirvData);
+			spirv_cross::ShaderResources resources = compiler.get_shader_resources();
+			
+			// Uniform buffers
+			for (const auto& resource : resources.uniform_buffers) {
+				const auto& type = compiler.get_type(resource.base_type_id);
+				
+				ShaderUniformBlock block;
+				block.Name = resource.name;
+				block.Binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
+				block.Size = static_cast<uint32_t>(compiler.get_declared_struct_size(type));
+				
+				m_Reflection.UniformBlocks.push_back(block);
+			}
+			
+			// Samplers
+			for (const auto& resource : resources.sampled_images) {
+				ShaderSampler sampler;
+				sampler.Name = resource.name;
+				sampler.Binding = compiler.get_decoration(resource.id, spv::DecorationBinding);
+				
+				const auto& type = compiler.get_type(resource.type_id);
+				sampler.IsCube = (type.image.dim == spv::DimCube);
+				
+				m_Reflection.Samplers.push_back(sampler);
+			}
+			
+		} catch (const std::exception& e) {
+			LNX_LOG_WARN("RHIShader reflection failed for {0}: {1}", m_Name, e.what());
+		}
+	}
+	
+	// ============================================================================
+	// BINDING
+	// ============================================================================
 	
 	void OpenGLRHIShader::Bind() const {
 		if (m_ProgramID) {
@@ -203,6 +421,10 @@ namespace RHI {
 	void OpenGLRHIShader::Unbind() const {
 		glUseProgram(0);
 	}
+	
+	// ============================================================================
+	// UNIFORMS
+	// ============================================================================
 	
 	int OpenGLRHIShader::GetUniformLocation(const std::string& name) const {
 		auto it = m_UniformLocationCache.find(name);
@@ -247,10 +469,15 @@ namespace RHI {
 		glUniformMatrix4fv(GetUniformLocation(name), 1, GL_FALSE, glm::value_ptr(value));
 	}
 	
+	// ============================================================================
+	// COMPUTE
+	// ============================================================================
+	
 	void OpenGLRHIShader::Dispatch(uint32_t groupsX, uint32_t groupsY, uint32_t groupsZ) {
-		if (m_ProgramID && IsCompute()) {
+		if (m_ProgramID && m_IsCompute) {
 			Bind();
 			glDispatchCompute(groupsX, groupsY, groupsZ);
+			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 		}
 	}
 	
@@ -260,23 +487,57 @@ namespace RHI {
 		z = m_WorkGroupSize[2];
 	}
 	
+	// ============================================================================
+	// HOT RELOAD
+	// ============================================================================
+	
 	bool OpenGLRHIShader::Reload() {
 		if (m_FilePath.empty()) return false;
 		
+		// Delete cache files to force recompilation
+		auto cacheDir = GetCacheDirectory();
+		std::filesystem::path shaderPath = m_FilePath;
+		
+		for (GLenum stage : {GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_COMPUTE_SHADER}) {
+			std::filesystem::path vulkanCache = cacheDir / (shaderPath.filename().string() + GetVulkanCacheExtension(stage));
+			std::filesystem::path openglCache = cacheDir / (shaderPath.filename().string() + GetOpenGLCacheExtension(stage));
+			
+			if (std::filesystem::exists(vulkanCache)) std::filesystem::remove(vulkanCache);
+			if (std::filesystem::exists(openglCache)) std::filesystem::remove(openglCache);
+		}
+		
+		// Store old program
 		GLuint oldProgram = m_ProgramID;
 		m_ProgramID = 0;
+		m_VulkanSPIRV.clear();
+		m_OpenGLSPIRV.clear();
+		m_OpenGLSourceCode.clear();
 		m_UniformLocationCache.clear();
-		m_Reflection = ShaderReflection{};
 		
-		CompileFromFile(m_FilePath);
+		// Recompile
+		std::string source = ReadFile(m_FilePath);
+		if (!source.empty()) {
+			std::unordered_map<GLenum, std::string> shaderSources;
+			
+			if (m_IsCompute) {
+				shaderSources[GL_COMPUTE_SHADER] = InsertDefineAfterVersion(source, "#define COMPUTE");
+			} else {
+				shaderSources[GL_VERTEX_SHADER] = InsertDefineAfterVersion(source, "#define VERTEX");
+				shaderSources[GL_FRAGMENT_SHADER] = InsertDefineAfterVersion(source, "#define FRAGMENT");
+			}
+			
+			CompileOrGetVulkanBinaries(shaderSources);
+			CompileOrGetOpenGLBinaries();
+			CreateProgram();
+		}
 		
 		if (m_ProgramID) {
 			glDeleteProgram(oldProgram);
-			LNX_LOG_INFO("Shader reloaded: {0}", m_Name);
+			LNX_LOG_INFO("RHIShader '{0}' reloaded successfully", m_Name);
 			return true;
 		} else {
 			m_ProgramID = oldProgram;
-			LNX_LOG_WARN("Shader reload failed, keeping old: {0}", m_Name);
+			LNX_LOG_WARN("RHIShader '{0}' reload failed, keeping old shader", m_Name);
 			return false;
 		}
 	}
@@ -288,7 +549,7 @@ namespace RHI {
 	}
 
 	// ============================================================================
-	// OPENGL GRAPHICS PIPELINE IMPLEMENTATION
+	// OPENGL GRAPHICS PIPELINE
 	// ============================================================================
 	
 	OpenGLRHIGraphicsPipeline::OpenGLRHIGraphicsPipeline(const GraphicsPipelineDesc& desc) {
@@ -296,12 +557,9 @@ namespace RHI {
 	}
 	
 	void OpenGLRHIGraphicsPipeline::Bind() const {
-		// Bind shader
 		if (m_Desc.Shader) {
 			m_Desc.Shader->Bind();
 		}
-		
-		// Apply fixed function states
 		ApplyRasterizerState();
 		ApplyDepthStencilState();
 		ApplyBlendState();
@@ -316,7 +574,6 @@ namespace RHI {
 	void OpenGLRHIGraphicsPipeline::ApplyRasterizerState() const {
 		const auto& rs = m_Desc.Rasterizer;
 		
-		// Culling
 		if (rs.Culling == CullMode::None) {
 			glDisable(GL_CULL_FACE);
 		} else {
@@ -324,13 +581,9 @@ namespace RHI {
 			glCullFace(rs.Culling == CullMode::Front ? GL_FRONT : GL_BACK);
 		}
 		
-		// Front face
 		glFrontFace(rs.WindingOrder == FrontFace::CounterClockwise ? GL_CCW : GL_CW);
-		
-		// Fill mode
 		glPolygonMode(GL_FRONT_AND_BACK, rs.Fill == FillMode::Wireframe ? GL_LINE : GL_FILL);
 		
-		// Depth bias
 		if (rs.DepthBias != 0.0f || rs.SlopeScaledDepthBias != 0.0f) {
 			glEnable(GL_POLYGON_OFFSET_FILL);
 			glPolygonOffset(rs.SlopeScaledDepthBias, rs.DepthBias);
@@ -338,7 +591,6 @@ namespace RHI {
 			glDisable(GL_POLYGON_OFFSET_FILL);
 		}
 		
-		// Scissor
 		if (rs.ScissorEnabled) {
 			glEnable(GL_SCISSOR_TEST);
 		} else {
@@ -349,17 +601,14 @@ namespace RHI {
 	void OpenGLRHIGraphicsPipeline::ApplyDepthStencilState() const {
 		const auto& ds = m_Desc.DepthStencil;
 		
-		// Depth test
 		if (ds.DepthTestEnabled) {
 			glEnable(GL_DEPTH_TEST);
 		} else {
 			glDisable(GL_DEPTH_TEST);
 		}
 		
-		// Depth write
 		glDepthMask(ds.DepthWriteEnabled ? GL_TRUE : GL_FALSE);
 		
-		// Depth function
 		GLenum depthFunc = GL_LESS;
 		switch (ds.DepthCompareFunc) {
 			case CompareFunc::Never: depthFunc = GL_NEVER; break;
@@ -373,7 +622,6 @@ namespace RHI {
 		}
 		glDepthFunc(depthFunc);
 		
-		// Stencil test
 		if (ds.StencilTestEnabled) {
 			glEnable(GL_STENCIL_TEST);
 			glStencilMask(ds.StencilWriteMask);
@@ -425,7 +673,7 @@ namespace RHI {
 	}
 
 	// ============================================================================
-	// OPENGL COMPUTE PIPELINE IMPLEMENTATION
+	// OPENGL COMPUTE PIPELINE
 	// ============================================================================
 	
 	OpenGLRHIComputePipeline::OpenGLRHIComputePipeline(const ComputePipelineDesc& desc) {
@@ -435,6 +683,12 @@ namespace RHI {
 	void OpenGLRHIComputePipeline::Bind() const {
 		if (m_Desc.Shader) {
 			m_Desc.Shader->Bind();
+		}
+	}
+	
+	void OpenGLRHIComputePipeline::Unbind() const {
+		if (m_Desc.Shader) {
+			m_Desc.Shader->Unbind();
 		}
 	}
 	
@@ -466,12 +720,14 @@ namespace RHI {
 		return CreateRef<OpenGLRHIShader>(name, vertexSource, fragmentSource);
 	}
 	
-	Ref<RHIGraphicsPipeline> RHIGraphicsPipeline::Create(const GraphicsPipelineDesc& desc) {
-		return CreateRef<OpenGLRHIGraphicsPipeline>(desc);
+	Ref<RHIShader> RHIShader::CreateComputeFromFile(const std::string& filePath) {
+		return CreateRef<OpenGLRHIShader>(filePath, true);
 	}
 	
-	Ref<RHIComputePipeline> RHIComputePipeline::Create(const ComputePipelineDesc& desc) {
-		return CreateRef<OpenGLRHIComputePipeline>(desc);
+	Ref<RHIShader> RHIShader::CreateComputeFromSource(const std::string& name, const std::string& source) {
+		// For compute from source, we need to handle it differently
+		auto shader = CreateRef<OpenGLRHIShader>(name, source, ""); // Empty fragment
+		return shader;
 	}
 
 } // namespace RHI

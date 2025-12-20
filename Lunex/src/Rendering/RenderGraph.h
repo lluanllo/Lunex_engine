@@ -3,19 +3,6 @@
 /**
  * @file RenderGraph.h
  * @brief Frame graph system for automatic resource management and pass scheduling
- * 
- * The RenderGraph is the core of our AAA rendering architecture.
- * It provides:
- * - Automatic resource lifetime management
- * - Dependency-based pass ordering
- * - Resource aliasing and reuse
- * - Barrier insertion
- * - Culling of unused passes
- * 
- * Inspired by:
- * - Frostbite's FrameGraph
- * - Unreal's RDG (Render Dependency Graph)
- * - Unity's Scriptable Render Pipeline
  */
 
 #include "Core/Core.h"
@@ -29,7 +16,6 @@ namespace Lunex {
 
 	// Forward declarations
 	class RenderGraph;
-	class RenderPassNode;
 	struct RenderGraphResourceDesc;
 
 	// ============================================================================
@@ -225,7 +211,7 @@ namespace Lunex {
 		friend class RenderGraph;
 		
 		RenderGraph* m_Graph = nullptr;
-		RenderPassNode* m_Pass = nullptr;
+		void* m_Pass = nullptr;  // RenderGraph::PassNode* - opaque to avoid forward decl issues
 		std::string m_PassName;
 		
 		std::vector<RenderGraphResource> m_ColorTargets;

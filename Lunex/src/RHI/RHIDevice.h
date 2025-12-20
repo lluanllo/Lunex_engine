@@ -3,26 +3,12 @@
 /**
  * @file RHIDevice.h
  * @brief GPU Device abstraction - Factory for creating all RHI resources
- * 
- * The RHIDevice represents a physical GPU and provides methods to:
- * - Create all GPU resources (buffers, textures, shaders, etc.)
- * - Query device capabilities
- * - Manage resource pools and caches
  */
 
 #include "RHITypes.h"
 #include "RHIResource.h"
 
-// Forward declare GLM types to avoid header dependency
-namespace glm {
-	template<typename T, int N> struct vec;
-	using vec2 = vec<float, 2>;
-	using vec3 = vec<float, 3>;
-	using vec4 = vec<float, 4>;
-	template<typename T, int C, int R> struct mat;
-	using mat3 = mat<float, 3, 3>;
-	using mat4 = mat<float, 4, 4>;
-}
+#include <glm/glm.hpp>
 
 namespace Lunex {
 namespace RHI {
@@ -353,10 +339,17 @@ namespace RHI {
 		 * @brief Get the global device instance
 		 * @return The current active device
 		 */
-		static RHIDevice* Get();
+		static RHIDevice* Get() { return s_Instance; }  // ? Make inline public
 		
 	protected:
 		static RHIDevice* s_Instance;
+		
+		// Protected constructor - use Create() factory
+		RHIDevice() = default;
+		
+		// Allow RHI module to access s_Instance
+		friend void Shutdown();
+		friend bool Initialize(GraphicsAPI api, void* windowHandle);
 	};
 
 } // namespace RHI

@@ -9,6 +9,58 @@
 #include "RHI/RHISampler.h"
 #include <glad/glad.h>
 
+// ============================================================================
+// FALLBACK DEFINES FOR MISSING GLAD EXTENSIONS
+// ============================================================================
+
+#ifndef GL_COMPRESSED_RGB_S3TC_DXT1_EXT
+#define GL_COMPRESSED_RGB_S3TC_DXT1_EXT 0x83F0
+#endif
+
+#ifndef GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
+#define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 0x83F1
+#endif
+
+#ifndef GL_COMPRESSED_RGBA_S3TC_DXT3_EXT
+#define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 0x83F2
+#endif
+
+#ifndef GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
+#define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
+#endif
+
+#ifndef GL_COMPRESSED_SRGB_S3TC_DXT1_EXT
+#define GL_COMPRESSED_SRGB_S3TC_DXT1_EXT 0x8C4C
+#endif
+
+#ifndef GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT
+#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT 0x8C4D
+#endif
+
+#ifndef GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT
+#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT 0x8C4E
+#endif
+
+#ifndef GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT
+#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT 0x8C4F
+#endif
+
+#ifndef GL_COMPRESSED_RED_RGTC1
+#define GL_COMPRESSED_RED_RGTC1 0x8DBB
+#endif
+
+#ifndef GL_COMPRESSED_RG_RGTC2
+#define GL_COMPRESSED_RG_RGTC2 0x8DBD
+#endif
+
+#ifndef GL_COMPRESSED_RGBA_BPTC_UNORM
+#define GL_COMPRESSED_RGBA_BPTC_UNORM 0x8E8C
+#endif
+
+#ifndef GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM
+#define GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM 0x8E8D
+#endif
+
 namespace Lunex {
 namespace RHI {
 
@@ -184,8 +236,8 @@ namespace RHI {
 		bool IsValid() const override { return m_TextureID != 0; }
 		
 		// Data operations
-		void SetData(const void* data, uint64_t size, const TextureRegion& region = {}) override;
-		void GetData(void* data, uint64_t size, const TextureRegion& region = {}) const override;
+		void SetData(const void* data, uint64_t size, const TextureRegion& region) override;
+		void GetData(void* data, uint64_t size, const TextureRegion& region) const override;
 		void GenerateMipmaps() override;
 		
 		// Binding
@@ -225,8 +277,8 @@ namespace RHI {
 		bool IsValid() const override { return m_TextureID != 0; }
 		
 		// Data operations
-		void SetData(const void* data, uint64_t size, const TextureRegion& region = {}) override;
-		void GetData(void* data, uint64_t size, const TextureRegion& region = {}) const override;
+		void SetData(const void* data, uint64_t size, const TextureRegion& region) override;
+		void GetData(void* data, uint64_t size, const TextureRegion& region) const override;
 		void GenerateMipmaps() override;
 		void SetFaceData(uint32_t face, const void* data, uint64_t size, uint32_t mipLevel = 0) override;
 		

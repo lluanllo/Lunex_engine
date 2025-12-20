@@ -8,6 +8,11 @@
 #include "RHI/RHIContext.h"
 #include <glad/glad.h>
 
+// Fallback for missing GLAD extensions
+#ifndef GLAD_GL_KHR_debug
+#define GLAD_GL_KHR_debug 0
+#endif
+
 struct GLFWwindow;
 
 namespace Lunex {

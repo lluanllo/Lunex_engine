@@ -2,12 +2,15 @@
 
 /**
  * @file OpenGLRHIShader.h
- * @brief OpenGL implementation of RHI shader and pipeline
+ * @brief OpenGL implementation of RHI shader with SPIR-V compilation pipeline
  */
 
 #include "RHI/RHIShader.h"
 #include "RHI/RHIPipeline.h"
 #include <glad/glad.h>
+#include <unordered_map>
+#include <vector>
+#include <filesystem>
 
 namespace Lunex {
 namespace RHI {
@@ -18,8 +21,15 @@ namespace RHI {
 	
 	class OpenGLRHIShader : public RHIShader {
 	public:
+		// Standard graphics shader from file (supports #ifdef VERTEX/#ifdef FRAGMENT format)
 		OpenGLRHIShader(const std::string& filePath);
+		
+		// Graphics shader from separate sources
 		OpenGLRHIShader(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc);
+		
+		// Compute shader from file
+		OpenGLRHIShader(const std::string& filePath, bool isCompute);
+		
 		virtual ~OpenGLRHIShader();
 		
 		// RHIResource
@@ -30,7 +40,7 @@ namespace RHI {
 		const std::string& GetName() const override { return m_Name; }
 		const std::string& GetFilePath() const override { return m_FilePath; }
 		ShaderStage GetStages() const override { return m_Stages; }
-		bool IsCompute() const override { return HasFlag(m_Stages, ShaderStage::Compute); }
+		bool IsCompute() const override { return m_IsCompute; }
 		const ShaderReflection& GetReflection() const override { return m_Reflection; }
 		
 		// Binding
@@ -62,22 +72,45 @@ namespace RHI {
 		void OnDebugNameChanged() override;
 		
 	private:
-		void CompileFromFile(const std::string& filePath);
-		void CompileFromSource(const std::string& vertexSrc, const std::string& fragmentSrc);
-		GLuint CompileShader(GLenum type, const std::string& source);
-		void LinkProgram(GLuint vertexShader, GLuint fragmentShader);
-		void Reflect();
+		// File reading
 		std::string ReadFile(const std::string& filePath);
-		void ParseShaderSource(const std::string& source, std::string& vertexSrc, std::string& fragmentSrc);
 		
+		// Source preprocessing (handles #ifdef VERTEX/FRAGMENT format)
+		std::string InsertDefineAfterVersion(const std::string& source, const std::string& defineLine);
+		
+		// SPIR-V compilation pipeline
+		void CompileOrGetVulkanBinaries(const std::unordered_map<GLenum, std::string>& shaderSources);
+		void CompileOrGetOpenGLBinaries();
+		void CreateProgram();
+		
+		// Reflection from SPIR-V
+		void ReflectStage(GLenum stage, const std::vector<uint32_t>& spirvData);
+		
+		// Cache utilities
+		static std::filesystem::path GetCacheDirectory();
+		static void CreateCacheDirectoryIfNeeded();
+		static const char* GetVulkanCacheExtension(GLenum stage);
+		static const char* GetOpenGLCacheExtension(GLenum stage);
+		static const char* StageToString(GLenum stage);
+		
+		// Program data
 		GLuint m_ProgramID = 0;
 		std::string m_Name;
 		std::string m_FilePath;
 		ShaderStage m_Stages = ShaderStage::None;
 		ShaderReflection m_Reflection;
+		bool m_IsCompute = false;
 		
+		// SPIR-V data (for caching and reflection)
+		std::unordered_map<GLenum, std::vector<uint32_t>> m_VulkanSPIRV;
+		std::unordered_map<GLenum, std::vector<uint32_t>> m_OpenGLSPIRV;
+		std::unordered_map<GLenum, std::string> m_OpenGLSourceCode;
+		
+		// Uniform cache
 		mutable std::unordered_map<std::string, int> m_UniformLocationCache;
-		uint32_t m_WorkGroupSize[3] = { 0, 0, 0 };
+		
+		// Compute work group size
+		uint32_t m_WorkGroupSize[3] = { 1, 1, 1 };
 	};
 
 	// ============================================================================
@@ -90,7 +123,7 @@ namespace RHI {
 		virtual ~OpenGLRHIGraphicsPipeline() = default;
 		
 		// RHIResource
-		RHIHandle GetNativeHandle() const override { return 0; }  // OpenGL doesn't have pipeline objects
+		RHIHandle GetNativeHandle() const override { return 0; }
 		bool IsValid() const override { return m_Desc.Shader != nullptr; }
 		
 		// Binding
@@ -121,6 +154,7 @@ namespace RHI {
 		
 		// Binding and dispatch
 		void Bind() const override;
+		void Unbind() const override;
 		void Dispatch(uint32_t groupsX, uint32_t groupsY, uint32_t groupsZ) const override;
 		void GetWorkGroupSize(uint32_t& x, uint32_t& y, uint32_t& z) const override;
 		

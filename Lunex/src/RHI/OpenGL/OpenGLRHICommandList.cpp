@@ -5,7 +5,22 @@
 #include "OpenGLRHIShader.h"
 #include "OpenGLRHIFramebuffer.h"
 #include "OpenGLRHIDevice.h"
+#include "RHI/RHICommandList.h"  // ADD: Ensure ResourceBarrier is visible
+#include "RHI/RHIContext.h"
 #include "Log/Log.h"
+
+// Fallback defines for missing GLAD extensions
+#ifndef GLAD_GL_KHR_debug
+#define GLAD_GL_KHR_debug 0
+#endif
+
+#ifndef GLAD_GL_ARB_indirect_parameters
+#define GLAD_GL_ARB_indirect_parameters 0
+#endif
+
+#ifndef GL_PARAMETER_BUFFER
+#define GL_PARAMETER_BUFFER 0x80EE
+#endif
 
 namespace Lunex {
 namespace RHI {
@@ -171,7 +186,7 @@ namespace RHI {
 		}
 	}
 	
-	void OpenGLRHICommandList::ResourceBarriers(const ResourceBarrier* barriers, uint32_t count) {
+	void OpenGLRHICommandList::ResourceBarriers(const RHI::ResourceBarrier* barriers, uint32_t count) {
 		// OpenGL doesn't have explicit barriers like Vulkan, but we can use memory barriers
 		GLbitfield barrierBits = 0;
 		
@@ -249,6 +264,22 @@ namespace RHI {
 			glDebugMessageInsert(GL_DEBUG_SOURCE_APPLICATION, GL_DEBUG_TYPE_MARKER,
 								0, GL_DEBUG_SEVERITY_NOTIFICATION, -1, name.c_str());
 		}
+	}
+
+	// ============================================================================
+	// FACTORY IMPLEMENTATIONS
+	// ============================================================================
+	
+	Ref<RHICommandList> RHICommandList::CreateGraphics() {
+		return CreateRef<OpenGLRHICommandList>();
+	}
+	
+	Ref<RHICommandList> RHICommandList::CreateCompute() {
+		return CreateRef<OpenGLRHICommandList>();
+	}
+	
+	Ref<RHICommandList> RHICommandList::CreateCopy() {
+		return CreateRef<OpenGLRHICommandList>();
 	}
 
 } // namespace RHI

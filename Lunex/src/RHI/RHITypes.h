@@ -540,6 +540,25 @@ namespace RHI {
 	};
 
 	// ============================================================================
+	// TEXTURE REGION (for copy operations)
+	// ============================================================================
+	
+	struct TextureRegion {
+		uint32_t MipLevel = 0;
+		uint32_t ArrayLayer = 0;
+		
+		// Offset
+		int32_t X = 0;
+		int32_t Y = 0;
+		int32_t Z = 0;
+		
+		// Size (0 = entire dimension)
+		uint32_t Width = 0;
+		uint32_t Height = 0;
+		uint32_t Depth = 1;
+	};
+
+	// ============================================================================
 	// RESOURCE STATES (for barriers)
 	// ============================================================================
 	

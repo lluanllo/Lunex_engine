@@ -2,6 +2,28 @@
 #include "OpenGLRHIDevice.h"
 #include "Log/Log.h"
 
+// Fallback defines for missing GLAD extensions
+#ifndef GLAD_GL_KHR_debug
+#define GLAD_GL_KHR_debug 0
+#endif
+
+#ifndef GLAD_GL_EXT_texture_filter_anisotropic
+#define GLAD_GL_EXT_texture_filter_anisotropic 0
+#define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
+#endif
+
+#ifndef GLAD_GL_EXT_texture_compression_s3tc
+#define GLAD_GL_EXT_texture_compression_s3tc 0
+#endif
+
+#ifndef GLAD_GL_ARB_ES3_compatibility
+#define GLAD_GL_ARB_ES3_compatibility 0
+#endif
+
+#ifndef GLAD_GL_KHR_texture_compression_astc_ldr
+#define GLAD_GL_KHR_texture_compression_astc_ldr 0
+#endif
+
 namespace Lunex {
 namespace RHI {
 

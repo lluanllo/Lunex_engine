@@ -1,11 +1,7 @@
 #pragma once
 
-/**
- * @file EnvironmentPass.h
- * @brief Environment and skybox rendering passes
- */
-
 #include "Rendering/RenderPass.h"
+#include <glm/glm.hpp>  // ? ADD THIS
 
 namespace Lunex {
 

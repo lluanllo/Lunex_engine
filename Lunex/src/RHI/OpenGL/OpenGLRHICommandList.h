@@ -3,16 +3,17 @@
 /**
  * @file OpenGLRHICommandList.h
  * @brief OpenGL implementation of RHI command list (immediate mode)
- * 
- * Note: OpenGL doesn't have true command buffers like Vulkan/DX12.
- * This implementation executes commands immediately.
  */
 
 #include "RHI/RHICommandList.h"
+#include "RHI/RHITypes.h"  // ADD: Ensure all types are visible
 #include <glad/glad.h>
 
 namespace Lunex {
 namespace RHI {
+
+	// Forward declare if needed
+	struct ResourceBarrier;
 
 	class OpenGLRHICommandList : public RHICommandList {
 	public:
@@ -70,7 +71,7 @@ namespace RHI {
 		void DispatchIndirect(const RHIBuffer* argsBuffer, uint64_t offset) override;
 		
 		// Barriers
-		void ResourceBarriers(const ResourceBarrier* barriers, uint32_t count) override;
+		void ResourceBarriers(const RHI::ResourceBarrier* barriers, uint32_t count) override;  // ADD: fully qualify type
 		void MemoryBarrier() override;
 		
 		// Copy operations
@@ -102,19 +103,6 @@ namespace RHI {
 		const RHIComputePipeline* m_CurrentComputePipeline = nullptr;
 		IndexType m_CurrentIndexType = IndexType::UInt32;
 	};
-
-	// Factory
-	Ref<RHICommandList> RHICommandList::CreateGraphics() {
-		return CreateRef<OpenGLRHICommandList>();
-	}
-	
-	Ref<RHICommandList> RHICommandList::CreateCompute() {
-		return CreateRef<OpenGLRHICommandList>();
-	}
-	
-	Ref<RHICommandList> RHICommandList::CreateCopy() {
-		return CreateRef<OpenGLRHICommandList>();
-	}
 
 } // namespace RHI
 } // namespace Lunex

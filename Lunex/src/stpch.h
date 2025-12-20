@@ -13,6 +13,13 @@
 #include <unordered_map>
 #include <unordered_set>
 
+// ============================================
+// GLM - Include FIRST to prevent forward declaration conflicts
+// ============================================
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 #include "Log/Log.h"
 
 #include "Debug/Instrumentor.h"
