@@ -1,8 +1,42 @@
 #pragma once
 
+/**
+ * @file RenderCommand.h
+ * @brief Immediate-mode rendering commands facade
+ * 
+ * @note DEPRECATION NOTICE: This class is being phased out in favor of the RHI layer.
+ * 
+ * Migration Path:
+ * - For new code: Use RHI::RHICommandList directly
+ * - For existing code: Continue using RenderCommand until migrated
+ * 
+ * Usage in Legacy Code:
+ * - Renderer2D::Flush() uses RenderCommand for batched 2D rendering
+ * - Mesh::Draw() uses RenderCommand for 3D mesh rendering
+ * - Renderer::Init() uses RenderCommand for OpenGL initialization
+ * 
+ * RHI Equivalents:
+ * - RenderCommand::DrawIndexed() -> RHICommandList::DrawIndexed()
+ * - RenderCommand::SetViewport() -> RHICommandList::SetViewport()
+ * - RenderCommand::Clear() -> RHICommandList::ClearRenderTarget()
+ * 
+ * This class will be removed once:
+ * 1. Renderer2D is migrated to use RHI command lists
+ * 2. Mesh rendering uses RHI pipelines
+ * 3. All immediate OpenGL state is managed through RHI
+ */
+
 #include "RendererAPI.h"
 
 namespace Lunex {
+	
+	/**
+	 * @class RenderCommand
+	 * @brief Static facade for immediate-mode rendering commands
+	 * 
+	 * @note For new rendering code, prefer using RHI::RHICommandList.
+	 *       This class remains for backward compatibility with Renderer2D and Mesh.
+	 */
 	class RenderCommand {
 		public:
 			static void Init() {

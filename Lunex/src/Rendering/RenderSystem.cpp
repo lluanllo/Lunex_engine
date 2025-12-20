@@ -1,5 +1,6 @@
 #include "stpch.h"
 #include "RenderSystem.h"
+#include "RenderPassJob.h"
 #include "Log/Log.h"
 #include "Scene/Entity.h"
 #include "Scene/Components.h"
@@ -7,6 +8,7 @@
 #include "Renderer/Renderer3D.h"
 #include "Renderer/SkyboxRenderer.h"
 #include "Renderer/GridRenderer.h"
+#include "Core/JobSystem/JobSystem.h"
 
 namespace Lunex {
 
@@ -32,6 +34,9 @@ namespace Lunex {
 		s_State->Graph->SetSwapchainSize(config.ViewportWidth, config.ViewportHeight);
 		s_State->Graph->SetEnablePassCulling(true);
 		
+		// Create job scheduler for parallel pass execution
+		s_State->JobScheduler = CreateScope<RenderJobScheduler>();
+		
 		// Create render passes (from GeometryPass.h)
 		s_State->GeometryPassPtr = CreateScope<GeometryPass>();
 		s_State->TransparentPassPtr = CreateScope<TransparentPass>();
@@ -48,13 +53,19 @@ namespace Lunex {
 		
 		s_State->Initialized = true;
 		
-		LNX_LOG_INFO("RenderSystem initialized successfully with 8 passes");
+		LNX_LOG_INFO("RenderSystem initialized successfully with 8 passes (parallel={0})", 
+			config.EnableParallelPasses ? "enabled" : "disabled");
 	}
 	
 	void RenderSystem::Shutdown() {
 		if (!s_State) return;
 		
 		LNX_LOG_INFO("Shutting down RenderSystem...");
+		
+		// Wait for any pending jobs
+		if (s_State->JobScheduler) {
+			s_State->JobScheduler->WaitForCompletion();
+		}
 		
 		delete s_State;
 		s_State = nullptr;
@@ -69,11 +80,21 @@ namespace Lunex {
 		
 		// Reset render graph for new frame
 		s_State->Graph->Reset();
+		
+		// Clear job scheduler
+		s_State->JobScheduler->Clear();
+		
+		// Increment scene version for job cancellation
+		s_State->CurrentSceneVersion++;
 	}
 	
 	void RenderSystem::EndFrame() {
 		if (!s_State || !s_State->Initialized) return;
-		// Nothing to do here for now
+		
+		// Wait for any pending parallel jobs
+		if (s_State->Config.EnableParallelPasses) {
+			s_State->JobScheduler->WaitForCompletion();
+		}
 	}
 
 	// ============================================================================
@@ -103,7 +124,12 @@ namespace Lunex {
 			LNX_LOG_INFO("RenderGraph:\n{0}", graphViz);
 		}
 		
-		s_State->Graph->Execute();
+		// Execute with parallel passes if enabled
+		if (s_State->Config.EnableParallelPasses) {
+			ExecuteRenderGraphParallel();
+		} else {
+			s_State->Graph->Execute();
+		}
 	}
 	
 	void RenderSystem::RenderScene(Scene* scene, Entity cameraEntity) {
@@ -132,7 +158,12 @@ namespace Lunex {
 		// Build and execute
 		BuildRenderGraph();
 		s_State->Graph->Compile();
-		s_State->Graph->Execute();
+		
+		if (s_State->Config.EnableParallelPasses) {
+			ExecuteRenderGraphParallel();
+		} else {
+			s_State->Graph->Execute();
+		}
 	}
 
 	// ============================================================================
@@ -250,6 +281,65 @@ namespace Lunex {
 		s_State->FinalColorTarget = s_State->GeometryPassPtr->GetColorOutput();
 		graph.SetBackbufferSource(s_State->FinalColorTarget);
 	}
+	
+	// ============================================================================
+	// PARALLEL RENDER GRAPH EXECUTION
+	// ============================================================================
+	
+	void RenderSystem::ExecuteRenderGraphParallel() {
+		auto& sceneInfo = s_State->CurrentSceneInfo;
+		auto& scheduler = *s_State->JobScheduler;
+		
+		// Create jobs for each render pass
+		// Note: OpenGL requires most operations on main thread, so for now
+		// we schedule sequentially but with JobSystem infrastructure ready
+		
+		// GeometryPass Job (depends on nothing)
+		auto geometryJob = CreateRef<RenderPassJob>(s_State->GeometryPassPtr.get(), s_State->Graph.get());
+		scheduler.AddJob(geometryJob);
+		
+		// SkyboxPass Job (depends on GeometryPass)
+		if (s_State->SkyboxPassPtr->ShouldExecute(sceneInfo)) {
+			auto skyboxJob = CreateRef<RenderPassJob>(s_State->SkyboxPassPtr.get(), s_State->Graph.get());
+			skyboxJob->AddDependency(geometryJob.get());
+			scheduler.AddJob(skyboxJob);
+		}
+		
+		// TransparentPass Job (depends on GeometryPass)
+		auto transparentJob = CreateRef<RenderPassJob>(s_State->TransparentPassPtr.get(), s_State->Graph.get());
+		transparentJob->AddDependency(geometryJob.get());
+		scheduler.AddJob(transparentJob);
+		
+		// Editor passes (depend on previous passes)
+		if (s_State->GridPassPtr->ShouldExecute(sceneInfo)) {
+			auto gridJob = CreateRef<RenderPassJob>(s_State->GridPassPtr.get(), s_State->Graph.get());
+			gridJob->AddDependency(transparentJob.get());
+			scheduler.AddJob(gridJob);
+		}
+		
+		if (s_State->GizmoPassPtr->ShouldExecute(sceneInfo)) {
+			auto gizmoJob = CreateRef<RenderPassJob>(s_State->GizmoPassPtr.get(), s_State->Graph.get());
+			gizmoJob->AddDependency(transparentJob.get());
+			scheduler.AddJob(gizmoJob);
+		}
+		
+		if (s_State->SelectionOutlinePassPtr->ShouldExecute(sceneInfo)) {
+			auto outlineJob = CreateRef<RenderPassJob>(s_State->SelectionOutlinePassPtr.get(), s_State->Graph.get());
+			outlineJob->AddDependency(transparentJob.get());
+			scheduler.AddJob(outlineJob);
+		}
+		
+		// Prepare all jobs with scene info
+		RenderPassJobData jobData;
+		jobData.SceneInfo = &sceneInfo;
+		jobData.SceneVersion = s_State->CurrentSceneVersion;
+		
+		// Execute all scheduled jobs
+		auto counter = scheduler.Execute(s_State->CurrentSceneVersion);
+		
+		// For OpenGL, we must wait for completion (no async submit)
+		scheduler.WaitForCompletion();
+	}
 
 	// ============================================================================
 	// PUBLIC API
@@ -281,6 +371,11 @@ namespace Lunex {
 		return s_State && s_State->Graph ? s_State->Graph->GetStatistics() : dummy;
 	}
 	
+	const RenderJobScheduler::Statistics& RenderSystem::GetJobSchedulerStatistics() {
+		static RenderJobScheduler::Statistics dummy;
+		return s_State && s_State->JobScheduler ? s_State->JobScheduler->GetStatistics() : dummy;
+	}
+	
 	std::string RenderSystem::ExportRenderGraphViz() {
 		if (!s_State || !s_State->Graph) return "";
 		return s_State->Graph->ExportGraphViz();
@@ -301,6 +396,14 @@ namespace Lunex {
 	int RenderSystem::GetEntityAtScreenPos(int x, int y) {
 		// TODO: Implement entity picking from framebuffer
 		return -1;
+	}
+	
+	void RenderSystem::SetParallelPassesEnabled(bool enabled) {
+		if (s_State) s_State->Config.EnableParallelPasses = enabled;
+	}
+	
+	bool RenderSystem::IsParallelPassesEnabled() {
+		return s_State ? s_State->Config.EnableParallelPasses : false;
 	}
 
 } // namespace Lunex

@@ -8,6 +8,7 @@
 #include "Core/Core.h"
 #include "RenderGraph.h"
 #include "RenderPass.h"
+#include "RenderPassJob.h"
 #include "Passes/GeometryPass.h"
 #include "Passes/EnvironmentPass.h"
 #include "Passes/EditorPass.h"
@@ -51,6 +52,27 @@ namespace Lunex {
 		// Debug
 		bool EnableDebugOutput = true;
 		bool ExportRenderGraph = false;
+		
+		// ============================================
+		// JOB SYSTEM INTEGRATION
+		// ============================================
+		
+		/**
+		 * @brief Enable parallel pass execution via JobSystem
+		 * When enabled, independent passes will be scheduled as jobs
+		 */
+		bool EnableParallelPasses = true;
+		
+		/**
+		 * @brief Enable parallel draw command collection
+		 * When enabled, entity iteration for draw commands uses ParallelFor
+		 */
+		bool EnableParallelDrawCollection = true;
+		
+		/**
+		 * @brief Minimum entity count to trigger parallel collection
+		 */
+		uint32_t ParallelCollectionThreshold = 100;
 	};
 
 	// ============================================================================
@@ -114,6 +136,11 @@ namespace Lunex {
 		static const RenderGraph::Statistics& GetStatistics();
 		
 		/**
+		 * @brief Get job scheduler statistics
+		 */
+		static const RenderJobScheduler::Statistics& GetJobSchedulerStatistics();
+		
+		/**
 		 * @brief Export render graph visualization
 		 */
 		static std::string ExportRenderGraphViz();
@@ -142,12 +169,27 @@ namespace Lunex {
 		 */
 		static int GetEntityAtScreenPos(int x, int y);
 		
+		// ============================================
+		// PARALLEL EXECUTION API
+		// ============================================
+		
+		/**
+		 * @brief Enable/disable parallel pass execution
+		 */
+		static void SetParallelPassesEnabled(bool enabled);
+		
+		/**
+		 * @brief Check if parallel passes are enabled
+		 */
+		static bool IsParallelPassesEnabled();
+		
 	private:
 		RenderSystem() = delete;
 		~RenderSystem() = delete;
 		
 		static void BuildRenderGraph();
 		static void ExecuteRenderGraph();
+		static void ExecuteRenderGraphParallel();
 		
 		// Internal state
 		struct State {
@@ -155,6 +197,9 @@ namespace Lunex {
 			
 			// RenderGraph
 			Scope<RenderGraph> Graph;
+			
+			// Job Scheduler for parallel pass execution
+			Scope<RenderJobScheduler> JobScheduler;
 			
 			// Render passes (from GeometryPass.h)
 			Scope<GeometryPass> GeometryPassPtr;
@@ -181,6 +226,9 @@ namespace Lunex {
 			bool DrawGrid = true;
 			bool DrawGizmos = true;
 			int SelectedEntityID = -1;
+			
+			// Scene version for job cancellation
+			uint64_t CurrentSceneVersion = 0;
 			
 			bool Initialized = false;
 		};
