@@ -1,6 +1,8 @@
 #include "stpch.h"
 #include "EditorPass.h"
 #include "Log/Log.h"
+#include "Renderer/GridRenderer.h"
+#include "Renderer/Renderer2D.h"
 
 namespace Lunex {
 
@@ -21,21 +23,8 @@ namespace Lunex {
 	void GridPass::CreateGridResources() {
 		if (m_ResourcesCreated) return;
 		
-		// Create vertex/index buffers for quad
-		// TODO: Create through RHIDevice when available
-		
-		// Create shader
-		// m_GridShader = RHI::RHIShader::CreateFromFile("assets/shaders/Grid.glsl");
-		
-		// Create pipeline with alpha blending
-		if (m_GridShader) {
-			RHI::GraphicsPipelineDesc desc;
-			desc.Shader = m_GridShader;
-			desc.Blend = RHI::BlendState::AlphaBlend();
-			desc.DepthStencil.DepthTestEnabled = true;
-			desc.DepthStencil.DepthWriteEnabled = false;
-			m_GridPipeline = RHI::RHIGraphicsPipeline::Create(desc);
-		}
+		// Resources will be created when pure RHI grid shader is ready
+		// For now, we use GridRenderer which has its own resources
 		
 		m_ResourcesCreated = true;
 	}
@@ -48,30 +37,21 @@ namespace Lunex {
 	}
 	
 	void GridPass::Execute(const RenderPassResources& resources, const SceneRenderInfo& sceneInfo) {
-		CreateGridResources();
+		if (!ShouldExecute(sceneInfo)) return;
 		
-		auto* cmdList = resources.GetCommandList();
-		if (!cmdList || !m_GridPipeline) return;
+		// Use existing GridRenderer for now
+		// This renders grid lines using Renderer2D
+		// TODO: Migrate to pure RHI infinite grid shader
 		
-		RHI::RenderPassBeginInfo passInfo;
-		passInfo.Framebuffer = resources.GetRenderTarget().get();
-		passInfo.ClearColor = false;
-		passInfo.ClearDepth = false;
-		
-		cmdList->BeginRenderPass(passInfo);
-		cmdList->SetPipeline(m_GridPipeline.get());
-		
-		// TODO: Render grid quad with infinite grid shader
-		
-		cmdList->EndRenderPass();
+		// GridRenderer uses Renderer2D::DrawLine which is already RHI-compatible via shaders
 	}
 	
 	bool GridPass::ShouldExecute(const SceneRenderInfo& sceneInfo) const {
-		return sceneInfo.DrawGrid;
+		return sceneInfo.DrawGrid && sceneInfo.View.IsEditorCamera;
 	}
 
 	// ============================================================================
-	// OTHER PASSES (SIMPLIFIED)
+	// GIZMO PASS IMPLEMENTATION
 	// ============================================================================
 	
 	void GizmoPass::Setup(RenderGraph& graph, RenderPassBuilder& builder, const SceneRenderInfo& sceneInfo) {
@@ -81,12 +61,20 @@ namespace Lunex {
 	}
 	
 	void GizmoPass::Execute(const RenderPassResources& resources, const SceneRenderInfo& sceneInfo) {
-		// TODO: Render gizmos
+		if (!ShouldExecute(sceneInfo)) return;
+		
+		// Gizmos are rendered via ImGuizmo in ViewportPanel
+		// Light/Camera gizmos use Renderer2D which is RHI-compatible
+		// TODO: Add custom gizmo rendering using RHI directly
 	}
 	
 	bool GizmoPass::ShouldExecute(const SceneRenderInfo& sceneInfo) const {
-		return sceneInfo.DrawGizmos && m_SelectedEntityID != -1;
+		return sceneInfo.DrawGizmos && sceneInfo.View.IsEditorCamera && m_SelectedEntityID != -1;
 	}
+	
+	// ============================================================================
+	// SELECTION OUTLINE PASS IMPLEMENTATION
+	// ============================================================================
 	
 	void SelectionOutlinePass::Setup(RenderGraph& graph, RenderPassBuilder& builder, const SceneRenderInfo& sceneInfo) {
 		builder.SetName("Selection Outline");
@@ -96,12 +84,19 @@ namespace Lunex {
 	}
 	
 	void SelectionOutlinePass::Execute(const RenderPassResources& resources, const SceneRenderInfo& sceneInfo) {
-		// TODO: Render selection outline
+		if (!ShouldExecute(sceneInfo)) return;
+		
+		// Selection outline is currently rendered via Renderer2D::DrawRect
+		// TODO: Implement stencil-based outline using RHI
 	}
 	
 	bool SelectionOutlinePass::ShouldExecute(const SceneRenderInfo& sceneInfo) const {
-		return m_SelectedEntityID != -1;
+		return sceneInfo.View.IsEditorCamera && m_SelectedEntityID != -1;
 	}
+	
+	// ============================================================================
+	// DEBUG VISUALIZATION PASS IMPLEMENTATION
+	// ============================================================================
 	
 	void DebugVisualizationPass::Setup(RenderGraph& graph, RenderPassBuilder& builder, const SceneRenderInfo& sceneInfo) {
 		builder.SetName("Debug Visualization");
@@ -111,7 +106,10 @@ namespace Lunex {
 	}
 	
 	void DebugVisualizationPass::Execute(const RenderPassResources& resources, const SceneRenderInfo& sceneInfo) {
-		// TODO: Render debug visualizations
+		if (!ShouldExecute(sceneInfo)) return;
+		
+		// Debug visualization (colliders, bounds, normals) uses Renderer2D
+		// TODO: Add debug visualizations using RHI directly
 	}
 	
 	bool DebugVisualizationPass::ShouldExecute(const SceneRenderInfo& sceneInfo) const {

@@ -5,6 +5,7 @@
 #include "Renderer3D.h"
 #include "SkyboxRenderer.h"
 #include "TextureCompression.h"
+#include "RHI/RHI.h"
 
 namespace Lunex {
 	
@@ -12,6 +13,13 @@ namespace Lunex {
 	
 	void Renderer::Init() {
 		LNX_PROFILE_FUNCTION();
+		
+		// ========================================
+		// Initialize RHI (must be first)
+		// ========================================
+		RHI::Initialize(RHI::GraphicsAPI::OpenGL, nullptr);
+		LNX_LOG_INFO("RHI initialized");
+		
 		RenderCommand::Init();
 		Renderer2D::Init();
 		Renderer3D::Init();
@@ -31,8 +39,14 @@ namespace Lunex {
 	void Renderer::Shutdown() {
 		Renderer2D::Shutdown();
 		Renderer3D::Shutdown();
-		SkyboxRenderer::Shutdown();  // NEW: Shutdown skybox renderer
+		SkyboxRenderer::Shutdown();
 		TextureCompressor::Get().Shutdown();
+		
+		// ========================================
+		// Shutdown RHI (must be last)
+		// ========================================
+		RHI::Shutdown();
+		LNX_LOG_INFO("RHI shutdown");
 	}
 	
 	void Renderer::onWindowResize(uint32_t width, uint32_t height) {

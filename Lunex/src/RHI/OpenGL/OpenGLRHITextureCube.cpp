@@ -1,5 +1,5 @@
 #include "stpch.h"
-#include "OpenGLTextureCube.h"
+#include "OpenGLRHITextureCube.h"
 #include "Renderer/Shader.h"
 #include "Renderer/VertexArray.h"
 #include "Renderer/Buffer.h"

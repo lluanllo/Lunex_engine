@@ -146,6 +146,12 @@ namespace RHI {
 		virtual int ReadPixel(int x, int y) const = 0;
 		virtual void Clear(const ClearValue& value) = 0;
 		
+		/**
+		 * @brief Get the native renderer ID (e.g., OpenGL texture ID)
+		 * @return Native handle as uint32_t
+		 */
+		virtual uint32_t GetRendererID() const = 0;
+		
 		// Factory
 		static Ref<RHITexture2D> Create(const TextureDesc& desc);
 		static Ref<RHITexture2D> Create(const TextureDesc& desc, const void* data, uint64_t dataSize);

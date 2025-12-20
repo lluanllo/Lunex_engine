@@ -1,6 +1,7 @@
 #include "stpch.h"
 #include "EnvironmentPass.h"
 #include "Log/Log.h"
+#include "Renderer/SkyboxRenderer.h"
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace Lunex {
@@ -58,55 +59,8 @@ namespace Lunex {
 	void SkyboxPass::CreateSkyboxResources() {
 		if (m_ResourcesCreated) return;
 		
-		// Create vertex buffer
-		RHI::BufferDesc vbDesc;
-		vbDesc.Type = RHI::BufferType::Vertex;
-		vbDesc.Usage = RHI::BufferUsage::Static;
-		vbDesc.Size = sizeof(s_SkyboxVertices);
-		vbDesc.Stride = 3 * sizeof(float);
-		
-		// TODO: Create through RHIDevice
-		// m_SkyboxVertexBuffer = RHI::RHIDevice::Get()->CreateVertexBuffer(
-		//     s_SkyboxVertices, sizeof(s_SkyboxVertices), vbDesc.Stride, RHI::BufferUsage::Static
-		// );
-		
-		// Create shader (would load from file)
-		// m_SkyboxShader = RHI::RHIShader::CreateFromFile("assets/shaders/Skybox.glsl");
-		
-		// Create pipeline
-		if (m_SkyboxShader) {
-			RHI::GraphicsPipelineDesc pipelineDesc;
-			pipelineDesc.Shader = m_SkyboxShader;
-			
-			// Vertex layout
-			RHI::VertexLayout layout({
-				RHI::VertexAttribute("a_Position", RHI::DataType::Float3)
-			});
-			pipelineDesc.VertexLayout = layout;
-			
-			// Rasterizer state
-			pipelineDesc.Rasterizer = RHI::RasterizerState::Default();
-			pipelineDesc.Rasterizer.Culling = RHI::CullMode::Front;  // Cull front faces
-			
-			// Depth state
-			pipelineDesc.DepthStencil.DepthTestEnabled = true;
-			pipelineDesc.DepthStencil.DepthWriteEnabled = false;  // Don't write depth
-			pipelineDesc.DepthStencil.DepthCompareFunc = RHI::CompareFunc::LessEqual;  // Draw at far plane
-			
-			// Blend state
-			pipelineDesc.Blend = RHI::BlendState::Opaque();
-			
-			m_SkyboxPipeline = RHI::RHIGraphicsPipeline::Create(pipelineDesc);
-		}
-		
-		// Create camera uniform buffer
-		RHI::BufferDesc ubDesc;
-		ubDesc.Type = RHI::BufferType::Uniform;
-		ubDesc.Usage = RHI::BufferUsage::Dynamic;
-		ubDesc.Size = sizeof(glm::mat4) * 2;  // View and Projection
-		
-		// TODO: Create through RHIDevice
-		// m_CameraUniformBuffer = RHI::RHIDevice::Get()->CreateUniformBuffer(ubDesc.Size, ubDesc.Usage);
+		// Resources will be created when pure RHI skybox is needed
+		// For now, we use SkyboxRenderer which has its own resources
 		
 		m_ResourcesCreated = true;
 	}
@@ -123,64 +77,23 @@ namespace Lunex {
 	}
 	
 	void SkyboxPass::Execute(const RenderPassResources& resources, const SceneRenderInfo& sceneInfo) {
-		if (!sceneInfo.Environment) {
-			return;  // No environment to render
-		}
+		if (!ShouldExecute(sceneInfo)) return;
 		
 		CreateSkyboxResources();
 		
-		if (!m_SkyboxPipeline || !m_SkyboxVertexBuffer) {
-			LNX_LOG_WARN("SkyboxPass: Resources not ready");
+		// Use existing SkyboxRenderer which already uses RHI-compatible shaders
+		auto environment = SkyboxRenderer::GetGlobalEnvironment();
+		if (!environment || !environment->IsLoaded()) {
 			return;
 		}
 		
-		auto* cmdList = resources.GetCommandList();
-		if (!cmdList) return;
-		
-		// Begin render pass
-		RHI::RenderPassBeginInfo passInfo;
-		passInfo.Framebuffer = resources.GetRenderTarget().get();
-		passInfo.ClearColor = false;  // Don't clear, render on top
-		passInfo.ClearDepth = false;
-		
-		cmdList->BeginRenderPass(passInfo);
-		
-		// Bind pipeline
-		cmdList->SetPipeline(m_SkyboxPipeline.get());
-		
-		// Update camera uniforms (remove translation for skybox)
-		if (m_CameraUniformBuffer) {
-			struct SkyboxUniforms {
-				glm::mat4 View;
-				glm::mat4 Projection;
-			} uniforms;
-			
-			// Remove translation from view matrix
-			glm::mat4 viewNoTranslation = glm::mat4(glm::mat3(sceneInfo.View.ViewMatrix));
-			uniforms.View = viewNoTranslation;
-			uniforms.Projection = sceneInfo.View.ProjectionMatrix;
-			
-			m_CameraUniformBuffer->SetData(&uniforms, sizeof(SkyboxUniforms));
-			cmdList->SetUniformBuffer(m_CameraUniformBuffer.get(), 0, RHI::ShaderStage::Vertex);
-		}
-		
-		// Bind environment cubemap
-		// TODO: Get cubemap texture from environment
-		// cmdList->SetTexture(sceneInfo.Environment->GetCubemap().get(), 0);
-		
-		// Draw skybox cube
-		cmdList->SetVertexBuffer(m_SkyboxVertexBuffer.get(), 0, 0);
-		
-		RHI::DrawArrayArgs drawArgs;
-		drawArgs.VertexCount = 36;
-		drawArgs.InstanceCount = 1;
-		cmdList->Draw(drawArgs);
-		
-		cmdList->EndRenderPass();
+		// Render skybox using existing renderer
+		const auto& view = sceneInfo.View;
+		SkyboxRenderer::Render(*environment, view.ViewMatrix, view.ProjectionMatrix);
 	}
 	
 	bool SkyboxPass::ShouldExecute(const SceneRenderInfo& sceneInfo) const {
-		return sceneInfo.Environment != nullptr;
+		return SkyboxRenderer::IsEnabled() && SkyboxRenderer::HasEnvironmentLoaded();
 	}
 
 	// ============================================================================
@@ -191,9 +104,11 @@ namespace Lunex {
 		builder.SetName("IBL Generation");
 		
 		// Read input environment
-		builder.ReadTexture(m_InputEnvironment);
+		if (m_InputEnvironment.IsValid()) {
+			builder.ReadTexture(m_InputEnvironment);
+		}
 		
-		// Create output cubemaps
+		// Create output cubemaps if needed
 		if (!m_IrradianceMap.IsValid()) {
 			RenderGraphTextureDesc desc;
 			desc.Width = 32;  // Small for diffuse irradiance
@@ -219,19 +134,13 @@ namespace Lunex {
 	}
 	
 	void IBLPass::Execute(const RenderPassResources& resources, const SceneRenderInfo& sceneInfo) {
-		if (!m_NeedsUpdate) return;
+		if (!ShouldExecute(sceneInfo)) return;
 		
-		auto* cmdList = resources.GetCommandList();
-		if (!cmdList) return;
+		// IBL generation is already handled by EnvironmentMap class
+		// when loading HDRI files. This pass is for future compute-based generation.
 		
-		// This would use compute shaders to generate:
-		// 1. Irradiance map (convolution of environment)
-		// 2. Prefiltered map (importance sampling for different roughness levels)
-		
-		// TODO: Implement IBL generation using compute shaders
-		// For now, this is a placeholder
-		
-		LNX_LOG_INFO("IBLPass: Generating IBL maps (placeholder)");
+		// TODO: Implement compute shader-based IBL generation
+		// For now, IBL is pre-computed when environment maps are loaded
 		
 		m_NeedsUpdate = false;
 	}

@@ -39,6 +39,8 @@ namespace Lunex {
 		uint32_t ViewportWidth = 1920;
 		uint32_t ViewportHeight = 1080;
 		
+		bool IsEditorCamera = false;  // NEW: Distinguish editor vs runtime camera
+		
 		static ViewInfo FromEditorCamera(const EditorCamera& camera, uint32_t width, uint32_t height);
 		static ViewInfo FromCamera(const Camera& camera, const glm::mat4& transform, uint32_t width, uint32_t height);
 	};

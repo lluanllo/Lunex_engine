@@ -14,6 +14,7 @@ namespace Lunex {
 		info.ViewportHeight = height;
 		info.NearPlane = camera.GetNearClip();
 		info.FarPlane = camera.GetFarClip();
+		info.IsEditorCamera = true;  // NEW: Mark as editor camera
 		return info;
 	}
 	
@@ -25,6 +26,7 @@ namespace Lunex {
 		info.CameraPosition = glm::vec3(transform[3]);
 		info.ViewportWidth = width;
 		info.ViewportHeight = height;
+		info.IsEditorCamera = false;  // NEW: Mark as runtime camera
 		// Note: Camera class doesn't expose near/far, using defaults
 		return info;
 	}

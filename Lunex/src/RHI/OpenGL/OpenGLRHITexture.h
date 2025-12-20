@@ -249,6 +249,7 @@ namespace RHI {
 		void Resize(uint32_t width, uint32_t height) override;
 		int ReadPixel(int x, int y) const override;
 		void Clear(const ClearValue& value) override;
+		uint32_t GetRendererID() const override { return m_TextureID; }
 		
 		// OpenGL specific
 		GLuint GetTextureID() const { return m_TextureID; }

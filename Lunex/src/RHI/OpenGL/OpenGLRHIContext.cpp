@@ -96,19 +96,31 @@ namespace RHI {
 			return true;
 		}
 		
-		if (!m_Window) {
-			LNX_LOG_ERROR("OpenGLRHIContext: No window handle provided!");
+		// Check if there's already a current context (created by Application)
+		GLFWwindow* currentContext = glfwGetCurrentContext();
+		
+		if (!m_Window && currentContext) {
+			// Use the existing context from Application
+			m_Window = currentContext;
+			LNX_LOG_INFO("OpenGLRHIContext: Using existing OpenGL context");
+		}
+		else if (!m_Window) {
+			LNX_LOG_ERROR("OpenGLRHIContext: No window handle provided and no existing context!");
 			return false;
 		}
+		else {
+			// Make our window current
+			glfwMakeContextCurrent(m_Window);
+		}
 		
-		// Make context current
-		glfwMakeContextCurrent(m_Window);
-		
-		// Load OpenGL functions
-		int status = gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-		if (!status) {
-			LNX_LOG_ERROR("OpenGLRHIContext: Failed to initialize GLAD!");
-			return false;
+		// Check if GLAD is already initialized
+		if (glGetString == nullptr) {
+			// Load OpenGL functions
+			int status = gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+			if (!status) {
+				LNX_LOG_ERROR("OpenGLRHIContext: Failed to initialize GLAD!");
+				return false;
+			}
 		}
 		
 		// Get version info

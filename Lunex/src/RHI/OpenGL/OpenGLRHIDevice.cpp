@@ -1,5 +1,10 @@
 #include "stpch.h"
 #include "OpenGLRHIDevice.h"
+#include "OpenGLRHIBuffer.h"
+#include "OpenGLRHITexture.h"
+#include "OpenGLRHIFramebuffer.h"
+#include "OpenGLRHIShader.h"
+#include "OpenGLRHICommandList.h"
 #include "Log/Log.h"
 
 // Fallback defines for missing GLAD extensions
@@ -147,55 +152,98 @@ namespace RHI {
 	}
 	
 	// ============================================================================
-	// RESOURCE CREATION STUBS (TO BE IMPLEMENTED)
+	// RESOURCE CREATION
 	// ============================================================================
 	
 	Ref<RHIBuffer> OpenGLRHIDevice::CreateBuffer(const BufferCreateInfo& info) {
-		// TODO: Implement OpenGLRHIBuffer
-		LNX_LOG_WARN("OpenGLRHIDevice::CreateBuffer - Not yet implemented");
-		return nullptr;
+		BufferDesc desc;
+		desc.Type = info.Type;
+		desc.Usage = info.Usage;
+		desc.Size = info.Size;
+		desc.Stride = info.Stride;
+		desc.IndexFormat = info.IndexFormat;
+		
+		return CreateRef<OpenGLRHIBuffer>(desc, info.InitialData);
 	}
 	
 	Ref<RHITexture2D> OpenGLRHIDevice::CreateTexture2D(const TextureCreateInfo& info) {
-		// TODO: Implement OpenGLRHITexture2D
-		LNX_LOG_WARN("OpenGLRHIDevice::CreateTexture2D - Not yet implemented");
-		return nullptr;
+		TextureDesc desc;
+		desc.Width = info.Width;
+		desc.Height = info.Height;
+		desc.Depth = info.Depth;
+		desc.ArrayLayers = info.ArrayLayers;
+		desc.MipLevels = info.MipLevels;
+		desc.SampleCount = info.SampleCount;
+		desc.Format = info.Format;
+		desc.IsRenderTarget = info.IsRenderTarget;
+		desc.IsStorage = info.IsStorage;
+		desc.GenerateMipmaps = info.GenerateMipmaps;
+		
+		return CreateRef<OpenGLRHITexture2D>(desc, info.InitialData);
 	}
 	
 	Ref<RHITextureCube> OpenGLRHIDevice::CreateTextureCube(const TextureCreateInfo& info) {
-		// TODO: Implement OpenGLRHITextureCube
-		LNX_LOG_WARN("OpenGLRHIDevice::CreateTextureCube - Not yet implemented");
-		return nullptr;
+		TextureDesc desc;
+		desc.Width = info.Width;
+		desc.Height = info.Height;
+		desc.MipLevels = info.MipLevels;
+		desc.Format = info.Format;
+		desc.GenerateMipmaps = info.GenerateMipmaps;
+		
+		return CreateRef<OpenGLRHITextureCube>(desc);
 	}
 	
 	Ref<RHISampler> OpenGLRHIDevice::CreateSampler(const SamplerCreateInfo& info) {
-		// TODO: Implement OpenGLRHISampler
-		LNX_LOG_WARN("OpenGLRHIDevice::CreateSampler - Not yet implemented");
-		return nullptr;
+		return CreateRef<OpenGLRHISampler>(info.State);
 	}
 	
 	Ref<RHIShader> OpenGLRHIDevice::CreateShader(const ShaderCreateInfo& info) {
-		// TODO: Implement OpenGLRHIShader
-		LNX_LOG_WARN("OpenGLRHIDevice::CreateShader - Not yet implemented");
+		if (!info.FilePath.empty()) {
+			return CreateRef<OpenGLRHIShader>(info.FilePath);
+		}
+		// TODO: Support creating from stages
+		LNX_LOG_WARN("OpenGLRHIDevice::CreateShader - Only file-based shaders supported currently");
 		return nullptr;
 	}
 	
 	Ref<RHIPipeline> OpenGLRHIDevice::CreatePipeline(const PipelineCreateInfo& info) {
-		// TODO: Implement OpenGLRHIPipeline
-		LNX_LOG_WARN("OpenGLRHIDevice::CreatePipeline - Not yet implemented");
+		// OpenGL doesn't have explicit pipeline objects
+		// State is set at draw time
+		LNX_LOG_WARN("OpenGLRHIDevice::CreatePipeline - Not yet implemented (OpenGL uses state at draw time)");
 		return nullptr;
 	}
 	
 	Ref<RHIFramebuffer> OpenGLRHIDevice::CreateFramebuffer(const FramebufferCreateInfo& info) {
-		// TODO: Implement OpenGLRHIFramebuffer
-		LNX_LOG_WARN("OpenGLRHIDevice::CreateFramebuffer - Not yet implemented");
-		return nullptr;
+		FramebufferDesc desc;
+		desc.Width = info.Width;
+		desc.Height = info.Height;
+		
+		// Convert color attachments
+		for (const auto& colorAtt : info.ColorAttachments) {
+			RenderTargetDesc rtDesc;
+			rtDesc.Width = info.Width;
+			rtDesc.Height = info.Height;
+			rtDesc.ExistingTexture = colorAtt.Texture;
+			rtDesc.MipLevel = colorAtt.MipLevel;
+			rtDesc.ArrayLayer = colorAtt.ArrayLayer;
+			if (colorAtt.Texture) {
+				rtDesc.Format = colorAtt.Texture->GetFormat();
+			}
+			desc.ColorAttachments.push_back(rtDesc);
+		}
+		
+		// Convert depth attachment
+		if (info.DepthStencilAttachment.Texture) {
+			desc.DepthAttachment.ExistingTexture = info.DepthStencilAttachment.Texture;
+			desc.DepthAttachment.MipLevel = info.DepthStencilAttachment.MipLevel;
+			desc.HasDepth = true;
+		}
+		
+		return CreateRef<OpenGLRHIFramebuffer>(desc);
 	}
 	
 	Ref<RHICommandList> OpenGLRHIDevice::CreateCommandList(const CommandListCreateInfo& info) {
-		// TODO: Implement OpenGLRHICommandList
-		LNX_LOG_WARN("OpenGLRHIDevice::CreateCommandList - Not yet implemented");
-		return nullptr;
+		return CreateRef<OpenGLRHICommandList>();
 	}
 	
 	Ref<RHIFence> OpenGLRHIDevice::CreateFence(bool signaled) {

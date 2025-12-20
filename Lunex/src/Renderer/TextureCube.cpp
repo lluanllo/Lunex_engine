@@ -1,7 +1,7 @@
 #include "stpch.h"
 #include "TextureCube.h"
 #include "Renderer/RendererAPI.h"
-#include "Platform/OpenGL/OpenGLTextureCube.h"
+#include "RHI/OpenGL/OpenGLRHITextureCube.h"
 
 namespace Lunex {
 	

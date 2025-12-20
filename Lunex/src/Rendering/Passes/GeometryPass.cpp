@@ -3,6 +3,7 @@
 #include "Scene/Entity.h"
 #include "Scene/Components.h"
 #include "Log/Log.h"
+#include "Renderer/Renderer3D.h"
 
 namespace Lunex {
 
@@ -38,39 +39,45 @@ namespace Lunex {
 	
 	void GeometryPass::Execute(const RenderPassResources& resources, const SceneRenderInfo& sceneInfo) {
 		if (!sceneInfo.ScenePtr) {
-			LNX_LOG_WARN("GeometryPass: No scene provided");
 			return;
 		}
 		
-		auto* cmdList = resources.GetCommandList();
-		if (!cmdList) return;
+		// For now, delegate to existing Renderer3D which already works well
+		// This will be replaced with pure RHI rendering in the future
 		
-		// Collect draw commands
-		DrawList drawList;
-		CollectDrawCommands(sceneInfo, drawList);
+		Scene* scene = sceneInfo.ScenePtr;
+		const ViewInfo& view = sceneInfo.View;
 		
-		if (drawList.IsEmpty()) {
-			return;  // Nothing to render
+		// Use existing Renderer3D for mesh rendering
+		if (view.IsEditorCamera) {
+			// We need to reconstruct EditorCamera - for now just use view matrices
+			// TODO: Pass EditorCamera directly or use view matrices
 		}
 		
-		// Begin render pass
-		RHI::RenderPassBeginInfo passInfo;
-		passInfo.Framebuffer = resources.GetRenderTarget().get();
-		passInfo.ClearColor = true;
-		passInfo.ClearDepth = true;
-		passInfo.ClearValues.push_back(RHI::ClearValue::ColorValue(0.1f, 0.1f, 0.1f, 1.0f));
-		passInfo.RenderViewport.Width = static_cast<float>(sceneInfo.View.ViewportWidth);
-		passInfo.RenderViewport.Height = static_cast<float>(sceneInfo.View.ViewportHeight);
+		// Collect and render meshes using existing system
+		auto meshView = scene->GetAllEntitiesWith<TransformComponent, MeshComponent>();
 		
-		cmdList->BeginRenderPass(passInfo);
-		
-		// Setup camera uniforms
-		SetupUniforms(cmdList, sceneInfo.View);
-		
-		// Execute draw list (will sort and batch automatically)
-		drawList.Execute(cmdList);
-		
-		cmdList->EndRenderPass();
+		for (auto entityID : meshView) {
+			Entity entity = { entityID, scene };
+			
+			auto& transform = entity.GetComponent<TransformComponent>();
+			auto& mesh = entity.GetComponent<MeshComponent>();
+			
+			glm::mat4 worldTransform = scene->GetWorldTransform(entity);
+			
+			// Use existing Renderer3D
+			if (entity.HasComponent<MaterialComponent>()) {
+				auto& material = entity.GetComponent<MaterialComponent>();
+				if (entity.HasComponent<TextureComponent>()) {
+					auto& texture = entity.GetComponent<TextureComponent>();
+					Renderer3D::DrawMesh(worldTransform, mesh, material, texture, static_cast<int>(entityID));
+				} else {
+					Renderer3D::DrawMesh(worldTransform, mesh, material, static_cast<int>(entityID));
+				}
+			} else {
+				Renderer3D::DrawMesh(worldTransform, mesh, static_cast<int>(entityID));
+			}
+		}
 	}
 	
 	void GeometryPass::CollectDrawCommands(const SceneRenderInfo& sceneInfo, DrawList& outDrawList) {
@@ -86,20 +93,8 @@ namespace Lunex {
 			auto& transform = entity.GetComponent<TransformComponent>();
 			auto& mesh = entity.GetComponent<MeshComponent>();
 			
-			// Skip if no mesh (TODO: Need to implement MeshAsset integration)
-			// if (!mesh.MeshAsset) continue;
-			
 			// TODO: Frustum culling here
-			
-			// For now, create a simple draw command
-			// In a real implementation, this would:
-			// 1. Get vertex/index buffers from mesh
-			// 2. Get material/pipeline from mesh or material component
-			// 3. Calculate sort key based on distance to camera
-			// 4. Add to draw list
-			
-			// Placeholder: We need to integrate with the existing Model/Mesh system
-			LNX_LOG_TRACE("GeometryPass: Would render mesh for entity {0}", static_cast<uint64_t>(entity.GetUUID()));
+			// TODO: Create draw commands for pure RHI rendering
 		}
 	}
 	
@@ -112,7 +107,6 @@ namespace Lunex {
 			desc.Size = sizeof(glm::mat4) * 3 + sizeof(glm::vec4);  // VP, View, Proj, CamPos
 			
 			// TODO: Create through RHIDevice when available
-			// m_CameraUniformBuffer = RHI::RHIDevice::Get()->CreateUniformBuffer(desc.Size, desc.Usage);
 		}
 		
 		// Update camera data
@@ -130,8 +124,6 @@ namespace Lunex {
 			cameraData.CameraPosition = glm::vec4(view.CameraPosition, 1.0f);
 			
 			m_CameraUniformBuffer->SetData(&cameraData, sizeof(CameraData));
-			
-			// Bind to shader binding point 0
 			cmdList->SetUniformBuffer(m_CameraUniformBuffer.get(), 0, RHI::ShaderStage::AllGraphics);
 		}
 	}
@@ -154,24 +146,24 @@ namespace Lunex {
 	void TransparentPass::Execute(const RenderPassResources& resources, const SceneRenderInfo& sceneInfo) {
 		if (!sceneInfo.ScenePtr) return;
 		
-		auto* cmdList = resources.GetCommandList();
-		if (!cmdList) return;
+		// TODO: Implement transparent rendering with proper sorting
+		// For now, transparent objects are handled by the existing system
 		
-		// TODO: Implement transparent rendering
-		// - Collect transparent meshes
-		// - Sort back-to-front
-		// - Render with alpha blending enabled
+		Scene* scene = sceneInfo.ScenePtr;
 		
-		RHI::RenderPassBeginInfo passInfo;
-		passInfo.Framebuffer = resources.GetRenderTarget().get();
-		passInfo.ClearColor = false;  // Don't clear, blend on top
-		passInfo.ClearDepth = false;
+		// Collect sprites and other transparent objects
+		auto spriteView = scene->GetAllEntitiesWith<TransformComponent, SpriteRendererComponent>();
 		
-		cmdList->BeginRenderPass(passInfo);
-		
-		// Render transparent objects here
-		
-		cmdList->EndRenderPass();
+		for (auto entityID : spriteView) {
+			Entity entity = { entityID, scene };
+			auto& transform = entity.GetComponent<TransformComponent>();
+			auto& sprite = entity.GetComponent<SpriteRendererComponent>();
+			
+			glm::mat4 worldTransform = scene->GetWorldTransform(entity);
+			
+			// Sprites are rendered via Renderer2D in the existing system
+			// TODO: Add to transparent draw list for proper sorting
+		}
 	}
 
 } // namespace Lunex

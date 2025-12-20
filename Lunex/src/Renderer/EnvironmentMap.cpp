@@ -1,6 +1,6 @@
 #include "stpch.h"
 #include "EnvironmentMap.h"
-#include "Platform/OpenGL/OpenGLTextureCube.h"
+#include "RHI/OpenGL/OpenGLRHITextureCube.h"
 
 #include <glad/glad.h>
 

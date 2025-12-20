@@ -3,15 +3,6 @@
 /**
  * @file RenderSystem.h
  * @brief High-level rendering system facade
- * 
- * The RenderSystem is the main entry point for rendering in the engine.
- * It orchestrates the RenderGraph, RenderPasses, and provides a simple API.
- * 
- * Usage:
- *   RenderSystem::Init();
- *   RenderSystem::BeginFrame();
- *   RenderSystem::RenderScene(scene, camera);
- *   RenderSystem::EndFrame();
  */
 
 #include "Core/Core.h"
@@ -21,9 +12,10 @@
 #include "Passes/EnvironmentPass.h"
 #include "Passes/EditorPass.h"
 #include "Scene/Scene.h"
+#include "Scene/Entity.h"
 #include "Renderer/EditorCamera.h"
 
-#include <glm/glm.hpp>  // ? ADD THIS
+#include <glm/glm.hpp>
 
 namespace Lunex {
 
@@ -92,12 +84,12 @@ namespace Lunex {
 		static void EndFrame();
 		
 		/**
-		 * @brief Render a scene
+		 * @brief Render a scene with editor camera
 		 */
 		static void RenderScene(Scene* scene, const EditorCamera& camera);
 		
 		/**
-		 * @brief Render a scene with runtime camera
+		 * @brief Render a scene with runtime camera entity
 		 */
 		static void RenderScene(Scene* scene, Entity cameraEntity);
 		
@@ -164,13 +156,19 @@ namespace Lunex {
 			// RenderGraph
 			Scope<RenderGraph> Graph;
 			
-			// Render passes
-			Scope<GeometryPass> GeometryPass;
-			Scope<TransparentPass> TransparentPass;
-			Scope<SkyboxPass> SkyboxPass;
-			Scope<GridPass> GridPass;
-			Scope<GizmoPass> GizmoPass;
-			Scope<SelectionOutlinePass> SelectionOutlinePass;
+			// Render passes (from GeometryPass.h)
+			Scope<GeometryPass> GeometryPassPtr;
+			Scope<TransparentPass> TransparentPassPtr;
+			
+			// Render passes (from EnvironmentPass.h)
+			Scope<SkyboxPass> SkyboxPassPtr;
+			Scope<IBLPass> IBLPassPtr;
+			
+			// Render passes (from EditorPass.h)
+			Scope<GridPass> GridPassPtr;
+			Scope<GizmoPass> GizmoPassPtr;
+			Scope<SelectionOutlinePass> SelectionOutlinePassPtr;
+			Scope<DebugVisualizationPass> DebugVisualizationPassPtr;
 			
 			// Scene info for current frame
 			SceneRenderInfo CurrentSceneInfo;
