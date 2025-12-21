@@ -135,12 +135,6 @@ namespace Lunex {
 			// Scene systems (ordered by priority)
 			std::vector<std::unique_ptr<ISceneSystem>> m_Systems;
 			
-			// Legacy physics world (will be removed once PhysicsSystem2D is fully integrated)
-			b2WorldId m_PhysicsWorld = B2_NULL_ID;
-			
-			// Note: ScriptingEngine is now managed by ScriptSystem
-			// std::unique_ptr<ScriptingEngine> m_ScriptingEngine;
-			
 			friend class Entity;
 			friend class SceneSerializer;
 			friend class SceneHierarchyPanel;
