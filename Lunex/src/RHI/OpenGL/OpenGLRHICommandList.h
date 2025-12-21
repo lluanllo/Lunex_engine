@@ -30,6 +30,18 @@ namespace RHI {
 		void Reset() override;
 		bool IsRecording() const override { return m_Recording; }
 		
+		// Immediate state (for legacy compatibility)
+		void SetClearColor(const glm::vec4& color) override;
+		void Clear() override;
+		void SetDepthMask(bool enabled) override;
+		void SetDepthFunc(CompareFunc func) override;
+		CompareFunc GetDepthFunc() const override;
+		void SetLineWidth(float width) override;
+		void DrawLines(uint32_t vertexCount, uint32_t firstVertex = 0) override;
+		void DrawArrays(uint32_t vertexCount, uint32_t firstVertex = 0) override;
+		void GetViewport(int* viewport) const override;
+		void SetDrawBuffers(const std::vector<uint32_t>& attachments) override;
+		
 		// Render pass
 		void BeginRenderPass(const RenderPassBeginInfo& info) override;
 		void EndRenderPass() override;
@@ -102,6 +114,8 @@ namespace RHI {
 		const RHIGraphicsPipeline* m_CurrentPipeline = nullptr;
 		const RHIComputePipeline* m_CurrentComputePipeline = nullptr;
 		IndexType m_CurrentIndexType = IndexType::UInt32;
+		CompareFunc m_CurrentDepthFunc = CompareFunc::Less;
+		glm::vec4 m_ClearColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 	};
 
 } // namespace RHI

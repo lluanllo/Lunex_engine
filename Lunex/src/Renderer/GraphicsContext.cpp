@@ -2,7 +2,7 @@
 
 #include "GraphicsContext.h"
 
-#include "Renderer.h"
+#include "RHI/RHI.h"
 #include "RHI/OpenGL/OpenGLRHIContext.h"
 
 namespace Lunex {
@@ -16,6 +16,8 @@ namespace Lunex {
 		GraphicsContextAdapter(void* window)
 			: m_Window(window)
 		{
+			// Create OpenGL context directly (doesn't depend on RHI::Initialize)
+			// This allows window creation before RHI initialization
 			m_RHIContext = CreateScope<RHI::OpenGLRHIContext>(window);
 		}
 		
@@ -50,15 +52,9 @@ namespace Lunex {
 	};
 	
 	Scope<GraphicsContext> GraphicsContext::Create(void* window) {
-		switch (Renderer::GetAPI()) {
-			case RendererAPI::API::None:    
-				LNX_CORE_ASSERT(false, "RendererAPI::None is currently not supported!"); 
-				return nullptr;
-			case RendererAPI::API::OpenGL:  
-				return CreateScope<GraphicsContextAdapter>(window);
-		}
-		
-		LNX_CORE_ASSERT(false, "Unknown RendererAPI!");
-		return nullptr;
+		// Always create OpenGL context for now (independent of RHI::GetCurrentAPI)
+		// This allows window creation before RHI::Initialize is called
+		// RHI will be initialized later with the window handle
+		return CreateScope<GraphicsContextAdapter>(window);
 	}
 }

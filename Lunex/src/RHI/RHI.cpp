@@ -2,6 +2,8 @@
 #include "RHI.h"
 #include "Log/Log.h"
 
+#include <glad/glad.h>
+
 namespace Lunex {
 namespace RHI {
 
@@ -14,6 +16,7 @@ namespace RHI {
 	static GraphicsAPI s_CurrentAPI = GraphicsAPI::None;
 	static Scope<RHIContext> s_Context = nullptr;
 	static Ref<RHIDevice> s_Device = nullptr;
+	static Ref<RHICommandList> s_ImmediateCommandList = nullptr;
 
 	// ============================================================================
 	// RHI INITIALIZATION
@@ -47,6 +50,16 @@ namespace RHI {
 			return false;
 		}
 		
+		// Create immediate command list
+		s_ImmediateCommandList = RHICommandList::CreateGraphics();
+		if (!s_ImmediateCommandList) {
+			LNX_LOG_ERROR("Failed to create immediate command list!");
+			s_Device = nullptr;
+			s_Context->Shutdown();
+			s_Context = nullptr;
+			return false;
+		}
+		
 		s_CurrentAPI = api;
 		s_Initialized = true;
 		
@@ -73,6 +86,9 @@ namespace RHI {
 			s_Device->WaitIdle();
 		}
 		
+		// Release immediate command list
+		s_ImmediateCommandList = nullptr;
+		
 		// Release device
 		s_Device = nullptr;
 		RHIDevice::s_Instance = nullptr;
@@ -96,6 +112,29 @@ namespace RHI {
 	
 	GraphicsAPI GetCurrentAPI() {
 		return s_CurrentAPI;
+	}
+	
+	RHICommandList* GetImmediateCommandList() {
+		return s_ImmediateCommandList.get();
+	}
+	
+	void InitializeRenderState() {
+		if (!s_Initialized) {
+			LNX_LOG_ERROR("RHI not initialized!");
+			return;
+		}
+		
+		// Initialize OpenGL state
+		#ifdef LNX_DEBUG
+			glEnable(GL_DEBUG_OUTPUT);
+			glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+		#endif
+		
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		
+		glEnable(GL_DEPTH_TEST);
+		glEnable(GL_LINE_SMOOTH);
 	}
 
 	// ============================================================================

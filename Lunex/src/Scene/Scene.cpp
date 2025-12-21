@@ -6,10 +6,10 @@
 #include "Renderer/Renderer2D.h"
 #include "Renderer/Renderer3D.h"
 #include "Renderer/GridRenderer.h"
-#include "Renderer/SkyboxRenderer.h"  // NEW: Skybox rendering
-#include "Renderer/RenderCommand.h"
+#include "Renderer/SkyboxRenderer.h"
+#include "RHI/RHI.h"
 #include "Core/Input.h"
-#include "Core/JobSystem/JobSystem.h"  // ✅ Added for parallel physics
+#include "Core/JobSystem/JobSystem.h"
 
 #include "Scripting/ScriptingEngine.h"
 #include "Physics/Physics.h"
@@ -636,14 +636,19 @@ namespace Lunex {
 				return a.Distance > b.Distance;
 			});
 
-		RenderCommand::SetDepthMask(false);
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (cmdList) {
+			cmdList->SetDepthMask(false);
+		}
 
 		for (const auto& billboard : billboards) {
 			Renderer2D::DrawBillboard(billboard.Position, billboard.Texture,
 				cameraPos, billboard.Size, billboard.EntityID);
 		}
 
-		RenderCommand::SetDepthMask(true);
+		if (cmdList) {
+			cmdList->SetDepthMask(true);
+		}
 
 		// ========================================
 		// DRAW CAMERA FRUSTUMS (Editor only)

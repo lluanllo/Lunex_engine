@@ -1,7 +1,7 @@
 ﻿#include "stpch.h"
 #include "MaterialEditorPanel.h"
-#include "ContentBrowserPanel.h" // Para ContentBrowserPayload
-#include "Renderer/RenderCommand.h"
+#include "ContentBrowserPanel.h"
+#include "RHI/RHI.h"
 #include "Renderer/MaterialRegistry.h"
 #include "Log/Log.h"
 

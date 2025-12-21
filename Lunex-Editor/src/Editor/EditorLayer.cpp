@@ -29,6 +29,8 @@
 // ✅ Skybox Renderer for camera preview
 #include "Renderer/SkyboxRenderer.h"
 
+#include "RHI/RHI.h"
+
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
 
@@ -728,10 +730,15 @@ namespace Lunex {
 		Renderer2D::ResetStats();
 		Renderer3D::ResetStats();
 
+		// ✅ CRITICAL FIX: Bind framebuffer BEFORE rendering
 		m_Framebuffer->Bind();
-		RenderCommand::SetViewport(0, 0, (uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
-		RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
-		RenderCommand::Clear();
+
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (cmdList) {
+			cmdList->SetViewport(0.0f, 0.0f, m_ViewportSize.x, m_ViewportSize.y);
+			cmdList->SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+			cmdList->Clear();
+		}
 
 		// Clear our entity ID attachment to -1
 		m_Framebuffer->ClearAttachment(1, -1);
@@ -1396,15 +1403,20 @@ namespace Lunex {
 		// SAVE CURRENT VIEWPORT STATE
 		// ========================================
 		int currentViewport[4];
-		RenderCommand::SaveViewport(currentViewport);
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (cmdList) {
+			cmdList->GetViewport(currentViewport);
+		}
 
 		// ========================================
 		// RENDER CAMERA PREVIEW (Isolated)
 		// ========================================
 		m_CameraPreviewFramebuffer->Bind();
-		RenderCommand::SetViewport(0, 0, previewWidth, previewHeight);
-		RenderCommand::SetClearColor({ 0.15f, 0.15f, 0.18f, 1.0f });
-		RenderCommand::Clear();
+		if (cmdList) {
+			cmdList->SetViewport(0.0f, 0.0f, static_cast<float>(previewWidth), static_cast<float>(previewHeight));
+			cmdList->SetClearColor({ 0.15f, 0.15f, 0.18f, 1.0f });
+			cmdList->Clear();
+		}
 
 		// ========================================
 		// RENDER SKYBOX FIRST (before geometry)
@@ -1457,7 +1469,14 @@ namespace Lunex {
 		// RESTORE MAIN VIEWPORT STATE
 		// ========================================
 		m_CameraPreviewFramebuffer->Unbind();
-		RenderCommand::RestoreViewport(currentViewport);
+		if (cmdList) {
+			cmdList->SetViewport(
+				static_cast<float>(currentViewport[0]), 
+				static_cast<float>(currentViewport[1]),
+				static_cast<float>(currentViewport[2]), 
+				static_cast<float>(currentViewport[3])
+			);
+		}
 
 		// ========================================
 		// CRITICAL: RESTORE MAIN CAMERA (Editor or Runtime)

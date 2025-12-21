@@ -1,7 +1,7 @@
 #include "stpch.h"
 #include "Renderer3D.h"
 
-#include "Renderer/RenderCommand.h"
+#include "RHI/RHI.h"
 #include "Renderer/UniformBuffer.h"
 #include "Renderer/StorageBuffer.h"
 #include "Renderer/MaterialRegistry.h"
@@ -230,12 +230,15 @@ namespace Lunex {
 		
 		// Count lights (capped at MaxLights)
 		int lightCount = 0;
-		for (auto entity : view) {
-			if (lightCount >= s_Data.MaxLights) {
-				LNX_LOG_WARN("Light count exceeded maximum of {0}. Some lights will not be rendered.", s_Data.MaxLights);
-				break;
+		view.each([&](auto entity, auto& transform, auto& light) {
+			if (lightCount < s_Data.MaxLights) {
+				lightCount++;
 			}
-			lightCount++;
+		});
+		
+		if (lightCount > s_Data.MaxLights) {
+			LNX_LOG_WARN("Light count exceeded maximum of {0}. Some lights will not be rendered.", s_Data.MaxLights);
+			lightCount = s_Data.MaxLights;
 		}
 		
 		// Update header
@@ -250,12 +253,8 @@ namespace Lunex {
 		
 		// Fill light data
 		int lightIndex = 0;
-		for (auto entity : view) {
-			if (lightIndex >= s_Data.MaxLights) break;
-
-			Entity e = { entity, scene };
-			auto& transform = e.GetComponent<TransformComponent>();
-			auto& light = e.GetComponent<LightComponent>();
+		view.each([&](auto entity, auto& transform, auto& light) {
+			if (lightIndex >= s_Data.MaxLights) return;
 
 			glm::vec3 position = transform.Translation;
 			glm::vec3 direction = glm::normalize(
@@ -264,7 +263,7 @@ namespace Lunex {
 
 			lightsArray[lightIndex] = light.LightInstance->GetLightData(position, direction);
 			lightIndex++;
-		}
+		});
 		
 		s_Data.CurrentLightCount = lightCount;
 		

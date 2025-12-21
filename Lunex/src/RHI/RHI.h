@@ -59,6 +59,26 @@ namespace RHI {
 	 * @return The active graphics API
 	 */
 	GraphicsAPI GetCurrentAPI();
+	
+	// ============================================================================
+	// GLOBAL COMMAND LIST ACCESS
+	// ============================================================================
+	
+	/**
+	 * @brief Get the immediate command list for rendering
+	 * 
+	 * This provides a global command list for immediate-mode rendering.
+	 * For new code, prefer creating your own command lists per-thread.
+	 * 
+	 * @return The global command list
+	 */
+	RHICommandList* GetImmediateCommandList();
+	
+	/**
+	 * @brief Initialize OpenGL state (blend, depth test, etc.)
+	 * Called during engine initialization.
+	 */
+	void InitializeRenderState();
 
 } // namespace RHI
 } // namespace Lunex

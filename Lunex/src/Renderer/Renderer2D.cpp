@@ -4,7 +4,7 @@
 #include "VertexArray.h"
 #include "Shader.h"
 #include "UniformBuffer.h"
-#include "RenderCommand.h"
+#include "RHI/RHI.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -229,6 +229,8 @@ namespace Lunex {
 	}
 	
 	void Renderer2D::Flush() {
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (!cmdList) return;
 		
 		if (s_Data.QuadIndexCount) {
 			uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.QuadVertexBufferPtr - (uint8_t*)s_Data.QuadVertexBufferBase);
@@ -238,7 +240,8 @@ namespace Lunex {
 				s_Data.TextureSlots[i]->Bind(i);
 			
 			s_Data.QuadShader->Bind();
-			RenderCommand::DrawIndexed(s_Data.QuadVertexArray, s_Data.QuadIndexCount);
+			s_Data.QuadVertexArray->Bind();
+			cmdList->DrawIndexed(s_Data.QuadIndexCount);
 			s_Data.Stats.DrawCalls++;
 		}
 		
@@ -247,7 +250,8 @@ namespace Lunex {
 			s_Data.CircleVertexBuffer->SetData(s_Data.CircleVertexBufferBase, dataSize);
 			
 			s_Data.CircleShader->Bind();
-			RenderCommand::DrawIndexed(s_Data.CircleVertexArray, s_Data.CircleIndexCount);
+			s_Data.CircleVertexArray->Bind();
+			cmdList->DrawIndexed(s_Data.CircleIndexCount);
 			s_Data.Stats.DrawCalls++;
 		}
 		
@@ -256,8 +260,9 @@ namespace Lunex {
 			s_Data.LineVertexBuffer->SetData(s_Data.LineVertexBufferBase, dataSize);
 			
 			s_Data.LineShader->Bind();
-			RenderCommand::SetLineWidth(s_Data.LineWidth);
-			RenderCommand::DrawLines(s_Data.LineVertexArray, s_Data.LineVertexCount);
+			s_Data.LineVertexArray->Bind();
+			cmdList->SetLineWidth(s_Data.LineWidth);
+			cmdList->DrawLines(s_Data.LineVertexCount);
 			s_Data.Stats.DrawCalls++;
 		}
 	}

@@ -15,12 +15,16 @@ namespace Lunex {
 		LNX_PROFILE_FUNCTION();
 		
 		// ========================================
-		// Initialize RHI (must be first)
+		// Initialize RHI (if not already initialized)
 		// ========================================
-		RHI::Initialize(RHI::GraphicsAPI::OpenGL, nullptr);
-		LNX_LOG_INFO("RHI initialized");
+		// NOTE: RHI may already be initialized by Application for window creation
+		if (!RHI::IsInitialized()) {
+			RHI::Initialize(RHI::GraphicsAPI::OpenGL, nullptr);
+			LNX_LOG_INFO("RHI initialized");
+		}
 		
-		RenderCommand::Init();
+		RHI::InitializeRenderState();
+		
 		Renderer2D::Init();
 		Renderer3D::Init();
 		SkyboxRenderer::Init();
@@ -50,7 +54,10 @@ namespace Lunex {
 	}
 	
 	void Renderer::onWindowResize(uint32_t width, uint32_t height) {
-		RenderCommand::SetViewport(0, 0, width, height);
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (cmdList) {
+			cmdList->SetViewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
+		}
 	}
 	
 	void Renderer::BeginScene(OrthographicCamera& camera){
@@ -67,6 +74,10 @@ namespace Lunex {
 		shader->SetMat4("u_Transform", transform);
 		
 		vertexArray->Bind();
-		RenderCommand::DrawIndexed(vertexArray);
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (cmdList) {
+			uint32_t indexCount = vertexArray->GetIndexBuffer() ? vertexArray->GetIndexBuffer()->GetCount() : 0;
+			cmdList->DrawIndexed(indexCount);
+		}
 	}
 }

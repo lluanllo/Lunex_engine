@@ -1,7 +1,7 @@
 ﻿#include "stpch.h"
 #include "Mesh.h"
 
-#include "Renderer/RenderCommand.h"
+#include "RHI/RHI.h"
 
 namespace Lunex {
 	Mesh::Mesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices, const std::vector<MeshTexture>& textures)
@@ -21,7 +21,7 @@ namespace Lunex {
 			{ ShaderDataType::Float2, "a_TexCoords" },
 			{ ShaderDataType::Float3, "a_Tangent" },
 			{ ShaderDataType::Float3, "a_Bitangent" },
-			{ ShaderDataType::Int,    "a_EntityID" }  // ✅ AÑADIDO
+			{ ShaderDataType::Int,    "a_EntityID" }
 		};
 		
 		m_VertexBuffer->SetLayout(layout);
@@ -31,7 +31,6 @@ namespace Lunex {
 		m_VertexArray->SetIndexBuffer(m_IndexBuffer);
 	}
 	
-	// ✅ NUEVO: Actualizar EntityID de todos los vértices
 	void Mesh::SetEntityID(int entityID) {
 		for (auto& vertex : m_Vertices) {
 			vertex.EntityID = entityID;
@@ -67,6 +66,9 @@ namespace Lunex {
 		
 		// Draw mesh
 		m_VertexArray->Bind();
-		RenderCommand::DrawIndexed(m_VertexArray, (uint32_t)m_Indices.size());
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (cmdList) {
+			cmdList->DrawIndexed((uint32_t)m_Indices.size());
+		}
 	}
 }

@@ -21,9 +21,24 @@ namespace Lunex{
 		LNX_CORE_ASSERT(s_Instance == nullptr, "Application already exists!");
 		s_Instance = this;
 		
+		// ========================================
+		// CREATE WINDOW FIRST (will create OpenGL context via GLFW)
+		// ========================================
+		// WindowsWindow::Init creates GLFW window and OpenGL context
+		// GraphicsContext wraps the existing context
 		m_Window = Window::Create(WindowProps(name));
 		m_Window->SetEventCallback(LNX_BIND_EVENT_FN(Application::OnEvent));
 		
+		// ========================================
+		// INITIALIZE RHI (uses existing OpenGL context from window)
+		// ========================================
+		// Pass the GLFW window handle so RHI can use the existing context
+		auto* glfwWindow = static_cast<GLFWwindow*>(m_Window->GetNativeWindow());
+		if (!RHI::Initialize(RHI::GraphicsAPI::OpenGL, glfwWindow)) {
+			LNX_LOG_ERROR("Failed to initialize RHI!");
+		}
+		
+		// Complete renderer initialization
 		Renderer::Init();
 		
 		// ========================================

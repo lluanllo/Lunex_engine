@@ -5,7 +5,7 @@
 #include "OpenGLRHIShader.h"
 #include "OpenGLRHIFramebuffer.h"
 #include "OpenGLRHIDevice.h"
-#include "RHI/RHICommandList.h"  // ADD: Ensure ResourceBarrier is visible
+#include "RHI/RHICommandList.h"
 #include "RHI/RHIContext.h"
 #include "Log/Log.h"
 
@@ -25,12 +25,94 @@
 namespace Lunex {
 namespace RHI {
 
+	// Helper function to convert CompareFunc to GL
+	static GLenum CompareFuncToGL(CompareFunc func) {
+		switch (func) {
+			case CompareFunc::Never:        return GL_NEVER;
+			case CompareFunc::Less:         return GL_LESS;
+			case CompareFunc::Equal:        return GL_EQUAL;
+			case CompareFunc::LessEqual:    return GL_LEQUAL;
+			case CompareFunc::Greater:      return GL_GREATER;
+			case CompareFunc::NotEqual:     return GL_NOTEQUAL;
+			case CompareFunc::GreaterEqual: return GL_GEQUAL;
+			case CompareFunc::Always:       return GL_ALWAYS;
+		}
+		return GL_LESS;
+	}
+
 	OpenGLRHICommandList::OpenGLRHICommandList() {}
 	OpenGLRHICommandList::~OpenGLRHICommandList() {}
 	
 	void OpenGLRHICommandList::Begin() { m_Recording = true; }
 	void OpenGLRHICommandList::End() { m_Recording = false; }
 	void OpenGLRHICommandList::Reset() { m_CurrentFramebuffer = nullptr; m_CurrentPipeline = nullptr; }
+	
+	// ============================================================================
+	// IMMEDIATE STATE (for legacy compatibility)
+	// ============================================================================
+	
+	void OpenGLRHICommandList::SetClearColor(const glm::vec4& color) {
+		m_ClearColor = color;
+		glClearColor(color.r, color.g, color.b, color.a);
+	}
+	
+	void OpenGLRHICommandList::Clear() {
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	}
+	
+	void OpenGLRHICommandList::SetDepthMask(bool enabled) {
+		glDepthMask(enabled ? GL_TRUE : GL_FALSE);
+	}
+	
+	void OpenGLRHICommandList::SetDepthFunc(CompareFunc func) {
+		m_CurrentDepthFunc = func;
+		glDepthFunc(CompareFuncToGL(func));
+	}
+	
+	CompareFunc OpenGLRHICommandList::GetDepthFunc() const {
+		return m_CurrentDepthFunc;
+	}
+	
+	void OpenGLRHICommandList::SetLineWidth(float width) {
+		glLineWidth(width);
+	}
+	
+	void OpenGLRHICommandList::DrawLines(uint32_t vertexCount, uint32_t firstVertex) {
+		glDrawArrays(GL_LINES, firstVertex, vertexCount);
+		
+		if (auto* device = dynamic_cast<OpenGLRHIDevice*>(RHIDevice::Get())) {
+			device->GetMutableStatistics().DrawCalls++;
+		}
+	}
+	
+	void OpenGLRHICommandList::DrawArrays(uint32_t vertexCount, uint32_t firstVertex) {
+		glDrawArrays(GL_TRIANGLES, firstVertex, vertexCount);
+		
+		if (auto* device = dynamic_cast<OpenGLRHIDevice*>(RHIDevice::Get())) {
+			device->GetMutableStatistics().DrawCalls++;
+			device->GetMutableStatistics().TrianglesDrawn += vertexCount / 3;
+		}
+	}
+	
+	void OpenGLRHICommandList::GetViewport(int* viewport) const {
+		glGetIntegerv(GL_VIEWPORT, viewport);
+	}
+	
+	void OpenGLRHICommandList::SetDrawBuffers(const std::vector<uint32_t>& attachments) {
+		if (attachments.empty()) {
+			glDrawBuffer(GL_NONE);
+			return;
+		}
+		
+		std::vector<GLenum> glAttachments;
+		glAttachments.reserve(attachments.size());
+		
+		for (uint32_t attachment : attachments) {
+			glAttachments.push_back(GL_COLOR_ATTACHMENT0 + attachment);
+		}
+		
+		glDrawBuffers(static_cast<GLsizei>(glAttachments.size()), glAttachments.data());
+	}
 	
 	void OpenGLRHICommandList::BeginRenderPass(const RenderPassBeginInfo& info) {
 		m_CurrentFramebuffer = info.Framebuffer;

@@ -1,20 +1,22 @@
 #include "Stpch.h"
 
 #include "Renderer/VertexArray.h"
-#include "Renderer.h"
+#include "RHI/RHI.h"
 #include "RHI/OpenGL/OpenGLRHIVertexArray.h"
 
 namespace Lunex {
 	Ref<VertexArray> VertexArray::Create() {
-		switch (Renderer::GetAPI()) {
-			case RendererAPI::API::None:    
-				LNX_CORE_ASSERT(false, "RendererAPI::None is currently not supported!"); 
+		switch (RHI::GetCurrentAPI()) {
+			case RHI::GraphicsAPI::None:    
+				LNX_CORE_ASSERT(false, "RHI::GraphicsAPI::None is currently not supported!"); 
 				return nullptr;
-			case RendererAPI::API::OpenGL:  
+			case RHI::GraphicsAPI::OpenGL:  
 				return CreateRef<RHI::OpenGLRHIVertexArray>();
+			default:
+				break;
 		}
 		
-		LNX_CORE_ASSERT(false, "Unknown RendererAPI!");
+		LNX_CORE_ASSERT(false, "Unknown RHI::GraphicsAPI!");
 		return nullptr;
 	}
 }

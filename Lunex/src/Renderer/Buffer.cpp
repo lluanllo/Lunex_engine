@@ -1,8 +1,7 @@
 #include "stpch.h"
 #include "Buffer.h"
 
-#include "Renderer/Renderer.h"
-
+#include "RHI/RHI.h"
 #include "RHI/OpenGL/OpenGLRHIBuffer.h"
 
 namespace Lunex {
@@ -140,41 +139,47 @@ namespace Lunex {
 	// ============================================================================
 	
 	Ref<VertexBuffer> VertexBuffer::Create(uint32_t size) {
-		switch (Renderer::GetAPI()) {
-			case RendererAPI::API::None:    
-				LNX_CORE_ASSERT(false, "RendererAPI::None is currently not supported!"); 
+		switch (RHI::GetCurrentAPI()) {
+			case RHI::GraphicsAPI::None:    
+				LNX_CORE_ASSERT(false, "RHI::GraphicsAPI::None is currently not supported!"); 
 				return nullptr;
-			case RendererAPI::API::OpenGL:  
+			case RHI::GraphicsAPI::OpenGL:  
 				return CreateRef<VertexBufferAdapter>(size);
+			default:
+				break;
 		}
 		
-		LNX_CORE_ASSERT(false, "Unknown RendererAPI!");
+		LNX_CORE_ASSERT(false, "Unknown RHI::GraphicsAPI!");
 		return nullptr;
 	}
 	
 	Ref<VertexBuffer> VertexBuffer::Create(float* vertices, uint32_t size) {
-		switch (Renderer::GetAPI()) {
-			case RendererAPI::API::None:    
-				LNX_CORE_ASSERT(false, "RendererAPI::None is currently not supported!"); 
+		switch (RHI::GetCurrentAPI()) {
+			case RHI::GraphicsAPI::None:    
+				LNX_CORE_ASSERT(false, "RHI::GraphicsAPI::None is currently not supported!"); 
 				return nullptr;
-			case RendererAPI::API::OpenGL:  
+			case RHI::GraphicsAPI::OpenGL:  
 				return CreateRef<VertexBufferAdapter>(vertices, size);
+			default:
+				break;
 		}
 		
-		LNX_CORE_ASSERT(false, "Unknown RendererAPI!");
+		LNX_CORE_ASSERT(false, "Unknown RHI::GraphicsAPI!");
 		return nullptr;
 	}
 	
 	Ref<IndexBuffer> IndexBuffer::Create(unsigned int* indices, uint32_t count) {
-		switch (Renderer::GetAPI()) {
-			case RendererAPI::API::None:    
-				LNX_CORE_ASSERT(false, "RendererAPI::None is currently not supported!"); 
+		switch (RHI::GetCurrentAPI()) {
+			case RHI::GraphicsAPI::None:    
+				LNX_CORE_ASSERT(false, "RHI::GraphicsAPI::None is currently not supported!"); 
 				return nullptr;
-			case RendererAPI::API::OpenGL:  
+			case RHI::GraphicsAPI::OpenGL:  
 				return CreateRef<IndexBufferAdapter>(indices, count);
+			default:
+				break;
 		}
 		
-		LNX_CORE_ASSERT(false, "Unknown RendererAPI!");
+		LNX_CORE_ASSERT(false, "Unknown RHI::GraphicsAPI!");
 		return nullptr;
 	}
 }

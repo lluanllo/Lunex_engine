@@ -5,7 +5,7 @@
 #include "Renderer/VertexArray.h"
 #include "Renderer/Buffer.h"
 #include "Renderer/UniformBuffer.h"
-#include "Renderer/RenderCommand.h"
+#include "RHI/RHI.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -139,14 +139,17 @@ namespace Lunex {
 			return;
 		}
 		
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (!cmdList) return;
+		
 		// Save current depth function
-		DepthFunc previousDepthFunc = RenderCommand::GetDepthFunc();
+		RHI::CompareFunc previousDepthFunc = cmdList->GetDepthFunc();
 		
 		// Change depth function to LEQUAL so skybox passes at z = 1.0
-		RenderCommand::SetDepthFunc(DepthFunc::LessEqual);
+		cmdList->SetDepthFunc(RHI::CompareFunc::LessEqual);
 		
 		// Don't write to depth buffer (skybox should always be at maximum depth)
-		RenderCommand::SetDepthMask(false);
+		cmdList->SetDepthMask(false);
 		
 		// Update uniform buffer
 		s_Data.UniformData.ViewRotation = view;
@@ -164,11 +167,12 @@ namespace Lunex {
 		environment.GetEnvironmentMap()->Bind(7);
 		
 		// Draw cube
-		RenderCommand::DrawArrays(s_Data.CubeVAO, 36);
+		s_Data.CubeVAO->Bind();
+		cmdList->DrawArrays(36);
 		
 		// Restore state
-		RenderCommand::SetDepthMask(true);
-		RenderCommand::SetDepthFunc(previousDepthFunc);
+		cmdList->SetDepthMask(true);
+		cmdList->SetDepthFunc(previousDepthFunc);
 	}
 	
 	void SkyboxRenderer::RenderSolidColor(const glm::vec3& color, const EditorCamera& camera) {
@@ -282,7 +286,10 @@ namespace Lunex {
 
 	void SkyboxRenderer::ApplyBackgroundClearColor() {
 		// Apply the stored background color to the renderer clear color
-		RenderCommand::SetClearColor(glm::vec4(s_Data.BackgroundColor, 1.0f));
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (cmdList) {
+			cmdList->SetClearColor(glm::vec4(s_Data.BackgroundColor, 1.0f));
+		}
 	}
 	
 }

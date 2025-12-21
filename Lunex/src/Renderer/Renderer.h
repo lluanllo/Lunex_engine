@@ -1,12 +1,12 @@
 #pragma once
 
-#include "RenderCommand.h"
-
 #include "OrthographicCamera.h"
 #include "Shader.h"
+#include "VertexArray.h"
+#include "RHI/RHI.h"
 
 namespace Lunex {
-	class   Renderer {	
+	class Renderer {	
 		public:
 			static void Init();
 			static void Shutdown();
@@ -18,7 +18,7 @@ namespace Lunex {
 			
 			static void Submit(const Ref<Shader>& shader, const Ref<VertexArray>& vertexArray, const glm::mat4& transform = glm::mat4(1.0f));
 			
-			inline static RendererAPI::API GetAPI() { return RendererAPI::GetAPI(); }
+			inline static RHI::GraphicsAPI GetAPI() { return RHI::GetCurrentAPI(); }
 			
 		private:
 			struct SceneData{

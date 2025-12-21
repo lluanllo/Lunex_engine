@@ -19,6 +19,8 @@
 #include "RHIBuffer.h"
 #include "RHIPipeline.h"
 
+#include <glm/glm.hpp>
+
 namespace Lunex {
 namespace RHI {
 
@@ -158,6 +160,61 @@ namespace RHI {
 		 * @brief Check if currently recording
 		 */
 		virtual bool IsRecording() const = 0;
+		
+		// ============================================
+		// IMMEDIATE STATE (for legacy compatibility)
+		// ============================================
+		
+		/**
+		 * @brief Set the clear color for subsequent clear operations
+		 * @param color RGBA clear color
+		 */
+		virtual void SetClearColor(const glm::vec4& color) = 0;
+		
+		/**
+		 * @brief Clear the current framebuffer with the set clear color
+		 */
+		virtual void Clear() = 0;
+		
+		/**
+		 * @brief Enable or disable depth mask (writing to depth buffer)
+		 */
+		virtual void SetDepthMask(bool enabled) = 0;
+		
+		/**
+		 * @brief Set the depth comparison function
+		 */
+		virtual void SetDepthFunc(CompareFunc func) = 0;
+		
+		/**
+		 * @brief Get the current depth function
+		 */
+		virtual CompareFunc GetDepthFunc() const = 0;
+		
+		/**
+		 * @brief Set the line width for line drawing
+		 */
+		virtual void SetLineWidth(float width) = 0;
+		
+		/**
+		 * @brief Draw lines (non-indexed)
+		 */
+		virtual void DrawLines(uint32_t vertexCount, uint32_t firstVertex = 0) = 0;
+		
+		/**
+		 * @brief Draw triangles non-indexed using currently bound vertex array
+		 */
+		virtual void DrawArrays(uint32_t vertexCount, uint32_t firstVertex = 0) = 0;
+		
+		/**
+		 * @brief Get current viewport dimensions
+		 */
+		virtual void GetViewport(int* viewport) const = 0;
+		
+		/**
+		 * @brief Set the draw buffers for MRT rendering
+		 */
+		virtual void SetDrawBuffers(const std::vector<uint32_t>& attachments) = 0;
 		
 		// ============================================
 		// RENDER PASS
