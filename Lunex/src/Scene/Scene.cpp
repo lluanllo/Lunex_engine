@@ -14,6 +14,12 @@
 #include "Scripting/ScriptingEngine.h"
 #include "Physics/Physics.h"
 
+// AAA Architecture: Include Systems
+#include "Scene/Systems/PhysicsSystem2D.h"
+#include "Scene/Systems/PhysicsSystem3D.h"
+#include "Scene/Systems/ScriptSystem.h"
+#include "Scene/Systems/SceneRenderSystem.h"
+
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
 
@@ -32,19 +38,96 @@ namespace Lunex {
 	}
 
 	Scene::Scene() {
-		// Inicializar el motor de scripting
-		m_ScriptingEngine = std::make_unique<ScriptingEngine>();
-		m_ScriptingEngine->Initialize(this);
+		// Initialize scene context
+		m_Context.Registry = &m_Registry;
+		m_Context.OwningScene = this;
+		m_Context.Mode = SceneMode::Edit;
+		
+		// Initialize AAA systems (ScriptSystem now handles scripting)
+		InitializeSystems();
+		
+		// Legacy scripting engine is no longer needed - ScriptSystem handles it
+		// m_ScriptingEngine = std::make_unique<ScriptingEngine>();
+		// m_ScriptingEngine->Initialize(this);
 	}
 
 	Scene::~Scene() {
-		// El ScriptingEngine se destruirá automáticamente (unique_ptr)
-
-		// Box2D v3.x: verificar si el mundo existe antes de destruir
+		// Shutdown systems first
+		ShutdownSystems();
+		
+		// Legacy cleanup
 		if (B2_IS_NON_NULL(m_PhysicsWorld)) {
 			b2DestroyWorld(m_PhysicsWorld);
 		}
 	}
+	
+	// ========================================================================
+	// SYSTEM MANAGEMENT (AAA Architecture)
+	// ========================================================================
+	
+	void Scene::InitializeSystems() {
+		// Create and attach systems in priority order
+		// Note: Systems are stored sorted by priority
+		
+		// AAA Architecture: Systems are now fully integrated
+		// They coexist with legacy code during transition period
+		
+		// Script System (priority: 100)
+		auto scriptSystem = std::make_unique<ScriptSystem>();
+		scriptSystem->OnAttach(m_Context);
+		m_Systems.push_back(std::move(scriptSystem));
+		
+		// Physics 2D System (priority: 200) - Legacy code still handles physics for now
+		// auto physics2D = std::make_unique<PhysicsSystem2D>();
+		// physics2D->OnAttach(m_Context);
+		// m_Systems.push_back(std::move(physics2D));
+		
+		// Physics 3D System (priority: 200) - Legacy code still handles physics for now
+		// auto physics3D = std::make_unique<PhysicsSystem3D>();
+		// physics3D->OnAttach(m_Context);
+		// m_Systems.push_back(std::move(physics3D));
+		
+		// Render System (priority: 1000) - Legacy rendering still active
+		// auto renderSystem = std::make_unique<SceneRenderSystem>();
+		// renderSystem->OnAttach(m_Context);
+		// m_Systems.push_back(std::move(renderSystem));
+		
+		// Sort systems by priority
+		std::sort(m_Systems.begin(), m_Systems.end(),
+			[](const std::unique_ptr<ISceneSystem>& a, const std::unique_ptr<ISceneSystem>& b) {
+				return static_cast<uint32_t>(a->GetPriority()) < static_cast<uint32_t>(b->GetPriority());
+			});
+		
+		LNX_LOG_INFO("Scene systems initialized ({0} systems)", m_Systems.size());
+	}
+	
+	void Scene::ShutdownSystems() {
+		// Shutdown in reverse order
+		for (auto it = m_Systems.rbegin(); it != m_Systems.rend(); ++it) {
+			(*it)->OnDetach();
+		}
+		m_Systems.clear();
+	}
+	
+	void Scene::UpdateSystems(Timestep ts, SceneMode mode) {
+		for (auto& system : m_Systems) {
+			if (system->IsEnabled() && system->IsActiveInMode(mode)) {
+				system->OnUpdate(ts, mode);
+			}
+		}
+	}
+	
+	void Scene::DispatchEvent(const SceneSystemEvent& event) {
+		// Dispatch to context listeners
+		m_Context.DispatchEvent(event);
+		
+		// Dispatch to each system
+		for (auto& system : m_Systems) {
+			system->OnSceneEvent(event);
+		}
+	}
+
+	// ...existing code for CopyComponent templates...
 
 	template<typename... Component>
 	static void CopyComponent(entt::registry& dst, entt::registry& src, const std::unordered_map<UUID, entt::entity>& enttMap) {
@@ -82,8 +165,8 @@ namespace Lunex {
 	Ref<Scene> Scene::Copy(Ref<Scene> other) {
 		Ref<Scene> newScene = CreateRef<Scene>();
 
-		newScene->m_ViewportWidth = other->m_ViewportWidth;
-		newScene->m_ViewportHeight = other->m_ViewportHeight;
+		newScene->m_Context.ViewportWidth = other->m_Context.ViewportWidth;
+		newScene->m_Context.ViewportHeight = other->m_Context.ViewportHeight;
 
 		auto& srcSceneRegistry = other->m_Registry;
 		auto& dstSceneRegistry = newScene->m_Registry;
@@ -114,54 +197,83 @@ namespace Lunex {
 		entity.AddComponent<TransformComponent>();
 		auto& tag = entity.AddComponent<TagComponent>();
 		tag.Tag = name.empty() ? "Entity" : name;
+		
+		// Dispatch entity created event
+		DispatchEvent(SceneSystemEvent::EntityCreated(entity, uuid));
 
 		return entity;
 	}
 
 	void Scene::DestroyEntity(Entity entity) {
+		// Dispatch event before destruction
+		UUID uuid = entity.GetUUID();
+		DispatchEvent(SceneSystemEvent::EntityDestroyed(entity, uuid));
+		
 		m_Registry.destroy(entity);
 	}
 
 	void Scene::OnRuntimeStart() {
+		m_Context.Mode = SceneMode::Play;
+		
+		// Start AAA systems (includes ScriptSystem)
+		for (auto& system : m_Systems) {
+			if (system->IsEnabled()) {
+				system->OnRuntimeStart(SceneMode::Play);
+			}
+		}
+		
+		// Legacy physics code (will be replaced when PhysicsSystem2D/3D are enabled)
 		OnPhysics2DStart();
 		OnPhysics3DStart();
-		m_ScriptingEngine->OnScriptsStart(m_Registry);
 	}
 
 	void Scene::OnRuntimeStop() {
-		m_ScriptingEngine->OnScriptsStop(m_Registry);
+		// Legacy physics code
 		OnPhysics3DStop();
 		OnPhysics2DStop();
+		
+		// Stop AAA systems
+		for (auto& system : m_Systems) {
+			system->OnRuntimeStop();
+		}
+		
+		m_Context.Mode = SceneMode::Edit;
 	}
 
 	void Scene::OnSimulationStart() {
+		m_Context.Mode = SceneMode::Simulate;
+		
+		// Start AAA systems
+		for (auto& system : m_Systems) {
+			if (system->IsEnabled()) {
+				system->OnRuntimeStart(SceneMode::Simulate);
+			}
+		}
+		
+		// Legacy physics code
 		OnPhysics2DStart();
 		OnPhysics3DStart();
 	}
 
 	void Scene::OnSimulationStop() {
+		// Legacy physics code
 		OnPhysics3DStop();
 		OnPhysics2DStop();
+		
+		// Stop AAA systems
+		for (auto& system : m_Systems) {
+			system->OnRuntimeStop();
+		}
+		
+		m_Context.Mode = SceneMode::Edit;
 	}
 
 	void Scene::OnUpdateRuntime(Timestep ts) {
-		// Update scripts con deltaTime real
-		m_ScriptingEngine->OnScriptsUpdate(ts);
-
-		// Native scripts
-		{
-			m_Registry.view<NativeScriptComponent>().each([=](auto entity, auto& nsc) {
-				if (!nsc.Instance) {
-					nsc.Instance = nsc.InstantiateScript();
-					nsc.Instance->m_Entity = Entity{ entity, this };
-					nsc.Instance->OnCreate();
-				}
-				nsc.Instance->OnUpdate(ts);
-				});
-		}
+		// Update AAA systems (includes ScriptSystem for scripts)
+		UpdateSystems(ts, SceneMode::Play);
 
 		// ========================================
-		// PARALLELIZED PHYSICS 2D
+		// PARALLELIZED PHYSICS 2D (Legacy - will be replaced by PhysicsSystem2D)
 		// ========================================
 		{
 			// ✅ Box2D v3.x: Step con firma actualizada
@@ -343,6 +455,9 @@ namespace Lunex {
 	}
 
 	void Scene::OnUpdateSimulation(Timestep ts, EditorCamera& camera) {
+		// Update AAA systems
+		UpdateSystems(ts, SceneMode::Simulate);
+		
 		// Physics 2D
 		{
 			// ✅ Box2D v3.x: Step con firma actualizada
@@ -411,13 +526,19 @@ namespace Lunex {
 	}
 
 	void Scene::OnUpdateEditor(Timestep ts, EditorCamera& camera) {
+		// Update AAA systems (only those active in Edit mode)
+		UpdateSystems(ts, SceneMode::Edit);
+		
 		// Render
 		RenderScene(camera);
 	}
 
 	void Scene::OnViewportResize(uint32_t width, uint32_t height) {
-		m_ViewportWidth = width;
-		m_ViewportHeight = height;
+		m_Context.ViewportWidth = width;
+		m_Context.ViewportHeight = height;
+		
+		// Dispatch viewport resize event
+		DispatchEvent(SceneSystemEvent::ViewportResized(width, height));
 
 		// Resize our non-FixedAspectRatio cameras
 		auto view = m_Registry.view<CameraComponent>();
@@ -790,8 +911,8 @@ namespace Lunex {
 
 	template<>
 	void Scene::OnComponentAdded<CameraComponent>(Entity entity, CameraComponent& component) {
-		if (m_ViewportWidth > 0 && m_ViewportHeight > 0)
-			component.Camera.SetViewportSize(m_ViewportWidth, m_ViewportHeight);
+		if (m_Context.ViewportWidth > 0 && m_Context.ViewportHeight > 0)
+			component.Camera.SetViewportSize(m_Context.ViewportWidth, m_Context.ViewportHeight);
 	}
 
 	template<>
@@ -1038,6 +1159,9 @@ namespace Lunex {
 				// Nueva posición local = posición mundial anterior - posición mundial del padre
 				child.GetComponent<TransformComponent>().Translation = childWorldPos - parentWorldPos;
 			}
+			
+			// Dispatch hierarchy event
+			DispatchEvent(SceneSystemEvent::ParentChanged(child, parent, childUUID, parentUUID));
 		}
 	}
 
@@ -1066,7 +1190,7 @@ namespace Lunex {
 
 		childRel.ClearParent();
 
-		// Restaurar posición mundial como posición local (ya no tiene padre)
+		// restaurar posición mundial como posición local (ya no tiene padre)
 		if (child.HasComponent<TransformComponent>()) {
 			child.GetComponent<TransformComponent>().Translation = childWorldPos;
 		}

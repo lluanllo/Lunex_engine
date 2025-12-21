@@ -2,13 +2,13 @@
 
 #include "Core/Core.h"
 #include "Renderer/Texture.h"
+#include "Scene/Core/SceneMode.h"  // AAA Architecture: Use SceneMode
 #include <functional>
 #include <glm/glm.hpp>
 
 namespace Lunex {
-	enum class SceneState {
-		Edit = 0, Play = 1, Simulate = 2
-	};
+	// Legacy alias for backwards compatibility
+	using SceneState = SceneMode;
 
 	class ToolbarPanel {
 	public:
@@ -16,7 +16,7 @@ namespace Lunex {
 		~ToolbarPanel() = default;
 
 		// Renderiza la toolbar flotante sobre el viewport
-		void OnImGuiRender(SceneState sceneState, bool toolbarEnabled,
+		void OnImGuiRender(SceneMode sceneState, bool toolbarEnabled,
 						   const glm::vec2& viewportBounds, const glm::vec2& viewportSize);
 
 		void SetPlayIcon(Ref<Texture2D> icon) { m_IconPlay = icon; }
