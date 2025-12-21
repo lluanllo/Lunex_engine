@@ -3,11 +3,18 @@
 /**
  * @file RenderSystem.h
  * @brief High-level rendering system facade
+ * 
+ * AAA-level architecture with:
+ * - Data-driven pass registration via RenderPassDescriptor
+ * - Automatic dependency resolution
+ * - Parallel execution support
+ * - Resource lifetime management
  */
 
 #include "Core/Core.h"
 #include "RenderGraph.h"
 #include "RenderPass.h"
+#include "RenderPassDescriptor.h"
 #include "RenderPassJob.h"
 #include "Passes/GeometryPass.h"
 #include "Passes/EnvironmentPass.h"
@@ -82,6 +89,20 @@ namespace Lunex {
 	/**
 	 * @class RenderSystem
 	 * @brief Main rendering system facade
+	 * 
+	 * Usage (data-driven):
+	 * ```cpp
+	 * // Register passes via descriptors
+	 * RenderSystem::RegisterPass(RenderPassDescriptor::Graphics(
+	 *     "MyPass",
+	 *     PassCategory::ForwardOpaque,
+	 *     { inputs... },
+	 *     { outputs... },
+	 *     [](auto& cmd, auto& res, auto& scene) { ... }
+	 * ));
+	 * 
+	 * // Or use automatic registration with REGISTER_RENDER_PASS macro
+	 * ```
 	 */
 	class RenderSystem {
 	public:
@@ -146,6 +167,35 @@ namespace Lunex {
 		static std::string ExportRenderGraphViz();
 		
 		// ============================================
+		// DATA-DRIVEN PASS REGISTRATION (NEW AAA API)
+		// ============================================
+		
+		/**
+		 * @brief Register a pass from descriptor
+		 */
+		static void RegisterPass(const RenderPassDescriptor& descriptor);
+		
+		/**
+		 * @brief Unregister a pass by name
+		 */
+		static void UnregisterPass(const std::string& name);
+		
+		/**
+		 * @brief Enable/disable a registered pass at runtime
+		 */
+		static void SetPassEnabled(const std::string& name, bool enabled);
+		
+		/**
+		 * @brief Check if a pass is enabled
+		 */
+		static bool IsPassEnabled(const std::string& name);
+		
+		/**
+		 * @brief Get all registered pass names
+		 */
+		static std::vector<std::string> GetRegisteredPasses();
+		
+		// ============================================
 		// EDITOR API
 		// ============================================
 		
@@ -188,6 +238,7 @@ namespace Lunex {
 		~RenderSystem() = delete;
 		
 		static void BuildRenderGraph();
+		static void BuildRenderGraphFromDescriptors();
 		static void ExecuteRenderGraph();
 		static void ExecuteRenderGraphParallel();
 		
@@ -201,19 +252,19 @@ namespace Lunex {
 			// Job Scheduler for parallel pass execution
 			Scope<RenderJobScheduler> JobScheduler;
 			
-			// Render passes (from GeometryPass.h)
+			// Legacy render passes (kept for compatibility)
 			Scope<GeometryPass> GeometryPassPtr;
 			Scope<TransparentPass> TransparentPassPtr;
-			
-			// Render passes (from EnvironmentPass.h)
 			Scope<SkyboxPass> SkyboxPassPtr;
 			Scope<IBLPass> IBLPassPtr;
-			
-			// Render passes (from EditorPass.h)
 			Scope<GridPass> GridPassPtr;
 			Scope<GizmoPass> GizmoPassPtr;
 			Scope<SelectionOutlinePass> SelectionOutlinePassPtr;
 			Scope<DebugVisualizationPass> DebugVisualizationPassPtr;
+			
+			// Data-driven pass descriptors (NEW)
+			std::unordered_map<std::string, RenderPassDescriptor> RegisteredPasses;
+			bool UseDataDrivenPasses = false;  // Toggle between legacy and new system
 			
 			// Scene info for current frame
 			SceneRenderInfo CurrentSceneInfo;

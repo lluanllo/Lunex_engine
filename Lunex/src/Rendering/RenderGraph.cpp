@@ -313,6 +313,144 @@ namespace Lunex {
 		}
 	}
 	
+	// ============================================================================
+	// RESOURCE LOOKUP
+	// ============================================================================
+	
+	RenderGraphResource RenderGraph::GetResource(const std::string& name) const {
+		auto it = m_ResourceNameMap.find(name);
+		if (it != m_ResourceNameMap.end()) {
+			auto& node = m_Resources[it->second];
+			return RenderGraphResource(it->second, node->Type);
+		}
+		return RenderGraphResource();
+	}
+	
+	bool RenderGraph::HasResource(const std::string& name) const {
+		return m_ResourceNameMap.find(name) != m_ResourceNameMap.end();
+	}
+	
+	// ============================================================================
+	// RESOURCE POOLING (AAA-level memory management)
+	// ============================================================================
+	
+	Ref<RHI::RHITexture2D> RenderGraph::AcquirePooledTexture(const RenderGraphTextureDesc& desc) {
+		if (!m_EnableResourcePooling) {
+			// Create new texture directly
+			RHI::TextureDesc texDesc;
+			if (desc.Policy == RenderGraphTextureDesc::SizePolicy::ScaleToSwapchain) {
+				texDesc.Width = static_cast<uint32_t>(m_SwapchainWidth * desc.ScaleX);
+				texDesc.Height = static_cast<uint32_t>(m_SwapchainHeight * desc.ScaleY);
+			} else {
+				texDesc.Width = desc.Width;
+				texDesc.Height = desc.Height;
+			}
+			texDesc.Format = desc.Format;
+			texDesc.MipLevels = desc.MipLevels;
+			texDesc.IsRenderTarget = desc.IsRenderTarget;
+			texDesc.DebugName = desc.DebugName;
+			
+			m_PoolStats.PoolMisses++;
+			return RHI::RHITexture2D::Create(texDesc);
+		}
+		
+		// Calculate target dimensions
+		uint32_t targetWidth, targetHeight;
+		if (desc.Policy == RenderGraphTextureDesc::SizePolicy::ScaleToSwapchain) {
+			targetWidth = static_cast<uint32_t>(m_SwapchainWidth * desc.ScaleX);
+			targetHeight = static_cast<uint32_t>(m_SwapchainHeight * desc.ScaleY);
+		} else {
+			targetWidth = desc.Width;
+			targetHeight = desc.Height;
+		}
+		
+		// Look for compatible texture in pool
+		for (auto& pooled : m_TexturePool) {
+			if (pooled.Texture && 
+				pooled.Desc.Format == desc.Format &&
+				pooled.Desc.MipLevels == desc.MipLevels &&
+				pooled.Desc.IsRenderTarget == desc.IsRenderTarget) {
+				
+				// Check size match (allow exact or larger)
+				uint32_t pooledWidth, pooledHeight;
+				if (pooled.Desc.Policy == RenderGraphTextureDesc::SizePolicy::ScaleToSwapchain) {
+					pooledWidth = static_cast<uint32_t>(m_SwapchainWidth * pooled.Desc.ScaleX);
+					pooledHeight = static_cast<uint32_t>(m_SwapchainHeight * pooled.Desc.ScaleY);
+				} else {
+					pooledWidth = pooled.Desc.Width;
+					pooledHeight = pooled.Desc.Height;
+				}
+				
+				if (pooledWidth == targetWidth && pooledHeight == targetHeight) {
+					// Found compatible texture
+					Ref<RHI::RHITexture2D> result = pooled.Texture;
+					pooled.Texture = nullptr;  // Mark as used
+					pooled.LastUsedFrame = m_CurrentFrame;
+					m_PoolStats.PoolHits++;
+					return result;
+				}
+			}
+		}
+		
+		// No compatible texture found, create new one
+		RHI::TextureDesc texDesc;
+		texDesc.Width = targetWidth;
+		texDesc.Height = targetHeight;
+		texDesc.Format = desc.Format;
+		texDesc.MipLevels = desc.MipLevels;
+		texDesc.IsRenderTarget = desc.IsRenderTarget;
+		texDesc.DebugName = desc.DebugName;
+		
+		m_PoolStats.PoolMisses++;
+		return RHI::RHITexture2D::Create(texDesc);
+	}
+	
+	void RenderGraph::ReleasePooledTextures() {
+		// Return allocated textures to pool for next frame
+		for (auto& resNode : m_Resources) {
+			if (resNode->IsImported) continue;
+			
+			if (resNode->AllocatedTexture) {
+				// Add to pool
+				PooledTexture pooled;
+				pooled.Texture = resNode->AllocatedTexture;
+				pooled.Desc = resNode->TextureDesc;
+				pooled.LastUsedFrame = m_CurrentFrame;
+				
+				m_TexturePool.push_back(pooled);
+				resNode->AllocatedTexture = nullptr;
+			}
+		}
+		
+		// Update pool statistics
+		m_PoolStats.PooledTextures = 0;
+		m_PoolStats.PooledMemory = 0;
+		for (const auto& pooled : m_TexturePool) {
+			if (pooled.Texture) {
+				m_PoolStats.PooledTextures++;
+				m_PoolStats.PooledMemory += pooled.Texture->GetGPUMemorySize();
+			}
+		}
+		
+		// Cleanup old textures (not used for 3 frames)
+		const uint64_t maxAge = 3;
+		m_TexturePool.erase(
+			std::remove_if(m_TexturePool.begin(), m_TexturePool.end(),
+				[this, maxAge](const PooledTexture& p) {
+					return p.Texture == nullptr || 
+						   (m_CurrentFrame - p.LastUsedFrame) > maxAge;
+				}),
+			m_TexturePool.end()
+		);
+	}
+	
+	void RenderGraph::ClearResourcePool() {
+		m_TexturePool.clear();
+		m_BufferPool.clear();
+		m_PoolStats = PoolStatistics{};
+		LNX_LOG_INFO("RenderGraph: Resource pool cleared");
+	}
+	
 	void RenderGraph::AllocateResources() {
 		m_Stats.TransientResources = 0;
 		m_Stats.TransientMemoryUsage = 0;
@@ -321,26 +459,13 @@ namespace Lunex {
 			if (resNode->IsImported) continue;  // Already allocated
 			
 			if (resNode->Type == RenderGraphResourceType::Texture) {
-				RHI::TextureDesc texDesc;
+				// Use pooled allocation
+				resNode->AllocatedTexture = AcquirePooledTexture(resNode->TextureDesc);
 				
-				auto& desc = resNode->TextureDesc;
-				if (desc.Policy == RenderGraphTextureDesc::SizePolicy::ScaleToSwapchain) {
-					texDesc.Width = static_cast<uint32_t>(m_SwapchainWidth * desc.ScaleX);
-					texDesc.Height = static_cast<uint32_t>(m_SwapchainHeight * desc.ScaleY);
-				} else {
-					texDesc.Width = desc.Width;
-					texDesc.Height = desc.Height;
+				if (resNode->AllocatedTexture) {
+					m_Stats.TransientResources++;
+					m_Stats.TransientMemoryUsage += resNode->AllocatedTexture->GetGPUMemorySize();
 				}
-				
-				texDesc.Format = desc.Format;
-				texDesc.MipLevels = desc.MipLevels;
-				texDesc.IsRenderTarget = desc.IsRenderTarget;
-				texDesc.DebugName = desc.DebugName;
-				
-				resNode->AllocatedTexture = RHI::RHITexture2D::Create(texDesc);
-				
-				m_Stats.TransientResources++;
-				m_Stats.TransientMemoryUsage += resNode->AllocatedTexture->GetGPUMemorySize();
 				
 			} else if (resNode->Type == RenderGraphResourceType::Buffer) {
 				RHI::BufferDesc bufDesc;
@@ -348,7 +473,7 @@ namespace Lunex {
 				bufDesc.Usage = resNode->BufferDesc.Usage;
 				bufDesc.Size = resNode->BufferDesc.Size;
 				
-				// TODO: Create buffer through RHIDevice
+				// TODO: Implement buffer pooling similar to textures
 				
 				m_Stats.TransientResources++;
 			}
@@ -443,12 +568,20 @@ namespace Lunex {
 	}
 	
 	void RenderGraph::Reset() {
+		// Release textures back to pool before clearing
+		if (m_EnableResourcePooling) {
+			ReleasePooledTextures();
+		}
+		
 		m_Passes.clear();
 		m_Resources.clear();
 		m_ResourceNameMap.clear();
 		m_Compiled = false;
 		m_BackbufferSource = RenderGraphResource();
 		m_Stats = Statistics{};
+		
+		// Increment frame counter for pool management
+		m_CurrentFrame++;
 	}
 	
 	std::string RenderGraph::ExportGraphViz() const {

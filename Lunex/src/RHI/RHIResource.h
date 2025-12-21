@@ -29,7 +29,8 @@ namespace RHI {
 		Framebuffer,
 		CommandList,
 		Fence,
-		Query
+		Query,
+		InputLayout  // NEW: API-agnostic vertex input description
 	};
 
 	// ============================================================================
