@@ -3,10 +3,11 @@
 
 #include "Entity.h"
 #include "Components.h"
-#include "Core/JobSystem/JobSystem.h"  // ✅ Added for parallel serialization
+#include "Core/JobSystem/JobSystem.h"
+#include "Renderer/SkyboxRenderer.h"  // For global skybox serialization
 
 #include <fstream>
-#include <sstream>  // ✅ Added for istringstream
+#include <sstream>
 #include <unordered_map>
 #include <yaml-cpp/yaml.h>
 
@@ -469,6 +470,30 @@ namespace Lunex {
 		YAML::Emitter out;
 		out << YAML::BeginMap;
 		out << YAML::Key << "Scene" << YAML::Value << "Untitled";
+		
+		// ========================================
+		// SERIALIZE GLOBAL SKYBOX/HDRI SETTINGS
+		// ========================================
+		out << YAML::Key << "GlobalSkybox" << YAML::Value << YAML::BeginMap;
+		out << YAML::Key << "Enabled" << YAML::Value << SkyboxRenderer::IsEnabled();
+		
+		if (SkyboxRenderer::HasEnvironmentLoaded()) {
+			std::string hdriPath = SkyboxRenderer::GetHDRIPath();
+			if (!hdriPath.empty()) {
+				out << YAML::Key << "HDRIPath" << YAML::Value << hdriPath;
+				out << YAML::Key << "Intensity" << YAML::Value << SkyboxRenderer::GetIntensity();
+				out << YAML::Key << "Rotation" << YAML::Value << SkyboxRenderer::GetRotation();
+				out << YAML::Key << "Tint" << YAML::Value << SkyboxRenderer::GetTint();
+				out << YAML::Key << "Blur" << YAML::Value << SkyboxRenderer::GetBlur();
+			}
+		} else {
+			// Save background color when no HDRI is loaded
+			out << YAML::Key << "HDRIPath" << YAML::Value << "";
+			out << YAML::Key << "BackgroundColor" << YAML::Value << SkyboxRenderer::GetBackgroundColor();
+		}
+		
+		out << YAML::EndMap; // GlobalSkybox
+		
 		out << YAML::Key << "Entities" << YAML::Value << YAML::BeginSeq;
 		
 		m_Scene->m_Registry.view<entt::entity>().each([&](auto entityID) {
@@ -486,6 +511,10 @@ namespace Lunex {
 		fout << out.c_str();
 		
 		LNX_LOG_INFO("Scene serialized to: {0}", filepath);
+		LNX_LOG_INFO("  - Global Skybox: {0}", SkyboxRenderer::IsEnabled() ? "Enabled" : "Disabled");
+		if (SkyboxRenderer::HasEnvironmentLoaded()) {
+			LNX_LOG_INFO("  - HDRI loaded: Yes");
+		}
 	}
 	
 	void SceneSerializer::SerializeRuntime(const std::string& filepath) {
@@ -507,6 +536,54 @@ namespace Lunex {
 		
 		std::string sceneName = data["Scene"].as<std::string>();
 		LNX_LOG_TRACE("Deserializing scene '{0}'", sceneName);
+		
+		// ========================================
+		// DESERIALIZE GLOBAL SKYBOX/HDRI SETTINGS
+		// ========================================
+		auto globalSkybox = data["GlobalSkybox"];
+		if (globalSkybox) {
+			if (globalSkybox["Enabled"]) {
+				SkyboxRenderer::SetEnabled(globalSkybox["Enabled"].as<bool>());
+			}
+			
+			if (globalSkybox["HDRIPath"]) {
+				std::string hdriPath = globalSkybox["HDRIPath"].as<std::string>();
+				
+				if (!hdriPath.empty()) {
+					// Load HDRI
+					bool loaded = SkyboxRenderer::LoadHDRI(hdriPath);
+					
+					if (loaded) {
+						// Apply settings
+						if (globalSkybox["Intensity"]) {
+							SkyboxRenderer::SetIntensity(globalSkybox["Intensity"].as<float>());
+						}
+						if (globalSkybox["Rotation"]) {
+							SkyboxRenderer::SetRotation(globalSkybox["Rotation"].as<float>());
+						}
+						if (globalSkybox["Tint"]) {
+							SkyboxRenderer::SetTint(globalSkybox["Tint"].as<glm::vec3>());
+						}
+						if (globalSkybox["Blur"]) {
+							SkyboxRenderer::SetBlur(globalSkybox["Blur"].as<float>());
+						}
+						
+						LNX_LOG_INFO("Loaded global HDRI: {0}", hdriPath);
+					} else {
+						LNX_LOG_WARN("Failed to load HDRI from: {0}", hdriPath);
+					}
+				} else {
+					// No HDRI, use background color
+					if (globalSkybox["BackgroundColor"]) {
+						SkyboxRenderer::SetBackgroundColor(globalSkybox["BackgroundColor"].as<glm::vec3>());
+					}
+				}
+			}
+		} else {
+			// No skybox data - use defaults
+			SkyboxRenderer::SetEnabled(false);
+			LNX_LOG_INFO("No global skybox data found, using defaults");
+		}
 		
 		std::unordered_set<uint64_t> seenIds;
 		

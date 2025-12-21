@@ -8,7 +8,7 @@
 #include "../Panels/StatsPanel.h"
 #include "../Panels/SettingsPanel.h"
 #include "../Panels/ViewportPanel.h"
-#include "../Panels/ToolbarPanel.h"
+#include "../Panels/ToolbarPanel.h"  // This includes SceneMode.h and defines SceneState alias
 #include "../Panels/ConsolePanel.h"
 #include "../Panels/MenuBarPanel.h"
 #include "../Panels/ProjectCreationDialog.h"
@@ -18,8 +18,11 @@
 #include "../Panels/MeshImportModal.h"
 
 #include "Scene/Camera/EditorCamera.h"
+// Note: SceneMode.h is included via ToolbarPanel.h
 
 namespace Lunex {
+	// Note: SceneState alias is defined in ToolbarPanel.h
+	
 	class EditorLayer : public Layer {
 		public:
 			EditorLayer();

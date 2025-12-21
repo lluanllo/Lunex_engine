@@ -22,6 +22,7 @@
 #include "Scene/Entity.h"
 #include "Scene/ScriptableEntity.h"
 #include "Scene/Components.h"
+#include "Scene/SceneManager.h"
 //-----------------------
 
 //---Lunex Physics-------
@@ -45,6 +46,13 @@
 //===== AAA ARCHITECTURE =====
 // These are the new, properly layered systems.
 // Legacy includes above still work via compatibility wrappers.
+
+//---AAA Scene System---
+#include "Scene/Core/SceneMode.h"
+#include "Scene/Core/SceneContext.h"
+#include "Scene/Core/SceneEvents.h"
+#include "Scene/Core/ISceneSystem.h"
+//-----------------------
 
 //---AAA Camera System---
 #include "Scene/Camera/CameraData.h"

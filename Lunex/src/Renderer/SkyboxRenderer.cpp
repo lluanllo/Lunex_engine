@@ -257,6 +257,13 @@ namespace Lunex {
 		return s_Data.GlobalEnvironment;
 	}
 	
+	std::string SkyboxRenderer::GetHDRIPath() {
+		if (s_Data.GlobalEnvironment && s_Data.GlobalEnvironment->IsLoaded()) {
+			return s_Data.GlobalEnvironment->GetPath();
+		}
+		return "";
+	}
+	
 	void SkyboxRenderer::RenderGlobalSkybox(const EditorCamera& camera) {
 		if (!s_Data.Enabled) {
 			return;

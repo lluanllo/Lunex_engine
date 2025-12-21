@@ -79,6 +79,12 @@ namespace Lunex {
 		// Get global environment for IBL lighting
 		static Ref<EnvironmentMap> GetGlobalEnvironment();
 		
+		/**
+		 * Get the path of the currently loaded HDRI
+		 * Returns empty string if no HDRI is loaded
+		 */
+		static std::string GetHDRIPath();
+		
 		// ========================================
 		// RENDER GLOBAL SKYBOX
 		// ========================================
