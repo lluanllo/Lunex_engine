@@ -1,9 +1,9 @@
 #pragma once
 #include "Core/Core.h"
 
-#include "OrthographicCamera.h"
-#include "Camera.h"
-#include "EditorCamera.h"
+#include "Scene/Camera/OrthographicCamera.h"
+#include "Scene/Camera/Camera.h"
+#include "Scene/Camera/EditorCamera.h"
 
 #include "Scene/Components.h"
 

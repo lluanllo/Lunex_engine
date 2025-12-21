@@ -3,6 +3,9 @@
 #include "Project.h"
 
 namespace Lunex {
+	// Forward declaration
+	class AssetDatabase;
+	
 	class ProjectManager {
 	public:
 		static Ref<Project> New();
@@ -10,6 +13,10 @@ namespace Lunex {
 		static bool SaveActive(const std::filesystem::path& path);
 		
 		static Ref<Project> GetActiveProject() { return Project::s_ActiveProject; }
+		
+		// ? NEW: AssetDatabase management
+		static AssetDatabase& GetAssetDatabase();
+		static void RefreshAssetDatabase();
 		
 	private:
 		static bool CreateProjectDirectories(const std::filesystem::path& projectPath);

@@ -16,6 +16,41 @@ outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
 VULKAN_SDK = os.getenv("VULKAN_SDK")
 
+-- ============================================================================
+-- KTX-Software SDK Detection
+-- ============================================================================
+KTX_SDK_PATH = nil
+
+-- Try to load KTX config from Python setup script
+if os.isfile("ktx_config.lua") then
+    dofile("ktx_config.lua")
+end
+
+-- If not found, try common installation paths
+if KTX_SDK_PATH == nil then
+    local ktx_paths = {
+        "C:/Program Files/KTX-Software",
+        "C:/Program Files/KTX-Software-4.3.2",
+        os.getenv("KTX_SDK") or ""
+    }
+    
+    for _, path in ipairs(ktx_paths) do
+        if os.isdir(path) and os.isfile(path .. "/include/ktx.h") then
+            KTX_SDK_PATH = path
+            break
+        end
+    end
+end
+
+-- KTX availability flag
+KTX_AVAILABLE = KTX_SDK_PATH ~= nil
+
+if KTX_AVAILABLE then
+    print("KTX-Software SDK found: " .. KTX_SDK_PATH)
+else
+    print("KTX-Software SDK not found - texture compression will use compatibility mode")
+end
+
 -- Include directories relative to the solution directory
 IncludeDir = {}
 IncludeDir["GLFW"]      = "vendor/GLFW/include"
@@ -32,10 +67,20 @@ IncludeDir["Bullet3"]   = "vendor/Bullet3/src"
 IncludeDir["Lunex"]     = "Lunex/src"
 IncludeDir["VulkanSDK"] = "%{VULKAN_SDK}/Include"
 
+-- KTX include directory (only if available)
+if KTX_AVAILABLE then
+    IncludeDir["KTX"] = KTX_SDK_PATH .. "/include"
+end
+
 -- ✅ Librerías de Vulkan y Assimp
 LibraryDir = {}
 LibraryDir["VulkanSDK"] = "%{VULKAN_SDK}/Lib"
 LibraryDir["Assimp"]    = "vendor/assimp/lib"
+
+-- KTX library directory (only if available)
+if KTX_AVAILABLE then
+    LibraryDir["KTX"] = KTX_SDK_PATH .. "/lib"
+end
 
 Library = {}
 Library["Vulkan"] = "%{LibraryDir.VulkanSDK}/vulkan-1.lib"
@@ -50,9 +95,12 @@ Library["SPIRV_Cross_Release"] = "%{LibraryDir.VulkanSDK}/spirv-cross-core.lib"
 Library["SPIRV_Cross_GLSL_Debug"] = "%{LibraryDir.VulkanSDK}/spirv-cross-glsld.lib"
 Library["SPIRV_Cross_GLSL_Release"] = "%{LibraryDir.VulkanSDK}/spirv-cross-glsl.lib"
 
--- Assimp libraries (usaremos libdirs + nombres de lib)
+-- Assimp libraries
 Library["Assimp_Debug_Name"] = "assimp-vc143-mtd"
 Library["Assimp_Release_Name"] = "assimp-vc143-mt"
+
+-- KTX-Software libraries
+Library["KTX_Name"] = "ktx"
 
 -- ============================================================================
 -- DEPENDENCIES
@@ -416,6 +464,12 @@ project "Lunex"
         "YAML_CPP_STATIC_DEFINE"
     }
 
+    -- Add KTX define if available
+    filter {}
+    if KTX_AVAILABLE then
+        defines { "LNX_HAS_KTX" }
+    end
+
     includedirs
     {
         "%{prj.name}/src",
@@ -434,6 +488,11 @@ project "Lunex"
         "%{IncludeDir.VulkanSDK}",
         "Lunex-ScriptCore/src"
     }
+
+    -- Add KTX include if available
+    if KTX_AVAILABLE then
+        includedirs { IncludeDir["KTX"] }
+    end
 
     links
     {
@@ -472,10 +531,22 @@ project "Lunex"
             "%{Library.SPIRV_Cross_GLSL_Debug}",
             "%{Library.Assimp_Debug_Name}"
         }
+        -- Add KTX library if available
+        if KTX_AVAILABLE then
+            libdirs { LibraryDir["KTX"] }
+            links { "%{Library.KTX_Name}" }
+        end
         postbuildcommands
         {
             "{COPY} $(SolutionDir)vendor/assimp/lib/Debug/assimp-vc143-mtd.dll %{cfg.targetdir}"
         }
+        -- Copy KTX DLL if available
+        if KTX_AVAILABLE then
+            postbuildcommands
+            {
+                "{COPY} \"" .. KTX_SDK_PATH .. "/bin/ktx.dll\" \"%{cfg.targetdir}\""
+            }
+        end
 
     filter "configurations:Release"
         defines { "LN_RELEASE" }
@@ -489,10 +560,22 @@ project "Lunex"
             "%{Library.SPIRV_Cross_GLSL_Release}",
             "%{Library.Assimp_Release_Name}"
         }
+        -- Add KTX library if available
+        if KTX_AVAILABLE then
+            libdirs { LibraryDir["KTX"] }
+            links { "%{Library.KTX_Name}" }
+        end
         postbuildcommands
         {
             "{COPY} $(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll %{cfg.targetdir}"
         }
+        -- Copy KTX DLL if available
+        if KTX_AVAILABLE then
+            postbuildcommands
+            {
+                "{COPY} \"" .. KTX_SDK_PATH .. "/bin/ktx.dll\" \"%{cfg.targetdir}\""
+            }
+        end
 
     filter "configurations:Dist"
         defines { "LN_DIST" }
@@ -506,10 +589,22 @@ project "Lunex"
             "%{Library.SPIRV_Cross_GLSL_Release}",
             "%{Library.Assimp_Release_Name}"
         }
+        -- Add KTX library if available
+        if KTX_AVAILABLE then
+            libdirs { LibraryDir["KTX"] }
+            links { "%{Library.KTX_Name}" }
+        end
         postbuildcommands
         {
             "{COPY} $(SolutionDir)vendor/assimp/lib/Release/assimp-vc143-mt.dll %{cfg.targetdir}"
         }
+        -- Copy KTX DLL if available
+        if KTX_AVAILABLE then
+            postbuildcommands
+            {
+                "{COPY} \"" .. KTX_SDK_PATH .. "/bin/ktx.dll\" \"%{cfg.targetdir}\""
+            }
+        end
 
 project "Sandbox"
     location "Sandbox"

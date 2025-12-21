@@ -2,9 +2,10 @@
 
 #include "Core/Core.h"
 #include "Renderer/Shader.h"
-#include "Renderer/Model.h"
-#include "Renderer/OrthographicCamera.h"
-#include "Renderer/EditorCamera.h"
+#include "Resources/Mesh/Model.h"
+#include "Scene/Camera/OrthographicCamera.h"
+#include "Scene/Camera/EditorCamera.h"
+#include "Renderer/EnvironmentMap.h"
 
 #include <glm/glm.hpp>
 
@@ -26,6 +27,10 @@ namespace Lunex {
 		static void EndScene();
 
 		static void UpdateLights(Scene* scene);
+		
+		// IBL Environment binding
+		static void BindEnvironment(const Ref<EnvironmentMap>& environment);
+		static void UnbindEnvironment();
 
 		static void DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, int entityID = -1);
 		static void DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, MaterialComponent& materialComponent, int entityID = -1);

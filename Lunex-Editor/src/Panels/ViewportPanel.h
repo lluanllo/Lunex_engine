@@ -1,8 +1,8 @@
-﻿#pragma once
+#pragma once
 
 #include "Core/Core.h"
 #include "Renderer/Framebuffer.h"
-#include "Renderer/EditorCamera.h"
+#include "Scene/Camera/EditorCamera.h"
 #include "Scene/Entity.h"
 #include "Scene/Scene.h"
 #include "SceneHierarchyPanel.h"

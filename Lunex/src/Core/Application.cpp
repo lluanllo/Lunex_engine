@@ -1,8 +1,11 @@
-#include "stpch.h"
+﻿#include "stpch.h"
 #include "Application.h"
 
 #include "Renderer/Renderer.h"
-#include "Renderer/MaterialRegistry.h"
+#include "Assets/Materials/MaterialRegistry.h"
+
+// NEW: Unified Asset System
+#include "Assets/Core/AssetCore.h"
 
 #include "Input.h"
 
@@ -21,18 +24,37 @@ namespace Lunex{
 		LNX_CORE_ASSERT(s_Instance == nullptr, "Application already exists!");
 		s_Instance = this;
 		
+		// ========================================
+		// CREATE WINDOW FIRST (will create OpenGL context via GLFW)
+		// ========================================
+		// WindowsWindow::Init creates GLFW window and OpenGL context
+		// GraphicsContext wraps the existing context
 		m_Window = Window::Create(WindowProps(name));
 		m_Window->SetEventCallback(LNX_BIND_EVENT_FN(Application::OnEvent));
 		
+		// ========================================
+		// INITIALIZE RHI (uses existing OpenGL context from window)
+		// ========================================
+		// Pass the GLFW window handle so RHI can use the existing context
+		auto* glfwWindow = static_cast<GLFWwindow*>(m_Window->GetNativeWindow());
+		if (!RHI::Initialize(RHI::GraphicsAPI::OpenGL, glfwWindow)) {
+			LNX_LOG_ERROR("Failed to initialize RHI!");
+		}
+		
+		// Complete renderer initialization
 		Renderer::Init();
 		
 		// ========================================
-		// Initialize Material System
+		// Initialize Unified Asset System (NEW)
 		// ========================================
-		// MaterialRegistry is a singleton that manages all material assets
-		// It creates the default material on first access
-		MaterialRegistry::Get(); // Initialize registry and create default material
-		LNX_LOG_INFO("? Material System initialized");
+		AssetManager::Initialize();
+		LNX_LOG_INFO("✓ Unified Asset System initialized (with JobSystem)");
+		
+		// ========================================
+		// Initialize Material System (Legacy - now uses AssetManager)
+		// ========================================
+		MaterialRegistry::Get();
+		LNX_LOG_INFO("✓ Material System initialized");
 		
 		m_ImGuiLayer = new ImGuiLayer;
 		PushOverlay(m_ImGuiLayer);
@@ -46,6 +68,12 @@ namespace Lunex{
 		// ========================================
 		MaterialRegistry::Get().ClearAll();
 		LNX_LOG_INFO("Material System shutdown");
+		
+		// ========================================
+		// Shutdown Unified Asset System (NEW)
+		// ========================================
+		AssetManager::Shutdown();
+		LNX_LOG_INFO("Unified Asset System shutdown");
 		
 		Renderer::Shutdown();
 	}
@@ -90,6 +118,9 @@ namespace Lunex{
 			float time = (float)glfwGetTime();
 			Timestep timestep = time - m_LastFrameTime;
 			m_LastFrameTime = time;
+			
+			// Update Asset System (hot-reload, async callbacks)
+			AssetManager::Update(timestep.GetSeconds());
 			
 			if (!m_Minimized) {
 				{

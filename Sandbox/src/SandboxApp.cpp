@@ -5,7 +5,8 @@
 
 class Sandbox : public Lunex::Application {
 public:
-	Sandbox() {
+	Sandbox(Lunex::ApplicationCommandLineArgs args)
+		: Lunex::Application("Sandbox", args) {
 		PushLayer(new Sandbox2D());
 	}
 	
@@ -13,6 +14,6 @@ public:
 	}
 };
 
-Lunex::Ref <Lunex::Application> CreateApplication() {
-	return Lunex::CreateScope<Sandbox>();
+Lunex::Ref<Lunex::Application> Lunex::CreateApplication(Lunex::ApplicationCommandLineArgs args) {
+	return Lunex::CreateRef<Sandbox>(args);
 }

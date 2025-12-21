@@ -1,5 +1,6 @@
 #include "Sandbox2D.h"
 #include "imgui.h"
+#include "RHI/RHI.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -26,8 +27,11 @@ void Sandbox2D::OnUpdate(Lunex::Timestep ts) {
 	
 	{
 		LNX_PROFILE_SCOPE("Renderer Prep");
-		Lunex::RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
-		Lunex::RenderCommand::Clear();
+		auto* cmdList = Lunex::RHI::GetImmediateCommandList();
+		if (cmdList) {
+			cmdList->SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+			cmdList->Clear();
+		}
 	}
 	
 	{

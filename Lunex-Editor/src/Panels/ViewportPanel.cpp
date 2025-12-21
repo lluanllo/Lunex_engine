@@ -6,7 +6,7 @@
 #include "Core/Input.h"
 #include "Scene/Components.h"
 #include "Math/Math.h"
-#include "Asset/MeshImporter.h"
+#include "Assets/Mesh/MeshImporter.h"
 #include "Asset/Prefab.h"
 #include <glm/gtc/type_ptr.hpp>
 
@@ -131,9 +131,10 @@ namespace Lunex {
 	}
 
 	void ViewportPanel::RenderCameraPreview(Ref<Framebuffer> previewFramebuffer, Entity selectedEntity) {
-		// Preview size (aspect ratio 16:9)
-		float previewWidth = 320.0f;
-		float previewHeight = 180.0f;
+		// Get the actual framebuffer size (matches camera aspect ratio)
+		auto spec = previewFramebuffer->GetSpecification();
+		float previewWidth = static_cast<float>(spec.Width);
+		float previewHeight = static_cast<float>(spec.Height);
 		float padding = 16.0f;
 		
 		// Calculate position (bottom-right corner of viewport)

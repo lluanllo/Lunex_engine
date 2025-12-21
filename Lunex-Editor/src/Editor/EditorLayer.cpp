@@ -18,10 +18,18 @@
 // ✅ Input System
 #include "Input/InputManager.h"
 
-// ✅ MeshAsset System
-#include "Asset/MeshAsset.h"
-#include "Asset/MeshImporter.h"
+// ✅ MeshAsset System (Unified Assets)
+#include "Assets/Mesh/MeshAsset.h"
+#include "Assets/Mesh/MeshImporter.h"
 #include "Asset/Prefab.h"
+
+// ✅ AssetDatabase (Unified Assets)
+#include "Assets/Core/AssetDatabase.h"
+
+// ✅ Skybox Renderer for camera preview
+#include "Renderer/SkyboxRenderer.h"
+
+#include "RHI/RHI.h"
 
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
@@ -205,8 +213,11 @@ namespace Lunex {
 		
 		// 3. Material Editor -> Content Browser & Properties Panel (hot reload when saved)
 		m_MaterialEditorPanel.SetOnMaterialSavedCallback([this](const std::filesystem::path& path) {
-			// Invalidate Content Browser thumbnail
+			// Invalidate Content Browser thumbnail (memory cache)
 			m_ContentBrowserPanel.InvalidateMaterialThumbnail(path);
+			
+			// ✅ Invalidate disk cache so thumbnail is regenerated
+			m_ContentBrowserPanel.InvalidateThumbnailDiskCache(path);
 			
 			// Also invalidate PropertiesPanel thumbnail cache for the material
 			// (we need to get the material's UUID to invalidate it)
@@ -323,6 +334,68 @@ namespace Lunex {
 				auto stats = Renderer2D::GetStats();
 				m_ConsolePanel.AddLog("FPS: " + std::to_string(1.0f / ImGui::GetIO().DeltaTime), LogLevel::Info, "Performance");
 				m_ConsolePanel.AddLog("Draw Calls: " + std::to_string(stats.DrawCalls), LogLevel::Info, "Performance");
+			});
+		
+		// ✅ NEW: AssetDatabase commands
+		m_ConsolePanel.RegisterCommand("refresh_assets", "Refresh the asset database", "refresh_assets",
+			[this](const std::vector<std::string>& args) {
+				auto project = ProjectManager::GetActiveProject();
+				if (!project) {
+					m_ConsolePanel.AddLog("No active project", LogLevel::Warning, "Assets");
+					return;
+				}
+				
+				m_ConsolePanel.AddLog("Refreshing AssetDatabase...", LogLevel::Info, "Assets");
+				ProjectManager::RefreshAssetDatabase();
+				
+				auto& db = ProjectManager::GetAssetDatabase();
+				m_ConsolePanel.AddLog("AssetDatabase refreshed: " + std::to_string(db.GetAssetCount()) + " assets", LogLevel::Info, "Assets");
+			});
+		
+		m_ConsolePanel.RegisterCommand("list_assets", "List all assets in the database", "list_assets [type]",
+			[this](const std::vector<std::string>& args) {
+				auto project = ProjectManager::GetActiveProject();
+				if (!project) {
+					m_ConsolePanel.AddLog("No active project", LogLevel::Warning, "Assets");
+					return;
+				}
+				
+				auto& db = ProjectManager::GetAssetDatabase();
+				const auto& assets = db.GetAllAssets();
+				
+				if (assets.empty()) {
+					m_ConsolePanel.AddLog("No assets found in database", LogLevel::Info, "Assets");
+					return;
+				}
+				
+				m_ConsolePanel.AddLog("Assets in database:", LogLevel::Info, "Assets");
+				
+				// Filter by type if specified
+				std::string typeFilter = "";
+				if (!args.empty()) {
+					typeFilter = args[0];
+					std::transform(typeFilter.begin(), typeFilter.end(), typeFilter.begin(), ::tolower);
+				}
+				
+				int count = 0;
+				for (const auto& [id, entry] : assets) {
+					// Apply filter if specified
+					if (!typeFilter.empty()) {
+						std::string typeName = AssetTypeToString(entry.Type);
+						std::string lowerTypeName = typeName;
+						std::transform(lowerTypeName.begin(), lowerTypeName.end(), lowerTypeName.begin(), ::tolower);
+						
+						if (lowerTypeName.find(typeFilter) == std::string::npos) {
+							continue;
+						}
+					}
+					
+					std::string msg = "  [" + std::string(AssetTypeToString(entry.Type)) + "] " + entry.Name;
+					m_ConsolePanel.AddLog(msg, LogLevel::Info, "Assets");
+					count++;
+				}
+				
+				m_ConsolePanel.AddLog("Total: " + std::to_string(count) + " assets", LogLevel::Info, "Assets");
 			});
 
 		m_ConsolePanel.AddLog("Lunex Editor initialized", LogLevel::Info, "System");
@@ -657,10 +730,15 @@ namespace Lunex {
 		Renderer2D::ResetStats();
 		Renderer3D::ResetStats();
 
+		// ✅ CRITICAL FIX: Bind framebuffer BEFORE rendering
 		m_Framebuffer->Bind();
-		RenderCommand::SetViewport(0, 0, (uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
-		RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
-		RenderCommand::Clear();
+
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (cmdList) {
+			cmdList->SetViewport(0.0f, 0.0f, m_ViewportSize.x, m_ViewportSize.y);
+			cmdList->SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+			cmdList->Clear();
+		}
 
 		// Clear our entity ID attachment to -1
 		m_Framebuffer->ClearAttachment(1, -1);
@@ -1300,8 +1378,21 @@ namespace Lunex {
 		auto& cameraComp = cameraEntity.GetComponent<CameraComponent>();
 		glm::mat4 cameraWorldTransform = m_ActiveScene->GetWorldTransform(cameraEntity);
 
+		// ========================================
+		// CALCULATE PREVIEW SIZE WITH CORRECT ASPECT RATIO
+		// ========================================
+		// Use the camera's aspect ratio to avoid distortion
+		float cameraAspect = cameraComp.Camera.GetAspectRatio();
+		if (cameraAspect <= 0.0f) {
+			cameraAspect = 16.0f / 9.0f; // Default fallback
+		}
+		
+		// Base preview width, calculate height from camera aspect ratio
 		uint32_t previewWidth = 320;
-		uint32_t previewHeight = 180;
+		uint32_t previewHeight = static_cast<uint32_t>(previewWidth / cameraAspect);
+		
+		// Clamp height to reasonable bounds
+		previewHeight = std::clamp(previewHeight, 100u, 400u);
 
 		auto previewSpec = m_CameraPreviewFramebuffer->GetSpecification();
 		if (previewSpec.Width != previewWidth || previewSpec.Height != previewHeight) {
@@ -1312,18 +1403,28 @@ namespace Lunex {
 		// SAVE CURRENT VIEWPORT STATE
 		// ========================================
 		int currentViewport[4];
-		RenderCommand::SaveViewport(currentViewport);
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (cmdList) {
+			cmdList->GetViewport(currentViewport);
+		}
 
 		// ========================================
 		// RENDER CAMERA PREVIEW (Isolated)
 		// ========================================
 		m_CameraPreviewFramebuffer->Bind();
-		RenderCommand::SetViewport(0, 0, previewWidth, previewHeight);
-		RenderCommand::SetClearColor({ 0.15f, 0.15f, 0.18f, 1.0f });
-		RenderCommand::Clear();
+		if (cmdList) {
+			cmdList->SetViewport(0.0f, 0.0f, static_cast<float>(previewWidth), static_cast<float>(previewHeight));
+			cmdList->SetClearColor({ 0.15f, 0.15f, 0.18f, 1.0f });
+			cmdList->Clear();
+		}
 
 		// ========================================
-		// RENDER 3D MESHES ONLY (NO GRID, NO BILLBOARDS)
+		// RENDER SKYBOX FIRST (before geometry)
+		// ========================================
+		SkyboxRenderer::RenderGlobalSkybox(cameraComp.Camera, cameraWorldTransform);
+
+		// ========================================
+		// RENDER 3D MESHES (NO GRID, NO BILLBOARDS)
 		// ========================================
 		Renderer3D::BeginScene(cameraComp.Camera, cameraWorldTransform);
 		Renderer3D::UpdateLights(m_ActiveScene.get());
@@ -1348,7 +1449,7 @@ namespace Lunex {
 		Renderer3D::EndScene();
 
 		// ========================================
-		// RENDER 2D SPRITES ONLY (NO GRID, NO BILLBOARDS)
+		// RENDER 2D SPRITES (NO GRID, NO BILLBOARDS)
 		// ========================================
 		Renderer2D::BeginScene(cameraComp.Camera, cameraWorldTransform);
 
@@ -1368,7 +1469,14 @@ namespace Lunex {
 		// RESTORE MAIN VIEWPORT STATE
 		// ========================================
 		m_CameraPreviewFramebuffer->Unbind();
-		RenderCommand::RestoreViewport(currentViewport);
+		if (cmdList) {
+			cmdList->SetViewport(
+				static_cast<float>(currentViewport[0]), 
+				static_cast<float>(currentViewport[1]),
+				static_cast<float>(currentViewport[2]), 
+				static_cast<float>(currentViewport[3])
+			);
+		}
 
 		// ========================================
 		// CRITICAL: RESTORE MAIN CAMERA (Editor or Runtime)

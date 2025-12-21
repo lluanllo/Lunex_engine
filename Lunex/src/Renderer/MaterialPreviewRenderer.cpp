@@ -1,8 +1,8 @@
 #include "stpch.h"
 #include "MaterialPreviewRenderer.h"
 #include "Renderer/Renderer3D.h"
-#include "Renderer/RenderCommand.h"
-#include "Renderer/MaterialInstance.h"
+#include "RHI/RHI.h"
+#include "Resources/Render/MaterialInstance.h"
 #include "Log/Log.h"
 #include "Scene/Scene.h"
 #include "Scene/Entity.h"
@@ -10,6 +10,9 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glad/glad.h>
+#include <stb_image.h>
+#include <stb_image_write.h>
+#include <fstream>
 
 namespace Lunex {
 
@@ -47,6 +50,15 @@ namespace Lunex {
 			return;
 		}
 		m_PreviewModel = model;
+	}
+
+	// ? NEW: Camera positioning methods
+	void MaterialPreviewRenderer::SetCameraPosition(const glm::vec3& position) {
+		m_Camera.SetPosition(position);
+	}
+
+	glm::vec3 MaterialPreviewRenderer::GetCameraPosition() const {
+		return m_Camera.GetPosition();
 	}
 
 	// ========== RENDERING ==========
@@ -165,31 +177,29 @@ namespace Lunex {
 		// Crear esfera por defecto
 		m_PreviewModel = Model::CreateSphere();
 
-		// Initialize camera with proper perspective settings
+		// ? Camera settings for material preview (frontal, centered view)
 		m_Camera = EditorCamera(45.0f, 1.0f, 0.1f, 1000.0f);
 		m_Camera.SetViewportSize(m_Width, m_Height);
 		
-		// Position camera outside the sphere (radius=0.5f)
-		// Camera at z=2.5f looking at origin gives good view of the sphere
+		// ? Frontal centered position for materials (sphere radius=0.5f)
+		// Camera directly in front at z=2.5f looking at origin
 		m_Camera.SetPosition(glm::vec3(0.0f, 0.0f, 2.5f));
 
 		// Crear escena temporal para el preview
 		m_PreviewScene = CreateRef<Scene>();
 
-		// Crear entidad de luz en la escena de preview
+		// ? Luz principal para materials (centrada, intensa)
 		Entity lightEntity = m_PreviewScene->CreateEntity("Preview Light");
 		auto& lightComp = lightEntity.AddComponent<LightComponent>(LightType::Directional);
 		auto& lightTransform = lightEntity.GetComponent<TransformComponent>();
 		
-		// Posicionar luz en diagonal superior
 		lightTransform.Translation = glm::vec3(2.0f, 3.0f, 2.0f);
 		lightTransform.Rotation = glm::vec3(glm::radians(-45.0f), glm::radians(45.0f), 0.0f);
 		
-		// Configurar propiedades de luz
 		lightComp.SetColor(m_LightColor);
 		lightComp.SetIntensity(m_LightIntensity);
 
-		// Crear segunda luz de relleno (fill light)
+		// Luz de relleno
 		Entity fillLightEntity = m_PreviewScene->CreateEntity("Fill Light");
 		auto& fillLightComp = fillLightEntity.AddComponent<LightComponent>(LightType::Directional);
 		auto& fillLightTransform = fillLightEntity.GetComponent<TransformComponent>();
@@ -218,15 +228,21 @@ namespace Lunex {
 			return;
 		}
 
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (!cmdList) {
+			LNX_LOG_ERROR("MaterialPreviewRenderer::RenderInternal - No immediate command list available");
+			return;
+		}
+
 		// Bind framebuffer
 		m_Framebuffer->Bind();
 
 		// Set viewport to match framebuffer size
-		RenderCommand::SetViewport(0, 0, m_Width, m_Height);
+		cmdList->SetViewport(0.0f, 0.0f, static_cast<float>(m_Width), static_cast<float>(m_Height));
 
 		// Clear with background color
-		RenderCommand::SetClearColor(m_BackgroundColor);
-		RenderCommand::Clear();
+		cmdList->SetClearColor(m_BackgroundColor);
+		cmdList->Clear();
 
 		// Clear entity ID attachment to -1 (attachment index 1)
 		m_Framebuffer->ClearAttachment(1, -1);
@@ -274,6 +290,173 @@ namespace Lunex {
 
 		// Unbind framebuffer
 		m_Framebuffer->Unbind();
+	}
+
+	// ========== THUMBNAIL DISK CACHING ==========
+
+	Ref<Texture2D> MaterialPreviewRenderer::GetOrGenerateCachedThumbnail(const std::filesystem::path& materialPath, Ref<MaterialAsset> material) {
+		if (!material) {
+			return nullptr;
+		}
+
+		// Get thumbnail cache path
+		std::filesystem::path thumbnailPath = GetThumbnailPath(materialPath);
+
+		// Check if thumbnail exists and is valid (not older than material file)
+		if (std::filesystem::exists(thumbnailPath) && IsThumbnailValid(thumbnailPath, materialPath)) {
+			// Load from disk
+			Ref<Texture2D> thumbnail = LoadThumbnailFromDisk(thumbnailPath);
+			if (thumbnail) {
+				LNX_LOG_TRACE("Loaded thumbnail from cache: {0}", thumbnailPath.filename().string());
+				return thumbnail;
+			}
+		}
+
+		// Generate new thumbnail
+		Ref<Texture2D> thumbnail = RenderToTexture(material);
+		if (thumbnail) {
+			// Save to disk cache
+			if (SaveThumbnailToDisk(thumbnailPath, thumbnail)) {
+				LNX_LOG_TRACE("Generated and cached thumbnail: {0}", thumbnailPath.filename().string());
+			}
+		}
+
+		return thumbnail;
+	}
+
+	void MaterialPreviewRenderer::InvalidateCachedThumbnail(const std::filesystem::path& materialPath) {
+		std::filesystem::path thumbnailPath = GetThumbnailPath(materialPath);
+		if (std::filesystem::exists(thumbnailPath)) {
+			try {
+				std::filesystem::remove(thumbnailPath);
+				LNX_LOG_TRACE("Invalidated thumbnail cache: {0}", thumbnailPath.filename().string());
+			}
+			catch (const std::exception& e) {
+				LNX_LOG_ERROR("Failed to remove cached thumbnail: {0}", e.what());
+			}
+		}
+	}
+
+	void MaterialPreviewRenderer::ClearThumbnailCache() {
+		std::filesystem::path cacheDir = GetThumbnailCachePath();
+		if (std::filesystem::exists(cacheDir)) {
+			try {
+				std::filesystem::remove_all(cacheDir);
+				std::filesystem::create_directories(cacheDir);
+				LNX_LOG_INFO("Cleared thumbnail cache directory");
+			}
+			catch (const std::exception& e) {
+				LNX_LOG_ERROR("Failed to clear thumbnail cache: {0}", e.what());
+			}
+		}
+	}
+
+	// ========== DISK CACHE HELPERS ==========
+
+	std::filesystem::path MaterialPreviewRenderer::GetThumbnailCachePath() const {
+		// Cache thumbnails in "Cache/Thumbnails" folder relative to assets
+		std::filesystem::path cacheDir = "Cache/Thumbnails";
+		
+		// Create directory if it doesn't exist
+		if (!std::filesystem::exists(cacheDir)) {
+			std::filesystem::create_directories(cacheDir);
+		}
+		
+		return cacheDir;
+	}
+
+	std::filesystem::path MaterialPreviewRenderer::GetThumbnailPath(const std::filesystem::path& materialPath) const {
+		// Generate a unique filename based on material path
+		// Replace slashes with underscores and change extension to .png
+		std::string filename = materialPath.filename().stem().string() + ".png";
+		
+		// If material is in a subfolder, include folder name to avoid collisions
+		if (materialPath.has_parent_path()) {
+			std::string parentName = materialPath.parent_path().filename().string();
+			if (!parentName.empty() && parentName != "assets") {
+				filename = parentName + "_" + filename;
+			}
+		}
+		
+		return GetThumbnailCachePath() / filename;
+	}
+
+	bool MaterialPreviewRenderer::IsThumbnailValid(const std::filesystem::path& thumbnailPath, const std::filesystem::path& materialPath) const {
+		if (!std::filesystem::exists(thumbnailPath) || !std::filesystem::exists(materialPath)) {
+			return false;
+		}
+
+		// Check if thumbnail is newer than material file
+		auto thumbnailTime = std::filesystem::last_write_time(thumbnailPath);
+		auto materialTime = std::filesystem::last_write_time(materialPath);
+
+		return thumbnailTime >= materialTime;
+	}
+
+	bool MaterialPreviewRenderer::SaveThumbnailToDisk(const std::filesystem::path& thumbnailPath, Ref<Texture2D> thumbnail) {
+		if (!thumbnail) {
+			return false;
+		}
+
+		// Get pixel data from texture
+		uint32_t dataSize = thumbnail->GetWidth() * thumbnail->GetHeight() * 4; // RGBA
+		std::vector<uint8_t> pixels(dataSize);
+		
+		// Read pixels from GPU
+		glBindTexture(GL_TEXTURE_2D, thumbnail->GetRendererID());
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+		glBindTexture(GL_TEXTURE_2D, 0);
+
+		// Flip image vertically (OpenGL texture is upside down)
+		uint32_t width = thumbnail->GetWidth();
+		uint32_t height = thumbnail->GetHeight();
+		uint32_t rowSize = width * 4;
+		std::vector<uint8_t> flipped(dataSize);
+		
+		for (uint32_t y = 0; y < height; y++) {
+			memcpy(flipped.data() + y * rowSize, 
+			       pixels.data() + (height - 1 - y) * rowSize, 
+			       rowSize);
+		}
+
+		// Save to PNG using stb_image_write
+		int result = stbi_write_png(thumbnailPath.string().c_str(), 
+		                             width, height, 4, 
+		                             flipped.data(), width * 4);
+
+		if (result == 0) {
+			LNX_LOG_ERROR("Failed to save thumbnail to disk: {0}", thumbnailPath.string());
+			return false;
+		}
+
+		return true;
+	}
+
+	Ref<Texture2D> MaterialPreviewRenderer::LoadThumbnailFromDisk(const std::filesystem::path& thumbnailPath) {
+		if (!std::filesystem::exists(thumbnailPath)) {
+			return nullptr;
+		}
+
+		// Load image using stb_image
+		int width, height, channels;
+		stbi_set_flip_vertically_on_load(1); // Flip vertically to match OpenGL
+		unsigned char* data = stbi_load(thumbnailPath.string().c_str(), &width, &height, &channels, 4); // Force RGBA
+
+		if (!data) {
+			LNX_LOG_ERROR("Failed to load thumbnail from disk: {0}", thumbnailPath.string());
+			return nullptr;
+		}
+
+		// Create texture
+		Ref<Texture2D> texture = Texture2D::Create(width, height);
+		if (texture) {
+			texture->SetData(data, width * height * 4);
+		}
+
+		// Free image data
+		stbi_image_free(data);
+
+		return texture;
 	}
 
 }

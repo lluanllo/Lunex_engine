@@ -8,7 +8,7 @@
 #include <filesystem>
 
 #include "Scene/Components.h"
-#include "Asset/MeshAsset.h"
+#include "Assets/Mesh/MeshAsset.h"
 
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
@@ -789,7 +789,7 @@ namespace Lunex {
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
 			PropertyLabel("Size");
-			ImGui::NextColumn();
+		 ImGui::NextColumn();
 			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
 			ImGui::SetNextItemWidth(-1);
 			ImGui::DragFloat2("##Size", glm::value_ptr(component.Size), 0.01f, 0.01f);

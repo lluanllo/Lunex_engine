@@ -1,6 +1,6 @@
 #include "stpch.h"
 #include "WindowsWindow.h"
-#include "Platform/OpenGL/OpenGLContext.h"
+#include "Renderer/GraphicsContext.h"
 
 #include "Events/ApplicationEvent.h"
 #include "Events/KeyEvent.h"
@@ -53,7 +53,7 @@ namespace Lunex {
 		// Set window icon
 		LoadWindowIcon("Lunex-Editor/Resources/Icons/LunexLogo/LunexLogo.png");
 		
-		m_Context = CreateScope<OpenGLContext>(m_Window);
+		m_Context = GraphicsContext::Create(m_Window);
 		m_Context->Init();
 		
 		glfwSetWindowUserPointer(m_Window, &m_Data);

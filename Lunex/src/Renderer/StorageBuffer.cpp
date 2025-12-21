@@ -1,17 +1,50 @@
 #include "stpch.h"
 #include "StorageBuffer.h"
-
-#include "Renderer/Renderer.h"
-#include "Platform/OpenGL/OpenGLStorageBuffer.h"
+#include "RHI/RHIDevice.h"
 
 namespace Lunex {
-	Ref<StorageBuffer> StorageBuffer::Create(uint32_t size, uint32_t binding) {
-		switch (Renderer::GetAPI()) {
-			case RendererAPI::API::None:    LNX_CORE_ASSERT(false, "RendererAPI::None is currently not supported!"); return nullptr;
-			case RendererAPI::API::OpenGL:  return CreateRef<OpenGLStorageBuffer>(size, binding);
-		}
+	
+	StorageBuffer::StorageBuffer(uint32_t size, uint32_t binding)
+		: m_Binding(binding)
+	{
+		RHI::BufferCreateInfo info;
+		info.Size = size;
+		info.Type = RHI::BufferType::Storage;
+		info.Usage = RHI::BufferUsage::Dynamic;
 		
-		LNX_CORE_ASSERT(false, "Unknown RendererAPI!");
-		return nullptr;
+		m_RHIBuffer = RHI::RHIDevice::Get()->CreateBuffer(info);
+		
+		// Bind to the specified binding point
+		if (m_RHIBuffer) {
+			m_RHIBuffer->BindToPoint(binding);
+		}
+	}
+	
+	void StorageBuffer::SetData(const void* data, uint32_t size, uint32_t offset) {
+		if (m_RHIBuffer) {
+			m_RHIBuffer->SetData(data, size, offset);
+		}
+	}
+	
+	void StorageBuffer::GetData(void* data, uint32_t size, uint32_t offset) const {
+		if (m_RHIBuffer) {
+			m_RHIBuffer->GetData(data, size, offset);
+		}
+	}
+	
+	void StorageBuffer::BindForCompute(uint32_t binding) const {
+		if (m_RHIBuffer) {
+			m_RHIBuffer->BindToPoint(binding);
+		}
+	}
+	
+	void StorageBuffer::BindForRead(uint32_t binding) const {
+		if (m_RHIBuffer) {
+			m_RHIBuffer->BindToPoint(binding);
+		}
+	}
+	
+	Ref<StorageBuffer> StorageBuffer::Create(uint32_t size, uint32_t binding) {
+		return CreateRef<StorageBuffer>(size, binding);
 	}
 }

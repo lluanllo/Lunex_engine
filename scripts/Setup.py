@@ -13,8 +13,9 @@ print("Verificando paquetes de Python...")
 CheckPython.ValidatePackages()
 
 import Vulkan
+import KTX
 
-print("\n[2/7] Clonando/actualizando submodulos...")
+print("\n[2/8] Clonando/actualizando submodulos...")
 result = subprocess.call(["git", "submodule", "update", "--init", "--recursive"])
 
 if result != 0:
@@ -31,7 +32,7 @@ if result != 0:
     result = subprocess.call(["git", "submodule", "update", "--init", "--recursive"])
 
 # ✅ Lista completa de submódulos (para clonar manualmente si no están en .gitmodules)
-print("\n[3/7] Verificando dependencias adicionales...")
+print("\n[3/8] Verificando dependencias adicionales...")
 submodules = [
     ("vendor/GLFW", "https://github.com/glfw/glfw.git", "master"),
     ("vendor/ImGuiLib", "https://github.com/ocornut/imgui.git", "docking"),
@@ -68,7 +69,7 @@ for path, url, branch in submodules:
         print(f"  ✓ {path} ya existe")
 
 # Verificar que los submódulos se clonaron correctamente
-print("\n[4/7] Verificando integridad de submódulos...")
+print("\n[4/8] Verificando integridad de submódulos...")
 missing_submodules = []
 required_files = {
     "vendor/GLFW/include/GLFW/glfw3.h": "GLFW",
@@ -103,7 +104,7 @@ if not all_ok:
 else:
     print("\n✓ Todos los submódulos están correctos")
 
-print("\n[5/7] Configurando Assimp...")
+print("\n[5/8] Configurando Assimp...")
 # Configurar Assimp
 assimp_config = "vendor/assimp/include/assimp/config.h"
 if not os.path.exists(assimp_config):
@@ -125,13 +126,18 @@ if not os.path.exists(assimp_config):
 else:
     print("  ✓ Assimp ya configurado")
 
-print("\n[6/7] Verificando Vulkan SDK...")
+print("\n[6/8] Verificando Vulkan SDK...")
 vulkanInstalled = Vulkan.CheckVulkanSDK()
 if vulkanInstalled:
     # Solo verificar, no intentar descargar
     Vulkan.CheckVulkanSDKDebugLibs()
 
-print("\n[7/7] Generando archivos de proyecto con Premake...")
+print("\n[7/8] Verificando KTX-Software SDK...")
+ktxInstalled = KTX.CheckKTXSDK()
+if ktxInstalled:
+    KTX.CheckKTXSDKDebugLibs()
+
+print("\n[8/8] Generando archivos de proyecto con Premake...")
 if os.name == 'nt':  # Windows
     premake_path = "vendor/bin/premake/premake5.exe"
     if not os.path.exists(premake_path):
@@ -157,6 +163,10 @@ print("  ✓ Assimp - Carga de modelos 3D")
 print("  ✓ GLFW - Manejo de ventanas")
 print("  ✓ ImGui - Interfaz de usuario")
 print("  ✓ Vulkan SDK - Compilación de shaders SPIR-V")
+if ktxInstalled:
+    print("  ✓ KTX-Software - Compresión de texturas GPU")
+else:
+    print("  ⚠ KTX-Software - No instalado (modo compatibilidad)")
 print("\nSiguientes pasos:")
 print("  1. Abre 'Lunex-Engine.sln' en Visual Studio")
 print("  2. Selecciona la configuración 'Debug' o 'Release'")

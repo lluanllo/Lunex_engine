@@ -2,8 +2,9 @@
 
 #include "Renderer/Texture.h"
 #include "Renderer/MaterialPreviewRenderer.h"
-#include "Renderer/MaterialAsset.h"
-#include "Renderer/MaterialRegistry.h"
+#include "Assets/Materials/MaterialAsset.h"
+#include "Assets/Materials/MaterialRegistry.h"
+#include "Assets/Mesh/MeshAsset.h"
 #include <filesystem>
 #include <vector>
 #include <set>
@@ -52,6 +53,9 @@ namespace Lunex {
 		void InvalidateMaterialThumbnail(const std::filesystem::path& materialPath);
 		void RefreshAllThumbnails();
 		
+		// ? NEW: Invalidate disk cache for thumbnails
+		void InvalidateThumbnailDiskCache(const std::filesystem::path& materialPath);
+
 		// ========================================
 		// PUBLIC API FOR GLOBAL SHORTCUTS
 		// ========================================
@@ -80,6 +84,7 @@ namespace Lunex {
 		// Icons & Thumbnails
 		Ref<Texture2D> GetIconForFile(const std::filesystem::path& path);
 		Ref<Texture2D> GetThumbnailForFile(const std::filesystem::path& path);
+		std::string GetAssetTypeLabel(const std::filesystem::path& path);
 
 		// File operations
 		void CreateNewFolder();
@@ -140,7 +145,7 @@ namespace Lunex {
 		ImVec2 m_SelectionEnd;
 
 		// View settings
-		float m_ThumbnailSize = 80.0f;
+		float m_ThumbnailSize = 96.0f; // ? Aumentado de 80 a 96 para cards más grandes
 		float m_Padding = 12.0f;
 
 		// Icons
@@ -165,6 +170,9 @@ namespace Lunex {
 		// Material preview renderer and cache (stores standalone textures, not framebuffer IDs)
 		Scope<MaterialPreviewRenderer> m_MaterialPreviewRenderer;
 		std::unordered_map<std::string, Ref<Texture2D>> m_MaterialThumbnailCache;
+		
+		// Mesh/Prefab preview cache (3D model thumbnails)
+		std::unordered_map<std::string, Ref<Texture2D>> m_MeshThumbnailCache;
 
 		// Item positions for selection rectangle
 		std::unordered_map<std::string, ImRect> m_ItemBounds;
