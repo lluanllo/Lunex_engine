@@ -2,14 +2,14 @@
 #include "OpenGLRHIVertexArray.h"
 
 namespace Lunex {
-namespace RHI {
+	namespace RHI {
 
-	// ============================================================================
-	// UTILITY FUNCTIONS
-	// ============================================================================
-	
-	GLenum OpenGLRHIVertexArray::ShaderDataTypeToOpenGLBaseType(ShaderDataType type) {
-		switch (type) {
+		// ============================================================================
+		// UTILITY FUNCTIONS
+		// ============================================================================
+
+		GLenum OpenGLRHIVertexArray::ShaderDataTypeToOpenGLBaseType(ShaderDataType type) {
+			switch (type) {
 			case ShaderDataType::None:   return GL_FLOAT;
 			case ShaderDataType::Float:  return GL_FLOAT;
 			case ShaderDataType::Float2: return GL_FLOAT;
@@ -22,57 +22,57 @@ namespace RHI {
 			case ShaderDataType::Mat3:   return GL_FLOAT;
 			case ShaderDataType::Mat4:   return GL_FLOAT;
 			case ShaderDataType::Bool:   return GL_BOOL;
+			}
+
+			LNX_CORE_ASSERT(false, "Unknown ShaderDataType!");
+			return 0;
 		}
-		
-		LNX_CORE_ASSERT(false, "Unknown ShaderDataType!");
-		return 0;
-	}
 
-	// ============================================================================
-	// CONSTRUCTOR / DESTRUCTOR
-	// ============================================================================
-	
-	OpenGLRHIVertexArray::OpenGLRHIVertexArray() {
-		LNX_PROFILE_FUNCTION();
-		glCreateVertexArrays(1, &m_RendererID);
-	}
-	
-	OpenGLRHIVertexArray::~OpenGLRHIVertexArray() {
-		LNX_PROFILE_FUNCTION();
-		if (m_RendererID) {
-			glDeleteVertexArrays(1, &m_RendererID);
+		// ============================================================================
+		// CONSTRUCTOR / DESTRUCTOR
+		// ============================================================================
+
+		OpenGLRHIVertexArray::OpenGLRHIVertexArray() {
+			LNX_PROFILE_FUNCTION();
+			glCreateVertexArrays(1, &m_RendererID);
 		}
-	}
 
-	// ============================================================================
-	// BINDING
-	// ============================================================================
-	
-	void OpenGLRHIVertexArray::Bind() const {
-		LNX_PROFILE_FUNCTION();
-		glBindVertexArray(m_RendererID);
-	}
-	
-	void OpenGLRHIVertexArray::Unbind() const {
-		LNX_PROFILE_FUNCTION();
-		glBindVertexArray(0);
-	}
+		OpenGLRHIVertexArray::~OpenGLRHIVertexArray() {
+			LNX_PROFILE_FUNCTION();
+			if (m_RendererID) {
+				glDeleteVertexArrays(1, &m_RendererID);
+			}
+		}
 
-	// ============================================================================
-	// BUFFER MANAGEMENT
-	// ============================================================================
-	
-	void OpenGLRHIVertexArray::AddVertexBuffer(const Ref<VertexBuffer>& vertexBuffer) {
-		LNX_PROFILE_FUNCTION();
-		
-		LNX_CORE_ASSERT(vertexBuffer->GetLayout().GetElements().size(), "Vertex Buffer has no layout!");
-		
-		glBindVertexArray(m_RendererID);
-		vertexBuffer->Bind();
-		
-		const auto& layout = vertexBuffer->GetLayout();
-		for (const auto& element : layout) {
-			switch (element.Type) {
+		// ============================================================================
+		// BINDING
+		// ============================================================================
+
+		void OpenGLRHIVertexArray::Bind() const {
+			LNX_PROFILE_FUNCTION();
+			glBindVertexArray(m_RendererID);
+		}
+
+		void OpenGLRHIVertexArray::Unbind() const {
+			LNX_PROFILE_FUNCTION();
+			glBindVertexArray(0);
+		}
+
+		// ============================================================================
+		// BUFFER MANAGEMENT
+		// ============================================================================
+
+		void OpenGLRHIVertexArray::AddVertexBuffer(const Ref<VertexBuffer>& vertexBuffer) {
+			LNX_PROFILE_FUNCTION();
+
+			LNX_CORE_ASSERT(vertexBuffer->GetLayout().GetElements().size(), "Vertex Buffer has no layout!");
+
+			glBindVertexArray(m_RendererID);
+			vertexBuffer->Bind();
+
+			const auto& layout = vertexBuffer->GetLayout();
+			for (const auto& element : layout) {
+				switch (element.Type) {
 				case ShaderDataType::Float:
 				case ShaderDataType::Float2:
 				case ShaderDataType::Float3:
@@ -125,20 +125,20 @@ namespace RHI {
 				}
 				default:
 					LNX_CORE_ASSERT(false, "Unknown ShaderDataType!");
+				}
 			}
-		}
-		
-		m_VertexBuffers.push_back(vertexBuffer);
-	}
-	
-	void OpenGLRHIVertexArray::SetIndexBuffer(const Ref<IndexBuffer>& indexBuffer) {
-		LNX_PROFILE_FUNCTION();
-		
-		glBindVertexArray(m_RendererID);
-		indexBuffer->Bind();
-		
-		m_IndexBuffer = indexBuffer;
-	}
 
-} // namespace RHI
+			m_VertexBuffers.push_back(vertexBuffer);
+		}
+
+		void OpenGLRHIVertexArray::SetIndexBuffer(const Ref<IndexBuffer>& indexBuffer) {
+			LNX_PROFILE_FUNCTION();
+
+			glBindVertexArray(m_RendererID);
+			indexBuffer->Bind();
+
+			m_IndexBuffer = indexBuffer;
+		}
+
+	} // namespace RHI
 } // namespace Lunex
