@@ -1,18 +1,27 @@
 #include "stpch.h"
 #include "UniformBuffer.h"
-
-#include "Renderer/Renderer.h"
-#include "Platform/OpenGL/OpenGLUniformBuffer.h"
+#include "RHI/RHIDevice.h"
 
 namespace Lunex {
-	Ref<UniformBuffer> UniformBuffer::Create(uint32_t size, uint32_t binding) {
-		switch (Renderer::GetAPI()) {
-			case RendererAPI::API::None:    LNX_CORE_ASSERT(false, "RendererAPI::None is currently not supported!"); return nullptr;
-			case RendererAPI::API::OpenGL:  return CreateRef<OpenGLUniformBuffer>(size, binding);
-		}
+	
+	UniformBuffer::UniformBuffer(uint32_t size, uint32_t binding)
+		: m_Binding(binding)
+	{
+		m_RHIBuffer = RHI::RHIDevice::Get()->CreateUniformBuffer(size, RHI::BufferUsage::Dynamic);
 		
-		LNX_CORE_ASSERT(false, "Unknown RendererAPI!");
-		return nullptr;
+		// Bind to the specified binding point
+		if (m_RHIBuffer) {
+			m_RHIBuffer->BindToPoint(binding);
+		}
 	}
-
+	
+	void UniformBuffer::SetData(const void* data, uint32_t size, uint32_t offset) {
+		if (m_RHIBuffer) {
+			m_RHIBuffer->SetData(data, size, offset);
+		}
+	}
+	
+	Ref<UniformBuffer> UniformBuffer::Create(uint32_t size, uint32_t binding) {
+		return CreateRef<UniformBuffer>(size, binding);
+	}
 }

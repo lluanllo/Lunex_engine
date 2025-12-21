@@ -2,17 +2,59 @@
 
 #include "GraphicsContext.h"
 
-#include "Renderer.h"
-#include "Platform/OpenGL/OpenGLContext.h"
+#include "RHI/RHI.h"
+#include "RHI/OpenGL/OpenGLRHIContext.h"
 
 namespace Lunex {
-	Scope<GraphicsContext> GraphicsContext::Create(void* window) {
-		switch (Renderer::GetAPI()) {
-			case RendererAPI::API::None:    LNX_CORE_ASSERT(false, "RendererAPI::None is currently not supported!"); return nullptr;
-			case RendererAPI::API::OpenGL:  return CreateScope<OpenGLContext>(static_cast<GLFWwindow*>(window));
+	
+	// ============================================================================
+	// GRAPHICS CONTEXT ADAPTER - Wraps RHIContext for legacy API compatibility
+	// ============================================================================
+	
+	class GraphicsContextAdapter : public GraphicsContext {
+	public:
+		GraphicsContextAdapter(void* window)
+			: m_Window(window)
+		{
+			// Create OpenGL context directly (doesn't depend on RHI::Initialize)
+			// This allows window creation before RHI initialization
+			m_RHIContext = CreateScope<RHI::OpenGLRHIContext>(window);
 		}
 		
-		LNX_CORE_ASSERT(false, "Unknown RendererAPI!");
-		return nullptr;
+		virtual ~GraphicsContextAdapter() = default;
+		
+		void Init() override {
+			if (m_RHIContext) {
+				m_RHIContext->Initialize();
+			}
+		}
+		
+		void SwapBuffers() override {
+			if (m_Swapchain) {
+				m_Swapchain->Present();
+			} else if (m_RHIContext) {
+				// Create default swapchain on first use
+				RHI::SwapchainCreateInfo info;
+				info.Width = 1280;  // Will be resized by window
+				info.Height = 720;
+				info.VSync = true;
+				m_Swapchain = m_RHIContext->CreateSwapchain(info);
+				if (m_Swapchain) {
+					m_Swapchain->Present();
+				}
+			}
+		}
+		
+	private:
+		void* m_Window = nullptr;
+		Scope<RHI::OpenGLRHIContext> m_RHIContext;
+		Ref<RHI::RHISwapchain> m_Swapchain;
+	};
+	
+	Scope<GraphicsContext> GraphicsContext::Create(void* window) {
+		// Always create OpenGL context for now (independent of RHI::GetCurrentAPI)
+		// This allows window creation before RHI::Initialize is called
+		// RHI will be initialized later with the window handle
+		return CreateScope<GraphicsContextAdapter>(window);
 	}
 }

@@ -1,6 +1,7 @@
 #include "ExampleLayer.h"
 
 #include "imgui.h"
+#include "RHI/RHI.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -136,8 +137,11 @@ void ExampleLayer::OnUpdate(Lunex::Timestep ts)
 	m_CameraController.OnUpdate(ts);
 
 	// Render
-	Lunex::RenderCommand::SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
-	Lunex::RenderCommand::Clear();
+	auto* cmdList = Lunex::RHI::GetImmediateCommandList();
+	if (cmdList) {
+		cmdList->SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+		cmdList->Clear();
+	}
 
 	Lunex::Renderer::BeginScene(m_CameraController.GetCamera());
 

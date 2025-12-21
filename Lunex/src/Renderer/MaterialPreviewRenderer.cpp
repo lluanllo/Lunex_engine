@@ -1,7 +1,7 @@
 #include "stpch.h"
 #include "MaterialPreviewRenderer.h"
 #include "Renderer/Renderer3D.h"
-#include "Renderer/RenderCommand.h"
+#include "RHI/RHI.h"
 #include "Renderer/MaterialInstance.h"
 #include "Log/Log.h"
 #include "Scene/Scene.h"
@@ -228,15 +228,21 @@ namespace Lunex {
 			return;
 		}
 
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (!cmdList) {
+			LNX_LOG_ERROR("MaterialPreviewRenderer::RenderInternal - No immediate command list available");
+			return;
+		}
+
 		// Bind framebuffer
 		m_Framebuffer->Bind();
 
 		// Set viewport to match framebuffer size
-		RenderCommand::SetViewport(0, 0, m_Width, m_Height);
+		cmdList->SetViewport(0.0f, 0.0f, static_cast<float>(m_Width), static_cast<float>(m_Height));
 
 		// Clear with background color
-		RenderCommand::SetClearColor(m_BackgroundColor);
-		RenderCommand::Clear();
+		cmdList->SetClearColor(m_BackgroundColor);
+		cmdList->Clear();
 
 		// Clear entity ID attachment to -1 (attachment index 1)
 		m_Framebuffer->ClearAttachment(1, -1);
