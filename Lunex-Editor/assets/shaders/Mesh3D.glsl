@@ -305,7 +305,8 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 			float distance = length(lightVec);
 			L = lightVec / max(distance, EPSILON);
 			
-			float range = light.Params.x;
+			// ? FIX: Range is in Direction.w, NOT Params.x
+			float range = light.Direction.w;
 			if (range > 0.0 && distance > range) continue;
 			
 			// Use physical attenuation (more realistic)
@@ -321,15 +322,16 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 			float distance = length(lightVec);
 			L = lightVec / max(distance, EPSILON);
 			
-			float range = light.Params.x;
+			// ? FIX: Range is in Direction.w, NOT Params.x
+			float range = light.Direction.w;
 			if (range > 0.0 && distance > range) continue;
 			
 			// Physical attenuation
 			attenuation = GetPhysicalAttenuation(distance, range);
 			
-			// Spotlight cone
+			// Spotlight cone (Params.x = innerCone, Params.y = outerCone)
 			vec3 spotDir = normalize(light.Direction.xyz);
-			float spotAtten = GetSpotAttenuation(L, spotDir, light.Params.y, light.Params.z);
+			float spotAtten = GetSpotAttenuation(L, spotDir, light.Params.x, light.Params.y);
 			attenuation *= spotAtten;
 			
 			if (attenuation < EPSILON) continue;
@@ -369,10 +371,6 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 		// Use Burley diffuse for AAA quality
 		float burley = Diffuse_Burley(NdotV, NdotL, LdotH, roughness);
 		vec3 diffuse = kD * albedo * burley;
-		
-		// Alternative: Use Oren-Nayar for very rough materials (roughness > 0.7)
-		// float orenNayar = Diffuse_OrenNayar(NdotV, NdotL, LdotV, roughness);
-		// vec3 diffuse = kD * albedo * orenNayar;
 		
 		// ========== MICRO-OCCLUSION ==========
 		// Darken crevices where light can't reach (AO affects lighting)

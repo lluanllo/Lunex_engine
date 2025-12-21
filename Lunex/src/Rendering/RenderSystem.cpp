@@ -10,6 +10,11 @@
 #include "Renderer/SkyboxRenderer.h"
 #include "Renderer/GridRenderer.h"
 #include "Core/JobSystem/JobSystem.h"
+
+// AAA Systems Integration
+#include "Scene/Camera/CameraSystem.h"
+#include "Scene/Lighting/LightSystem.h"
+
 #include <unordered_set>
 
 namespace Lunex {
@@ -53,10 +58,23 @@ namespace Lunex {
 		s_State->SelectionOutlinePassPtr = CreateScope<SelectionOutlinePass>();
 		s_State->DebugVisualizationPassPtr = CreateScope<DebugVisualizationPass>();
 		
+		// Initialize AAA systems if enabled
+		if (config.UseCameraSystem) {
+			CameraSystem::Get().Initialize();
+			LNX_LOG_INFO("CameraSystem initialized");
+		}
+		
+		if (config.UseLightSystem) {
+			LightSystem::Get().Initialize();
+			LNX_LOG_INFO("LightSystem initialized");
+		}
+		
 		s_State->Initialized = true;
 		
-		LNX_LOG_INFO("RenderSystem initialized successfully with 8 passes (parallel={0})", 
-			config.EnableParallelPasses ? "enabled" : "disabled");
+		LNX_LOG_INFO("RenderSystem initialized successfully with 8 passes (parallel={0}, CameraSystem={1}, LightSystem={2})", 
+			config.EnableParallelPasses ? "enabled" : "disabled",
+			config.UseCameraSystem ? "enabled" : "disabled",
+			config.UseLightSystem ? "enabled" : "disabled");
 	}
 	
 	void RenderSystem::Shutdown() {
@@ -67,6 +85,15 @@ namespace Lunex {
 		// Wait for any pending jobs
 		if (s_State->JobScheduler) {
 			s_State->JobScheduler->WaitForCompletion();
+		}
+		
+		// Shutdown AAA systems
+		if (s_State->Config.UseCameraSystem) {
+			CameraSystem::Get().Shutdown();
+		}
+		
+		if (s_State->Config.UseLightSystem) {
+			LightSystem::Get().Shutdown();
 		}
 		
 		delete s_State;
@@ -88,6 +115,10 @@ namespace Lunex {
 		
 		// Increment scene version for job cancellation
 		s_State->CurrentSceneVersion++;
+		
+		// Invalidate cached data
+		s_State->CameraDataValid = false;
+		s_State->LightingDataValid = false;
 	}
 	
 	void RenderSystem::EndFrame() {
@@ -106,6 +137,9 @@ namespace Lunex {
 	void RenderSystem::RenderScene(Scene* scene, const EditorCamera& camera) {
 		if (!s_State || !s_State->Initialized || !scene) return;
 		
+		// Sync AAA systems with scene
+		SyncSystemsWithScene(scene);
+		
 		// Setup scene info
 		s_State->CurrentSceneInfo.ScenePtr = scene;
 		s_State->CurrentSceneInfo.View = ViewInfo::FromEditorCamera(
@@ -116,9 +150,14 @@ namespace Lunex {
 		s_State->CurrentSceneInfo.DrawGrid = s_State->DrawGrid;
 		s_State->CurrentSceneInfo.DrawGizmos = s_State->DrawGizmos;
 		
+		// Cull lights if enabled
+		if (s_State->Config.UseLightSystem && s_State->Config.EnableLightCulling) {
+			ViewFrustum frustum(s_State->CurrentSceneInfo.View.ViewProjectionMatrix);
+			LightSystem::Get().CullLights(frustum);
+		}
+		
 		// Build and execute render graph
 		BuildRenderGraph();
-		
 		s_State->Graph->Compile();
 		
 		if (s_State->Config.ExportRenderGraph) {
@@ -137,16 +176,17 @@ namespace Lunex {
 	void RenderSystem::RenderScene(Scene* scene, Entity cameraEntity) {
 		if (!s_State || !s_State->Initialized || !scene) return;
 		
-		// Get camera component
 		if (!cameraEntity.HasComponent<CameraComponent>()) {
 			LNX_LOG_ERROR("RenderScene: Entity does not have CameraComponent");
 			return;
 		}
 		
+		// Sync AAA systems with scene
+		SyncSystemsWithScene(scene);
+		
 		auto& cameraComp = cameraEntity.GetComponent<CameraComponent>();
 		auto& transform = cameraEntity.GetComponent<TransformComponent>();
 		
-		// Setup scene info
 		s_State->CurrentSceneInfo.ScenePtr = scene;
 		s_State->CurrentSceneInfo.View = ViewInfo::FromCamera(
 			cameraComp.Camera,
@@ -154,10 +194,15 @@ namespace Lunex {
 			s_State->Config.ViewportWidth,
 			s_State->Config.ViewportHeight
 		);
-		s_State->CurrentSceneInfo.DrawGrid = false;  // No grid in runtime
+		s_State->CurrentSceneInfo.DrawGrid = false;
 		s_State->CurrentSceneInfo.DrawGizmos = false;
 		
-		// Build and execute
+		// Cull lights if enabled
+		if (s_State->Config.UseLightSystem && s_State->Config.EnableLightCulling) {
+			ViewFrustum frustum(s_State->CurrentSceneInfo.View.ViewProjectionMatrix);
+			LightSystem::Get().CullLights(frustum);
+		}
+		
 		BuildRenderGraph();
 		s_State->Graph->Compile();
 		
@@ -166,6 +211,88 @@ namespace Lunex {
 		} else {
 			s_State->Graph->Execute();
 		}
+	}
+
+	// ============================================================================
+	// AAA SYSTEMS INTEGRATION (NEW)
+	// ============================================================================
+	
+	void RenderSystem::SyncSystemsWithScene(Scene* scene) {
+		if (!s_State || !scene) return;
+		
+		SyncCameraSystem(scene);
+		SyncLightSystem(scene);
+	}
+	
+	void RenderSystem::SyncCameraSystem(Scene* scene) {
+		if (!s_State->Config.UseCameraSystem) return;
+		
+		CameraSystem::Get().SyncFromScene(scene);
+		s_State->CameraDataValid = false;
+	}
+	
+	void RenderSystem::SyncLightSystem(Scene* scene) {
+		if (!s_State->Config.UseLightSystem) return;
+		
+		LightSystem::Get().SyncFromScene(scene);
+		s_State->LightingDataValid = false;
+	}
+	
+	CameraRenderData RenderSystem::GetActiveCameraData() {
+		if (!s_State) return CameraRenderData{};
+		
+		// Use cached data if valid
+		if (s_State->CameraDataValid) {
+			return s_State->CachedCameraData;
+		}
+		
+		// Get from CameraSystem if enabled
+		if (s_State->Config.UseCameraSystem) {
+			// TODO: CameraSystem::Get().GetActiveCameraData() - needs implementation
+			// For now, fallback to ViewInfo
+		}
+		
+		// Fallback: construct from current view info
+		auto& view = s_State->CurrentSceneInfo.View;
+		CameraRenderData data;
+		data.ViewMatrix = view.ViewMatrix;
+		data.ProjectionMatrix = view.ProjectionMatrix;
+		data.ViewProjectionMatrix = view.ViewProjectionMatrix;
+		data.InverseViewMatrix = glm::inverse(view.ViewMatrix);
+		data.InverseProjectionMatrix = glm::inverse(view.ProjectionMatrix);
+		data.Position = view.CameraPosition;
+		data.Direction = view.CameraDirection;
+		data.NearPlane = view.NearPlane;
+		data.FarPlane = view.FarPlane;
+		data.FieldOfView = 45.0f;
+		data.AspectRatio = view.AspectRatio;
+		data.IsPerspective = true;
+		
+		s_State->CachedCameraData = data;
+		s_State->CameraDataValid = true;
+		
+		return data;
+	}
+	
+	LightingData RenderSystem::GetLightingData() {
+		if (!s_State) return LightingData{};
+		
+		// Use cached data if valid
+		if (s_State->LightingDataValid) {
+			return s_State->CachedLightingData;
+		}
+		
+		// Get from LightSystem if enabled
+		if (s_State->Config.UseLightSystem) {
+			s_State->CachedLightingData = LightSystem::Get().GetLightingData();
+			s_State->LightingDataValid = true;
+			return s_State->CachedLightingData;
+		}
+		
+		// Fallback: empty lighting
+		s_State->CachedLightingData = LightingData{};
+		s_State->LightingDataValid = true;
+		return s_State->CachedLightingData;
 	}
 
 	// ============================================================================
@@ -263,7 +390,7 @@ namespace Lunex {
 		if (s_State->SelectionOutlinePassPtr->ShouldExecute(sceneInfo)) {
 			s_State->SelectionOutlinePassPtr->SetColorTarget(s_State->GeometryPassPtr->GetColorOutput());
 			s_State->SelectionOutlinePassPtr->SetDepthTarget(s_State->GeometryPassPtr->GetDepthOutput());
-			s_State->SelectionOutlinePassPtr->SetSelectedEntity(s_State->SelectedEntityID);
+		 s_State->SelectionOutlinePassPtr->SetSelectedEntity(s_State->SelectedEntityID);
 			
 			graph.AddPass(
 				"SelectionOutline",

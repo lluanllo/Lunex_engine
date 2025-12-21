@@ -17,7 +17,7 @@
 #include "../Panels/JobSystemPanel.h"
 #include "../Panels/MeshImportModal.h"
 
-#include "Renderer/EditorCamera.h"
+#include "Scene/Camera/EditorCamera.h"
 
 namespace Lunex {
 	class EditorLayer : public Layer {

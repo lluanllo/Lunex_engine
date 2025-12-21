@@ -9,6 +9,7 @@
  * - Automatic dependency resolution
  * - Parallel execution support
  * - Resource lifetime management
+ * - CameraSystem/LightSystem integration
  */
 
 #include "Core/Core.h"
@@ -21,7 +22,11 @@
 #include "Passes/EditorPass.h"
 #include "Scene/Scene.h"
 #include "Scene/Entity.h"
-#include "Renderer/EditorCamera.h"
+#include "Scene/Camera/EditorCamera.h"
+
+// AAA Camera/Light System Integration
+#include "Scene/Camera/CameraData.h"
+#include "Scene/Lighting/LightTypes.h"
 
 #include <glm/glm.hpp>
 
@@ -29,6 +34,8 @@ namespace Lunex {
 
 	// Forward declarations
 	class EnvironmentMap;
+	class CameraSystem;
+	class LightSystem;
 
 	// ============================================================================
 	// RENDER SYSTEM CONFIG
@@ -80,6 +87,27 @@ namespace Lunex {
 		 * @brief Minimum entity count to trigger parallel collection
 		 */
 		uint32_t ParallelCollectionThreshold = 100;
+		
+		// ============================================
+		// AAA SYSTEMS INTEGRATION (NEW)
+		// ============================================
+		
+		/**
+		 * @brief Use CameraSystem for camera management
+		 * When enabled, cameras are managed through CameraSystem singleton
+		 */
+		bool UseCameraSystem = true;
+		
+		/**
+		 * @brief Use LightSystem for light aggregation
+		 * When enabled, lights are gathered via LightSystem singleton
+		 */
+		bool UseLightSystem = true;
+		
+		/**
+		 * @brief Enable frustum culling via LightSystem
+		 */
+		bool EnableLightCulling = true;
 	};
 
 	// ============================================================================
@@ -233,6 +261,28 @@ namespace Lunex {
 		 */
 		static bool IsParallelPassesEnabled();
 		
+		// ============================================
+		// AAA SYSTEMS API (NEW)
+		// ============================================
+		
+		/**
+		 * @brief Get current camera data from CameraSystem or scene
+		 * Returns unified CameraRenderData regardless of source
+		 */
+		static CameraRenderData GetActiveCameraData();
+		
+		/**
+		 * @brief Get lighting data from LightSystem or scene
+		 * Returns pre-culled lighting data ready for GPU upload
+		 */
+		static LightingData GetLightingData();
+		
+		/**
+		 * @brief Force sync systems with current scene
+		 * Call this after scene changes (load, entity add/remove)
+		 */
+		static void SyncSystemsWithScene(Scene* scene);
+		
 	private:
 		RenderSystem() = delete;
 		~RenderSystem() = delete;
@@ -241,6 +291,8 @@ namespace Lunex {
 		static void BuildRenderGraphFromDescriptors();
 		static void ExecuteRenderGraph();
 		static void ExecuteRenderGraphParallel();
+		static void SyncCameraSystem(Scene* scene);
+		static void SyncLightSystem(Scene* scene);
 		
 		// Internal state
 		struct State {
@@ -268,6 +320,12 @@ namespace Lunex {
 			
 			// Scene info for current frame
 			SceneRenderInfo CurrentSceneInfo;
+			
+			// AAA Systems cached data (NEW)
+			CameraRenderData CachedCameraData;
+			LightingData CachedLightingData;
+			bool CameraDataValid = false;
+			bool LightingDataValid = false;
 			
 			// Output
 			RenderGraphResource FinalColorTarget;

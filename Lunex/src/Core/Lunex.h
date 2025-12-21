@@ -38,6 +38,37 @@
 #include "Renderer/Framebuffer.h"
 #include "Renderer/Texture.h"
 #include "Renderer/VertexArray.h"
-#include "Renderer/OrthographicCamera.h"
-#include "Renderer/OrthographicCameraController.h"
+#include "Scene/Camera/OrthographicCamera.h"
+#include "Scene/Camera/OrthographicCameraController.h"
 //--------------------------
+
+//===== AAA ARCHITECTURE =====
+// These are the new, properly layered systems.
+// Legacy includes above still work via compatibility wrappers.
+
+//---AAA Camera System---
+#include "Scene/Camera/CameraData.h"
+#include "Scene/Camera/CameraSystem.h"
+//-----------------------
+
+//---AAA Lighting System---
+#include "Scene/Lighting/LightTypes.h"
+#include "Scene/Lighting/LightSystem.h"
+//--------------------------
+
+//---AAA Render System---
+#include "Rendering/RenderSystem.h"
+//------------------------
+
+//===== UNIFIED ASSET SYSTEM =====
+// New unified asset architecture with JobSystem integration
+
+//---Unified Assets Core---
+#include "Assets/Core/AssetCore.h"
+//-------------------------
+
+//---Unified Assets Types---
+#include "Assets/Materials/MaterialAsset.h"
+#include "Assets/Mesh/MeshAsset.h"
+// Note: TextureAsset, Prefab - coming soon
+//---------------------------

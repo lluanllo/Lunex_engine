@@ -1,6 +1,6 @@
 #include "stpch.h"
 #include "RenderPass.h"
-#include "Renderer/EditorCamera.h"
+#include "Scene/Camera/EditorCamera.h"
 
 namespace Lunex {
 
@@ -10,11 +10,13 @@ namespace Lunex {
 		info.ProjectionMatrix = camera.GetProjection();
 		info.ViewProjectionMatrix = camera.GetViewProjection();
 		info.CameraPosition = camera.GetPosition();
+		info.CameraDirection = camera.GetForwardDirection();  // NEW
 		info.ViewportWidth = width;
 		info.ViewportHeight = height;
+		info.AspectRatio = width > 0 ? (float)width / (float)height : 1.0f;  // NEW
 		info.NearPlane = camera.GetNearClip();
 		info.FarPlane = camera.GetFarClip();
-		info.IsEditorCamera = true;  // NEW: Mark as editor camera
+		info.IsEditorCamera = true;
 		return info;
 	}
 	
@@ -24,10 +26,11 @@ namespace Lunex {
 		info.ViewMatrix = glm::inverse(transform);
 		info.ViewProjectionMatrix = info.ProjectionMatrix * info.ViewMatrix;
 		info.CameraPosition = glm::vec3(transform[3]);
+		info.CameraDirection = -glm::normalize(glm::vec3(transform[2]));  // NEW: -Z axis of transform
 		info.ViewportWidth = width;
 		info.ViewportHeight = height;
-		info.IsEditorCamera = false;  // NEW: Mark as runtime camera
-		// Note: Camera class doesn't expose near/far, using defaults
+		info.AspectRatio = width > 0 ? (float)width / (float)height : 1.0f;  // NEW
+		info.IsEditorCamera = false;
 		return info;
 	}
 

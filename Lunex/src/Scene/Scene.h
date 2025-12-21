@@ -2,7 +2,7 @@
 
 #include "Core/Timestep.h"
 #include "Core/UUID.h"
-#include "Renderer/EditorCamera.h"
+#include "Scene/Camera/EditorCamera.h"
 
 #include "entt.hpp"
 

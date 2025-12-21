@@ -2,7 +2,7 @@
 #include "MaterialPreviewRenderer.h"
 #include "Renderer/Renderer3D.h"
 #include "RHI/RHI.h"
-#include "Renderer/MaterialInstance.h"
+#include "Resources/Render/MaterialInstance.h"
 #include "Log/Log.h"
 #include "Scene/Scene.h"
 #include "Scene/Entity.h"

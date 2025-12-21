@@ -2,11 +2,11 @@
 
 #include "Core/Core.h"
 #include "Renderer/Framebuffer.h"
-#include "Renderer/MaterialAsset.h"
-#include "Renderer/MaterialInstance.h"
-#include "Renderer/EditorCamera.h"
-#include "Renderer/Model.h"
-#include "Renderer/Light.h"
+#include "Assets/Materials/MaterialAsset.h"
+#include "Resources/Render/MaterialInstance.h"
+#include "Scene/Camera/EditorCamera.h"
+#include "resources/Mesh/Model.h"
+#include "Scene/Lighting/Light.h"
 #include "Renderer/Texture.h"
 #include <glm/glm.hpp>
 #include <filesystem>

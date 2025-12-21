@@ -2,9 +2,9 @@
 
 #include "Core/Core.h"
 #include "Renderer/Shader.h"
-#include "Renderer/Model.h"
-#include "Renderer/OrthographicCamera.h"
-#include "Renderer/EditorCamera.h"
+#include "Resources/Mesh/Model.h"
+#include "Scene/Camera/OrthographicCamera.h"
+#include "Scene/Camera/EditorCamera.h"
 #include "Renderer/EnvironmentMap.h"
 
 #include <glm/glm.hpp>

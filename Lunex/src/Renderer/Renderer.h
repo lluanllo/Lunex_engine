@@ -1,6 +1,6 @@
 #pragma once
 
-#include "OrthographicCamera.h"
+#include "Scene/Camera/OrthographicCamera.h"
 #include "Shader.h"
 #include "VertexArray.h"
 #include "RHI/RHI.h"

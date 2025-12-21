@@ -1,8 +1,11 @@
-#include "stpch.h"
+﻿#include "stpch.h"
 #include "Application.h"
 
 #include "Renderer/Renderer.h"
-#include "Renderer/MaterialRegistry.h"
+#include "Assets/Materials/MaterialRegistry.h"
+
+// NEW: Unified Asset System
+#include "Assets/Core/AssetCore.h"
 
 #include "Input.h"
 
@@ -42,12 +45,16 @@ namespace Lunex{
 		Renderer::Init();
 		
 		// ========================================
-		// Initialize Material System
+		// Initialize Unified Asset System (NEW)
 		// ========================================
-		// MaterialRegistry is a singleton that manages all material assets
-		// It creates the default material on first access
-		MaterialRegistry::Get(); // Initialize registry and create default material
-		LNX_LOG_INFO("? Material System initialized");
+		AssetManager::Initialize();
+		LNX_LOG_INFO("✓ Unified Asset System initialized (with JobSystem)");
+		
+		// ========================================
+		// Initialize Material System (Legacy - now uses AssetManager)
+		// ========================================
+		MaterialRegistry::Get();
+		LNX_LOG_INFO("✓ Material System initialized");
 		
 		m_ImGuiLayer = new ImGuiLayer;
 		PushOverlay(m_ImGuiLayer);
@@ -61,6 +68,12 @@ namespace Lunex{
 		// ========================================
 		MaterialRegistry::Get().ClearAll();
 		LNX_LOG_INFO("Material System shutdown");
+		
+		// ========================================
+		// Shutdown Unified Asset System (NEW)
+		// ========================================
+		AssetManager::Shutdown();
+		LNX_LOG_INFO("Unified Asset System shutdown");
 		
 		Renderer::Shutdown();
 	}
@@ -105,6 +118,9 @@ namespace Lunex{
 			float time = (float)glfwGetTime();
 			Timestep timestep = time - m_LastFrameTime;
 			m_LastFrameTime = time;
+			
+			// Update Asset System (hot-reload, async callbacks)
+			AssetManager::Update(timestep.GetSeconds());
 			
 			if (!m_Minimized) {
 				{

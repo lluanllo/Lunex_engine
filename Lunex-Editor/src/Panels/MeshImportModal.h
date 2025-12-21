@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Core/Core.h"
-#include "Asset/MeshAsset.h"
-#include "Asset/MeshImporter.h"
+#include "Assets/Mesh/MeshAsset.h"
+#include "Assets/Mesh/MeshImporter.h"
 
 #include <filesystem>
 #include <functional>

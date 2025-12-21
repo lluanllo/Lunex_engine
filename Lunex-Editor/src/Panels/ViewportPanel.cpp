@@ -6,7 +6,7 @@
 #include "Core/Input.h"
 #include "Scene/Components.h"
 #include "Math/Math.h"
-#include "Asset/MeshImporter.h"
+#include "Assets/Mesh/MeshImporter.h"
 #include "Asset/Prefab.h"
 #include <glm/gtc/type_ptr.hpp>
 

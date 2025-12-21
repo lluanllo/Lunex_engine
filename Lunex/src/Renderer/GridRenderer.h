@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Core.h"
-#include "Renderer/EditorCamera.h"
+#include "Scene/Camera/EditorCamera.h"
 
 #include <glm/glm.hpp>
 

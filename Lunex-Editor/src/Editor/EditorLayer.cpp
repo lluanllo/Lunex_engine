@@ -18,13 +18,13 @@
 // ✅ Input System
 #include "Input/InputManager.h"
 
-// ✅ MeshAsset System
-#include "Asset/MeshAsset.h"
-#include "Asset/MeshImporter.h"
+// ✅ MeshAsset System (Unified Assets)
+#include "Assets/Mesh/MeshAsset.h"
+#include "Assets/Mesh/MeshImporter.h"
 #include "Asset/Prefab.h"
 
-// ✅ AssetDatabase
-#include "Asset/AssetDatabase.h"
+// ✅ AssetDatabase (Unified Assets)
+#include "Assets/Core/AssetDatabase.h"
 
 // ✅ Skybox Renderer for camera preview
 #include "Renderer/SkyboxRenderer.h"

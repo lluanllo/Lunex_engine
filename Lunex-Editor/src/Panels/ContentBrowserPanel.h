@@ -2,9 +2,9 @@
 
 #include "Renderer/Texture.h"
 #include "Renderer/MaterialPreviewRenderer.h"
-#include "Renderer/MaterialAsset.h"
-#include "Renderer/MaterialRegistry.h"
-#include "Asset/MeshAsset.h"
+#include "Assets/Materials/MaterialAsset.h"
+#include "Assets/Materials/MaterialRegistry.h"
+#include "Assets/Mesh/MeshAsset.h"
 #include <filesystem>
 #include <vector>
 #include <set>
