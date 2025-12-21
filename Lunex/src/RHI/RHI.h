@@ -24,9 +24,11 @@
 #include "RHIShader.h"
 #include "RHIPipeline.h"
 #include "RHIFramebuffer.h"
+#include "RHIInputLayout.h"  // NEW: API-agnostic vertex input layout
 
 // Command system
 #include "RHICommandList.h"
+#include "RHICommandPool.h"  // NEW: Multithreaded command recording
 
 namespace Lunex {
 namespace RHI {

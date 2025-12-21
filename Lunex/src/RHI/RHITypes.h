@@ -343,6 +343,9 @@ namespace RHI {
 		GreaterEqual,
 		Always
 	};
+	
+	// Alias for CompareOp (used in pipeline state)
+	using CompareOp = CompareFunc;
 
 	enum class StencilOp : uint8_t {
 		Keep = 0,

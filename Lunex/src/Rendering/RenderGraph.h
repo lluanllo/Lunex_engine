@@ -240,6 +240,13 @@ namespace Lunex {
 	 * @class RenderGraph
 	 * @brief Frame graph for automatic resource management and pass scheduling
 	 * 
+	 * AAA-level features:
+	 * - Automatic transient resource allocation and deallocation
+	 * - Resource lifetime tracking for memory reuse
+	 * - Pass dependency resolution and topological sorting
+	 * - Dead pass culling
+	 * - Memory aliasing support (future)
+	 * 
 	 * Usage:
 	 * 1. Create graph: RenderGraph graph;
 	 * 2. Add passes: graph.AddPass(name, setup, execute);
@@ -270,6 +277,16 @@ namespace Lunex {
 		 * @brief Mark a resource as the final output
 		 */
 		void SetBackbufferSource(RenderGraphResource handle);
+		
+		/**
+		 * @brief Get a resource by name (for pass chaining)
+		 */
+		RenderGraphResource GetResource(const std::string& name) const;
+		
+		/**
+		 * @brief Check if a resource exists
+		 */
+		bool HasResource(const std::string& name) const;
 		
 		// ============================================
 		// PASS MANAGEMENT
@@ -316,6 +333,32 @@ namespace Lunex {
 		void Reset();
 		
 		// ============================================
+		// RESOURCE POOL (AAA-level memory management)
+		// ============================================
+		
+		/**
+		 * @brief Enable resource pooling for memory reuse across frames
+		 */
+		void SetEnableResourcePooling(bool enable) { m_EnableResourcePooling = enable; }
+		
+		/**
+		 * @brief Get statistics about resource pool
+		 */
+		struct PoolStatistics {
+			uint32_t PooledTextures = 0;
+			uint32_t PooledBuffers = 0;
+			uint64_t PooledMemory = 0;
+			uint32_t PoolHits = 0;
+			uint32_t PoolMisses = 0;
+		};
+		const PoolStatistics& GetPoolStatistics() const { return m_PoolStats; }
+		
+		/**
+		 * @brief Clear resource pool (useful when resizing)
+		 */
+		void ClearResourcePool();
+		
+		// ============================================
 		// CONFIGURATION
 		// ============================================
 		
@@ -323,8 +366,12 @@ namespace Lunex {
 		 * @brief Set swapchain dimensions for scaled resources
 		 */
 		void SetSwapchainSize(uint32_t width, uint32_t height) {
-			m_SwapchainWidth = width;
-			m_SwapchainHeight = height;
+			if (m_SwapchainWidth != width || m_SwapchainHeight != height) {
+				m_SwapchainWidth = width;
+				m_SwapchainHeight = height;
+				// Clear pool on resize
+				ClearResourcePool();
+			}
 		}
 		
 		/**
@@ -361,14 +408,38 @@ namespace Lunex {
 		struct ResourceNode;
 		struct PassNode;
 		
+		// Resource pool for memory reuse
+		struct PooledTexture {
+			Ref<RHI::RHITexture2D> Texture;
+			RenderGraphTextureDesc Desc;
+			uint64_t LastUsedFrame = 0;
+		};
+		
+		struct PooledBuffer {
+			Ref<RHI::RHIBuffer> Buffer;
+			RenderGraphBufferDesc Desc;
+			uint64_t LastUsedFrame = 0;
+		};
+		
 		void CompilePasses();
 		void CullUnusedPasses();
 		void AllocateResources();
 		void ExecutePass(PassNode* pass);
 		
+		// Resource pool helpers
+		Ref<RHI::RHITexture2D> AcquirePooledTexture(const RenderGraphTextureDesc& desc);
+		void ReleasePooledTextures();
+		
 		std::vector<Scope<PassNode>> m_Passes;
 		std::vector<Scope<ResourceNode>> m_Resources;
 		std::unordered_map<std::string, uint32_t> m_ResourceNameMap;
+		
+		// Resource pools
+		std::vector<PooledTexture> m_TexturePool;
+		std::vector<PooledBuffer> m_BufferPool;
+		uint64_t m_CurrentFrame = 0;
+		bool m_EnableResourcePooling = true;
+		PoolStatistics m_PoolStats;
 		
 		uint32_t m_SwapchainWidth = 1920;
 		uint32_t m_SwapchainHeight = 1080;

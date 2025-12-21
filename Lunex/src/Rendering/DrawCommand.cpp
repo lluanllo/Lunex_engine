@@ -70,6 +70,70 @@ namespace Lunex {
 		m_Sorted = true;
 	}
 	
+	uint32_t DrawList::CullAgainstFrustum(const glm::vec4 frustumPlanes[6]) {
+		uint32_t culledCount = 0;
+		
+		auto it = std::remove_if(m_Commands.begin(), m_Commands.end(),
+			[&frustumPlanes, &culledCount](const DrawCommand& cmd) {
+				// Skip if no bounds set
+				if (cmd.BoundsRadius <= 0.0f) return false;
+				
+				// Test sphere against all 6 frustum planes
+				for (int i = 0; i < 6; i++) {
+					float distance = glm::dot(glm::vec3(frustumPlanes[i]), cmd.BoundsCenter) + frustumPlanes[i].w;
+					if (distance < -cmd.BoundsRadius) {
+						// Sphere is completely outside this plane
+						culledCount++;
+						return true;
+					}
+				}
+				return false;
+			});
+		
+		m_Commands.erase(it, m_Commands.end());
+		return culledCount;
+	}
+	
+	uint32_t DrawList::BatchCommands() {
+		if (m_Commands.empty()) return 0;
+		
+		// Sort first to group compatible commands
+		Sort();
+		
+		uint32_t batchedCount = 0;
+		m_BatchedCommands.clear();
+		m_BatchedCommands.reserve(m_Commands.size());
+		
+		// Group commands by mesh + material combination
+		// For now, just identify batches - actual instancing requires uniform buffers
+		DrawCommand* currentBatch = nullptr;
+		
+		for (auto& cmd : m_Commands) {
+			if (currentBatch && 
+				cmd.Mesh.VertexBuffer == currentBatch->Mesh.VertexBuffer &&
+				cmd.Mesh.IndexBuffer == currentBatch->Mesh.IndexBuffer &&
+				cmd.Material.Pipeline == currentBatch->Material.Pipeline) {
+				// Compatible with current batch - increment instance count
+				currentBatch->Mesh.InstanceCount++;
+				batchedCount++;
+				// Note: In a full implementation, we'd also store instance transforms
+				// in a per-instance buffer for GPU instancing
+			} else {
+				// Start new batch
+				m_BatchedCommands.push_back(cmd);
+				currentBatch = &m_BatchedCommands.back();
+			}
+		}
+		
+		// Swap batched commands back
+		if (batchedCount > 0) {
+			m_Commands = std::move(m_BatchedCommands);
+			m_BatchedCommands.clear();
+		}
+		
+		return batchedCount;
+	}
+	
 	void DrawList::Execute(RHI::RHICommandList* cmdList) {
 		if (!cmdList) return;
 		
@@ -109,6 +173,65 @@ namespace Lunex {
 				args.FirstInstance = cmd.Mesh.FirstInstance;
 				
 				cmdList->DrawIndexed(args);
+			}
+		}
+	}
+	
+	void DrawList::Execute(RHI::RHICommandList* cmdList, DrawStatistics& stats) {
+		if (!cmdList) return;
+		
+		stats.TotalDrawCalls = static_cast<uint32_t>(m_Commands.size());
+		
+		// Sort if needed
+		if (!m_Sorted) {
+			Sort();
+		}
+		
+		// Track state to minimize state changes
+		RHI::RHIGraphicsPipeline* lastPipeline = nullptr;
+		
+		for (const auto& cmd : m_Commands) {
+			if (!cmd.IsValid()) {
+				stats.DrawCallsCulled++;
+				continue;
+			}
+			
+			// Only bind pipeline if it changed
+			if (cmd.Material.Pipeline.get() != lastPipeline) {
+				stats.PipelineChanges++;
+				cmdList->SetPipeline(cmd.Material.Pipeline.get());
+				lastPipeline = cmd.Material.Pipeline.get();
+			}
+			
+			// Bind buffers
+			cmdList->SetVertexBuffer(cmd.Mesh.VertexBuffer.get(), 0, 0);
+			cmdList->SetIndexBuffer(cmd.Mesh.IndexBuffer.get(), 0);
+			stats.BufferBinds += 2;
+			
+			// Bind textures
+			for (size_t i = 0; i < cmd.Material.Textures.size(); i++) {
+				if (cmd.Material.Textures[i]) {
+					auto sampler = i < cmd.Material.Samplers.size() ? cmd.Material.Samplers[i] : nullptr;
+					cmdList->SetTextureAndSampler(cmd.Material.Textures[i].get(), sampler.get(), static_cast<uint32_t>(i));
+					stats.TextureBinds++;
+				}
+			}
+			
+			// Draw
+			RHI::DrawArgs args;
+			args.IndexCount = cmd.Mesh.IndexCount;
+			args.InstanceCount = cmd.Mesh.InstanceCount;
+			args.FirstIndex = cmd.Mesh.FirstIndex;
+			args.VertexOffset = cmd.Mesh.VertexOffset;
+			args.FirstInstance = cmd.Mesh.FirstInstance;
+			
+			cmdList->DrawIndexed(args);
+			
+			stats.DrawCallsExecuted++;
+			stats.TrianglesDrawn += (cmd.Mesh.IndexCount / 3) * cmd.Mesh.InstanceCount;
+			
+			if (cmd.Mesh.InstanceCount > 1) {
+				stats.DrawCallsBatched++;
 			}
 		}
 	}

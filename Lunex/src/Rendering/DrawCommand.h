@@ -154,12 +154,33 @@ namespace Lunex {
 	};
 
 	// ============================================================================
-	// DRAW LIST
+	// DRAW STATISTICS
+	// ============================================================================
+	
+	/**
+	 * @struct DrawStatistics
+	 * @brief Statistics about draw list execution
+	 */
+	struct DrawStatistics {
+		uint32_t TotalDrawCalls = 0;
+		uint32_t DrawCallsExecuted = 0;
+		uint32_t DrawCallsCulled = 0;
+		uint32_t DrawCallsBatched = 0;
+		uint32_t TrianglesDrawn = 0;
+		uint32_t PipelineChanges = 0;
+		uint32_t TextureBinds = 0;
+		uint32_t BufferBinds = 0;
+		
+		void Reset() { *this = DrawStatistics{}; }
+	};
+
+	// ============================================================================
+	// DRAW LIST (Enhanced)
 	// ============================================================================
 	
 	/**
 	 * @class DrawList
-	 * @brief Collection of draw commands with sorting and batching
+	 * @brief Collection of draw commands with sorting, batching, and culling
 	 */
 	class DrawList {
 	public:
@@ -188,9 +209,28 @@ namespace Lunex {
 		void Sort(bool reverse = false);
 		
 		/**
+		 * @brief Perform frustum culling against camera planes
+		 * @param frustumPlanes 6 frustum planes (near, far, left, right, top, bottom)
+		 * @return Number of commands culled
+		 */
+		uint32_t CullAgainstFrustum(const glm::vec4 frustumPlanes[6]);
+		
+		/**
+		 * @brief Batch compatible draw commands for instancing
+		 * Commands with same mesh and material can be batched
+		 * @return Number of commands batched
+		 */
+		uint32_t BatchCommands();
+		
+		/**
 		 * @brief Execute all commands in order
 		 */
 		void Execute(RHI::RHICommandList* cmdList);
+		
+		/**
+		 * @brief Execute with statistics tracking
+		 */
+		void Execute(RHI::RHICommandList* cmdList, DrawStatistics& stats);
 		
 		/**
 		 * @brief Clear all commands
@@ -198,6 +238,7 @@ namespace Lunex {
 		void Clear() {
 			m_Commands.clear();
 			m_Sorted = false;
+			m_BatchedCommands.clear();
 		}
 		
 		/**
@@ -216,9 +257,65 @@ namespace Lunex {
 		std::vector<DrawCommand>& GetCommands() { return m_Commands; }
 		const std::vector<DrawCommand>& GetCommands() const { return m_Commands; }
 		
+		/**
+		 * @brief Reserve capacity for commands
+		 */
+		void Reserve(size_t count) { m_Commands.reserve(count); }
+		
 	private:
 		std::vector<DrawCommand> m_Commands;
+		std::vector<DrawCommand> m_BatchedCommands;  // For instanced draws
 		bool m_Sorted = false;
+	};
+	
+	// ============================================================================
+	// SCENE DRAW COLLECTOR
+	// ============================================================================
+	
+	/**
+	 * @class SceneDrawCollector
+	 * @brief Collects draw commands from scene entities (parallel-ready)
+	 * 
+	 * This is the bridge between Scene and DrawList.
+	 * Can be called from multiple threads for parallel draw collection.
+	 */
+	class SceneDrawCollector {
+	public:
+		/**
+		 * @brief Collect draws from a scene view
+		 * @param scene The scene to collect from
+		 * @param viewMatrix Camera view matrix
+		 * @param projMatrix Camera projection matrix
+		 * @return DrawList with all visible objects
+		 */
+		static DrawList CollectScene(
+			class Scene* scene,
+			const glm::mat4& viewMatrix,
+			const glm::mat4& projMatrix
+		);
+		
+		/**
+		 * @brief Collect draws for opaque objects only
+		 */
+		static DrawList CollectOpaqueObjects(class Scene* scene);
+		
+		/**
+		 * @brief Collect draws for transparent objects only
+		 */
+		static DrawList CollectTransparentObjects(class Scene* scene);
+		
+		/**
+		 * @brief Collect draws for a specific entity range (for parallel collection)
+		 */
+		static void CollectEntityRange(
+			class Scene* scene,
+			uint32_t startEntity,
+			uint32_t endEntity,
+			DrawList& outDrawList
+		);
+		
+	private:
+		static DrawCommand CreateDrawCommandFromEntity(class Entity& entity);
 	};
 
 	// ============================================================================

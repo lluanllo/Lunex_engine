@@ -1,6 +1,7 @@
 #include "stpch.h"
 #include "RenderSystem.h"
 #include "RenderPassJob.h"
+#include "RenderPassDescriptor.h"
 #include "Log/Log.h"
 #include "Scene/Entity.h"
 #include "Scene/Components.h"
@@ -9,6 +10,7 @@
 #include "Renderer/SkyboxRenderer.h"
 #include "Renderer/GridRenderer.h"
 #include "Core/JobSystem/JobSystem.h"
+#include <unordered_set>
 
 namespace Lunex {
 
@@ -339,6 +341,188 @@ namespace Lunex {
 		
 		// For OpenGL, we must wait for completion (no async submit)
 		scheduler.WaitForCompletion();
+	}
+
+	// ============================================================================
+	// DATA-DRIVEN PASS REGISTRATION (NEW AAA API)
+	// ============================================================================
+	
+	void RenderSystem::RegisterPass(const RenderPassDescriptor& descriptor) {
+		if (!s_State) {
+			LNX_LOG_ERROR("RenderSystem not initialized - cannot register pass: {0}", descriptor.Name);
+			return;
+		}
+		
+		if (descriptor.Name.empty()) {
+			LNX_LOG_ERROR("Cannot register pass with empty name");
+			return;
+		}
+		
+		if (!descriptor.Execute) {
+			LNX_LOG_ERROR("Cannot register pass '{0}' without execute function", descriptor.Name);
+			return;
+		}
+		
+		// Add to local registry
+		s_State->RegisteredPasses[descriptor.Name] = descriptor;
+		
+		// Also add to global PassRegistry
+		PassRegistry::Get().Register(descriptor);
+		
+		LNX_LOG_INFO("Registered render pass: {0} (category: {1}, priority: {2})", 
+			descriptor.Name, 
+			static_cast<int>(descriptor.Category),
+			descriptor.Priority);
+	}
+	
+	void RenderSystem::UnregisterPass(const std::string& name) {
+		if (!s_State) return;
+		
+		s_State->RegisteredPasses.erase(name);
+		PassRegistry::Get().Unregister(name);
+		
+		LNX_LOG_INFO("Unregistered render pass: {0}", name);
+	}
+	
+	void RenderSystem::SetPassEnabled(const std::string& name, bool enabled) {
+		if (!s_State) return;
+		
+		auto it = s_State->RegisteredPasses.find(name);
+		if (it != s_State->RegisteredPasses.end()) {
+			it->second.Enabled = enabled;
+			LNX_LOG_INFO("Render pass '{0}' {1}", name, enabled ? "enabled" : "disabled");
+		}
+	}
+	
+	bool RenderSystem::IsPassEnabled(const std::string& name) {
+		if (!s_State) return false;
+		
+		auto it = s_State->RegisteredPasses.find(name);
+		if (it != s_State->RegisteredPasses.end()) {
+			return it->second.Enabled;
+		}
+		return false;
+	}
+	
+	std::vector<std::string> RenderSystem::GetRegisteredPasses() {
+		std::vector<std::string> names;
+		if (!s_State) return names;
+		
+		names.reserve(s_State->RegisteredPasses.size());
+		for (const auto& [name, desc] : s_State->RegisteredPasses) {
+			names.push_back(name);
+		}
+		return names;
+	}
+	
+	// ============================================================================
+	// DATA-DRIVEN RENDER GRAPH BUILDING
+	// ============================================================================
+	
+	void RenderSystem::BuildRenderGraphFromDescriptors() {
+		if (!s_State || s_State->RegisteredPasses.empty()) return;
+		
+		auto& graph = *s_State->Graph;
+		auto& sceneInfo = s_State->CurrentSceneInfo;
+		
+		// Get sorted passes from registry
+		auto sortedPasses = PassRegistry::Get().GetSortedPasses();
+		
+		// Resource handles map (name -> handle)
+		std::unordered_map<std::string, RenderGraphResource> resourceHandles;
+		
+		// Track which resources have been created
+		std::unordered_set<std::string> createdResources;
+		
+		for (const RenderPassDescriptor* passDesc : sortedPasses) {
+			// Check condition
+			if (passDesc->Condition && !passDesc->Condition(sceneInfo)) {
+				continue;
+			}
+			
+			// Capture descriptor pointer for lambda
+			const RenderPassDescriptor* desc = passDesc;
+			
+			graph.AddPass(
+				desc->Name,
+				// Setup function
+				[&, desc](RenderPassBuilder& builder) {
+					builder.SetName(desc->Name);
+					
+					// Process outputs first (they might create resources)
+					for (const auto& output : desc->Outputs) {
+						RenderGraphResource handle;
+						
+						// Check if resource exists
+						auto it = resourceHandles.find(output.Name);
+						if (it != resourceHandles.end()) {
+							handle = it->second;
+						} else {
+							// Create new resource
+							if (output.IsTexture) {
+								handle = builder.CreateTexture(output.TextureDesc);
+							} else {
+								handle = builder.CreateBuffer(output.BufferDesc);
+							}
+							resourceHandles[output.Name] = handle;
+							createdResources.insert(output.Name);
+						}
+						
+						// Set as render target if needed
+						if (output.Access == ResourceAccess::RenderTarget) {
+							builder.SetRenderTarget(handle, output.Slot);
+						} else if (output.Access == ResourceAccess::DepthTarget) {
+							builder.SetDepthTarget(handle);
+						} else {
+							builder.WriteTexture(handle);
+						}
+					}
+					
+					// Process inputs
+					for (const auto& input : desc->Inputs) {
+						auto it = resourceHandles.find(input.Name);
+						if (it != resourceHandles.end()) {
+							if (input.IsTexture) {
+								builder.ReadTexture(it->second);
+							} else {
+								builder.ReadBuffer(it->second);
+							}
+						} else {
+							LNX_LOG_WARN("Pass '{0}' reads undefined resource: {1}", 
+								desc->Name, input.Name);
+						}
+					}
+				},
+				// Execute function
+				[&, desc](const RenderPassResources& resources) {
+					auto* cmdList = resources.GetCommandList();
+					if (cmdList && desc->Execute) {
+						desc->Execute(*cmdList, resources, sceneInfo);
+					}
+				}
+			);
+		}
+		
+		// Set final output (last color render target)
+		if (!resourceHandles.empty()) {
+			// Find "FinalColor" or similar
+			auto it = resourceHandles.find("FinalColor");
+			if (it != resourceHandles.end()) {
+				s_State->FinalColorTarget = it->second;
+				graph.SetBackbufferSource(s_State->FinalColorTarget);
+			} else {
+				// Use last created color target
+				for (const auto& [name, handle] : resourceHandles) {
+					s_State->FinalColorTarget = handle;
+					graph.SetBackbufferSource(s_State->FinalColorTarget);
+				}
+			}
+		}
+	}
+
+	void RenderSystem::ExecuteRenderGraph() {
+		if (!s_State || !s_State->Graph) return;
+		s_State->Graph->Execute();
 	}
 
 	// ============================================================================
