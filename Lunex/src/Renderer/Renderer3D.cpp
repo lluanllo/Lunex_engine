@@ -4,11 +4,13 @@
 #include "RHI/RHI.h"
 #include "Renderer/UniformBuffer.h"
 #include "Renderer/StorageBuffer.h"
-#include "Renderer/MaterialRegistry.h"
+#include "Assets/Materials/MaterialRegistry.h"
+#include "Resources/Mesh/Model.h"
 #include "Renderer/GridRenderer.h"
 #include "Renderer/SkyboxRenderer.h"
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
+#include "Scene/Lighting/LightTypes.h"  // NEW: For LightData
 #include "Log/Log.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -58,11 +60,9 @@ namespace Lunex {
 			float _padding;
 		};
 
-		// Dynamic light buffer structure
 		struct LightsStorageData {
 			int NumLights;
 			float _padding1, _padding2, _padding3;
-			// Light data follows dynamically
 		};
 
 		CameraData CameraBuffer;
@@ -70,7 +70,6 @@ namespace Lunex {
 		MaterialUniformData MaterialBuffer;
 		IBLUniformData IBLBuffer;
 		
-		// Dynamic light buffer
 		std::vector<uint8_t> LightsBufferData;
 		int CurrentLightCount = 0;
 		static constexpr int MaxLights = 10000;
@@ -85,7 +84,6 @@ namespace Lunex {
 
 		glm::vec3 CameraPosition = { 0.0f, 0.0f, 0.0f };
 		
-		// Current environment for IBL
 		Ref<EnvironmentMap> CurrentEnvironment;
 
 		Renderer3D::Statistics Stats;
@@ -98,51 +96,43 @@ namespace Lunex {
 
 		s_Data.MeshShader = Shader::Create("assets/shaders/Mesh3D.glsl");
 
-		// Create uniform buffers
 		s_Data.CameraUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::CameraData), 0);
 		s_Data.TransformUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::TransformData), 1);
 		s_Data.MaterialUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::MaterialUniformData), 2);
 		s_Data.IBLUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::IBLUniformData), 5);
 		
-		// Create storage buffer for lights (header + 10000 lights)
+		// Create storage buffer for lights (header + MaxLights * LightData)
 		uint32_t lightsBufferSize = sizeof(Renderer3DData::LightsStorageData) + 
-									 (s_Data.MaxLights * sizeof(Light::LightData));
+									 (s_Data.MaxLights * sizeof(LightData));  // FIXED: Use LightData directly
 		s_Data.LightsStorageBuffer = StorageBuffer::Create(lightsBufferSize, 3);
 		
-		// Allocate CPU-side buffer
 		s_Data.LightsBufferData.resize(lightsBufferSize);
 
-		// Initialize with zero lights
 		s_Data.CurrentLightCount = 0;
 		Renderer3DData::LightsStorageData* header = 
 			reinterpret_cast<Renderer3DData::LightsStorageData*>(s_Data.LightsBufferData.data());
 		header->NumLights = 0;
 		s_Data.LightsStorageBuffer->SetData(s_Data.LightsBufferData.data(), lightsBufferSize);
 		
-		// Initialize IBL buffer with defaults (no IBL)
 		s_Data.IBLBuffer.UseIBL = 0;
 		s_Data.IBLBuffer.Intensity = 1.0f;
 		s_Data.IBLBuffer.Rotation = 0.0f;
 		s_Data.IBLUniformBuffer->SetData(&s_Data.IBLBuffer, sizeof(Renderer3DData::IBLUniformData));
 		
-		// Initialize GridRenderer
 		GridRenderer::Init();
 	}
 
 	void Renderer3D::Shutdown() {
 		LNX_PROFILE_FUNCTION();
-		
 		GridRenderer::Shutdown();
 	}
 
 	void Renderer3D::BeginScene(const OrthographicCamera& camera) {
 		LNX_PROFILE_FUNCTION();
-
 		s_Data.CameraBuffer.ViewProjection = camera.GetViewProjectionMatrix();
 		s_Data.CameraPosition = glm::vec3(0.0f);
 		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(Renderer3DData::CameraData));
 		
-		// Bind global environment if available
 		auto globalEnv = SkyboxRenderer::GetGlobalEnvironment();
 		if (globalEnv && globalEnv->IsLoaded()) {
 			BindEnvironment(globalEnv);
@@ -153,12 +143,10 @@ namespace Lunex {
 
 	void Renderer3D::BeginScene(const Camera& camera, const glm::mat4& transform) {
 		LNX_PROFILE_FUNCTION();
-
 		s_Data.CameraBuffer.ViewProjection = camera.GetProjection() * glm::inverse(transform);
 		s_Data.CameraPosition = glm::vec3(transform[3]);
 		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(Renderer3DData::CameraData));
 		
-		// Bind global environment if available
 		auto globalEnv = SkyboxRenderer::GetGlobalEnvironment();
 		if (globalEnv && globalEnv->IsLoaded()) {
 			BindEnvironment(globalEnv);
@@ -169,12 +157,10 @@ namespace Lunex {
 
 	void Renderer3D::BeginScene(const EditorCamera& camera) {
 		LNX_PROFILE_FUNCTION();
-
 		s_Data.CameraBuffer.ViewProjection = camera.GetViewProjection();
 		s_Data.CameraPosition = camera.GetPosition();
 		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(Renderer3DData::CameraData));
 		
-		// Bind global environment if available
 		auto globalEnv = SkyboxRenderer::GetGlobalEnvironment();
 		if (globalEnv && globalEnv->IsLoaded()) {
 			BindEnvironment(globalEnv);
@@ -195,7 +181,6 @@ namespace Lunex {
 		
 		s_Data.CurrentEnvironment = environment;
 		
-		// Bind IBL textures (irradiance=8, prefiltered=9, brdfLUT=10)
 		if (environment->GetIrradianceMap()) {
 			environment->GetIrradianceMap()->Bind(8);
 		}
@@ -206,7 +191,6 @@ namespace Lunex {
 			environment->GetBRDFLUT()->Bind(10);
 		}
 		
-		// Update IBL uniform buffer
 		s_Data.IBLBuffer.UseIBL = 1;
 		s_Data.IBLBuffer.Intensity = environment->GetIntensity();
 		s_Data.IBLBuffer.Rotation = environment->GetRotation();
@@ -215,8 +199,6 @@ namespace Lunex {
 	
 	void Renderer3D::UnbindEnvironment() {
 		s_Data.CurrentEnvironment = nullptr;
-		
-		// Disable IBL in shader
 		s_Data.IBLBuffer.UseIBL = 0;
 		s_Data.IBLBuffer.Intensity = 1.0f;
 		s_Data.IBLBuffer.Rotation = 0.0f;
@@ -228,7 +210,6 @@ namespace Lunex {
 
 		auto view = scene->GetAllEntitiesWith<TransformComponent, LightComponent>();
 		
-		// Count lights (capped at MaxLights)
 		int lightCount = 0;
 		view.each([&](auto entity, auto& transform, auto& light) {
 			if (lightCount < s_Data.MaxLights) {
@@ -241,17 +222,15 @@ namespace Lunex {
 			lightCount = s_Data.MaxLights;
 		}
 		
-		// Update header
 		Renderer3DData::LightsStorageData* header = 
 			reinterpret_cast<Renderer3DData::LightsStorageData*>(s_Data.LightsBufferData.data());
 		header->NumLights = lightCount;
 		
-		// Get pointer to light data array (starts after header)
-		Light::LightData* lightsArray = reinterpret_cast<Light::LightData*>(
+		// FIXED: Use LightData directly instead of Light::LightData
+		LightData* lightsArray = reinterpret_cast<LightData*>(
 			s_Data.LightsBufferData.data() + sizeof(Renderer3DData::LightsStorageData)
 		);
 		
-		// Fill light data
 		int lightIndex = 0;
 		view.each([&](auto entity, auto& transform, auto& light) {
 			if (lightIndex >= s_Data.MaxLights) return;
@@ -267,9 +246,9 @@ namespace Lunex {
 		
 		s_Data.CurrentLightCount = lightCount;
 		
-		// Upload to GPU
+		// FIXED: Use LightData directly
 		uint32_t dataSize = sizeof(Renderer3DData::LightsStorageData) + 
-							(lightCount * sizeof(Light::LightData));
+							(lightCount * sizeof(LightData));
 		s_Data.LightsStorageBuffer->SetData(s_Data.LightsBufferData.data(), dataSize);
 	}
 

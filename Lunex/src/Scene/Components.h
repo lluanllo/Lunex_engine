@@ -1,19 +1,25 @@
 #pragma once
 
-#include "SceneCamera.h"
+#include "Scene/Camera/SceneCamera.h"
 #include "Core/UUID.h"
 #include "Renderer/Texture.h"
-#include "Renderer/Model.h"
-#include "Renderer/Light.h"
-#include "Renderer/EnvironmentMap.h"  // NEW: Environment map support
+#include "Resources/Mesh/Model.h"
+#include "Scene/Lighting/Light.h"
+#include "Renderer/EnvironmentMap.h"
 #include "Log/Log.h"
 
-// NEW MATERIAL SYSTEM
-#include "Renderer/MaterialInstance.h"
-#include "Renderer/MaterialRegistry.h"
+// NEW MATERIAL SYSTEM - AAA Architecture
+#include "Resources/Render/MaterialInstance.h"
+#include "Assets/Materials/MaterialRegistry.h"
 
-// NEW MESH ASSET SYSTEM
-#include "Asset/MeshAsset.h"
+// NEW MESH ASSET SYSTEM - Unified Assets
+#include "Assets/Mesh/MeshAsset.h"
+
+// NEW CAMERA SYSTEM - AAA Architecture
+#include "Scene/Camera/CameraData.h"
+
+// NEW LIGHTING SYSTEM - AAA Architecture
+#include "Scene/Lighting/LightTypes.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>

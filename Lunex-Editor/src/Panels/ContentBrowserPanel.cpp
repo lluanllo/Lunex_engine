@@ -2,10 +2,10 @@
 #include "ContentBrowserPanel.h"
 #include "Events/Event.h"
 #include "Events/FileDropEvent.h"
-#include "Renderer/MaterialRegistry.h"
-#include "Asset/MeshAsset.h"
+#include "Assets/Materials/MaterialRegistry.h"
+#include "Assets/Mesh/MeshAsset.h"
 #include "Asset/Prefab.h"
-#include "Asset/AssetRegistry.h"
+#include "Assets/Core/AssetRegistry.h"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <sstream>
@@ -2080,7 +2080,8 @@ extern "C"
 					int counter = 1;
 					
 					do {
-						std::string newName = baseName + " (" + std::to_string(counter) + ")" + extension;
+						std::string newName = baseName + " (" + std::to_string(counter) + ")";
+						newName += extension;
 						destPath = m_CurrentDirectory / newName;
 						counter++;
 					} while (std::filesystem::exists(destPath));

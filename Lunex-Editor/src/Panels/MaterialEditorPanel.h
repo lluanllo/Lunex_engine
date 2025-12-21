@@ -1,21 +1,26 @@
 #pragma once
 
 #include "Core/Core.h"
-#include "Renderer/MaterialAsset.h"
+
+// AAA Architecture - Material system
+#include "Assets/Materials/MaterialAsset.h"
+#include "Resources/Render/MaterialInstance.h"
 #include "Renderer/MaterialPreviewRenderer.h"
+
 #include <filesystem>
 #include <functional>
 
 namespace Lunex {
 
-	// MaterialEditorPanel - Editor visual de materiales con preview en tiempo real
-	// 
-	// Características:
-	//   - Preview 3D interactivo con esfera
-	//   - Controles PBR (Metallic, Roughness, Specular, etc.)
-	//   - Drag & Drop de texturas
-	//   - Guardado automático o manual
-	//   - Múltiples materiales abiertos en tabs
+	/**
+	 * @class MaterialEditorPanel
+	 * @brief Visual material editor with real-time preview
+	 * 
+	 * AAA Architecture Integration:
+	 * - Uses MaterialAsset from Assets/Materials/
+	 * - Uses MaterialInstance from Resources/Render/
+	 * - Supports the new Material/MaterialInstance separation
+	 */
 	class MaterialEditorPanel {
 	public:
 		MaterialEditorPanel();

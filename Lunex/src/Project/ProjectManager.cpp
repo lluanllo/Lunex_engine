@@ -3,7 +3,7 @@
 #include "ProjectSerializer.h"
 
 #include "Log/Log.h"
-#include "Asset/AssetDatabase.h"
+#include "Assets/Core/AssetDatabase.h"
 #include <filesystem>
 
 namespace Lunex {

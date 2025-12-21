@@ -1,9 +1,11 @@
 #pragma once
 
-#include "Asset.h"
-#include "Core/Core.h"
-#include "Core/UUID.h"
-#include "Scene/Entity.h"
+/**
+ * @file Prefab.h
+ * @brief DEPRECATED: Prefab will move to Assets/Prefabs/
+ */
+
+#include "Assets/Core/Asset.h"
 #include "Scene/Scene.h"
 
 #include <glm/glm.hpp>

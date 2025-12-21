@@ -2,8 +2,8 @@
 
 #include "Core/Core.h"
 #include "Renderer/EnvironmentMap.h"
-#include "Renderer/EditorCamera.h"
-#include "Renderer/Camera.h"
+#include "Scene/Camera/EditorCamera.h"
+#include "Scene/Camera/Camera.h"
 
 #include <glm/glm.hpp>
 
