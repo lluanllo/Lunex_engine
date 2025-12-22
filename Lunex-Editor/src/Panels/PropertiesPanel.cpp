@@ -8,7 +8,10 @@
 #include <filesystem>
 
 #include "Scene/Components.h"
+#include "Scene/Components/AnimationComponents.h"
 #include "Assets/Mesh/MeshAsset.h"
+#include "Assets/Animation/SkeletonAsset.h"
+#include "Assets/Animation/AnimationClipAsset.h"
 
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
@@ -431,6 +434,14 @@ namespace Lunex {
 
 			ImGui::Separator();
 			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+			ImGui::Text("Animation");
+			ImGui::PopStyleColor();
+
+			DisplayAddComponentEntry<SkeletalMeshComponent>("🦴  Skeletal Mesh");
+			DisplayAddComponentEntry<AnimatorComponent>("🎬  Animator");
+
+			ImGui::Separator();
+			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
 			ImGui::Text("Physics 2D");
 			ImGui::PopStyleColor();
 
@@ -520,16 +531,16 @@ namespace Lunex {
 
 				// Status badge
 				ImGui::Text("Status:");
-				ImGui::SameLine();
+			 ImGui::SameLine();
 				if (isLoaded) {
-					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
-					ImGui::Text("✓ Loaded");
-					ImGui::PopStyleColor();
+				 ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
+				 ImGui::Text("✓ Loaded");
+				 ImGui::PopStyleColor();
 				}
 				else {
-					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_WARNING);
-					ImGui::Text("⚠ Will compile on Play");
-					ImGui::PopStyleColor();
+				 ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_WARNING);
+				 ImGui::Text("⚠ Will compile on Play");
+				 ImGui::PopStyleColor();
 				}
 
 				ImGui::EndChild();
@@ -665,7 +676,7 @@ namespace Lunex {
 			if (component.Texture && component.Texture->IsLoaded()) {
 				ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
 				ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
-				ImGui::BeginChild("##TextureInfo", ImVec2(-1, 90.0f), true);
+				ImGui::BeginChild("##TextureInfo", ImVec2(-1, 90.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 				ImGui::Image(
 					(void*)(intptr_t)component.Texture->GetRendererID(),
@@ -757,7 +768,7 @@ namespace Lunex {
 				for (int i = 0; i < 3; i++) {
 					bool isSelected = ((int)component.Type == i);
 					if (ImGui::Selectable(bodyTypeStrings[i], isSelected)) {
-						component.Type = (Rigidbody2DComponent::BodyType)i;
+					 component.Type = (Rigidbody2DComponent::BodyType)i;
 					}
 					if (isSelected)
 						ImGui::SetItemDefaultFocus();
@@ -1020,7 +1031,7 @@ namespace Lunex {
 								LNX_LOG_INFO("Loaded model (legacy): {0}", data->FilePath);
 							}
 							else {
-								LNX_LOG_WARN("Unsupported model format: {0}", ext);
+							 LNX_LOG_WARN("Unsupported model format: {0}", ext);
 							}
 						}
 						ImGui::EndDragDropTarget();
@@ -1263,15 +1274,15 @@ namespace Lunex {
 			ImGui::Indent(UIStyle::INDENT_SIZE);
 
 			const char* lightTypeStrings[] = { "Directional", "Point", "Spot" };
-			int currentType = (int)component.GetType();
+			int currentBodyType = (int)component.GetType();
 
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
 			PropertyLabel("Type", "Type of light source");
 			ImGui::NextColumn();
 			ImGui::SetNextItemWidth(-1);
-			if (ImGui::Combo("##LightType", &currentType, lightTypeStrings, IM_ARRAYSIZE(lightTypeStrings))) {
-				component.SetType((LightType)currentType);
+			if (ImGui::Combo("##LightType", &currentBodyType, lightTypeStrings, IM_ARRAYSIZE(lightTypeStrings))) {
+				component.SetType((LightType)currentBodyType);
 			}
 			ImGui::Columns(1);
 
@@ -1367,7 +1378,7 @@ namespace Lunex {
 				for (int i = 0; i < 3; i++) {
 					bool isSelected = ((int)component.Type == i);
 					if (ImGui::Selectable(bodyTypeStrings[i], isSelected)) {
-						component.Type = (Rigidbody3DComponent::BodyType)i;
+					 component.Type = (Rigidbody3DComponent::BodyType)i;
 					}
 					if (isSelected)
 						ImGui::SetItemDefaultFocus();
@@ -1545,6 +1556,448 @@ namespace Lunex {
 			}
 
 			PropertyCheckbox("Use Entity Mesh", &component.UseEntityMesh, "Automatically use mesh from MeshComponent");
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+		});
+
+		// ========================================
+		// ANIMATION COMPONENTS
+		// ========================================
+
+		// Skeletal Mesh Component
+		DrawComponent<SkeletalMeshComponent>("🦴 Skeletal Mesh", entity, [](auto& component) {
+			SectionHeader("🎲", "Mesh Asset");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			// Mesh Assignment
+			if (component.Mesh) {
+				ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
+				ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+				ImGui::BeginChild("##SkeletalMeshInfo", ImVec2(-1, 80.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
+				ImGui::Text("📦 MeshAsset (.lumesh)");
+				ImGui::PopStyleColor();
+
+				std::filesystem::path meshPath(component.MeshAssetPath);
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_ACCENT);
+				ImGui::Text("🗿 %s", meshPath.filename().string().c_str());
+				ImGui::PopStyleColor();
+
+				ImGui::Spacing();
+				ImGui::Separator();
+				ImGui::Spacing();
+
+				// Mesh info from metadata
+				const auto& metadata = component.Mesh->GetMetadata();
+				
+				ImGui::Columns(2, nullptr, false);
+				ImGui::SetColumnWidth(0, 100.0f);
+				
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+				ImGui::Text("Submeshes"); ImGui::NextColumn();
+				ImGui::PopStyleColor();
+				ImGui::Text("%d", metadata.SubmeshCount); ImGui::NextColumn();
+
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+				ImGui::Text("Vertices"); ImGui::NextColumn();
+				ImGui::PopStyleColor();
+				ImGui::Text("%d", metadata.VertexCount); ImGui::NextColumn();
+
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+				ImGui::Text("Triangles"); ImGui::NextColumn();
+				ImGui::PopStyleColor();
+				ImGui::Text("%d", metadata.TriangleCount); ImGui::NextColumn();
+
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+				ImGui::Text("Source"); ImGui::NextColumn();
+				ImGui::PopStyleColor();
+				std::filesystem::path srcPath(component.Mesh->GetSourcePath());
+				ImGui::Text("%s", srcPath.filename().string().c_str()); ImGui::NextColumn();
+				
+				ImGui::Columns(1);
+
+				ImGui::Spacing();
+				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
+				if (ImGui::Button("Remove Mesh", ImVec2(-1, 0))) {
+					component.Mesh.reset();
+					component.MeshAssetPath.clear();
+				}
+				ImGui::PopStyleColor(2);
+
+				ImGui::EndChild();
+				ImGui::PopStyleVar();
+				ImGui::PopStyleColor();
+			}
+			else {
+				// Drop zone for mesh
+				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_BG_MEDIUM);
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.30f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_Border, UIStyle::COLOR_ACCENT);
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.5f);
+				ImGui::Button("📁 Drop Mesh Here\n(.lumesh)", ImVec2(-1, 50.0f));
+				ImGui::PopStyleVar();
+				ImGui::PopStyleColor(3);
+
+				if (ImGui::BeginDragDropTarget()) {
+					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+						ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+						std::string ext = data->Extension;
+						if (ext == ".lumesh") {
+							component.SetMesh(data->FilePath);
+							LNX_LOG_INFO("Skeletal mesh assigned: {0}", data->FilePath);
+						}
+						else {
+							LNX_LOG_WARN("Only .lumesh files are valid for skeletal meshes");
+						}
+					}
+					ImGui::EndDragDropTarget();
+				}
+			}
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+
+			SectionHeader("🦴", "Skeleton");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			// Skeleton Assignment
+			if (component.Skeleton) {
+				ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
+				ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+				ImGui::BeginChild("##SkeletonInfo", ImVec2(-1, 110.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
+				ImGui::Text("🔵 SkeletonAsset (.luskel)");
+				ImGui::PopStyleColor();
+
+				std::filesystem::path skelPath(component.SkeletonAssetPath);
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_ACCENT);
+				ImGui::Text("🦴 %s", skelPath.filename().string().c_str());
+				ImGui::PopStyleColor();
+
+				ImGui::Spacing();
+				ImGui::Separator();
+				ImGui::Spacing();
+
+				// Skeleton info
+				ImGui::Columns(2, nullptr, false);
+				ImGui::SetColumnWidth(0, 100.0f);
+				
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+				ImGui::Text("Joints"); ImGui::NextColumn();
+				ImGui::PopStyleColor();
+				ImGui::Text("%d", component.Skeleton->GetJointCount()); ImGui::NextColumn();
+
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+				ImGui::Text("Root"); ImGui::NextColumn();
+				ImGui::PopStyleColor();
+				if (component.Skeleton->GetJointCount() > 0) {
+					ImGui::Text("%s", component.Skeleton->GetJoint(0).Name.c_str());
+				}
+				else {
+					ImGui::Text("None");
+				}
+				ImGui::NextColumn();
+				
+				ImGui::Columns(1);
+
+				ImGui::Spacing();
+				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
+				if (ImGui::Button("Remove Skeleton", ImVec2(-1, 0))) {
+					component.Skeleton.reset();
+					component.SkeletonAssetPath.clear();
+					component.BoneMatrices.clear();
+				}
+				ImGui::PopStyleColor(2);
+
+				ImGui::EndChild();
+				ImGui::PopStyleVar();
+				ImGui::PopStyleColor();
+			}
+			else {
+				// Drop zone for skeleton
+				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_BG_MEDIUM);
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.30f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.3f, 0.5f, 0.9f, 1.0f));  // Purple for animation
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.5f);
+				ImGui::Button("📁 Drop Skeleton Here\n(.luskel)", ImVec2(-1, 50.0f));
+				ImGui::PopStyleVar();
+				ImGui::PopStyleColor(3);
+
+				if (ImGui::BeginDragDropTarget()) {
+					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+						ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+						std::string ext = data->Extension;
+						if (ext == ".luskel") {
+							component.SetSkeleton(data->FilePath);
+							LNX_LOG_INFO("Skeleton assigned: {0}", data->FilePath);
+						}
+						else {
+							LNX_LOG_WARN("Only .luskel files are valid skeletons");
+						}
+					}
+					ImGui::EndDragDropTarget();
+				}
+			}
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+
+			// Runtime Info
+			SectionHeader("📊", "Runtime Info");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			ImGui::Columns(2, nullptr, false);
+			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
+			
+			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+			ImGui::Text("Bone Count"); ImGui::NextColumn();
+			ImGui::PopStyleColor();
+			ImGui::Text("%d", component.GetBoneCount()); ImGui::NextColumn();
+
+			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+			ImGui::Text("Valid"); ImGui::NextColumn();
+			ImGui::PopStyleColor();
+			if (component.IsValid()) {
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
+				ImGui::Text("✓ Ready");
+				ImGui::PopStyleColor();
+			}
+			else {
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_WARNING);
+				ImGui::Text("⚠ Missing assets");
+				ImGui::PopStyleColor();
+			}
+			ImGui::NextColumn();
+			
+			ImGui::Columns(1);
+
+			// Reset to bind pose button
+			if (component.HasSkeleton()) {
+				ImGui::Spacing();
+				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_BG_MEDIUM);
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.30f, 1.0f));
+				if (ImGui::Button("🔄 Reset to Bind Pose", ImVec2(-1, 0))) {
+					component.ResetToBindPose();
+				}
+				ImGui::PopStyleColor(2);
+			}
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+		});
+
+		// Animator Component
+		DrawComponent<AnimatorComponent>("🎬 Animator", entity, [](auto& component) {
+			SectionHeader("🎞️", "Current Animation");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			// Current Clip Assignment
+			if (component.CurrentClip) {
+				ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
+				ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+				ImGui::BeginChild("##AnimClipInfo", ImVec2(-1, 100.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.4f, 0.9f, 1.0f));  // Purple for animation
+				ImGui::Text("🟣 AnimationClip (.luanim)");
+				ImGui::PopStyleColor();
+
+				std::filesystem::path clipPath(component.CurrentClipPath);
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_ACCENT);
+				ImGui::Text("🎬 %s", clipPath.filename().string().c_str());
+				ImGui::PopStyleColor();
+
+				ImGui::Spacing();
+				ImGui::Separator();
+				ImGui::Spacing();
+
+				// Clip info
+				ImGui::Columns(2, nullptr, false);
+				ImGui::SetColumnWidth(0, 80.0f);
+				
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+				ImGui::Text("Duration"); ImGui::NextColumn();
+				ImGui::PopStyleColor();
+				ImGui::Text("%.2f sec", component.CurrentClip->GetDuration()); ImGui::NextColumn();
+
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+				ImGui::Text("FPS"); ImGui::NextColumn();
+				ImGui::PopStyleColor();
+				ImGui::Text("%.0f", component.CurrentClip->GetTicksPerSecond()); ImGui::NextColumn();
+				
+				ImGui::Columns(1);
+
+				ImGui::Spacing();
+				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
+				if (ImGui::Button("Remove Clip", ImVec2(-1, 0))) {
+					component.Stop();
+					component.CurrentClip.reset();
+					component.CurrentClipPath.clear();
+				}
+				ImGui::PopStyleColor(2);
+
+				ImGui::EndChild();
+				ImGui::PopStyleVar();
+				ImGui::PopStyleColor();
+			}
+			else {
+				// Drop zone for animation clip
+				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_BG_MEDIUM);
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.30f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.4f, 0.9f, 1.0f));  // Purple for animation
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.5f);
+				ImGui::Button("📁 Drop Animation Clip Here\n(.luanim)", ImVec2(-1, 50.0f));
+				ImGui::PopStyleVar();
+				ImGui::PopStyleColor(3);
+
+				if (ImGui::BeginDragDropTarget()) {
+					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+						ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+						std::string ext = data->Extension;
+						if (ext == ".luanim") {
+							component.Play(std::filesystem::path(data->FilePath), component.Loop);
+							LNX_LOG_INFO("Animation clip assigned: {0}", data->FilePath);
+						}
+						else {
+							LNX_LOG_WARN("Only .luanim files are valid animation clips");
+						}
+					}
+					ImGui::EndDragDropTarget();
+				}
+			}
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+
+			SectionHeader("⏯️", "Playback");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			// Playback controls
+			ImGui::BeginGroup();
+			
+			// Play/Pause buttons
+			bool hasClip = component.HasAnimation();
+			
+			if (!hasClip) {
+				ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.5f);
+			}
+
+			ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_BG_MEDIUM);
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.30f, 1.0f));
+
+			// Stop button
+			if (ImGui::Button("⏹", ImVec2(35, 35)) && hasClip) {
+				component.Stop();
+			}
+			if (ImGui::IsItemHovered()) ImGui::SetTooltip("Stop");
+			
+			ImGui::SameLine();
+
+			// Play/Pause button
+			if (component.IsPlaying) {
+				if (ImGui::Button("⏸", ImVec2(35, 35)) && hasClip) {
+					component.Pause();
+				}
+				if (ImGui::IsItemHovered()) ImGui::SetTooltip("Pause");
+			}
+			else {
+				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_SUCCESS);
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.9f, 0.4f, 1.0f));
+				if (ImGui::Button("▶", ImVec2(35, 35)) && hasClip) {
+				 component.Resume();
+				}
+				ImGui::PopStyleColor(2);
+				if (ImGui::IsItemHovered()) ImGui::SetTooltip("Play");
+			}
+
+			ImGui::PopStyleColor(2);
+			
+			if (!hasClip) {
+				ImGui::PopStyleVar();
+			}
+
+			ImGui::EndGroup();
+
+			// Timeline progress bar
+			if (hasClip) {
+				ImGui::SameLine();
+				ImGui::BeginGroup();
+				
+				float duration = component.GetDuration();
+				float normalized = component.GetNormalizedTime();
+				
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+				ImGui::Text("%.2f / %.2f sec", component.CurrentTime, duration);
+				ImGui::PopStyleColor();
+
+				ImGui::PushStyleColor(ImGuiCol_PlotHistogram, UIStyle::COLOR_ACCENT);
+				ImGui::ProgressBar(normalized, ImVec2(-1, 8.0f), "");
+				ImGui::PopStyleColor();
+				
+				ImGui::EndGroup();
+			}
+
+			ImGui::Spacing();
+
+			// Speed slider
+			PropertySlider("Speed", &component.PlaybackSpeed, 0.0f, 2.0f, "%.2fx", "Playback speed multiplier");
+
+			// Loop checkbox
+			PropertyCheckbox("Loop", &component.Loop, "Loop animation when finished");
+
+			// Status
+			ImGui::Spacing();
+			ImGui::Columns(2, nullptr, false);
+			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
+			
+			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+			ImGui::Text("Status"); ImGui::NextColumn();
+			ImGui::PopStyleColor();
+			
+			if (component.IsPlaying) {
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
+				ImGui::Text("▶ Playing");
+				ImGui::PopStyleColor();
+			}
+			else if (component.HasAnimation()) {
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_WARNING);
+				ImGui::Text("⏸ Paused");
+				ImGui::PopStyleColor();
+			}
+			else {
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+				ImGui::Text("⏹ No Animation");
+				ImGui::PopStyleColor();
+			}
+			ImGui::NextColumn();
+			
+			ImGui::Columns(1);
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+
+			SectionHeader("🔀", "Blending");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+
+			PropertyDrag("Blend Duration", &component.BlendDuration, 0.01f, 0.0f, 2.0f, "%.2f sec", "Duration for crossfade transitions");
+
+			if (component.IsBlending) {
+				ImGui::Spacing();
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_ACCENT);
+				ImGui::Text("🔄 Blending: %.0f%%", component.GetBlendFactor() * 100.0f);
+				ImGui::PopStyleColor();
+
+				ImGui::PushStyleColor(ImGuiCol_PlotHistogram, UIStyle::COLOR_WARNING);
+				ImGui::ProgressBar(component.GetBlendFactor(), ImVec2(-1, 6.0f), "");
+				ImGui::PopStyleColor();
+			}
+
+			// Queued animations info
+			if (!component.AnimationQueue.empty()) {
+				ImGui::Spacing();
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+				ImGui::Text("📋 Queued: %zu animations", component.AnimationQueue.size());
+				ImGui::PopStyleColor();
+			}
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
 		});
