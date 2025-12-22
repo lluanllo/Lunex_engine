@@ -9,8 +9,9 @@
 #include "Renderer/GridRenderer.h"
 #include "Renderer/SkyboxRenderer.h"
 #include "Scene/Components.h"
+#include "Scene/Components/AnimationComponents.h"
 #include "Scene/Entity.h"
-#include "Scene/Lighting/LightTypes.h"  // NEW: For LightData
+#include "Scene/Lighting/LightTypes.h"
 #include "Log/Log.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -64,11 +65,18 @@ namespace Lunex {
 			int NumLights;
 			float _padding1, _padding2, _padding3;
 		};
+		
+		struct SkinnedMeshUniformData {
+			int UseSkinning;
+			int BoneCount;
+			float _padding1, _padding2;
+		};
 
 		CameraData CameraBuffer;
 		TransformData TransformBuffer;
 		MaterialUniformData MaterialBuffer;
 		IBLUniformData IBLBuffer;
+		SkinnedMeshUniformData SkinnedBuffer;
 		
 		std::vector<uint8_t> LightsBufferData;
 		int CurrentLightCount = 0;
@@ -78,9 +86,11 @@ namespace Lunex {
 		Ref<UniformBuffer> TransformUniformBuffer;
 		Ref<UniformBuffer> MaterialUniformBuffer;
 		Ref<UniformBuffer> IBLUniformBuffer;
+		Ref<UniformBuffer> SkinnedUniformBuffer;
 		Ref<StorageBuffer> LightsStorageBuffer;
 
 		Ref<Shader> MeshShader;
+		Ref<Shader> SkinnedMeshShader;
 
 		glm::vec3 CameraPosition = { 0.0f, 0.0f, 0.0f };
 		
@@ -95,15 +105,17 @@ namespace Lunex {
 		LNX_PROFILE_FUNCTION();
 
 		s_Data.MeshShader = Shader::Create("assets/shaders/Mesh3D.glsl");
+		s_Data.SkinnedMeshShader = Shader::Create("assets/shaders/SkinnedMesh3D.glsl");
 
 		s_Data.CameraUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::CameraData), 0);
 		s_Data.TransformUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::TransformData), 1);
 		s_Data.MaterialUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::MaterialUniformData), 2);
 		s_Data.IBLUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::IBLUniformData), 5);
+		s_Data.SkinnedUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::SkinnedMeshUniformData), 6);
 		
 		// Create storage buffer for lights (header + MaxLights * LightData)
 		uint32_t lightsBufferSize = sizeof(Renderer3DData::LightsStorageData) + 
-									 (s_Data.MaxLights * sizeof(LightData));  // FIXED: Use LightData directly
+									 (s_Data.MaxLights * sizeof(LightData));
 		s_Data.LightsStorageBuffer = StorageBuffer::Create(lightsBufferSize, 3);
 		
 		s_Data.LightsBufferData.resize(lightsBufferSize);
@@ -118,6 +130,10 @@ namespace Lunex {
 		s_Data.IBLBuffer.Intensity = 1.0f;
 		s_Data.IBLBuffer.Rotation = 0.0f;
 		s_Data.IBLUniformBuffer->SetData(&s_Data.IBLBuffer, sizeof(Renderer3DData::IBLUniformData));
+		
+		s_Data.SkinnedBuffer.UseSkinning = 0;
+		s_Data.SkinnedBuffer.BoneCount = 0;
+		s_Data.SkinnedUniformBuffer->SetData(&s_Data.SkinnedBuffer, sizeof(Renderer3DData::SkinnedMeshUniformData));
 		
 		GridRenderer::Init();
 	}
@@ -492,5 +508,136 @@ namespace Lunex {
 
 	Renderer3D::Statistics Renderer3D::GetStats() {
 		return s_Data.Stats;
+	}
+
+	// ============================================================================
+	// SKINNED MESH RENDERING
+	// ============================================================================
+
+	void Renderer3D::DrawSkinnedMesh(const glm::mat4& transform, SkeletalMeshComponent& skeletalMesh, int entityID) {
+		if (!skeletalMesh.IsValid() || !skeletalMesh.Mesh)
+			return;
+
+		// Use default material
+		auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
+		
+		// Set transform
+		s_Data.TransformBuffer.Transform = transform;
+		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
+
+		// Set default material
+		s_Data.MaterialBuffer.Color = defaultMaterial->GetAlbedo();
+		s_Data.MaterialBuffer.Metallic = defaultMaterial->GetMetallic();
+		s_Data.MaterialBuffer.Roughness = defaultMaterial->GetRoughness();
+		s_Data.MaterialBuffer.Specular = defaultMaterial->GetSpecular();
+		s_Data.MaterialBuffer.EmissionIntensity = 0.0f;
+		s_Data.MaterialBuffer.EmissionColor = glm::vec3(0.0f);
+		s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
+		s_Data.MaterialBuffer.UseAlbedoMap = 0;
+		s_Data.MaterialBuffer.UseNormalMap = 0;
+		s_Data.MaterialBuffer.UseMetallicMap = 0;
+		s_Data.MaterialBuffer.UseRoughnessMap = 0;
+		s_Data.MaterialBuffer.UseSpecularMap = 0;
+		s_Data.MaterialBuffer.UseEmissionMap = 0;
+		s_Data.MaterialBuffer.UseAOMap = 0;
+		s_Data.MaterialBuffer.MetallicMultiplier = 1.0f;
+		s_Data.MaterialBuffer.RoughnessMultiplier = 1.0f;
+		s_Data.MaterialBuffer.SpecularMultiplier = 1.0f;
+		s_Data.MaterialBuffer.AOMultiplier = 1.0f;
+		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
+
+		// Set skinning info
+		s_Data.SkinnedBuffer.UseSkinning = 1;
+		s_Data.SkinnedBuffer.BoneCount = skeletalMesh.GetBoneCount();
+		s_Data.SkinnedUniformBuffer->SetData(&s_Data.SkinnedBuffer, sizeof(Renderer3DData::SkinnedMeshUniformData));
+
+		// Bind bone matrix buffer
+		if (skeletalMesh.BoneMatrixBuffer) {
+			skeletalMesh.BoneMatrixBuffer->Bind();
+		}
+
+		// Bind shader and draw
+		s_Data.SkinnedMeshShader->Bind();
+		s_Data.SkinnedMeshShader->SetInt("u_EntityID", entityID);
+		
+		// Draw mesh from MeshAsset
+		auto model = skeletalMesh.Mesh->GetModel();
+		if (model) {
+			model->Draw(s_Data.SkinnedMeshShader);
+			s_Data.Stats.DrawCalls++;
+			s_Data.Stats.MeshCount += (uint32_t)model->GetMeshes().size();
+			for (const auto& mesh : model->GetMeshes()) {
+				s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
+			}
+		}
+
+		// Reset skinning state
+		s_Data.SkinnedBuffer.UseSkinning = 0;
+		s_Data.SkinnedUniformBuffer->SetData(&s_Data.SkinnedBuffer, sizeof(Renderer3DData::SkinnedMeshUniformData));
+	}
+
+	void Renderer3D::DrawSkinnedMesh(const glm::mat4& transform, SkeletalMeshComponent& skeletalMesh, MaterialComponent& materialComponent, int entityID) {
+		if (!skeletalMesh.IsValid() || !skeletalMesh.Mesh)
+			return;
+
+		// Set transform
+		s_Data.TransformBuffer.Transform = transform;
+		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
+
+		// Set material from MaterialComponent
+		if (materialComponent.Instance) {
+			auto uniformData = materialComponent.Instance->GetUniformData();
+			s_Data.MaterialBuffer.Color = uniformData.Albedo;
+			s_Data.MaterialBuffer.Metallic = uniformData.Metallic;
+			s_Data.MaterialBuffer.Roughness = uniformData.Roughness;
+			s_Data.MaterialBuffer.Specular = uniformData.Specular;
+			s_Data.MaterialBuffer.EmissionIntensity = uniformData.EmissionIntensity;
+			s_Data.MaterialBuffer.EmissionColor = uniformData.EmissionColor;
+			s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
+			s_Data.MaterialBuffer.UseAlbedoMap = uniformData.UseAlbedoMap;
+			s_Data.MaterialBuffer.UseNormalMap = uniformData.UseNormalMap;
+			s_Data.MaterialBuffer.UseMetallicMap = uniformData.UseMetallicMap;
+			s_Data.MaterialBuffer.UseRoughnessMap = uniformData.UseRoughnessMap;
+			s_Data.MaterialBuffer.UseSpecularMap = uniformData.UseSpecularMap;
+			s_Data.MaterialBuffer.UseEmissionMap = uniformData.UseEmissionMap;
+			s_Data.MaterialBuffer.UseAOMap = uniformData.UseAOMap;
+			s_Data.MaterialBuffer.MetallicMultiplier = uniformData.MetallicMultiplier;
+			s_Data.MaterialBuffer.RoughnessMultiplier = uniformData.RoughnessMultiplier;
+			s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
+			s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
+		}
+		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
+
+		// Set skinning info
+		s_Data.SkinnedBuffer.UseSkinning = 1;
+		s_Data.SkinnedBuffer.BoneCount = skeletalMesh.GetBoneCount();
+		s_Data.SkinnedUniformBuffer->SetData(&s_Data.SkinnedBuffer, sizeof(Renderer3DData::SkinnedMeshUniformData));
+
+		// Bind bone matrix buffer
+		if (skeletalMesh.BoneMatrixBuffer) {
+			skeletalMesh.BoneMatrixBuffer->Bind();
+		}
+
+		// Bind shader and textures
+		s_Data.SkinnedMeshShader->Bind();
+		s_Data.SkinnedMeshShader->SetInt("u_EntityID", entityID);
+		if (materialComponent.Instance) {
+			materialComponent.Instance->BindTextures();
+		}
+		
+		// Draw mesh from MeshAsset
+		auto model = skeletalMesh.Mesh->GetModel();
+		if (model) {
+			model->Draw(s_Data.SkinnedMeshShader);
+			s_Data.Stats.DrawCalls++;
+			s_Data.Stats.MeshCount += (uint32_t)model->GetMeshes().size();
+			for (const auto& mesh : model->GetMeshes()) {
+				s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
+			}
+		}
+
+		// Reset skinning state
+		s_Data.SkinnedBuffer.UseSkinning = 0;
+		s_Data.SkinnedUniformBuffer->SetData(&s_Data.SkinnedBuffer, sizeof(Renderer3DData::SkinnedMeshUniformData));
 	}
 }

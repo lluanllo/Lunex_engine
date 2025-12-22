@@ -3,6 +3,7 @@
 
 #include "Scene/Entity.h"
 #include "Scene/Components.h"
+#include "Scene/Components/AnimationComponents.h"
 #include "Log/Log.h"
 
 #include <fstream>
@@ -653,6 +654,39 @@ namespace Lunex {
 			data.Components.push_back(compData);
 		}
 		
+		// Serialize SkeletalMeshComponent
+		if (entity.HasComponent<SkeletalMeshComponent>()) {
+			PrefabComponentData compData;
+			compData.ComponentType = "SkeletalMeshComponent";
+			
+			auto& skeletal = entity.GetComponent<SkeletalMeshComponent>();
+			std::ostringstream oss;
+			oss << (uint64_t)skeletal.MeshAssetID << ";";
+			oss << skeletal.MeshAssetPath << ";";
+			oss << (uint64_t)skeletal.SkeletonAssetID << ";";
+			oss << skeletal.SkeletonAssetPath;
+			compData.SerializedData = oss.str();
+			
+			data.Components.push_back(compData);
+		}
+		
+		// Serialize AnimatorComponent
+		if (entity.HasComponent<AnimatorComponent>()) {
+			PrefabComponentData compData;
+			compData.ComponentType = "AnimatorComponent";
+			
+			auto& animator = entity.GetComponent<AnimatorComponent>();
+			std::ostringstream oss;
+			oss << (uint64_t)animator.CurrentClipID << ";";
+			oss << animator.CurrentClipPath << ";";
+			oss << animator.PlaybackSpeed << ";";
+			oss << (animator.Loop ? "1" : "0") << ";";
+			oss << animator.BlendDuration;
+			compData.SerializedData = oss.str();
+			
+			data.Components.push_back(compData);
+		}
+		
 		m_EntityData.push_back(data);
 	}
 
@@ -1054,6 +1088,97 @@ namespace Lunex {
 						if (!scriptPath.empty()) {
 							script.AddScript(scriptPath);
 						}
+					}
+				}
+			}
+			else if (compData.ComponentType == "SkeletalMeshComponent") {
+				auto& skeletal = entity.AddComponent<SkeletalMeshComponent>();
+				
+				std::istringstream iss(compData.SerializedData);
+				std::string token;
+				
+				// MeshAssetID
+				std::getline(iss, token, ';');
+				uint64_t meshAssetID = 0;
+				if (!token.empty()) {
+					meshAssetID = std::stoull(token);
+				}
+				
+				// MeshAssetPath
+				std::getline(iss, token, ';');
+				std::string meshAssetPath = token;
+				
+				// SkeletonAssetID
+				std::getline(iss, token, ';');
+				uint64_t skeletonAssetID = 0;
+				if (!token.empty()) {
+					skeletonAssetID = std::stoull(token);
+				}
+				
+				// SkeletonAssetPath
+				std::getline(iss, token, ';');
+				std::string skeletonAssetPath = token;
+				
+				// Load mesh
+				if (!meshAssetPath.empty()) {
+					std::filesystem::path fullPath = std::filesystem::path("assets") / meshAssetPath;
+					if (std::filesystem::exists(fullPath)) {
+						skeletal.SetMesh(fullPath);
+					} else {
+						LNX_LOG_WARN("Prefab: SkeletalMesh file not found: {0}", fullPath.string());
+					}
+				}
+				
+				// Load skeleton
+				if (!skeletonAssetPath.empty()) {
+					std::filesystem::path fullPath = std::filesystem::path("assets") / skeletonAssetPath;
+					if (std::filesystem::exists(fullPath)) {
+						skeletal.SetSkeleton(fullPath);
+					} else {
+						LNX_LOG_WARN("Prefab: Skeleton file not found: {0}", fullPath.string());
+					}
+				}
+			}
+			else if (compData.ComponentType == "AnimatorComponent") {
+				auto& animator = entity.AddComponent<AnimatorComponent>();
+				
+				std::istringstream iss(compData.SerializedData);
+				std::string token;
+				
+				// CurrentClipID
+				std::getline(iss, token, ';');
+				uint64_t clipID = 0;
+				if (!token.empty()) {
+					clipID = std::stoull(token);
+				}
+				
+				// CurrentClipPath
+				std::getline(iss, token, ';');
+				std::string clipPath = token;
+				
+				// PlaybackSpeed
+				std::getline(iss, token, ';');
+				if (!token.empty()) {
+					animator.PlaybackSpeed = std::stof(token);
+				}
+				
+				// Loop
+				std::getline(iss, token, ';');
+				animator.Loop = token == "1";
+				
+				// BlendDuration
+				std::getline(iss, token, ';');
+				if (!token.empty()) {
+					animator.BlendDuration = std::stof(token);
+				}
+				
+				// Load animation clip
+				if (!clipPath.empty()) {
+					std::filesystem::path fullPath = std::filesystem::path("assets") / clipPath;
+					if (std::filesystem::exists(fullPath)) {
+						animator.Play(fullPath, animator.Loop);
+					} else {
+						LNX_LOG_WARN("Prefab: Animation clip not found: {0}", fullPath.string());
 					}
 				}
 			}

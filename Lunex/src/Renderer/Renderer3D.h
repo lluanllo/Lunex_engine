@@ -14,6 +14,7 @@ namespace Lunex {
 	struct MeshComponent;
 	struct MaterialComponent;
 	struct TextureComponent;
+	struct SkeletalMeshComponent;
 	class Scene;
 
 	class Renderer3D {
@@ -38,6 +39,10 @@ namespace Lunex {
 		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& color = glm::vec4(1.0f), int entityID = -1);
 		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, MaterialComponent& materialComponent, int entityID = -1);
 		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, MaterialComponent& materialComponent, TextureComponent& textureComponent, int entityID = -1);
+
+		// Skinned mesh rendering
+		static void DrawSkinnedMesh(const glm::mat4& transform, SkeletalMeshComponent& skeletalMesh, int entityID = -1);
+		static void DrawSkinnedMesh(const glm::mat4& transform, SkeletalMeshComponent& skeletalMesh, MaterialComponent& materialComponent, int entityID = -1);
 
 		struct Statistics {
 			uint32_t DrawCalls = 0;

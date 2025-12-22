@@ -32,6 +32,18 @@ namespace Lunex {
 		}
 	}
 	
+	void StorageBuffer::Bind() const {
+		if (m_RHIBuffer) {
+			m_RHIBuffer->BindToPoint(m_Binding);
+		}
+	}
+	
+	void StorageBuffer::Bind(uint32_t binding) const {
+		if (m_RHIBuffer) {
+			m_RHIBuffer->BindToPoint(binding);
+		}
+	}
+	
 	void StorageBuffer::BindForCompute(uint32_t binding) const {
 		if (m_RHIBuffer) {
 			m_RHIBuffer->BindToPoint(binding);

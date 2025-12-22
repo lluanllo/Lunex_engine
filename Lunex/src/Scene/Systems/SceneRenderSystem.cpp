@@ -2,6 +2,7 @@
 #include "SceneRenderSystem.h"
 
 #include "Scene/Components.h"
+#include "Scene/Components/AnimationComponents.h"
 #include "Scene/Entity.h"
 #include "Scene/Scene.h"
 #include "Renderer/Renderer2D.h"
@@ -153,6 +154,7 @@ namespace Lunex {
 	}
 
 	void SceneRenderSystem::RenderMeshes(const Camera& camera, const glm::mat4& cameraTransform) {
+		// Render static meshes
 		auto view = m_Context->Registry->view<TransformComponent, MeshComponent>();
 		for (auto entity : view) {
 			Entity e = { entity, m_Context->OwningScene };
@@ -165,6 +167,25 @@ namespace Lunex {
 			}
 			else {
 				Renderer3D::DrawModel(worldTransform, mesh.MeshModel, mesh.Color, static_cast<int>(entity));
+			}
+		}
+
+		// Render skeletal meshes
+		auto skeletalView = m_Context->Registry->view<TransformComponent, SkeletalMeshComponent>();
+		for (auto entity : skeletalView) {
+			Entity e = { entity, m_Context->OwningScene };
+			auto& skeletal = skeletalView.get<SkeletalMeshComponent>(entity);
+			
+			if (!skeletal.IsValid()) continue;
+			
+			glm::mat4 worldTransform = GetWorldTransform(entity);
+			
+			if (e.HasComponent<MaterialComponent>()) {
+				auto& material = e.GetComponent<MaterialComponent>();
+				Renderer3D::DrawSkinnedMesh(worldTransform, skeletal, material, static_cast<int>(entity));
+			}
+			else {
+				Renderer3D::DrawSkinnedMesh(worldTransform, skeletal, static_cast<int>(entity));
 			}
 		}
 	}

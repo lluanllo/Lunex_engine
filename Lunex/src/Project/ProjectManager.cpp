@@ -118,9 +118,11 @@ namespace Lunex {
 		std::filesystem::create_directories(assetsPath / "Models");
 		std::filesystem::create_directories(assetsPath / "Materials");
 		std::filesystem::create_directories(assetsPath / "MeshAssets");  // For .lumesh files
+		std::filesystem::create_directories(assetsPath / "Animations");  // For .luanim and .luskel files
 		std::filesystem::create_directories(assetsPath / "Shaders");
 		std::filesystem::create_directories(assetsPath / "Audio");
 		std::filesystem::create_directories(assetsPath / "Prefabs");
+		std::filesystem::create_directories(assetsPath / "HDRI");
 		
 		LNX_LOG_INFO("Project directories created at: {0}", projectPath.string());
 		return true;

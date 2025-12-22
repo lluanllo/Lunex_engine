@@ -17,8 +17,12 @@ namespace Lunex {
 		void SetData(const void* data, uint32_t size, uint32_t offset = 0);
 		void GetData(void* data, uint32_t size, uint32_t offset = 0) const;
 		
+		void Bind() const;
+		void Bind(uint32_t binding) const;
 		void BindForCompute(uint32_t binding) const;
 		void BindForRead(uint32_t binding) const;
+		
+		uint32_t GetBinding() const { return m_Binding; }
 		
 		// Access underlying RHI buffer
 		RHI::RHIBuffer* GetRHIBuffer() const { return m_RHIBuffer.get(); }

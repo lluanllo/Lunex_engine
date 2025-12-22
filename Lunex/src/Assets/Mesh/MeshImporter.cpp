@@ -65,8 +65,27 @@ namespace Lunex {
 				animSettings.OptimizeKeyframes = true;
 				animSettings.Scale = settings.Scale;
 				
+				// ? FIXED: Save animations to Animations folder instead of MeshAssets folder
+				// Find the Animations folder relative to Assets root
+				std::filesystem::path animOutputDir = outDir;
+				
+				// Try to find Assets folder and navigate to Animations subfolder
+				std::filesystem::path current = outDir;
+				while (current.has_parent_path() && current.filename() != "Assets") {
+					current = current.parent_path();
+				}
+				
+				if (current.filename() == "Assets") {
+					animOutputDir = current / "Animations";
+					// Create Animations folder if it doesn't exist
+					if (!std::filesystem::exists(animOutputDir)) {
+						std::filesystem::create_directories(animOutputDir);
+						LNX_LOG_INFO("Created Animations folder: {0}", animOutputDir.string());
+					}
+				}
+				
 				// Import skeleton and animations
-				auto animResult = AnimationImporter::Import(sourcePath, outDir, animSettings);
+				auto animResult = AnimationImporter::Import(sourcePath, animOutputDir, animSettings);
 				
 				if (animResult.Success) {
 					LNX_LOG_INFO("Imported skeleton: {0}", animResult.SkeletonOutputPath.string());
