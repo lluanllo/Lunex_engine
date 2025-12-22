@@ -3,6 +3,7 @@
 
 #include "Entity.h"
 #include "Components.h"
+#include "Components/AnimationComponents.h"
 #include "Core/JobSystem/JobSystem.h"
 #include "Renderer/SkyboxRenderer.h"  // For global skybox serialization
 
@@ -462,6 +463,47 @@ namespace Lunex {
 			
 			out << YAML::EndMap; // EnvironmentComponent
 		}
+
+		// ========================================
+		// SKELETAL MESH COMPONENT (Skeletal Animation)
+		// ========================================
+		if (entity.HasComponent<SkeletalMeshComponent>()) {
+			out << YAML::Key << "SkeletalMeshComponent";
+			out << YAML::BeginMap;
+			
+			auto& skeletal = entity.GetComponent<SkeletalMeshComponent>();
+			
+			// Mesh reference
+			out << YAML::Key << "MeshAssetID" << YAML::Value << (uint64_t)skeletal.MeshAssetID;
+			out << YAML::Key << "MeshAssetPath" << YAML::Value << skeletal.MeshAssetPath;
+			
+			// Skeleton reference
+			out << YAML::Key << "SkeletonAssetID" << YAML::Value << (uint64_t)skeletal.SkeletonAssetID;
+			out << YAML::Key << "SkeletonAssetPath" << YAML::Value << skeletal.SkeletonAssetPath;
+			
+			out << YAML::EndMap;
+		}
+
+		// ========================================
+		// ANIMATOR COMPONENT (Animation Playback)
+		// ========================================
+		if (entity.HasComponent<AnimatorComponent>()) {
+			out << YAML::Key << "AnimatorComponent";
+			out << YAML::BeginMap;
+			
+			auto& animator = entity.GetComponent<AnimatorComponent>();
+			
+			// Current clip reference
+			out << YAML::Key << "CurrentClipID" << YAML::Value << (uint64_t)animator.CurrentClipID;
+			out << YAML::Key << "CurrentClipPath" << YAML::Value << animator.CurrentClipPath;
+			
+			// Playback settings
+			out << YAML::Key << "PlaybackSpeed" << YAML::Value << animator.PlaybackSpeed;
+			out << YAML::Key << "Loop" << YAML::Value << animator.Loop;
+			out << YAML::Key << "BlendDuration" << YAML::Value << animator.BlendDuration;
+			
+			out << YAML::EndMap;
+		}
 		
 		out << YAML::EndMap; // Entity
 	}
@@ -706,7 +748,7 @@ namespace Lunex {
 					rb3d.AngularFactor = rigidbody3DComponent["AngularFactor"].as<glm::vec3>();
 					rb3d.UseCCD = rigidbody3DComponent["UseCCD"].as<bool>();
 					rb3d.CcdMotionThreshold = rigidbody3DComponent["CcdMotionThreshold"].as<float>();
-					rb3d.CcdSweptSphereRadius = rigidbody3DComponent["CcdSweptSphereRadius"].as<float>();
+				 rb3d.CcdSweptSphereRadius = rigidbody3DComponent["CcdSweptSphereRadius"].as<float>();
 					rb3d.IsTrigger = rigidbody3DComponent["IsTrigger"].as<bool>();
 				}
 
@@ -1021,6 +1063,77 @@ namespace Lunex {
 					
 					if (environmentComponent["Blur"])
 						envComp.SetBlur(environmentComponent["Blur"].as<float>());
+				}
+
+				// ========================================
+				// SKELETAL MESH COMPONENT (Skeletal Animation)
+				// ========================================
+				auto skeletalMeshComponent = entity["SkeletalMeshComponent"];
+				if (skeletalMeshComponent) {
+					auto& skeletal = deserializedEntity.AddComponent<SkeletalMeshComponent>();
+					
+					// Load mesh
+					if (skeletalMeshComponent["MeshAssetPath"]) {
+						std::string meshPath = skeletalMeshComponent["MeshAssetPath"].as<std::string>();
+						if (!meshPath.empty()) {
+							auto meshAsset = MeshAsset::LoadFromFile(meshPath);
+							if (meshAsset) {
+								skeletal.SetMesh(meshAsset);
+							} else {
+								skeletal.MeshAssetID = UUID(skeletalMeshComponent["MeshAssetID"].as<uint64_t>());
+								skeletal.MeshAssetPath = meshPath;
+								LNX_LOG_WARN("SkeletalMesh asset not found: {0}", meshPath);
+							}
+						}
+					}
+					
+					// Load skeleton
+					if (skeletalMeshComponent["SkeletonAssetPath"]) {
+						std::string skelPath = skeletalMeshComponent["SkeletonAssetPath"].as<std::string>();
+						if (!skelPath.empty()) {
+							auto skeleton = SkeletonAsset::LoadFromFile(skelPath);
+							if (skeleton) {
+								skeletal.SetSkeleton(skeleton);
+							} else {
+								skeletal.SkeletonAssetID = UUID(skeletalMeshComponent["SkeletonAssetID"].as<uint64_t>());
+								skeletal.SkeletonAssetPath = skelPath;
+								LNX_LOG_WARN("Skeleton asset not found: {0}", skelPath);
+							}
+						}
+					}
+				}
+
+				// ========================================
+				// ANIMATOR COMPONENT (Animation Playback)
+				// ========================================
+				auto animatorComponent = entity["AnimatorComponent"];
+				if (animatorComponent) {
+					auto& animator = deserializedEntity.AddComponent<AnimatorComponent>();
+					
+					// Load animation clip
+					if (animatorComponent["CurrentClipPath"]) {
+						std::string clipPath = animatorComponent["CurrentClipPath"].as<std::string>();
+						if (!clipPath.empty()) {
+							auto clip = AnimationClipAsset::LoadFromFile(clipPath);
+							if (clip) {
+								animator.CurrentClip = clip;
+								animator.CurrentClipID = clip->GetID();
+								animator.CurrentClipPath = clipPath;
+							} else {
+								animator.CurrentClipID = UUID(animatorComponent["CurrentClipID"].as<uint64_t>());
+								animator.CurrentClipPath = clipPath;
+								LNX_LOG_WARN("Animation clip not found: {0}", clipPath);
+							}
+						}
+					}
+					
+					// Playback settings
+					if (animatorComponent["PlaybackSpeed"])
+						animator.PlaybackSpeed = animatorComponent["PlaybackSpeed"].as<float>();
+					if (animatorComponent["Loop"])
+						animator.Loop = animatorComponent["Loop"].as<bool>();
+					if (animatorComponent["BlendDuration"])
+						animator.BlendDuration = animatorComponent["BlendDuration"].as<float>();
 				}
 			}
 		}

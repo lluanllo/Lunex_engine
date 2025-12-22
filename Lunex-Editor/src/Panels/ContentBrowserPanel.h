@@ -163,6 +163,10 @@ namespace Lunex {
 		Ref<Texture2D> m_MaterialIcon;
 		Ref<Texture2D> m_MeshIcon;  // Icon for .lumesh files
 		Ref<Texture2D> m_PrefabIcon;  // Icon for .luprefab files
+		
+		// ? Animation icons
+		Ref<Texture2D> m_AnimationIcon;  // Icon for .luanim files
+		Ref<Texture2D> m_SkeletonIcon;   // Icon for .luskel files
 
 		// Texture preview cache
 		std::unordered_map<std::string, Ref<Texture2D>> m_TextureCache;

@@ -1,5 +1,6 @@
 #include "stpch.h"
 #include "MeshImporter.h"
+#include "Assets/Animation/AnimationImporter.h"
 #include "Log/Log.h"
 
 #include <algorithm>
@@ -48,6 +49,39 @@ namespace Lunex {
 			// Save the asset
 			result.Asset->SetPath(result.OutputPath);
 			result.Asset->Save();
+			
+			// ? AUTO-IMPORT ANIMATIONS if the mesh has bones
+			// Check if source file contains skeleton/animations
+			auto animInfo = AnimationImporter::GetAnimationInfo(sourcePath);
+			
+			if (animInfo.HasSkeleton && animInfo.BoneCount > 0) {
+				LNX_LOG_INFO("Detected skeletal mesh with {0} bones. Importing skeleton and animations...", 
+					animInfo.BoneCount);
+				
+				// Configure animation import settings
+				AnimationImportSettings animSettings;
+				animSettings.ImportSkeleton = true;
+				animSettings.ImportAnimations = true;
+				animSettings.OptimizeKeyframes = true;
+				animSettings.Scale = settings.Scale;
+				
+				// Import skeleton and animations
+				auto animResult = AnimationImporter::Import(sourcePath, outDir, animSettings);
+				
+				if (animResult.Success) {
+					LNX_LOG_INFO("Imported skeleton: {0}", animResult.SkeletonOutputPath.string());
+					
+					for (size_t i = 0; i < animResult.Clips.size(); i++) {
+						LNX_LOG_INFO("Imported animation clip: {0}", animResult.ClipOutputPaths[i].string());
+					}
+					
+					if (animResult.Clips.empty()) {
+						LNX_LOG_INFO("No animations found in file. Skeleton-only import complete.");
+					}
+				} else {
+					LNX_LOG_WARN("Failed to import animations: {0}", animResult.ErrorMessage);
+				}
+			}
 		} else {
 			result.ErrorMessage = "Failed to import mesh from: " + sourcePath.string();
 		}

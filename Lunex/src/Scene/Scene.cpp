@@ -19,6 +19,7 @@
 #include "Scene/Systems/PhysicsSystem3D.h"
 #include "Scene/Systems/ScriptSystem.h"
 #include "Scene/Systems/SceneRenderSystem.h"
+#include "Scene/Systems/AnimationSystem.h"
 
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
@@ -66,6 +67,11 @@ namespace Lunex {
 		auto physics3D = std::make_unique<PhysicsSystem3D>();
 		physics3D->OnAttach(m_Context);
 		m_Systems.push_back(std::move(physics3D));
+		
+		// ✅ Animation System (priority: 300 - after physics, before rendering)
+		auto animationSystem = std::make_unique<AnimationSystem>();
+		animationSystem->OnAttach(m_Context);
+		m_Systems.push_back(std::move(animationSystem));
 		
 		// Render System (priority: 1000)
 		auto renderSystem = std::make_unique<SceneRenderSystem>();

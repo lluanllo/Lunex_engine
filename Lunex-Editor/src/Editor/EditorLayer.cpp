@@ -853,6 +853,10 @@ namespace Lunex {
 		m_InputSettingsPanel.OnImGuiRender();
 		m_JobSystemPanel.OnImGuiRender();
 		m_MeshImportModal.OnImGuiRender();  // NEW: Mesh import modal
+		
+		// ✅ Animator Panel - sync with selected entity
+		m_AnimatorPanel.SetContext(m_SceneHierarchyPanel.GetSelectedEntity());
+		m_AnimatorPanel.OnImGuiRender();
 
 		// Render dialogs (on top)
 		m_ProjectCreationDialog.OnImGuiRender();
