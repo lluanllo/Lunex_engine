@@ -491,6 +491,19 @@ namespace Lunex {
 	void Scene::OnComponentAdded<EnvironmentComponent>(Entity entity, EnvironmentComponent& component) {
 	}
 
+	// ✅ NEW: Animation Components
+	template<>
+	void Scene::OnComponentAdded<SkeletalMeshComponent>(Entity entity, SkeletalMeshComponent& component) {
+		// Auto-create MaterialComponent when SkeletalMeshComponent is added
+		if (!entity.HasComponent<MaterialComponent>()) {
+			entity.AddComponent<MaterialComponent>();
+		}
+	}
+
+	template<>
+	void Scene::OnComponentAdded<AnimatorComponent>(Entity entity, AnimatorComponent& component) {
+	}
+
 	// ========================================
 	// ENTITY HIERARCHY (Parent-Child)
 	// ========================================

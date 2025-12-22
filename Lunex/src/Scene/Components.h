@@ -21,6 +21,9 @@
 // NEW LIGHTING SYSTEM - AAA Architecture
 #include "Scene/Lighting/LightTypes.h"
 
+// NEW ANIMATION SYSTEM - AAA Architecture
+#include "Scene/Components/AnimationComponents.h"
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -1051,5 +1054,6 @@ namespace Lunex {
 		Rigidbody3DComponent, BoxCollider3DComponent, SphereCollider3DComponent, 
 		CapsuleCollider3DComponent, MeshCollider3DComponent,
 		MeshComponent, MaterialComponent, LightComponent, TextureComponent, ScriptComponent,
-		RelationshipComponent, EnvironmentComponent>;  // Added EnvironmentComponent
+		RelationshipComponent, EnvironmentComponent,
+		SkeletalMeshComponent, AnimatorComponent>;  // ? Added Animation Components
 }
