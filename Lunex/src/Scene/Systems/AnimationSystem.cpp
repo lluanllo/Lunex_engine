@@ -77,6 +77,20 @@ namespace Lunex {
 		
 		float deltaTime = ts.GetSeconds();
 		
+		// Update all entities with SkeletalMeshComponent (even without AnimatorComponent)
+		auto skeletalView = m_Context->Registry->view<SkeletalMeshComponent>();
+		for (auto entity : skeletalView) {
+			auto& skeletal = skeletalView.get<SkeletalMeshComponent>(entity);
+			
+			// Initialize bone matrices to identity if skeleton is assigned but matrices are empty
+			if (skeletal.Skeleton && skeletal.BoneMatrices.empty()) {
+				uint32_t boneCount = skeletal.GetBoneCount();
+				skeletal.BoneMatrices.resize(boneCount, glm::mat4(1.0f));
+				skeletal.BoneMatricesDirty = true;
+				LNX_LOG_INFO("AnimationSystem: Initialized {0} bone matrices for entity", boneCount);
+			}
+		}
+		
 		// Update all entities with both AnimatorComponent and SkeletalMeshComponent
 		auto view = m_Context->Registry->view<AnimatorComponent, SkeletalMeshComponent>();
 		
@@ -84,7 +98,7 @@ namespace Lunex {
 			auto& animator = view.get<AnimatorComponent>(entity);
 			auto& skeletal = view.get<SkeletalMeshComponent>(entity);
 			
-			if (!skeletal.IsValid()) continue;
+			if (!skeletal.Skeleton) continue;
 			
 			UpdateEntityAnimation(animator, skeletal, deltaTime);
 		}

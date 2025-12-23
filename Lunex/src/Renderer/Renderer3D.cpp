@@ -6,6 +6,7 @@
 #include "Renderer/StorageBuffer.h"
 #include "Assets/Materials/MaterialRegistry.h"
 #include "Resources/Mesh/Model.h"
+#include "Resources/Mesh/SkinnedModel.h"
 #include "Renderer/GridRenderer.h"
 #include "Renderer/SkyboxRenderer.h"
 #include "Scene/Components.h"
@@ -111,7 +112,7 @@ namespace Lunex {
 		s_Data.TransformUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::TransformData), 1);
 		s_Data.MaterialUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::MaterialUniformData), 2);
 		s_Data.IBLUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::IBLUniformData), 5);
-		s_Data.SkinnedUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::SkinnedMeshUniformData), 6);
+		s_Data.SkinnedUniformBuffer = UniformBuffer::Create(sizeof(Renderer3DData::SkinnedMeshUniformData), 11);  // ? Fixed: binding 11 to match shader
 		
 		// Create storage buffer for lights (header + MaxLights * LightData)
 		uint32_t lightsBufferSize = sizeof(Renderer3DData::LightsStorageData) + 
@@ -515,78 +516,140 @@ namespace Lunex {
 	// ============================================================================
 
 	void Renderer3D::DrawSkinnedMesh(const glm::mat4& transform, SkeletalMeshComponent& skeletalMesh, int entityID) {
-		if (!skeletalMesh.IsValid() || !skeletalMesh.Mesh)
+		// Priority 1: Use SkinnedModel if available (has real bone weights)
+		if (skeletalMesh.SkinnedMeshModel) {
+			DrawSkinnedModelInternal(transform, skeletalMesh, nullptr, entityID);
 			return;
-
-		// Use default material
-		auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
-		
-		// Set transform
-		s_Data.TransformBuffer.Transform = transform;
-		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
-
-		// Set default material
-		s_Data.MaterialBuffer.Color = defaultMaterial->GetAlbedo();
-		s_Data.MaterialBuffer.Metallic = defaultMaterial->GetMetallic();
-		s_Data.MaterialBuffer.Roughness = defaultMaterial->GetRoughness();
-		s_Data.MaterialBuffer.Specular = defaultMaterial->GetSpecular();
-		s_Data.MaterialBuffer.EmissionIntensity = 0.0f;
-		s_Data.MaterialBuffer.EmissionColor = glm::vec3(0.0f);
-		s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
-		s_Data.MaterialBuffer.UseAlbedoMap = 0;
-		s_Data.MaterialBuffer.UseNormalMap = 0;
-		s_Data.MaterialBuffer.UseMetallicMap = 0;
-		s_Data.MaterialBuffer.UseRoughnessMap = 0;
-		s_Data.MaterialBuffer.UseSpecularMap = 0;
-		s_Data.MaterialBuffer.UseEmissionMap = 0;
-		s_Data.MaterialBuffer.UseAOMap = 0;
-		s_Data.MaterialBuffer.MetallicMultiplier = 1.0f;
-		s_Data.MaterialBuffer.RoughnessMultiplier = 1.0f;
-		s_Data.MaterialBuffer.SpecularMultiplier = 1.0f;
-		s_Data.MaterialBuffer.AOMultiplier = 1.0f;
-		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
-
-		// Set skinning info
-		s_Data.SkinnedBuffer.UseSkinning = 1;
-		s_Data.SkinnedBuffer.BoneCount = skeletalMesh.GetBoneCount();
-		s_Data.SkinnedUniformBuffer->SetData(&s_Data.SkinnedBuffer, sizeof(Renderer3DData::SkinnedMeshUniformData));
-
-		// Bind bone matrix buffer
-		if (skeletalMesh.BoneMatrixBuffer) {
-			skeletalMesh.BoneMatrixBuffer->Bind();
 		}
-
-		// Bind shader and draw
-		s_Data.SkinnedMeshShader->Bind();
-		s_Data.SkinnedMeshShader->SetInt("u_EntityID", entityID);
 		
-		// Draw mesh from MeshAsset
-		auto model = skeletalMesh.Mesh->GetModel();
-		if (model) {
-			model->Draw(s_Data.SkinnedMeshShader);
+		// Priority 2: Fallback to MeshAsset (static rendering)
+		if (skeletalMesh.Mesh) {
+			auto model = skeletalMesh.Mesh->GetModel();
+			if (!model) {
+				LNX_LOG_WARN("DrawSkinnedMesh: Failed to get model from MeshAsset");
+				return;
+			}
+			
+			// Static rendering fallback
+			s_Data.TransformBuffer.Transform = transform;
+			s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
+
+			auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
+			s_Data.MaterialBuffer.Color = defaultMaterial->GetAlbedo();
+			s_Data.MaterialBuffer.Metallic = defaultMaterial->GetMetallic();
+			s_Data.MaterialBuffer.Roughness = defaultMaterial->GetRoughness();
+			s_Data.MaterialBuffer.Specular = defaultMaterial->GetSpecular();
+			s_Data.MaterialBuffer.EmissionIntensity = 0.0f;
+			s_Data.MaterialBuffer.EmissionColor = glm::vec3(0.0f);
+			s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
+			s_Data.MaterialBuffer.UseAlbedoMap = 0;
+			s_Data.MaterialBuffer.UseNormalMap = 0;
+			s_Data.MaterialBuffer.UseMetallicMap = 0;
+			s_Data.MaterialBuffer.UseRoughnessMap = 0;
+			s_Data.MaterialBuffer.UseSpecularMap = 0;
+			s_Data.MaterialBuffer.UseEmissionMap = 0;
+			s_Data.MaterialBuffer.UseAOMap = 0;
+			s_Data.MaterialBuffer.MetallicMultiplier = 1.0f;
+			s_Data.MaterialBuffer.RoughnessMultiplier = 1.0f;
+			s_Data.MaterialBuffer.SpecularMultiplier = 1.0f;
+		 s_Data.MaterialBuffer.AOMultiplier = 1.0f;
+		 s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
+
+			model->SetEntityID(entityID);
+			s_Data.MeshShader->Bind();
+			model->Draw(s_Data.MeshShader);
+
 			s_Data.Stats.DrawCalls++;
 			s_Data.Stats.MeshCount += (uint32_t)model->GetMeshes().size();
 			for (const auto& mesh : model->GetMeshes()) {
 				s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
 			}
+			return;
 		}
-
-		// Reset skinning state
-		s_Data.SkinnedBuffer.UseSkinning = 0;
-		s_Data.SkinnedUniformBuffer->SetData(&s_Data.SkinnedBuffer, sizeof(Renderer3DData::SkinnedMeshUniformData));
+		
+		LNX_LOG_WARN("DrawSkinnedMesh: No mesh assigned");
 	}
 
 	void Renderer3D::DrawSkinnedMesh(const glm::mat4& transform, SkeletalMeshComponent& skeletalMesh, MaterialComponent& materialComponent, int entityID) {
-		if (!skeletalMesh.IsValid() || !skeletalMesh.Mesh)
+		// Priority 1: Use SkinnedModel if available (has real bone weights)
+		if (skeletalMesh.SkinnedMeshModel) {
+			DrawSkinnedModelInternal(transform, skeletalMesh, &materialComponent, entityID);
 			return;
+		}
+		
+		// Priority 2: Fallback to MeshAsset (static rendering)
+		if (skeletalMesh.Mesh) {
+			auto model = skeletalMesh.Mesh->GetModel();
+			if (!model) {
+				LNX_LOG_WARN("DrawSkinnedMesh: Failed to get model from MeshAsset");
+				return;
+			}
+			
+			// Static rendering fallback with material
+			s_Data.TransformBuffer.Transform = transform;
+			s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
 
+			if (materialComponent.Instance) {
+				auto uniformData = materialComponent.Instance->GetUniformData();
+				s_Data.MaterialBuffer.Color = uniformData.Albedo;
+				s_Data.MaterialBuffer.Metallic = uniformData.Metallic;
+				s_Data.MaterialBuffer.Roughness = uniformData.Roughness;
+				s_Data.MaterialBuffer.Specular = uniformData.Specular;
+				s_Data.MaterialBuffer.EmissionIntensity = uniformData.EmissionIntensity;
+				s_Data.MaterialBuffer.EmissionColor = uniformData.EmissionColor;
+				s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
+				s_Data.MaterialBuffer.UseAlbedoMap = uniformData.UseAlbedoMap;
+				s_Data.MaterialBuffer.UseNormalMap = uniformData.UseNormalMap;
+				s_Data.MaterialBuffer.UseMetallicMap = uniformData.UseMetallicMap;
+				s_Data.MaterialBuffer.UseRoughnessMap = uniformData.UseRoughnessMap;
+				s_Data.MaterialBuffer.UseSpecularMap = uniformData.UseSpecularMap;
+				s_Data.MaterialBuffer.UseEmissionMap = uniformData.UseEmissionMap;
+				s_Data.MaterialBuffer.UseAOMap = uniformData.UseAOMap;
+				s_Data.MaterialBuffer.MetallicMultiplier = uniformData.MetallicMultiplier;
+				s_Data.MaterialBuffer.RoughnessMultiplier = uniformData.RoughnessMultiplier;
+				s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
+				s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
+			}
+			s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
+
+			model->SetEntityID(entityID);
+			s_Data.MeshShader->Bind();
+			if (materialComponent.Instance) {
+				materialComponent.Instance->BindTextures();
+			}
+			model->Draw(s_Data.MeshShader);
+
+			s_Data.Stats.DrawCalls++;
+			s_Data.Stats.MeshCount += (uint32_t)model->GetMeshes().size();
+			for (const auto& mesh : model->GetMeshes()) {
+				s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
+			}
+			return;
+		}
+		
+		LNX_LOG_WARN("DrawSkinnedMesh: No mesh assigned");
+	}
+
+	// ============================================================================
+	// INTERNAL: Draw SkinnedModel with GPU Skinning
+	// ============================================================================
+	
+	void Renderer3D::DrawSkinnedModelInternal(
+		const glm::mat4& transform,
+		SkeletalMeshComponent& skeletalMesh,
+		MaterialComponent* materialComponent,
+		int entityID)
+	{
+		auto& skinnedModel = skeletalMesh.SkinnedMeshModel;
+		if (!skinnedModel) return;
+		
 		// Set transform
 		s_Data.TransformBuffer.Transform = transform;
 		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
 
-		// Set material from MaterialComponent
-		if (materialComponent.Instance) {
-			auto uniformData = materialComponent.Instance->GetUniformData();
+		// Set material
+		if (materialComponent && materialComponent->Instance) {
+			auto uniformData = materialComponent->Instance->GetUniformData();
 			s_Data.MaterialBuffer.Color = uniformData.Albedo;
 			s_Data.MaterialBuffer.Metallic = uniformData.Metallic;
 			s_Data.MaterialBuffer.Roughness = uniformData.Roughness;
@@ -605,35 +668,77 @@ namespace Lunex {
 			s_Data.MaterialBuffer.RoughnessMultiplier = uniformData.RoughnessMultiplier;
 			s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
 			s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
+		} else {
+			auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
+			s_Data.MaterialBuffer.Color = defaultMaterial->GetAlbedo();
+			s_Data.MaterialBuffer.Metallic = defaultMaterial->GetMetallic();
+			s_Data.MaterialBuffer.Roughness = defaultMaterial->GetRoughness();
+			s_Data.MaterialBuffer.Specular = defaultMaterial->GetSpecular();
+			s_Data.MaterialBuffer.EmissionIntensity = 0.0f;
+			s_Data.MaterialBuffer.EmissionColor = glm::vec3(0.0f);
+			s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
+			s_Data.MaterialBuffer.UseAlbedoMap = 0;
+			s_Data.MaterialBuffer.UseNormalMap = 0;
+			s_Data.MaterialBuffer.UseMetallicMap = 0;
+			s_Data.MaterialBuffer.UseRoughnessMap = 0;
+			s_Data.MaterialBuffer.UseSpecularMap = 0;
+			s_Data.MaterialBuffer.UseEmissionMap = 0;
+			s_Data.MaterialBuffer.UseAOMap = 0;
+			s_Data.MaterialBuffer.MetallicMultiplier = 1.0f;
+			s_Data.MaterialBuffer.RoughnessMultiplier = 1.0f;
+			s_Data.MaterialBuffer.SpecularMultiplier = 1.0f;
+			s_Data.MaterialBuffer.AOMultiplier = 1.0f;
 		}
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
 
-		// Set skinning info
-		s_Data.SkinnedBuffer.UseSkinning = 1;
-		s_Data.SkinnedBuffer.BoneCount = skeletalMesh.GetBoneCount();
-		s_Data.SkinnedUniformBuffer->SetData(&s_Data.SkinnedBuffer, sizeof(Renderer3DData::SkinnedMeshUniformData));
+		// Check if we can do GPU skinning
+		bool canSkin = skinnedModel->HasBones() && 
+					   !skeletalMesh.BoneMatrices.empty() && 
+					   skeletalMesh.BoneMatrixBuffer;
 
-		// Bind bone matrix buffer
-		if (skeletalMesh.BoneMatrixBuffer) {
+		if (canSkin) {
+			// ? GPU SKINNING ENABLED
+			s_Data.SkinnedBuffer.UseSkinning = 1;
+			s_Data.SkinnedBuffer.BoneCount = skeletalMesh.GetBoneCount();
+			s_Data.SkinnedUniformBuffer->SetData(&s_Data.SkinnedBuffer, sizeof(Renderer3DData::SkinnedMeshUniformData));
+
+			// Bind bone matrix storage buffer
 			skeletalMesh.BoneMatrixBuffer->Bind();
+
+			// Use skinned shader
+			s_Data.SkinnedMeshShader->Bind();
+			s_Data.SkinnedMeshShader->SetInt("u_EntityID", entityID);
+			
+			if (materialComponent && materialComponent->Instance) {
+				materialComponent->Instance->BindTextures();
+			}
+		} else {
+			// Static fallback
+			s_Data.SkinnedBuffer.UseSkinning = 0;
+			s_Data.SkinnedBuffer.BoneCount = 0;
+			s_Data.SkinnedUniformBuffer->SetData(&s_Data.SkinnedBuffer, sizeof(Renderer3DData::SkinnedMeshUniformData));
+			
+			s_Data.MeshShader->Bind();
+			
+			if (materialComponent && materialComponent->Instance) {
+				materialComponent->Instance->BindTextures();
+			}
 		}
 
-		// Bind shader and textures
-		s_Data.SkinnedMeshShader->Bind();
-		s_Data.SkinnedMeshShader->SetInt("u_EntityID", entityID);
-		if (materialComponent.Instance) {
-			materialComponent.Instance->BindTextures();
-		}
+		// Set entity ID and draw
+		skinnedModel->SetEntityID(entityID);
 		
-		// Draw mesh from MeshAsset
-		auto model = skeletalMesh.Mesh->GetModel();
-		if (model) {
-			model->Draw(s_Data.SkinnedMeshShader);
-			s_Data.Stats.DrawCalls++;
-			s_Data.Stats.MeshCount += (uint32_t)model->GetMeshes().size();
-			for (const auto& mesh : model->GetMeshes()) {
-				s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
-			}
+		if (canSkin) {
+			skinnedModel->Draw(s_Data.SkinnedMeshShader);
+		} else {
+			skinnedModel->Draw(s_Data.MeshShader);
+		}
+
+		// Update stats
+		s_Data.Stats.DrawCalls++;
+		s_Data.Stats.MeshCount += (uint32_t)skinnedModel->GetMeshes().size();
+		for (const auto& mesh : skinnedModel->GetMeshes()) {
+			s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
 		}
 
 		// Reset skinning state

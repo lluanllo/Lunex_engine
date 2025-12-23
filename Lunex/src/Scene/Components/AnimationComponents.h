@@ -16,6 +16,7 @@
 #include "Assets/Animation/SkeletonAsset.h"
 #include "Assets/Animation/AnimationClipAsset.h"
 #include "Assets/Mesh/MeshAsset.h"
+#include "Resources/Mesh/SkinnedModel.h"
 #include "Renderer/Buffer.h"
 
 #include <glm/glm.hpp>
@@ -56,14 +57,18 @@ namespace Lunex {
 	 * 
 	 * This component is required for any entity that uses skeletal animation.
 	 * It references:
-	 *   - A MeshAsset (the visual mesh with bone weights)
+	 *   - A SkinnedModel (the visual mesh with bone weights) - loaded directly from FBX/GLTF
 	 *   - A SkeletonAsset (the bone hierarchy)
 	 *   - Runtime bone matrices for GPU skinning
 	 */
 	struct SkeletalMeshComponent {
 		// ========== ASSET REFERENCES ==========
 		
-		// The skeletal mesh (with bone weights)
+		// The skeletal mesh (with bone weights) - uses SkinnedModel for real bone data
+		Ref<SkinnedModel> SkinnedMeshModel;
+		std::string SourceMeshPath;  // Original FBX/GLTF path
+		
+		// Legacy: MeshAsset reference (for compatibility)
 		Ref<MeshAsset> Mesh;
 		UUID MeshAssetID;
 		std::string MeshAssetPath;
@@ -89,7 +94,9 @@ namespace Lunex {
 		SkeletalMeshComponent() = default;
 		
 		SkeletalMeshComponent(const SkeletalMeshComponent& other)
-			: Mesh(other.Mesh)
+			: SkinnedMeshModel(other.SkinnedMeshModel)
+			, SourceMeshPath(other.SourceMeshPath)
+			, Mesh(other.Mesh)
 			, MeshAssetID(other.MeshAssetID)
 			, MeshAssetPath(other.MeshAssetPath)
 			, Skeleton(other.Skeleton)
@@ -100,13 +107,46 @@ namespace Lunex {
 		{
 		}
 		
-		// ========== MESH API ==========
+		// ========== SKINNED MODEL API (NEW) ==========
+		
+		void LoadSkinnedMesh(const std::string& path) {
+			SkinnedMeshModel = CreateRef<SkinnedModel>(path);
+			SourceMeshPath = path;
+			
+			if (SkinnedMeshModel && SkinnedMeshModel->HasBones()) {
+				// Initialize bone matrices from model
+				int boneCount = SkinnedMeshModel->GetBoneCount();
+				BoneMatrices.resize(boneCount, glm::mat4(1.0f));
+				BoneMatricesDirty = true;
+				
+				LNX_LOG_INFO("SkeletalMeshComponent: Loaded skinned mesh with {0} bones", boneCount);
+			}
+		}
+		
+		bool HasSkinnedModel() const {
+			return SkinnedMeshModel != nullptr;
+		}
+		
+		bool HasBoneWeights() const {
+			return SkinnedMeshModel && SkinnedMeshModel->HasBones();
+		}
+		
+		int GetSkinnedBoneCount() const {
+			return SkinnedMeshModel ? SkinnedMeshModel->GetBoneCount() : 0;
+		}
+		
+		// ========== MESH API (Legacy) ==========
 		
 		void SetMesh(Ref<MeshAsset> meshAsset) {
 			Mesh = meshAsset;
 			if (meshAsset) {
 				MeshAssetID = meshAsset->GetID();
 				MeshAssetPath = meshAsset->GetPath().string();
+				
+				// Also try to load as SkinnedModel from source
+				if (meshAsset->HasValidSource()) {
+					LoadSkinnedMesh(meshAsset->GetSourcePath().string());
+				}
 			}
 		}
 		
@@ -115,6 +155,11 @@ namespace Lunex {
 			if (Mesh) {
 				MeshAssetID = Mesh->GetID();
 				MeshAssetPath = path.string();
+				
+				// Load as SkinnedModel from source
+				if (Mesh->HasValidSource()) {
+					LoadSkinnedMesh(Mesh->GetSourcePath().string());
+				}
 			}
 		}
 		
@@ -153,23 +198,33 @@ namespace Lunex {
 		}
 		
 		uint32_t GetBoneCount() const {
+			// Prefer SkinnedModel bone count, fallback to Skeleton
+			if (SkinnedMeshModel && SkinnedMeshModel->HasBones()) {
+				return static_cast<uint32_t>(SkinnedMeshModel->GetBoneCount());
+			}
 			return Skeleton ? Skeleton->GetJointCount() : 0;
 		}
 		
 		// Reset to bind pose
 		void ResetToBindPose() {
-			if (Skeleton) {
-				for (uint32_t i = 0; i < Skeleton->GetJointCount(); i++) {
-					BoneMatrices[i] = glm::mat4(1.0f);
-				}
-				BoneMatricesDirty = true;
+			uint32_t count = GetBoneCount();
+			BoneMatrices.resize(count);
+			for (uint32_t i = 0; i < count; i++) {
+				BoneMatrices[i] = glm::mat4(1.0f);
 			}
+			BoneMatricesDirty = true;
 		}
 		
 		// ========== VALIDATION ==========
 		
 		bool IsValid() const {
-			return Mesh != nullptr && Skeleton != nullptr;
+			// Valid if we have either SkinnedModel or Mesh
+			return (SkinnedMeshModel != nullptr) || (Mesh != nullptr);
+		}
+		
+		bool IsFullyConfigured() const {
+			// Fully configured for animation if we have mesh + skeleton
+			return IsValid() && (Skeleton != nullptr || HasBoneWeights());
 		}
 		
 		bool HasSkeleton() const {

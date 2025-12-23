@@ -23,7 +23,7 @@ namespace Lunex {
 		constexpr float HEADER_HEIGHT = 28.0f;
 		constexpr float THUMBNAIL_SIZE = 64.0f;
 		constexpr float COLUMN_WIDTH = 120.0f;
-		
+
 		const ImVec4 COLOR_HEADER = ImVec4(0.85f, 0.85f, 0.85f, 1.0f);
 		const ImVec4 COLOR_SUBHEADER = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
 		const ImVec4 COLOR_HINT = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
@@ -198,7 +198,7 @@ namespace Lunex {
 
 	void PropertiesPanel::OnImGuiRender() {
 		ImGui::Begin("Properties");
-		
+
 		if (m_SelectedEntity) {
 			DrawComponents(m_SelectedEntity);
 		}
@@ -225,9 +225,9 @@ namespace Lunex {
 
 		ImGui::Columns(2, nullptr, false);
 		ImGui::SetColumnWidth(0, columnWidth);
-		
+
 		PropertyLabel(label.c_str());
-		
+
 		ImGui::NextColumn();
 
 		ImGui::PushMultiItemsWidths(3, ImGui::CalcItemWidth());
@@ -307,13 +307,13 @@ namespace Lunex {
 
 			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{ 6, 6 });
 			float lineHeight = ImGui::GetTextLineHeight() + ImGui::GetStyle().FramePadding.y * 2.0f;
-			
+
 			ImGui::PushStyleColor(ImGuiCol_Header, UIStyle::COLOR_BG_MEDIUM);
 			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.26f, 0.26f, 0.28f, 1.0f));
 			ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.30f, 0.30f, 0.32f, 1.0f));
-			
+
 			bool open = ImGui::TreeNodeEx((void*)typeid(T).hash_code(), treeNodeFlags, name.c_str());
-			
+
 			ImGui::PopStyleColor(3);
 			ImGui::PopStyleVar();
 
@@ -339,13 +339,13 @@ namespace Lunex {
 			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.32f, 1.0f));
 			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.42f, 1.0f));
 			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.35f, 0.35f, 0.37f, 1.0f));
-			
+
 			if (ImGui::Button("+", ImVec2{ lineHeight, lineHeight })) {
 				if (canRemove) {
 					ImGui::OpenPopup("ComponentSettings");
 				}
 			}
-			
+
 			ImGui::PopStyleColor(3);
 
 			if (!canRemove) {
@@ -507,7 +507,7 @@ namespace Lunex {
 				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
 				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
 				if (ImGui::Button("Remove", ImVec2(65, 0))) {
-				 component.RemoveScript(i);
+					component.RemoveScript(i);
 					ImGui::PopStyleColor(2);
 					ImGui::EndChild();
 					ImGui::PopStyleVar();
@@ -531,16 +531,16 @@ namespace Lunex {
 
 				// Status badge
 				ImGui::Text("Status:");
-			 ImGui::SameLine();
+				ImGui::SameLine();
 				if (isLoaded) {
-				 ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
-				 ImGui::Text("✓ Loaded");
-				 ImGui::PopStyleColor();
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
+					ImGui::Text("✓ Loaded");
+					ImGui::PopStyleColor();
 				}
 				else {
-				 ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_WARNING);
-				 ImGui::Text("⚠ Will compile on Play");
-				 ImGui::PopStyleColor();
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_WARNING);
+					ImGui::Text("⚠ Will compile on Play");
+					ImGui::PopStyleColor();
 				}
 
 				ImGui::EndChild();
@@ -723,7 +723,7 @@ namespace Lunex {
 						ext == ".bmp" || ext == ".tga" || ext == ".hdr") {
 						Ref<Texture2D> texture = Texture2D::Create(data->FilePath);
 						if (texture->IsLoaded())
-						component.Texture = texture;
+							component.Texture = texture;
 						else
 							LNX_LOG_WARN("Could not load texture {0}", data->FilePath);
 					}
@@ -762,13 +762,13 @@ namespace Lunex {
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
 			PropertyLabel("Type", "Defines how the body responds to physics");
-		 ImGui::NextColumn();
+			ImGui::NextColumn();
 			ImGui::SetNextItemWidth(-1);
 			if (ImGui::BeginCombo("##BodyType", currentBodyTypeString)) {
 				for (int i = 0; i < 3; i++) {
 					bool isSelected = ((int)component.Type == i);
 					if (ImGui::Selectable(bodyTypeStrings[i], isSelected)) {
-					 component.Type = (Rigidbody2DComponent::BodyType)i;
+						component.Type = (Rigidbody2DComponent::BodyType)i;
 					}
 					if (isSelected)
 						ImGui::SetItemDefaultFocus();
@@ -790,7 +790,7 @@ namespace Lunex {
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
 			PropertyLabel("Offset");
-		 ImGui::NextColumn();
+			ImGui::NextColumn();
 			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
 			ImGui::SetNextItemWidth(-1);
 			ImGui::DragFloat2("##Offset", glm::value_ptr(component.Offset), 0.01f);
@@ -800,7 +800,7 @@ namespace Lunex {
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
 			PropertyLabel("Size");
-		 ImGui::NextColumn();
+			ImGui::NextColumn();
 			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, UIStyle::COLOR_ACCENT);
 			ImGui::SetNextItemWidth(-1);
 			ImGui::DragFloat2("##Size", glm::value_ptr(component.Size), 0.01f, 0.01f);
@@ -879,7 +879,7 @@ namespace Lunex {
 				// Check if using MeshAsset (.lumesh)
 				if (component.HasMeshAsset()) {
 					auto meshAsset = component.GetMeshAsset();
-					
+
 					ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
 					ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
 					ImGui::BeginChild("##MeshAssetInfo", ImVec2(-1, 185.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -887,7 +887,7 @@ namespace Lunex {
 					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
 					ImGui::Text("📦 MeshAsset");
 					ImGui::PopStyleColor();
-					
+
 					ImGui::SameLine(ImGui::GetContentRegionAvail().x - 80);
 					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
 					ImGui::Text(".lumesh");
@@ -904,10 +904,10 @@ namespace Lunex {
 
 					// Mesh info from metadata
 					const auto& metadata = meshAsset->GetMetadata();
-					
+
 					ImGui::Columns(2, nullptr, false);
 					ImGui::SetColumnWidth(0, 100.0f);
-					
+
 					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
 					ImGui::Text("Submeshes"); ImGui::NextColumn();
 					ImGui::PopStyleColor();
@@ -928,7 +928,7 @@ namespace Lunex {
 					ImGui::PopStyleColor();
 					std::filesystem::path srcPath(meshAsset->GetSourcePath());
 					ImGui::Text("%s", srcPath.filename().string().c_str()); ImGui::NextColumn();
-					
+
 					ImGui::Columns(1);
 
 					ImGui::Spacing();
@@ -953,7 +953,7 @@ namespace Lunex {
 					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_WARNING);
 					ImGui::Text("⚠️ Legacy Model (not a MeshAsset)");
 					ImGui::PopStyleColor();
-					
+
 					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_ACCENT);
 					ImGui::Text("🗿 %s", modelPath.filename().string().c_str());
 					ImGui::PopStyleColor();
@@ -1014,14 +1014,15 @@ namespace Lunex {
 						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
 							ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
 							std::string ext = data->Extension;
-							
+
 							if (ext == ".lumesh") {
 								// Load MeshAsset
 								auto meshAsset = MeshAsset::LoadFromFile(data->FilePath);
 								if (meshAsset) {
 									component.SetMeshAsset(meshAsset);
 									LNX_LOG_INFO("Loaded MeshAsset: {0}", data->FilePath);
-								} else {
+								}
+								else {
 									LNX_LOG_ERROR("Failed to load MeshAsset: {0}", data->FilePath);
 								}
 							}
@@ -1031,7 +1032,7 @@ namespace Lunex {
 								LNX_LOG_INFO("Loaded model (legacy): {0}", data->FilePath);
 							}
 							else {
-							 LNX_LOG_WARN("Unsupported model format: {0}", ext);
+								LNX_LOG_WARN("Unsupported model format: {0}", ext);
 							}
 						}
 						ImGui::EndDragDropTarget();
@@ -1040,7 +1041,7 @@ namespace Lunex {
 			}
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 		// Material Component - NUEVO SISTEMA
 		DrawComponent<MaterialComponent>("✨ Material", entity, [&](auto& component) {
 			// ========== MATERIAL ASSET SECTION ==========
@@ -1061,7 +1062,7 @@ namespace Lunex {
 				// ✅ Preview thumbnail - Generate using MaterialPreviewRenderer
 				if (asset) {
 					Ref<Texture2D> thumbnail = GetOrGenerateThumbnail(asset);
-					
+
 					if (thumbnail) {
 						// Render actual thumbnail texture
 						ImGui::Image(
@@ -1070,7 +1071,7 @@ namespace Lunex {
 							ImVec2(0, 1),  // Flip Y for OpenGL
 							ImVec2(1, 0)
 						);
-						
+
 						if (ImGui::IsItemHovered()) {
 							ImGui::SetTooltip("Material Preview\nClick 'Edit Material' to modify");
 						}
@@ -1264,7 +1265,7 @@ namespace Lunex {
 					ImGui::Unindent(UIStyle::INDENT_SIZE);
 				}
 			}
-		});
+			});
 
 		// ========================================
 		// LIGHT COMPONENT
@@ -1355,7 +1356,7 @@ namespace Lunex {
 			}
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// ========================================
 		// 3D PHYSICS COMPONENTS
@@ -1378,7 +1379,7 @@ namespace Lunex {
 				for (int i = 0; i < 3; i++) {
 					bool isSelected = ((int)component.Type == i);
 					if (ImGui::Selectable(bodyTypeStrings[i], isSelected)) {
-					 component.Type = (Rigidbody3DComponent::BodyType)i;
+						component.Type = (Rigidbody3DComponent::BodyType)i;
 					}
 					if (isSelected)
 						ImGui::SetItemDefaultFocus();
@@ -1443,7 +1444,7 @@ namespace Lunex {
 			}
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// Box Collider 3D Component
 		DrawComponent<BoxCollider3DComponent>("📦 Box Collider 3D", entity, [](auto& component) {
@@ -1471,7 +1472,7 @@ namespace Lunex {
 			ImGui::Columns(1);
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// Sphere Collider 3D Component
 		DrawComponent<SphereCollider3DComponent>("🌐 Sphere Collider 3D", entity, [](auto& component) {
@@ -1491,7 +1492,7 @@ namespace Lunex {
 			PropertyDrag("Radius", &component.Radius, 0.01f, 0.01f, 100.0f, "%.2f", "Sphere radius");
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// Capsule Collider 3D Component
 		DrawComponent<CapsuleCollider3DComponent>("💊 Capsule Collider 3D", entity, [](auto& component) {
@@ -1512,7 +1513,7 @@ namespace Lunex {
 			PropertyDrag("Height", &component.Height, 0.01f, 0.01f, 100.0f, "%.2f", "Capsule cylinder height (excluding caps)");
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// Mesh Collider 3D Component
 		DrawComponent<MeshCollider3DComponent>("🗿 Mesh Collider 3D", entity, [](auto& component) {
@@ -1558,7 +1559,7 @@ namespace Lunex {
 			PropertyCheckbox("Use Entity Mesh", &component.UseEntityMesh, "Automatically use mesh from MeshComponent");
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// ========================================
 		// ANIMATION COMPONENTS
@@ -1590,10 +1591,10 @@ namespace Lunex {
 
 				// Mesh info from metadata
 				const auto& metadata = component.Mesh->GetMetadata();
-				
+
 				ImGui::Columns(2, nullptr, false);
 				ImGui::SetColumnWidth(0, 100.0f);
-				
+
 				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
 				ImGui::Text("Submeshes"); ImGui::NextColumn();
 				ImGui::PopStyleColor();
@@ -1614,7 +1615,7 @@ namespace Lunex {
 				ImGui::PopStyleColor();
 				std::filesystem::path srcPath(component.Mesh->GetSourcePath());
 				ImGui::Text("%s", srcPath.filename().string().c_str()); ImGui::NextColumn();
-				
+
 				ImGui::Columns(1);
 
 				ImGui::Spacing();
@@ -1683,7 +1684,7 @@ namespace Lunex {
 				// Skeleton info
 				ImGui::Columns(2, nullptr, false);
 				ImGui::SetColumnWidth(0, 100.0f);
-				
+
 				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
 				ImGui::Text("Joints"); ImGui::NextColumn();
 				ImGui::PopStyleColor();
@@ -1699,7 +1700,7 @@ namespace Lunex {
 					ImGui::Text("None");
 				}
 				ImGui::NextColumn();
-				
+
 				ImGui::Columns(1);
 
 				ImGui::Spacing();
@@ -1750,7 +1751,7 @@ namespace Lunex {
 
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			
+
 			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
 			ImGui::Text("Bone Count"); ImGui::NextColumn();
 			ImGui::PopStyleColor();
@@ -1770,7 +1771,7 @@ namespace Lunex {
 				ImGui::PopStyleColor();
 			}
 			ImGui::NextColumn();
-			
+
 			ImGui::Columns(1);
 
 			// Reset to bind pose button
@@ -1785,99 +1786,116 @@ namespace Lunex {
 			}
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// Animator Component
-		DrawComponent<AnimatorComponent>("🎬 Animator", entity, [](auto& component) {
-			SectionHeader("🎞️", "Current Animation");
-			ImGui::Indent(UIStyle::INDENT_SIZE);
+			DrawComponent<AnimatorComponent>("🎬 Animator", entity, [this, entity](auto& component) {
+				SectionHeader("🎞️", "Current Animation");
+				ImGui::Indent(UIStyle::INDENT_SIZE);
 
-			// Current Clip Assignment
-			if (component.CurrentClip) {
-				ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
-				ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
-				ImGui::BeginChild("##AnimClipInfo", ImVec2(-1, 100.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+				// Current Clip Assignment
+				if (component.CurrentClip) {
+					ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
+					ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+					ImGui::BeginChild("##AnimClipInfo", ImVec2(-1, 100.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.4f, 0.9f, 1.0f));  // Purple for animation
-				ImGui::Text("🟣 AnimationClip (.luanim)");
-				ImGui::PopStyleColor();
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.4f, 0.9f, 1.0f));  // Purple for animation
+					ImGui::Text("🟣 AnimationClip (.luanim)");
+					ImGui::PopStyleColor();
 
-				std::filesystem::path clipPath(component.CurrentClipPath);
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_ACCENT);
-				ImGui::Text("🎬 %s", clipPath.filename().string().c_str());
-				ImGui::PopStyleColor();
+					std::filesystem::path clipPath(component.CurrentClipPath);
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_ACCENT);
+					ImGui::Text("🎬 %s", clipPath.filename().string().c_str());
+					ImGui::PopStyleColor();
 
-				ImGui::Spacing();
-				ImGui::Separator();
-				ImGui::Spacing();
+					ImGui::Spacing();
+					ImGui::Separator();
+					ImGui::Spacing();
 
-				// Clip info
-				ImGui::Columns(2, nullptr, false);
-				ImGui::SetColumnWidth(0, 80.0f);
-				
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
-				ImGui::Text("Duration"); ImGui::NextColumn();
-				ImGui::PopStyleColor();
-				ImGui::Text("%.2f sec", component.CurrentClip->GetDuration()); ImGui::NextColumn();
+					// Clip info
+					ImGui::Columns(2, nullptr, false);
+					ImGui::SetColumnWidth(0, 80.0f);
 
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
-				ImGui::Text("FPS"); ImGui::NextColumn();
-				ImGui::PopStyleColor();
-				ImGui::Text("%.0f", component.CurrentClip->GetTicksPerSecond()); ImGui::NextColumn();
-				
-				ImGui::Columns(1);
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+					ImGui::Text("Duration"); ImGui::NextColumn();
+					ImGui::PopStyleColor();
+					ImGui::Text("%.2f sec", component.CurrentClip->GetDuration()); ImGui::NextColumn();
 
-				ImGui::Spacing();
-				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
-				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
-				if (ImGui::Button("Remove Clip", ImVec2(-1, 0))) {
-					component.Stop();
-					component.CurrentClip.reset();
-					component.CurrentClipPath.clear();
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+					ImGui::Text("FPS"); ImGui::NextColumn();
+					ImGui::PopStyleColor();
+					ImGui::Text("%.0f", component.CurrentClip->GetTicksPerSecond()); ImGui::NextColumn();
+
+					ImGui::Columns(1);
+
+					ImGui::Spacing();
+					ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
+					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
+					if (ImGui::Button("Remove Clip", ImVec2(-1, 0))) {
+						component.Stop();
+						component.CurrentClip.reset();
+						component.CurrentClipPath.clear();
+					}
+					ImGui::PopStyleColor(2);
+
+					ImGui::EndChild();
+					ImGui::PopStyleVar();
+					ImGui::PopStyleColor();
 				}
-				ImGui::PopStyleColor(2);
+				else {
+					// Drop zone for animation clip
+					ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_BG_MEDIUM);
+					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.30f, 1.0f));
+					ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.4f, 0.9f, 1.0f));  // Purple for animation
+					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.5f);
+					ImGui::Button("📁 Drop Animation Clip Here\n(.luanim)", ImVec2(-1, 50.0f));
+					ImGui::PopStyleVar();
+					ImGui::PopStyleColor(3);
 
-				ImGui::EndChild();
-				ImGui::PopStyleVar();
-				ImGui::PopStyleColor();
-			}
-			else {
-				// Drop zone for animation clip
-				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_BG_MEDIUM);
-				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.30f, 1.0f));
-				ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.4f, 0.9f, 1.0f));  // Purple for animation
-				ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.5f);
-				ImGui::Button("📁 Drop Animation Clip Here\n(.luanim)", ImVec2(-1, 50.0f));
-				ImGui::PopStyleVar();
+					if (ImGui::BeginDragDropTarget()) {
+						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+							ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+							std::string ext = data->Extension;
+							if (ext == ".luanim") {
+								component.Play(std::filesystem::path(data->FilePath), component.Loop);
+								LNX_LOG_INFO("Animation clip assigned: {0}", data->FilePath);
+							}
+							else {
+								LNX_LOG_WARN("Only .luanim files are valid animation clips");
+							}
+						}
+						ImGui::EndDragDropTarget();
+					}
+				}
+
+				ImGui::Unindent(UIStyle::INDENT_SIZE);
+
+				SectionHeader("🎬", "Animation Editor");
+				ImGui::Indent(UIStyle::INDENT_SIZE);
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.3f, 0.8f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.4f, 0.9f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.2f, 0.7f, 1.0f));
+				if (ImGui::Button("🎬 Edit Animation Settings", ImVec2(-1, 35.0f))) {
+					if (m_OnAnimationEditCallback) {
+						m_OnAnimationEditCallback(entity);
+					}
+					else {
+						LNX_LOG_WARN("Animation editor not connected");
+					}
+				}
 				ImGui::PopStyleColor(3);
 
-				if (ImGui::BeginDragDropTarget()) {
-					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
-						ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
-						std::string ext = data->Extension;
-						if (ext == ".luanim") {
-							component.Play(std::filesystem::path(data->FilePath), component.Loop);
-							LNX_LOG_INFO("Animation clip assigned: {0}", data->FilePath);
-						}
-						else {
-							LNX_LOG_WARN("Only .luanim files are valid animation clips");
-						}
-					}
-					ImGui::EndDragDropTarget();
-				}
-			}
-
-			ImGui::Unindent(UIStyle::INDENT_SIZE);
+				ImGui::Unindent(UIStyle::INDENT_SIZE);
 
 			SectionHeader("⏯️", "Playback");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
 
 			// Playback controls
 			ImGui::BeginGroup();
-			
+
 			// Play/Pause buttons
 			bool hasClip = component.HasAnimation();
-			
+
 			if (!hasClip) {
 				ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.5f);
 			}
@@ -1890,7 +1908,7 @@ namespace Lunex {
 				component.Stop();
 			}
 			if (ImGui::IsItemHovered()) ImGui::SetTooltip("Stop");
-			
+
 			ImGui::SameLine();
 
 			// Play/Pause button
@@ -1904,14 +1922,14 @@ namespace Lunex {
 				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_SUCCESS);
 				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.9f, 0.4f, 1.0f));
 				if (ImGui::Button("▶", ImVec2(35, 35)) && hasClip) {
-				 component.Resume();
+					component.Resume();
 				}
 				ImGui::PopStyleColor(2);
 				if (ImGui::IsItemHovered()) ImGui::SetTooltip("Play");
 			}
 
 			ImGui::PopStyleColor(2);
-			
+
 			if (!hasClip) {
 				ImGui::PopStyleVar();
 			}
@@ -1922,10 +1940,10 @@ namespace Lunex {
 			if (hasClip) {
 				ImGui::SameLine();
 				ImGui::BeginGroup();
-				
+
 				float duration = component.GetDuration();
 				float normalized = component.GetNormalizedTime();
-				
+
 				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
 				ImGui::Text("%.2f / %.2f sec", component.CurrentTime, duration);
 				ImGui::PopStyleColor();
@@ -1933,7 +1951,7 @@ namespace Lunex {
 				ImGui::PushStyleColor(ImGuiCol_PlotHistogram, UIStyle::COLOR_ACCENT);
 				ImGui::ProgressBar(normalized, ImVec2(-1, 8.0f), "");
 				ImGui::PopStyleColor();
-				
+
 				ImGui::EndGroup();
 			}
 
@@ -1949,11 +1967,11 @@ namespace Lunex {
 			ImGui::Spacing();
 			ImGui::Columns(2, nullptr, false);
 			ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-			
+
 			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
 			ImGui::Text("Status"); ImGui::NextColumn();
 			ImGui::PopStyleColor();
-			
+
 			if (component.IsPlaying) {
 				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
 				ImGui::Text("▶ Playing");
@@ -1970,7 +1988,7 @@ namespace Lunex {
 				ImGui::PopStyleColor();
 			}
 			ImGui::NextColumn();
-			
+
 			ImGui::Columns(1);
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
@@ -2000,7 +2018,7 @@ namespace Lunex {
 			}
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 	}
 	template<typename T>
 	void PropertiesPanel::DisplayAddComponentEntry(const std::string& entryName) {

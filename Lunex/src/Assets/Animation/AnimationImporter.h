@@ -38,7 +38,7 @@ namespace Lunex {
 		float KeyframeThreshold = 0.0001f;  // Threshold for optimization
 		
 		// Transform settings
-		float Scale = 1.0f;
+		float Scale = 0.01f;                  // ? Default 0.01 for Mixamo (cm to meters)
 		glm::vec3 Rotation = { 0.0f, 0.0f, 0.0f };    // Euler angles in degrees
 		bool ConvertCoordinateSystem = true;  // Auto-convert from source
 		

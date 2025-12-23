@@ -25,6 +25,11 @@ namespace Lunex {
 			m_OnMaterialEditCallback = callback;
 		}
 		
+		// Callback for opening animation editor
+		void SetOnAnimationEditCallback(const std::function<void(Entity)>& callback) {
+			m_OnAnimationEditCallback = callback;
+		}
+		
 		// Cache management for hot reloading
 		void InvalidateMaterialThumbnail(UUID assetID);
 		void ClearThumbnailCache();
@@ -42,8 +47,9 @@ namespace Lunex {
 		Ref<Scene> m_Context;
 		Entity m_SelectedEntity;
 		
-		// Callback
+		// Callbacks
 		std::function<void(Ref<MaterialAsset>)> m_OnMaterialEditCallback;
+		std::function<void(Entity)> m_OnAnimationEditCallback;
 		
 		// ===== THUMBNAIL CACHE =====
 		// Maps MaterialAsset UUID -> Standalone Texture

@@ -16,7 +16,7 @@
 #include "../Panels/GizmoSettingsPanel.h"
 #include "../Panels/JobSystemPanel.h"
 #include "../Panels/MeshImportModal.h"
-#include "../Panels/AnimatorPanel.h"
+#include "../Panels/AnimationEditorPanel.h"
 
 #include "Scene/Camera/EditorCamera.h"
 // Note: SceneMode.h is included via ToolbarPanel.h
@@ -133,7 +133,7 @@ namespace Lunex {
 			GizmoSettingsPanel m_GizmoSettingsPanel;
 			JobSystemPanel m_JobSystemPanel;
 			MeshImportModal m_MeshImportModal;
-			AnimatorPanel m_AnimatorPanel;
+			AnimationEditorPanel m_AnimationEditorPanel;
 			
 			// Editor resources
 			Ref<Texture2D> m_IconPlay, m_IconSimulate, m_IconStop;

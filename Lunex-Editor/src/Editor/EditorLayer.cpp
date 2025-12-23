@@ -211,6 +211,13 @@ namespace Lunex {
 			m_MaterialEditorPanel.OpenMaterial(asset);
 		});
 		
+		// ========================================
+		// ANIMATION EDITOR PANEL CALLBACK
+		// ========================================
+		m_PropertiesPanel.SetOnAnimationEditCallback([this](Entity entity) {
+			m_AnimationEditorPanel.Open(entity);
+		});
+		
 		// 3. Material Editor -> Content Browser & Properties Panel (hot reload when saved)
 		m_MaterialEditorPanel.SetOnMaterialSavedCallback([this](const std::filesystem::path& path) {
 			// Invalidate Content Browser thumbnail (memory cache)
@@ -793,6 +800,13 @@ namespace Lunex {
 		if (selectedEntity && selectedEntity.HasComponent<CameraComponent>() && m_SceneState == SceneState::Edit) {
 			RenderCameraPreview(selectedEntity);
 		}
+		
+		// ========================================
+		// ANIMATION EDITOR PREVIEW (isolated, after main viewport)
+		// ========================================
+		if (m_SceneState == SceneState::Edit) {
+			m_AnimationEditorPanel.OnUpdate(ts);
+		}
 	}
 
 	void EditorLayer::OnImGuiRender() {
@@ -854,9 +868,8 @@ namespace Lunex {
 		m_JobSystemPanel.OnImGuiRender();
 		m_MeshImportModal.OnImGuiRender();  // NEW: Mesh import modal
 		
-		// ✅ Animator Panel - sync with selected entity
-		m_AnimatorPanel.SetContext(m_SceneHierarchyPanel.GetSelectedEntity());
-		m_AnimatorPanel.OnImGuiRender();
+		// ✅ Animation Editor Panel (opened from Properties Panel)
+		m_AnimationEditorPanel.OnImGuiRender();
 
 		// Render dialogs (on top)
 		m_ProjectCreationDialog.OnImGuiRender();

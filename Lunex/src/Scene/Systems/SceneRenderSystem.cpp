@@ -12,6 +12,7 @@
 #include "RHI/RHI.h"
 
 #include <algorithm>
+#include <set>
 
 namespace Lunex {
 
@@ -154,9 +155,23 @@ namespace Lunex {
 	}
 
 	void SceneRenderSystem::RenderMeshes(const Camera& camera, const glm::mat4& cameraTransform) {
-		// Render static meshes
+		// Get set of entities with SkeletalMeshComponent to exclude from static mesh rendering
+		std::set<entt::entity> skeletalEntities;
+		{
+			auto skeletalView = m_Context->Registry->view<SkeletalMeshComponent>();
+			for (auto entity : skeletalView) {
+				skeletalEntities.insert(entity);
+			}
+		}
+
+		// Render static meshes (exclude entities that have SkeletalMeshComponent)
 		auto view = m_Context->Registry->view<TransformComponent, MeshComponent>();
 		for (auto entity : view) {
+			// Skip if entity has SkeletalMeshComponent - it will be rendered with skinning
+			if (skeletalEntities.find(entity) != skeletalEntities.end()) {
+				continue;
+			}
+			
 			Entity e = { entity, m_Context->OwningScene };
 			auto& mesh = view.get<MeshComponent>(entity);
 			glm::mat4 worldTransform = GetWorldTransform(entity);
@@ -176,7 +191,8 @@ namespace Lunex {
 			Entity e = { entity, m_Context->OwningScene };
 			auto& skeletal = skeletalView.get<SkeletalMeshComponent>(entity);
 			
-			if (!skeletal.IsValid()) continue;
+			// Skip if no mesh assigned - but allow rendering without skeleton (static fallback)
+			if (!skeletal.Mesh) continue;
 			
 			glm::mat4 worldTransform = GetWorldTransform(entity);
 			

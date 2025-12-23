@@ -208,6 +208,15 @@ namespace Lunex {
 		StartBatch();
 	}
 	
+	void Renderer2D::BeginScene(const glm::mat4& viewProjection) {
+		LNX_PROFILE_FUNCTION();
+		
+		s_Data.CameraBuffer.ViewProjection = viewProjection;
+		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(Renderer2DData::CameraData));
+		
+		StartBatch();
+	}
+	
 	void Renderer2D::EndScene() {
 		LNX_PROFILE_FUNCTION();
 		
@@ -257,7 +266,7 @@ namespace Lunex {
 		
 		if (s_Data.LineVertexCount) {
 			uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.LineVertexBufferPtr - (uint8_t*)s_Data.LineVertexBufferBase);
-			s_Data.LineVertexBuffer->SetData(s_Data.LineVertexBufferBase, dataSize);
+		 s_Data.LineVertexBuffer->SetData(s_Data.LineVertexBufferBase, dataSize);
 			
 			s_Data.LineShader->Bind();
 			s_Data.LineVertexArray->Bind();

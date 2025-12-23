@@ -40,7 +40,7 @@ namespace Lunex {
 		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, MaterialComponent& materialComponent, int entityID = -1);
 		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, MaterialComponent& materialComponent, TextureComponent& textureComponent, int entityID = -1);
 
-		// Skinned mesh rendering
+		// Skinned mesh rendering (with GPU skinning support)
 		static void DrawSkinnedMesh(const glm::mat4& transform, SkeletalMeshComponent& skeletalMesh, int entityID = -1);
 		static void DrawSkinnedMesh(const glm::mat4& transform, SkeletalMeshComponent& skeletalMesh, MaterialComponent& materialComponent, int entityID = -1);
 
@@ -52,6 +52,10 @@ namespace Lunex {
 
 		static void ResetStats();
 		static Statistics GetStats();
+		
+	private:
+		// Internal helper for SkinnedModel rendering
+		static void DrawSkinnedModelInternal(const glm::mat4& transform, SkeletalMeshComponent& skeletalMesh, MaterialComponent* materialComponent, int entityID);
 	};
 
 }
