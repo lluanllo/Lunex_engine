@@ -44,6 +44,16 @@ namespace Lunex {
 		// Callbacks
 		using OnAnimationChangedCallback = std::function<void(Entity, Ref<AnimationClipAsset>)>;
 		void SetOnAnimationChangedCallback(OnAnimationChangedCallback callback) { m_OnAnimationChanged = callback; }
+		
+		// ========== FOCUS SYSTEM ==========
+		// Returns true if the animation panel viewport is focused/hovered
+		// Used to block main editor camera input ONLY when actively dragging
+		bool IsViewportFocused() const { return m_ViewportFocused; }
+		bool IsViewportHovered() const { return m_ViewportHovered; }
+		
+		// Only wants camera input when ACTIVELY interacting (dragging in viewport)
+		// This prevents blocking main editor camera when just hovering
+		bool WantsCameraInput() const { return m_ViewportDragging && m_IsOpen; }
 
 	private:
 		void RenderMenuBar();
@@ -110,7 +120,8 @@ namespace Lunex {
 		std::string m_BoneSearchFilter;
 		bool m_ScrollToBone = false;
 		
-		// UI state
+		// UI state - viewport focus
+		bool m_ViewportFocused = false;
 		bool m_ViewportHovered = false;
 		bool m_ViewportDragging = false;
 		glm::vec2 m_LastMousePos = glm::vec2(0.0f);

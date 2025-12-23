@@ -283,8 +283,9 @@ namespace Lunex {
 			);
 		}
 		
-		// Handle viewport input
+		// Handle viewport input and focus
 		m_ViewportHovered = ImGui::IsItemHovered();
+		m_ViewportFocused = ImGui::IsItemFocused() || (m_ViewportHovered && ImGui::IsMouseDown(ImGuiMouseButton_Left));
 		HandleViewportInput();
 		
 		// Render bone name labels overlay

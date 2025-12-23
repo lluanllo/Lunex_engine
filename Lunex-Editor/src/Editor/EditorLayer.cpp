@@ -752,15 +752,20 @@ namespace Lunex {
 
 		switch (m_SceneState) {
 		case SceneState::Edit: {
+			// Only update 2D camera controller if viewport focused
 			if (m_ViewportPanel.IsViewportFocused())
 				m_CameraController.OnUpdate(ts);
 
+			// ✅ FIXED: EditorCamera always updates - AnimationPanel has its OWN camera
+			// The AnimationPreviewRenderer uses a completely separate orbital camera system
+			// (m_CameraYaw, m_CameraPitch, m_CameraDistance) so there's no conflict
 			m_EditorCamera.OnUpdate(ts);
 
 			m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
 			break;
 		}
 		case SceneState::Simulate: {
+			// EditorCamera updates normally
 			m_EditorCamera.OnUpdate(ts);
 
 			m_ActiveScene->OnUpdateSimulation(ts, m_EditorCamera);
@@ -798,7 +803,7 @@ namespace Lunex {
 		// These render to their own isolated framebuffers
 		// ========================================
 		
-		// Material Editor Preview (isolated FBO, may use Renderer3D)
+		// Material Editor Preview (has own UBOs but shares bindings)
 		m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
 
 		// Camera Preview Rendering (if camera entity selected)
@@ -807,9 +812,19 @@ namespace Lunex {
 			RenderCameraPreview(selectedEntity);
 		}
 		
-		// Animation Editor Preview (isolated FBO)
+		// Animation Editor Preview (isolated FBO with own UBOs)
 		if (m_SceneState == SceneState::Edit) {
 			m_AnimationEditorPanel.OnUpdate(ts);
+		}
+		
+		// ========================================
+		// CRITICAL: RESTORE EDITOR CAMERA UBOs
+		// All preview renderers may have updated UBOs at bindings 0,1,2
+		// We need to restore the editor camera for next frame
+		// ========================================
+		if (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Simulate) {
+			Renderer3D::BeginScene(m_EditorCamera);
+			Renderer3D::EndScene();
 		}
 	}
 
@@ -908,7 +923,11 @@ namespace Lunex {
 
 	void EditorLayer::OnEvent(Lunex::Event& e) {
 		m_CameraController.OnEvent(e);
-		if (m_SceneState == SceneState::Edit) {
+		
+		// ✅ FIXED: EditorCamera always receives events - AnimationPanel has its OWN camera
+		// The AnimationPreviewRenderer uses a completely separate orbital camera system
+		// controlled via HandleViewportInput() with ImGui, so there's no conflict
+		if (m_SceneState != SceneState::Play) {
 			m_EditorCamera.OnEvent(e);
 		}
 		

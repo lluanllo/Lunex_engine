@@ -29,7 +29,7 @@ namespace Lunex {
 		m_PreviewScene.reset();
 	}
 
-	// ========== CONFIGURACIÓN ==========
+	// ========== CONFIGURATION ==========
 
 	void MaterialPreviewRenderer::SetResolution(uint32_t width, uint32_t height) {
 		if (m_Width == width && m_Height == height)
@@ -39,8 +39,7 @@ namespace Lunex {
 		m_Height = height;
 		InitializeFramebuffer();
 
-		// Actualizar camera aspect ratio
-		m_Camera.SetViewportSize(width, height);
+		m_Camera.SetViewportSize(static_cast<float>(width), static_cast<float>(height));
 	}
 
 	void MaterialPreviewRenderer::SetPreviewModel(Ref<Model> model) {
@@ -52,7 +51,6 @@ namespace Lunex {
 		m_PreviewModel = model;
 	}
 
-	// ? NEW: Camera positioning methods
 	void MaterialPreviewRenderer::SetCameraPosition(const glm::vec3& position) {
 		m_Camera.SetPosition(position);
 	}
@@ -78,7 +76,6 @@ namespace Lunex {
 			return;
 		}
 
-		// Renderizar usando el asset base (con overrides aplicados)
 		RenderInternal(materialInstance->GetBaseAsset());
 	}
 
@@ -97,10 +94,7 @@ namespace Lunex {
 			return nullptr;
 		}
 
-		// Render the material
 		RenderInternal(material);
-		
-		// Copy framebuffer to standalone texture
 		return CopyFramebufferToTexture();
 	}
 
@@ -109,41 +103,33 @@ namespace Lunex {
 			return nullptr;
 		}
 
-		// Create a new texture with the same dimensions
 		Ref<Texture2D> texture = Texture2D::Create(m_Width, m_Height);
 		if (!texture) {
 			return nullptr;
 		}
 
-		// Allocate buffer for pixel data
-		uint32_t dataSize = m_Width * m_Height * 4; // RGBA
+		uint32_t dataSize = m_Width * m_Height * 4;
 		std::vector<uint8_t> pixels(dataSize);
 
-		// Bind framebuffer and read pixels
 		m_Framebuffer->Bind();
 		glReadPixels(0, 0, m_Width, m_Height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 		m_Framebuffer->Unbind();
 
-		// Upload to texture
 		texture->SetData(pixels.data(), dataSize);
 
 		return texture;
 	}
 
 	Ref<Texture2D> MaterialPreviewRenderer::GenerateThumbnail(Ref<MaterialAsset> material, uint32_t size) {
-		// Guardar configuración actual
 		uint32_t oldWidth = m_Width;
 		uint32_t oldHeight = m_Height;
 		bool oldAutoRotate = m_AutoRotate;
 
-		// Configurar para thumbnail
 		SetResolution(size, size);
 		SetAutoRotate(false);
 
-		// Renderizar y copiar a textura independiente
 		Ref<Texture2D> thumbnail = RenderToTexture(material);
 
-		// Restaurar configuración
 		SetResolution(oldWidth, oldHeight);
 		SetAutoRotate(oldAutoRotate);
 
@@ -161,7 +147,7 @@ namespace Lunex {
 		}
 	}
 
-	// ========== HELPERS PRIVADOS ==========
+	// ========== PRIVATE HELPERS ==========
 
 	void MaterialPreviewRenderer::InitializeFramebuffer() {
 		FramebufferSpecification spec;
@@ -174,21 +160,14 @@ namespace Lunex {
 	}
 
 	void MaterialPreviewRenderer::InitializePreviewScene() {
-		// Crear esfera por defecto
 		m_PreviewModel = Model::CreateSphere();
 
-		// ? Camera settings for material preview (frontal, centered view)
 		m_Camera = EditorCamera(45.0f, 1.0f, 0.1f, 1000.0f);
-		m_Camera.SetViewportSize(m_Width, m_Height);
-		
-		// ? Frontal centered position for materials (sphere radius=0.5f)
-		// Camera directly in front at z=2.5f looking at origin
+		m_Camera.SetViewportSize(static_cast<float>(m_Width), static_cast<float>(m_Height));
 		m_Camera.SetPosition(glm::vec3(0.0f, 0.0f, 2.5f));
 
-		// Crear escena temporal para el preview
 		m_PreviewScene = CreateRef<Scene>();
 
-		// ? Luz principal para materials (centrada, intensa)
 		Entity lightEntity = m_PreviewScene->CreateEntity("Preview Light");
 		auto& lightComp = lightEntity.AddComponent<LightComponent>(LightType::Directional);
 		auto& lightTransform = lightEntity.GetComponent<TransformComponent>();
@@ -199,7 +178,6 @@ namespace Lunex {
 		lightComp.SetColor(m_LightColor);
 		lightComp.SetIntensity(m_LightIntensity);
 
-		// Luz de relleno
 		Entity fillLightEntity = m_PreviewScene->CreateEntity("Fill Light");
 		auto& fillLightComp = fillLightEntity.AddComponent<LightComponent>(LightType::Directional);
 		auto& fillLightTransform = fillLightEntity.GetComponent<TransformComponent>();
@@ -218,39 +196,36 @@ namespace Lunex {
 			return;
 		}
 
-		if (!material) {
-			LNX_LOG_ERROR("MaterialPreviewRenderer::RenderInternal - Material is null");
-			return;
-		}
-
-		if (!m_Framebuffer) {
-			LNX_LOG_ERROR("MaterialPreviewRenderer::RenderInternal - Framebuffer not initialized");
+		if (!material || !m_Framebuffer) {
 			return;
 		}
 
 		auto* cmdList = RHI::GetImmediateCommandList();
-		if (!cmdList) {
-			LNX_LOG_ERROR("MaterialPreviewRenderer::RenderInternal - No immediate command list available");
-			return;
-		}
+		if (!cmdList) return;
 
-		// Bind framebuffer
+		// ========== BIND FRAMEBUFFER ==========
 		m_Framebuffer->Bind();
 
-		// Set viewport to match framebuffer size
 		cmdList->SetViewport(0.0f, 0.0f, static_cast<float>(m_Width), static_cast<float>(m_Height));
-
-		// Clear with background color
 		cmdList->SetClearColor(m_BackgroundColor);
 		cmdList->Clear();
 
-		// Clear entity ID attachment to -1 (attachment index 1)
 		m_Framebuffer->ClearAttachment(1, -1);
 
-		// Begin scene with editor camera
-		Renderer3D::BeginScene(m_Camera);
-
-		// Update lights from preview scene
+		// ========== USE RENDERER3D ==========
+		// Calculate view matrix for material preview camera
+		glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 2.5f);
+		glm::vec3 target = glm::vec3(0.0f, 0.0f, 0.0f);
+		glm::mat4 viewMatrix = glm::lookAt(cameraPos, target, glm::vec3(0, 1, 0));
+		glm::mat4 cameraTransform = glm::inverse(viewMatrix);
+		
+		// Create a temporary SceneCamera for the preview
+		SceneCamera previewCamera;
+		previewCamera.SetPerspective(45.0f, 0.1f, 100.0f);
+		previewCamera.SetViewportSize(m_Width, m_Height);
+		
+		// Begin scene with preview camera
+		Renderer3D::BeginScene(previewCamera, cameraTransform);
 		Renderer3D::UpdateLights(m_PreviewScene.get());
 
 		// Calculate transform with rotation
@@ -259,36 +234,17 @@ namespace Lunex {
 			transform = glm::rotate(transform, glm::radians(m_CurrentRotation), glm::vec3(0.0f, 1.0f, 0.0f));
 		}
 
-		// Create temporary MaterialInstance for rendering
-		Ref<MaterialInstance> tempInstance = MaterialInstance::Create(material);
-
-		if (!tempInstance) {
-			LNX_LOG_ERROR("MaterialPreviewRenderer::RenderInternal - Failed to create MaterialInstance");
-			Renderer3D::EndScene();
-			m_Framebuffer->Unbind();
-			return;
-		}
-
-		// Create temporary components for rendering
-		MeshComponent meshComp;
-		meshComp.MeshModel = m_PreviewModel;
-		meshComp.Type = ModelType::Sphere;
-		meshComp.Color = glm::vec4(1.0f); // White tint
-
-		MaterialComponent matComp;
-		matComp.Instance = tempInstance;
-		matComp.MaterialAssetID = material->GetID();
-
-		// Render the mesh with material
-		if (meshComp.MeshModel) {
-			Renderer3D::DrawMesh(transform, meshComp, matComp, -1);
-		} else {
-			LNX_LOG_WARN("MaterialPreviewRenderer::RenderInternal - Preview model is null");
-		}
+		// ========== CREATE TEMPORARY MaterialComponent FROM MaterialAsset ==========
+		// This is the KEY FIX: we create a proper MaterialComponent with the MaterialAsset
+		// so that Renderer3D::DrawModel uses all PBR properties, not just color
+		MaterialComponent tempMaterial(material);
+		
+		// Draw the preview model with full PBR material
+		Renderer3D::DrawModel(transform, m_PreviewModel, tempMaterial, -1);
 
 		Renderer3D::EndScene();
 
-		// Unbind framebuffer
+		// ========== UNBIND FRAMEBUFFER ==========
 		m_Framebuffer->Unbind();
 	}
 
@@ -299,12 +255,9 @@ namespace Lunex {
 			return nullptr;
 		}
 
-		// Get thumbnail cache path
 		std::filesystem::path thumbnailPath = GetThumbnailPath(materialPath);
 
-		// Check if thumbnail exists and is valid (not older than material file)
 		if (std::filesystem::exists(thumbnailPath) && IsThumbnailValid(thumbnailPath, materialPath)) {
-			// Load from disk
 			Ref<Texture2D> thumbnail = LoadThumbnailFromDisk(thumbnailPath);
 			if (thumbnail) {
 				LNX_LOG_TRACE("Loaded thumbnail from cache: {0}", thumbnailPath.filename().string());
@@ -312,10 +265,8 @@ namespace Lunex {
 			}
 		}
 
-		// Generate new thumbnail
 		Ref<Texture2D> thumbnail = RenderToTexture(material);
 		if (thumbnail) {
-			// Save to disk cache
 			if (SaveThumbnailToDisk(thumbnailPath, thumbnail)) {
 				LNX_LOG_TRACE("Generated and cached thumbnail: {0}", thumbnailPath.filename().string());
 			}
@@ -354,10 +305,8 @@ namespace Lunex {
 	// ========== DISK CACHE HELPERS ==========
 
 	std::filesystem::path MaterialPreviewRenderer::GetThumbnailCachePath() const {
-		// Cache thumbnails in "Cache/Thumbnails" folder relative to assets
 		std::filesystem::path cacheDir = "Cache/Thumbnails";
 		
-		// Create directory if it doesn't exist
 		if (!std::filesystem::exists(cacheDir)) {
 			std::filesystem::create_directories(cacheDir);
 		}
@@ -366,11 +315,8 @@ namespace Lunex {
 	}
 
 	std::filesystem::path MaterialPreviewRenderer::GetThumbnailPath(const std::filesystem::path& materialPath) const {
-		// Generate a unique filename based on material path
-		// Replace slashes with underscores and change extension to .png
 		std::string filename = materialPath.filename().stem().string() + ".png";
 		
-		// If material is in a subfolder, include folder name to avoid collisions
 		if (materialPath.has_parent_path()) {
 			std::string parentName = materialPath.parent_path().filename().string();
 			if (!parentName.empty() && parentName != "assets") {
@@ -386,7 +332,6 @@ namespace Lunex {
 			return false;
 		}
 
-		// Check if thumbnail is newer than material file
 		auto thumbnailTime = std::filesystem::last_write_time(thumbnailPath);
 		auto materialTime = std::filesystem::last_write_time(materialPath);
 
@@ -398,16 +343,13 @@ namespace Lunex {
 			return false;
 		}
 
-		// Get pixel data from texture
-		uint32_t dataSize = thumbnail->GetWidth() * thumbnail->GetHeight() * 4; // RGBA
+		uint32_t dataSize = thumbnail->GetWidth() * thumbnail->GetHeight() * 4;
 		std::vector<uint8_t> pixels(dataSize);
 		
-		// Read pixels from GPU
 		glBindTexture(GL_TEXTURE_2D, thumbnail->GetRendererID());
 		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 		glBindTexture(GL_TEXTURE_2D, 0);
 
-		// Flip image vertically (OpenGL texture is upside down)
 		uint32_t width = thumbnail->GetWidth();
 		uint32_t height = thumbnail->GetHeight();
 		uint32_t rowSize = width * 4;
@@ -419,7 +361,6 @@ namespace Lunex {
 			       rowSize);
 		}
 
-		// Save to PNG using stb_image_write
 		int result = stbi_write_png(thumbnailPath.string().c_str(), 
 		                             width, height, 4, 
 		                             flipped.data(), width * 4);
@@ -437,23 +378,20 @@ namespace Lunex {
 			return nullptr;
 		}
 
-		// Load image using stb_image
 		int width, height, channels;
-		stbi_set_flip_vertically_on_load(1); // Flip vertically to match OpenGL
-		unsigned char* data = stbi_load(thumbnailPath.string().c_str(), &width, &height, &channels, 4); // Force RGBA
+		stbi_set_flip_vertically_on_load(1);
+		unsigned char* data = stbi_load(thumbnailPath.string().c_str(), &width, &height, &channels, 4);
 
 		if (!data) {
 			LNX_LOG_ERROR("Failed to load thumbnail from disk: {0}", thumbnailPath.string());
 			return nullptr;
 		}
 
-		// Create texture
 		Ref<Texture2D> texture = Texture2D::Create(width, height);
 		if (texture) {
 			texture->SetData(data, width * height * 4);
 		}
 
-		// Free image data
 		stbi_image_free(data);
 
 		return texture;
