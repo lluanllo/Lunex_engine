@@ -787,23 +787,27 @@ namespace Lunex {
 		}
 
 		m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
-		m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
 
+		// ✅ Render overlay BEFORE any preview renderers (which may pollute UBOs)
 		OnOverlayRender();
 
 		m_Framebuffer->Unbind();
 
 		// ========================================
-		// CAMERA PREVIEW RENDERING (after main scene, separate pass)
+		// PREVIEW RENDERERS (AFTER main viewport is complete)
+		// These render to their own isolated framebuffers
 		// ========================================
+		
+		// Material Editor Preview (isolated FBO, may use Renderer3D)
+		m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
+
+		// Camera Preview Rendering (if camera entity selected)
 		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
 		if (selectedEntity && selectedEntity.HasComponent<CameraComponent>() && m_SceneState == SceneState::Edit) {
 			RenderCameraPreview(selectedEntity);
 		}
 		
-		// ========================================
-		// ANIMATION EDITOR PREVIEW (isolated, after main viewport)
-		// ========================================
+		// Animation Editor Preview (isolated FBO)
 		if (m_SceneState == SceneState::Edit) {
 			m_AnimationEditorPanel.OnUpdate(ts);
 		}

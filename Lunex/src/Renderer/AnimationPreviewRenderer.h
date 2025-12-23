@@ -4,13 +4,12 @@
  * @file AnimationPreviewRenderer.h
  * @brief Isolated preview renderer for skeletal animation
  * 
- * Similar to MaterialPreviewRenderer, this renders an animated mesh
- * in an isolated scene for the Animation Editor panel.
+ * Uses Renderer3D and EditorCamera similar to MaterialPreviewRenderer.
+ * Renders to its own framebuffer with auto-fit camera for model bounds.
  */
 
 #include "Core/Core.h"
 #include "Renderer/FrameBuffer.h"
-#include "Renderer/UniformBuffer.h"
 #include "Renderer/StorageBuffer.h"
 #include "Renderer/Shader.h"
 #include "Renderer/BoneVisualization.h"
@@ -24,6 +23,9 @@
 #include <vector>
 
 namespace Lunex {
+
+	// Forward declarations
+	class Scene;
 
 	class AnimationPreviewRenderer {
 	public:
@@ -80,33 +82,42 @@ namespace Lunex {
 		void SetSelectedBone(int32_t boneIndex) { m_BoneViz.SetSelectedBone(boneIndex); }
 		void SetHoveredBone(int32_t boneIndex) { m_BoneViz.SetHoveredBone(boneIndex); }
 		
-		// Bone picking (call with normalized screen coords -1 to 1)
+		// Bone picking
 		int32_t PickBone(const glm::vec2& screenPos);
 		
-		// Get bone world positions (for UI labels)
+		// Get matrices for UI
 		const std::vector<glm::mat4>& GetModelSpaceMatrices() const { return m_TempModelSpaceMatrices; }
 		glm::mat4 GetViewProjectionMatrix() const;
+		
+		// Model bounds
+		glm::vec3 GetModelBoundsMin() const { return m_ModelBoundsMin; }
+		glm::vec3 GetModelBoundsMax() const { return m_ModelBoundsMax; }
 
 	private:
+		void InitializePreviewScene();
 		void UpdateAnimation(float deltaTime);
 		void SampleAnimation(float time);
 		void SampleBindPose();
-		void RenderMesh(const glm::vec3& cameraPos);
-		void RenderSkeleton(const glm::mat4& viewProjection);
+		void CalculateModelBounds();
 		void UploadBoneMatrices();
-		void SetupPreviewLights(const glm::vec3& cameraPos);
+		void RenderSkeleton(const glm::mat4& viewProjection);
 		
 	private:
 		Ref<Framebuffer> m_Framebuffer;
 		uint32_t m_Width = 400;
 		uint32_t m_Height = 400;
 		
-		// Camera
+		// Camera (EditorCamera for proper orbit behavior)
+		EditorCamera m_Camera;
 		float m_CameraDistance = 3.0f;
 		float m_CameraYaw = 0.0f;
 		float m_CameraPitch = 0.3f;
 		glm::vec3 m_CameraTarget = glm::vec3(0.0f, 1.0f, 0.0f);
 		glm::mat4 m_LastViewProjection = glm::mat4(1.0f);
+		
+		// Model bounds for auto-fit camera
+		glm::vec3 m_ModelBoundsMin = glm::vec3(-0.5f, 0.0f, -0.5f);
+		glm::vec3 m_ModelBoundsMax = glm::vec3(0.5f, 2.0f, 0.5f);
 		
 		// Assets
 		Ref<SkinnedModel> m_Model;
@@ -124,19 +135,15 @@ namespace Lunex {
 		Ref<StorageBuffer> m_BoneMatrixBuffer;
 		bool m_BoneMatricesDirty = true;
 		
-		// Uniform buffers for isolated rendering (don't affect main scene)
-		Ref<UniformBuffer> m_CameraUBO;
-		Ref<UniformBuffer> m_TransformUBO;
-		Ref<UniformBuffer> m_MaterialUBO;
-		Ref<UniformBuffer> m_SkinningUBO;
-		Ref<StorageBuffer> m_LightsSSBO;
-		
 		// Shader
 		Ref<Shader> m_SkinnedShader;
 		
 		// Temp pose buffers
 		std::vector<BoneTransform> m_TempPose;
 		std::vector<glm::mat4> m_TempModelSpaceMatrices;
+		
+		// Preview scene with lights
+		Ref<Scene> m_PreviewScene;
 		
 		// Bone visualization
 		BoneVisualization m_BoneViz;
