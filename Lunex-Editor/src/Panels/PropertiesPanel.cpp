@@ -1789,103 +1789,103 @@ namespace Lunex {
 			});
 
 		// Animator Component
-			DrawComponent<AnimatorComponent>("🎬 Animator", entity, [this, entity](auto& component) {
-				SectionHeader("🎞️", "Current Animation");
-				ImGui::Indent(UIStyle::INDENT_SIZE);
+		DrawComponent<AnimatorComponent>("🎬 Animator", entity, [this, entity](auto& component) {
+			SectionHeader("🎞️", "Current Animation");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
 
-				// Current Clip Assignment
-				if (component.CurrentClip) {
-					ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
-					ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
-					ImGui::BeginChild("##AnimClipInfo", ImVec2(-1, 100.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+			// Current Clip Assignment
+			if (component.CurrentClip) {
+				ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
+				ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+				ImGui::BeginChild("##AnimClipInfo", ImVec2(-1, 100.0f), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.4f, 0.9f, 1.0f));  // Purple for animation
-					ImGui::Text("🟣 AnimationClip (.luanim)");
-					ImGui::PopStyleColor();
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.4f, 0.9f, 1.0f));  // Purple for animation
+				ImGui::Text("🟣 AnimationClip (.luanim)");
+				ImGui::PopStyleColor();
 
-					std::filesystem::path clipPath(component.CurrentClipPath);
-					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_ACCENT);
-					ImGui::Text("🎬 %s", clipPath.filename().string().c_str());
-					ImGui::PopStyleColor();
+				std::filesystem::path clipPath(component.CurrentClipPath);
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_ACCENT);
+				ImGui::Text("🎬 %s", clipPath.filename().string().c_str());
+				ImGui::PopStyleColor();
 
-					ImGui::Spacing();
-					ImGui::Separator();
-					ImGui::Spacing();
+				ImGui::Spacing();
+				ImGui::Separator();
+				ImGui::Spacing();
 
-					// Clip info
-					ImGui::Columns(2, nullptr, false);
-					ImGui::SetColumnWidth(0, 80.0f);
+				// Clip info
+				ImGui::Columns(2, nullptr, false);
+				ImGui::SetColumnWidth(0, 80.0f);
 
-					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
-					ImGui::Text("Duration"); ImGui::NextColumn();
-					ImGui::PopStyleColor();
-					ImGui::Text("%.2f sec", component.CurrentClip->GetDuration()); ImGui::NextColumn();
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+				ImGui::Text("Duration"); ImGui::NextColumn();
+				ImGui::PopStyleColor();
+				ImGui::Text("%.2f sec", component.CurrentClip->GetDuration()); ImGui::NextColumn();
 
-					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
-					ImGui::Text("FPS"); ImGui::NextColumn();
-					ImGui::PopStyleColor();
-					ImGui::Text("%.0f", component.CurrentClip->GetTicksPerSecond()); ImGui::NextColumn();
+				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUBHEADER);
+				ImGui::Text("FPS"); ImGui::NextColumn();
+				ImGui::PopStyleColor();
+				ImGui::Text("%.0f", component.CurrentClip->GetTicksPerSecond()); ImGui::NextColumn();
 
-					ImGui::Columns(1);
+				ImGui::Columns(1);
 
-					ImGui::Spacing();
-					ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
-					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
-					if (ImGui::Button("Remove Clip", ImVec2(-1, 0))) {
-						component.Stop();
-						component.CurrentClip.reset();
-						component.CurrentClipPath.clear();
-					}
-					ImGui::PopStyleColor(2);
-
-					ImGui::EndChild();
-					ImGui::PopStyleVar();
-					ImGui::PopStyleColor();
+				ImGui::Spacing();
+				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
+				if (ImGui::Button("Remove Clip", ImVec2(-1, 0))) {
+					component.Stop();
+					component.CurrentClip.reset();
+					component.CurrentClipPath.clear();
 				}
-				else {
-					// Drop zone for animation clip
-					ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_BG_MEDIUM);
-					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.30f, 1.0f));
-					ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.4f, 0.9f, 1.0f));  // Purple for animation
-					ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.5f);
-					ImGui::Button("📁 Drop Animation Clip Here\n(.luanim)", ImVec2(-1, 50.0f));
-					ImGui::PopStyleVar();
-					ImGui::PopStyleColor(3);
+				ImGui::PopStyleColor(2);
 
-					if (ImGui::BeginDragDropTarget()) {
-						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
-							ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
-							std::string ext = data->Extension;
-							if (ext == ".luanim") {
-								component.Play(std::filesystem::path(data->FilePath), component.Loop);
-								LNX_LOG_INFO("Animation clip assigned: {0}", data->FilePath);
-							}
-							else {
-								LNX_LOG_WARN("Only .luanim files are valid animation clips");
-							}
-						}
-						ImGui::EndDragDropTarget();
-					}
-				}
-
-				ImGui::Unindent(UIStyle::INDENT_SIZE);
-
-				SectionHeader("🎬", "Animation Editor");
-				ImGui::Indent(UIStyle::INDENT_SIZE);
-				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.3f, 0.8f, 1.0f));
-				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.4f, 0.9f, 1.0f));
-				ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.2f, 0.7f, 1.0f));
-				if (ImGui::Button("🎬 Edit Animation Settings", ImVec2(-1, 35.0f))) {
-					if (m_OnAnimationEditCallback) {
-						m_OnAnimationEditCallback(entity);
-					}
-					else {
-						LNX_LOG_WARN("Animation editor not connected");
-					}
-				}
+				ImGui::EndChild();
+				ImGui::PopStyleVar();
+				ImGui::PopStyleColor();
+			}
+			else {
+				// Drop zone for animation clip
+				ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_BG_MEDIUM);
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.28f, 0.30f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.7f, 0.4f, 0.9f, 1.0f));  // Purple for animation
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.5f);
+				ImGui::Button("📁 Drop Animation Clip Here\n(.luanim)", ImVec2(-1, 50.0f));
+				ImGui::PopStyleVar();
 				ImGui::PopStyleColor(3);
 
-				ImGui::Unindent(UIStyle::INDENT_SIZE);
+				if (ImGui::BeginDragDropTarget()) {
+					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+						ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+						std::string ext = data->Extension;
+						if (ext == ".luanim") {
+							component.Play(std::filesystem::path(data->FilePath), component.Loop);
+							LNX_LOG_INFO("Animation clip assigned: {0}", data->FilePath);
+						}
+						else {
+							LNX_LOG_WARN("Only .luanim files are valid animation clips");
+						}
+					}
+					ImGui::EndDragDropTarget();
+				}
+			}
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
+
+			SectionHeader("🎬", "Animation Editor");
+			ImGui::Indent(UIStyle::INDENT_SIZE);
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.3f, 0.8f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.4f, 0.9f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.2f, 0.7f, 1.0f));
+			if (ImGui::Button("🎬 Edit Animation Settings", ImVec2(-1, 35.0f))) {
+				if (m_OnAnimationEditCallback) {
+					m_OnAnimationEditCallback(entity);
+				}
+				else {
+					LNX_LOG_WARN("Animation editor not connected");
+				}
+			}
+			ImGui::PopStyleColor(3);
+
+			ImGui::Unindent(UIStyle::INDENT_SIZE);
 
 			SectionHeader("⏯️", "Playback");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
