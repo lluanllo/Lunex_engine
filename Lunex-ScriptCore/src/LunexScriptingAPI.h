@@ -32,6 +32,136 @@ namespace Lunex {
     class Scene;
 
     // ========================================================================
+    // KEY CODES - Input System
+    // ========================================================================
+    
+    // Key codes for input (matching GLFW/engine key codes)
+    #define LNX_KEY_SPACE           32
+    #define LNX_KEY_APOSTROPHE      39  /* ' */
+    #define LNX_KEY_COMMA           44  /* , */
+    #define LNX_KEY_MINUS           45  /* - */
+    #define LNX_KEY_PERIOD          46  /* . */
+    #define LNX_KEY_SLASH           47  /* / */
+    #define LNX_KEY_0               48
+    #define LNX_KEY_1               49
+    #define LNX_KEY_2               50
+    #define LNX_KEY_3               51
+    #define LNX_KEY_4               52
+    #define LNX_KEY_5               53
+    #define LNX_KEY_6               54
+    #define LNX_KEY_7               55
+    #define LNX_KEY_8               56
+    #define LNX_KEY_9               57
+    #define LNX_KEY_SEMICOLON       59  /* ; */
+    #define LNX_KEY_EQUAL           61  /* = */
+    #define LNX_KEY_A               65
+    #define LNX_KEY_B               66
+    #define LNX_KEY_C               67
+    #define LNX_KEY_D               68
+    #define LNX_KEY_E               69
+    #define LNX_KEY_F               70
+    #define LNX_KEY_G               71
+    #define LNX_KEY_H               72
+    #define LNX_KEY_I               73
+    #define LNX_KEY_J               74
+    #define LNX_KEY_K               75
+    #define LNX_KEY_L               76
+    #define LNX_KEY_M               77
+    #define LNX_KEY_N               78
+    #define LNX_KEY_O               79
+    #define LNX_KEY_P               80
+    #define LNX_KEY_Q               81
+    #define LNX_KEY_R               82
+    #define LNX_KEY_S               83
+    #define LNX_KEY_T               84
+    #define LNX_KEY_U               85
+    #define LNX_KEY_V               86
+    #define LNX_KEY_W               87
+    #define LNX_KEY_X               88
+    #define LNX_KEY_Y               89
+    #define LNX_KEY_Z               90
+    #define LNX_KEY_LEFT_BRACKET    91  /* [ */
+    #define LNX_KEY_BACKSLASH       92  /* \ */
+    #define LNX_KEY_RIGHT_BRACKET   93  /* ] */
+    #define LNX_KEY_GRAVE_ACCENT    96  /* ` */
+
+    // Function keys
+    #define LNX_KEY_ESCAPE          256
+    #define LNX_KEY_ENTER           257
+    #define LNX_KEY_TAB             258
+    #define LNX_KEY_BACKSPACE       259
+    #define LNX_KEY_INSERT          260
+    #define LNX_KEY_DELETE          261
+    #define LNX_KEY_RIGHT           262
+    #define LNX_KEY_LEFT            263
+    #define LNX_KEY_DOWN            264
+    #define LNX_KEY_UP              265
+    #define LNX_KEY_PAGE_UP         266
+    #define LNX_KEY_PAGE_DOWN       267
+    #define LNX_KEY_HOME            268
+    #define LNX_KEY_END             269
+    #define LNX_KEY_CAPS_LOCK       280
+    #define LNX_KEY_SCROLL_LOCK     281
+    #define LNX_KEY_NUM_LOCK        282
+    #define LNX_KEY_PRINT_SCREEN    283
+    #define LNX_KEY_PAUSE           284
+    #define LNX_KEY_F1              290
+    #define LNX_KEY_F2              291
+    #define LNX_KEY_F3              292
+    #define LNX_KEY_F4              293
+    #define LNX_KEY_F5              294
+    #define LNX_KEY_F6              295
+    #define LNX_KEY_F7              296
+    #define LNX_KEY_F8              297
+    #define LNX_KEY_F9              298
+    #define LNX_KEY_F10             299
+    #define LNX_KEY_F11             300
+    #define LNX_KEY_F12             301
+
+    // Keypad
+    #define LNX_KEY_KP_0            320
+    #define LNX_KEY_KP_1            321
+    #define LNX_KEY_KP_2            322
+    #define LNX_KEY_KP_3            323
+    #define LNX_KEY_KP_4            324
+    #define LNX_KEY_KP_5            325
+    #define LNX_KEY_KP_6            326
+    #define LNX_KEY_KP_7            327
+    #define LNX_KEY_KP_8            328
+    #define LNX_KEY_KP_9            329
+    #define LNX_KEY_KP_DECIMAL      330
+    #define LNX_KEY_KP_DIVIDE       331
+    #define LNX_KEY_KP_MULTIPLY     332
+    #define LNX_KEY_KP_SUBTRACT     333
+    #define LNX_KEY_KP_ADD          334
+    #define LNX_KEY_KP_ENTER        335
+    #define LNX_KEY_KP_EQUAL        336
+
+    // Modifiers
+    #define LNX_KEY_LEFT_SHIFT      340
+    #define LNX_KEY_LEFT_CONTROL    341
+    #define LNX_KEY_LEFT_ALT        342
+    #define LNX_KEY_LEFT_SUPER      343
+    #define LNX_KEY_RIGHT_SHIFT     344
+    #define LNX_KEY_RIGHT_CONTROL   345
+    #define LNX_KEY_RIGHT_ALT       346
+    #define LNX_KEY_RIGHT_SUPER     347
+    #define LNX_KEY_MENU            348
+
+    // Mouse button codes
+    #define LNX_MOUSE_BUTTON_1      0
+    #define LNX_MOUSE_BUTTON_2      1
+    #define LNX_MOUSE_BUTTON_3      2
+    #define LNX_MOUSE_BUTTON_4      3
+    #define LNX_MOUSE_BUTTON_5      4
+    #define LNX_MOUSE_BUTTON_6      5
+    #define LNX_MOUSE_BUTTON_7      6
+    #define LNX_MOUSE_BUTTON_8      7
+    #define LNX_MOUSE_BUTTON_LEFT   LNX_MOUSE_BUTTON_1
+    #define LNX_MOUSE_BUTTON_RIGHT  LNX_MOUSE_BUTTON_2
+    #define LNX_MOUSE_BUTTON_MIDDLE LNX_MOUSE_BUTTON_3
+
+    // ========================================================================
     // MATH UTILITIES - Thin wrappers around GLM for script API
     // ========================================================================
     
