@@ -1334,6 +1334,124 @@ namespace Lunex {
 
 				ImGui::Unindent(UIStyle::INDENT_SIZE);
 			}
+			
+			// ========================================
+			// SUN / SKY SETTINGS (Directional Light only)
+			// ========================================
+			if (component.GetType() == LightType::Directional) {
+				SectionHeader("☀️", "Sun / Sky");
+				ImGui::Indent(UIStyle::INDENT_SIZE);
+				
+				// Is Sun Light toggle
+				bool isSunLight = component.IsSunLight();
+				if (PropertyCheckbox("Is Sun Light", &isSunLight, "Mark this light as the primary sun that controls the skybox")) {
+					component.SetIsSunLight(isSunLight);
+				}
+				
+				// Only show sub-options if this is the sun light
+				if (isSunLight) {
+					ImGui::Spacing();
+					
+					// Link to Skybox Rotation
+					bool linkToSkybox = component.GetLinkToSkyboxRotation();
+					if (PropertyCheckbox("Link to Skybox", &linkToSkybox, "Skybox rotation follows this light's direction")) {
+						component.SetLinkToSkyboxRotation(linkToSkybox);
+					}
+					
+					// Skybox Intensity Multiplier
+					float skyboxMult = component.GetSkyboxIntensityMultiplier();
+					if (PropertyDrag("Skybox Intensity", &skyboxMult, 0.01f, 0.0f, 10.0f, "%.2f", "Multiplier for skybox brightness")) {
+						component.SetSkyboxIntensityMultiplier(skyboxMult);
+					}
+					
+					ImGui::Spacing();
+					ImGui::Separator();
+					ImGui::Spacing();
+					
+					// Ambient contribution
+					bool contributeAmbient = component.GetContributeToAmbient();
+					if (PropertyCheckbox("Contribute to Ambient", &contributeAmbient, "Add ambient light from sky")) {
+						component.SetContributeToAmbient(contributeAmbient);
+					}
+					
+					if (contributeAmbient) {
+						float ambientContrib = component.GetAmbientContribution();
+						if (PropertySlider("Ambient Amount", &ambientContrib, 0.0f, 1.0f, "%.2f", "Amount of ambient light from sky")) {
+							component.SetAmbientContribution(ambientContrib);
+						}
+						
+						glm::vec3 groundColor = component.GetGroundColor();
+						if (PropertyColor("Ground Color", groundColor, "Color for hemisphere ambient (bottom)")) {
+							component.SetGroundColor(groundColor);
+						}
+					}
+					
+					ImGui::Spacing();
+					ImGui::Separator();
+					ImGui::Spacing();
+					
+					// Sun disk (for future procedural sky)
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+					ImGui::TextWrapped("Sun Disk (Procedural Sky - Coming Soon)");
+					ImGui::PopStyleColor();
+					
+					ImGui::BeginDisabled();
+					bool renderSunDisk = component.GetRenderSunDisk();
+					PropertyCheckbox("Render Sun Disk", &renderSunDisk, "Show sun disk in procedural sky");
+					
+					if (renderSunDisk) {
+						float diskSize = component.GetSunDiskSize();
+						PropertyDrag("Disk Size", &diskSize, 0.1f, 0.1f, 10.0f, "%.2f", "Size of the sun disk");
+						
+						float diskIntensity = component.GetSunDiskIntensity();
+						PropertyDrag("Disk Intensity", &diskIntensity, 0.1f, 0.0f, 100.0f, "%.2f", "Brightness of the sun disk");
+					}
+					ImGui::EndDisabled();
+					
+					ImGui::Spacing();
+					ImGui::Separator();
+					ImGui::Spacing();
+					
+					// Atmosphere (for future procedural sky)
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+					ImGui::TextWrapped("Atmosphere (Procedural Sky - Coming Soon)");
+					ImGui::PopStyleColor();
+					
+					ImGui::BeginDisabled();
+					bool affectAtmo = component.GetAffectAtmosphere();
+					PropertyCheckbox("Affect Atmosphere", &affectAtmo, "Light affects atmospheric scattering");
+					
+					if (affectAtmo) {
+						float atmoDensity = component.GetAtmosphericDensity();
+						PropertyDrag("Density", &atmoDensity, 0.01f, 0.0f, 5.0f, "%.2f", "Atmospheric density");
+					}
+					ImGui::EndDisabled();
+					
+					ImGui::Spacing();
+					ImGui::Separator();
+					ImGui::Spacing();
+					
+					// Time of Day (optional feature)
+					ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
+					ImGui::TextWrapped("Time of Day (Coming Soon)");
+					ImGui::PopStyleColor();
+					
+					ImGui::BeginDisabled();
+					bool useTimeOfDay = component.GetUseTimeOfDay();
+					PropertyCheckbox("Use Time of Day", &useTimeOfDay, "Animate sun position based on time");
+					
+					if (useTimeOfDay) {
+						float timeOfDay = component.GetTimeOfDay();
+						PropertySlider("Time", &timeOfDay, 0.0f, 24.0f, "%.1f h", "Current time (0-24 hours)");
+						
+						float timeSpeed = component.GetTimeOfDaySpeed();
+						PropertyDrag("Speed", &timeSpeed, 0.1f, 0.0f, 100.0f, "%.1fx", "Time speed multiplier");
+					}
+					ImGui::EndDisabled();
+				}
+				
+				ImGui::Unindent(UIStyle::INDENT_SIZE);
+			}
 
 			SectionHeader("🌑", "Shadows");
 			ImGui::Indent(UIStyle::INDENT_SIZE);
@@ -1432,7 +1550,7 @@ namespace Lunex {
 			}
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// Box Collider 3D Component
 		DrawComponent<BoxCollider3DComponent>("📦 Box Collider 3D", entity, [](auto& component) {
@@ -1460,7 +1578,7 @@ namespace Lunex {
 			ImGui::Columns(1);
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// Sphere Collider 3D Component
 		DrawComponent<SphereCollider3DComponent>("🌐 Sphere Collider 3D", entity, [](auto& component) {
@@ -1480,7 +1598,7 @@ namespace Lunex {
 			PropertyDrag("Radius", &component.Radius, 0.01f, 0.01f, 100.0f, "%.2f", "Sphere radius");
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// Capsule Collider 3D Component
 		DrawComponent<CapsuleCollider3DComponent>("💊 Capsule Collider 3D", entity, [](auto& component) {
@@ -1501,7 +1619,7 @@ namespace Lunex {
 			PropertyDrag("Height", &component.Height, 0.01f, 0.01f, 100.0f, "%.2f", "Capsule cylinder height (excluding caps)");
 
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
-		});
+			});
 
 		// Mesh Collider 3D Component
 		DrawComponent<MeshCollider3DComponent>("🗿 Mesh Collider 3D", entity, [](auto& component) {
@@ -1549,6 +1667,7 @@ namespace Lunex {
 			ImGui::Unindent(UIStyle::INDENT_SIZE);
 		});
 	}
+
 	template<typename T>
 	void PropertiesPanel::DisplayAddComponentEntry(const std::string& entryName) {
 		if (!m_SelectedEntity.HasComponent<T>()) {

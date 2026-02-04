@@ -11,6 +11,7 @@
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
 #include "Scene/Lighting/LightTypes.h"  // NEW: For LightData
+#include "Scene/Lighting/LightSystem.h"  // NEW: For sun light sync
 #include "Log/Log.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -207,6 +208,9 @@ namespace Lunex {
 
 	void Renderer3D::UpdateLights(Scene* scene) {
 		LNX_PROFILE_FUNCTION();
+
+		// ? SYNC WITH LIGHT SYSTEM for sun light detection and skybox sync
+		LightSystem::Get().SyncFromScene(scene);
 
 		auto view = scene->GetAllEntitiesWith<TransformComponent, LightComponent>();
 		

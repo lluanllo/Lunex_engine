@@ -376,6 +376,22 @@ namespace Lunex {
 			out << YAML::Key << "OuterConeAngle" << YAML::Value << lightComponent.GetOuterConeAngle();
 			out << YAML::Key << "CastShadows" << YAML::Value << lightComponent.GetCastShadows();
 			
+			// Sun/Sky settings (for Directional lights)
+			out << YAML::Key << "IsSunLight" << YAML::Value << lightComponent.IsSunLight();
+			out << YAML::Key << "LinkToSkyboxRotation" << YAML::Value << lightComponent.GetLinkToSkyboxRotation();
+			out << YAML::Key << "SkyboxIntensityMultiplier" << YAML::Value << lightComponent.GetSkyboxIntensityMultiplier();
+			out << YAML::Key << "AffectAtmosphere" << YAML::Value << lightComponent.GetAffectAtmosphere();
+			out << YAML::Key << "AtmosphericDensity" << YAML::Value << lightComponent.GetAtmosphericDensity();
+			out << YAML::Key << "RenderSunDisk" << YAML::Value << lightComponent.GetRenderSunDisk();
+			out << YAML::Key << "SunDiskSize" << YAML::Value << lightComponent.GetSunDiskSize();
+			out << YAML::Key << "SunDiskIntensity" << YAML::Value << lightComponent.GetSunDiskIntensity();
+			out << YAML::Key << "ContributeToAmbient" << YAML::Value << lightComponent.GetContributeToAmbient();
+			out << YAML::Key << "AmbientContribution" << YAML::Value << lightComponent.GetAmbientContribution();
+			out << YAML::Key << "GroundColor" << YAML::Value << lightComponent.GetGroundColor();
+			out << YAML::Key << "UseTimeOfDay" << YAML::Value << lightComponent.GetUseTimeOfDay();
+			out << YAML::Key << "TimeOfDay" << YAML::Value << lightComponent.GetTimeOfDay();
+			out << YAML::Key << "TimeOfDaySpeed" << YAML::Value << lightComponent.GetTimeOfDaySpeed();
+			
 			out << YAML::EndMap; // LightComponent
 		}
 
@@ -861,6 +877,36 @@ namespace Lunex {
 					light.SetInnerConeAngle(lightComponent["InnerConeAngle"].as<float>());
 					light.SetOuterConeAngle(lightComponent["OuterConeAngle"].as<float>());
 					light.SetCastShadows(lightComponent["CastShadows"].as<bool>());
+					
+					// Sun/Sky settings (for Directional lights)
+					if (lightComponent["IsSunLight"])
+						light.SetIsSunLight(lightComponent["IsSunLight"].as<bool>());
+					if (lightComponent["LinkToSkyboxRotation"])
+						light.SetLinkToSkyboxRotation(lightComponent["LinkToSkyboxRotation"].as<bool>());
+					if (lightComponent["SkyboxIntensityMultiplier"])
+						light.SetSkyboxIntensityMultiplier(lightComponent["SkyboxIntensityMultiplier"].as<float>());
+					if (lightComponent["AffectAtmosphere"])
+						light.SetAffectAtmosphere(lightComponent["AffectAtmosphere"].as<bool>());
+					if (lightComponent["AtmosphericDensity"])
+						light.SetAtmosphericDensity(lightComponent["AtmosphericDensity"].as<float>());
+					if (lightComponent["RenderSunDisk"])
+						light.SetRenderSunDisk(lightComponent["RenderSunDisk"].as<bool>());
+					if (lightComponent["SunDiskSize"])
+						light.SetSunDiskSize(lightComponent["SunDiskSize"].as<float>());
+					if (lightComponent["SunDiskIntensity"])
+						light.SetSunDiskIntensity(lightComponent["SunDiskIntensity"].as<float>());
+					if (lightComponent["ContributeToAmbient"])
+						light.SetContributeToAmbient(lightComponent["ContributeToAmbient"].as<bool>());
+					if (lightComponent["AmbientContribution"])
+						light.SetAmbientContribution(lightComponent["AmbientContribution"].as<float>());
+					if (lightComponent["GroundColor"])
+						light.SetGroundColor(lightComponent["GroundColor"].as<glm::vec3>());
+					if (lightComponent["UseTimeOfDay"])
+						light.SetUseTimeOfDay(lightComponent["UseTimeOfDay"].as<bool>());
+					if (lightComponent["TimeOfDay"])
+						light.SetTimeOfDay(lightComponent["TimeOfDay"].as<float>());
+					if (lightComponent["TimeOfDaySpeed"])
+						light.SetTimeOfDaySpeed(lightComponent["TimeOfDaySpeed"].as<float>());
 				}
 
 				auto textureComponent = entity["TextureComponent"];

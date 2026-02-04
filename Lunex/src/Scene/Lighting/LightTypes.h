@@ -41,6 +41,44 @@ namespace Lunex {
 	};
 
 	/**
+	 * @struct SunSkySettings
+	 * @brief Settings for Directional Lights that control the environment/skybox
+	 * 
+	 * AAA Architecture: Similar to Unreal's "Atmosphere Sun Light" or Unity's
+	 * directional light affecting the skybox. When a directional light is marked
+	 * as the "Sun", it can control skybox rotation and atmospheric properties.
+	 */
+	struct SunSkySettings {
+		// Is this light the "Sun" that controls the environment?
+		bool IsSunLight = false;
+		
+		// Link to skybox rotation - the light's direction controls skybox rotation
+		bool LinkToSkyboxRotation = true;
+		
+		// Skybox intensity multiplier (controlled by this light)
+		float SkyboxIntensityMultiplier = 1.0f;
+		
+		// Atmospheric scattering (for future sky rendering)
+		bool AffectAtmosphere = true;
+		float AtmosphericDensity = 1.0f;
+		
+		// Sun disk appearance (for future procedural sky)
+		bool RenderSunDisk = true;
+		float SunDiskSize = 1.0f;
+		float SunDiskIntensity = 1.0f;
+		
+		// Ambient contribution from sky
+		bool ContributeToAmbient = true;
+		float AmbientContribution = 0.3f;
+		glm::vec3 GroundColor = { 0.1f, 0.1f, 0.1f };  // For hemisphere ambient
+		
+		// Time of day simulation (optional)
+		bool UseTimeOfDay = false;
+		float TimeOfDay = 12.0f;  // 0-24 hours
+		float TimeOfDaySpeed = 1.0f;  // Multiplier for real-time simulation
+	};
+
+	/**
 	 * @struct LightProperties
 	 * @brief Full light properties for scene storage
 	 */
@@ -66,6 +104,9 @@ namespace Lunex {
 		
 		// Area light (future)
 		glm::vec2 AreaSize = { 1.0f, 1.0f };
+		
+		// Sun/Sky settings (Directional lights only)
+		SunSkySettings SunSky;
 		
 		/**
 		 * @brief Convert to GPU-ready LightData
@@ -102,6 +143,12 @@ namespace Lunex {
 		// Environment
 		bool HasEnvironmentMap = false;
 		float EnvironmentIntensity = 1.0f;
+		
+		// Sun light reference (for skybox sync)
+		bool HasSunLight = false;
+		glm::vec3 SunDirection = { 0.0f, -1.0f, 0.0f };
+		glm::vec3 SunColor = { 1.0f, 1.0f, 1.0f };
+		float SunIntensity = 1.0f;
 		
 		// Statistics
 		uint32_t DirectionalLightCount = 0;
