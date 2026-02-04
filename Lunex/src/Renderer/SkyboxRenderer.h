@@ -18,6 +18,7 @@ namespace Lunex {
 	 *   - Supports HDR environments with tone mapping
 	 *   - Rotation, intensity, tint, and blur controls
 	 *   - Global settings controlled from SettingsPanel (no component needed)
+	 *   - Sun Light synchronization - skybox rotates to match directional light
 	 */
 	class SkyboxRenderer {
 	public:
@@ -84,6 +85,51 @@ namespace Lunex {
 		 * Returns empty string if no HDRI is loaded
 		 */
 		static std::string GetHDRIPath();
+		
+		// ========================================
+		// SUN LIGHT SYNCHRONIZATION
+		// ========================================
+		
+		/**
+		 * Enable/disable synchronization with a "Sun" directional light.
+		 * When enabled, the skybox rotation is controlled by the sun light's direction.
+		 * 
+		 * @param sync True to sync with sun light, false for manual rotation
+		 */
+		static void SetSyncWithSunLight(bool sync);
+		static bool IsSyncWithSunLight();
+		
+		/**
+		 * Update the sun light direction (called by LightSystem when a sun light is present)
+		 * @param direction The normalized world-space direction FROM the light
+		 */
+		static void UpdateSunLightDirection(const glm::vec3& direction);
+		static glm::vec3 GetSunLightDirection();
+		
+		/**
+		 * Set the intensity multiplier from the sun light
+		 * @param multiplier The sun light's skybox intensity multiplier
+		 */
+		static void SetSunLightIntensityMultiplier(float multiplier);
+		static float GetSunLightIntensityMultiplier();
+		
+		/**
+		 * Get the calculated skybox rotation from the current sun direction
+		 * @return Rotation in degrees
+		 */
+		static float GetCalculatedSkyboxRotation();
+		
+		/**
+		 * Get the sun's elevation angle above the horizon
+		 * @return Elevation in degrees (-90 to 90)
+		 */
+		static float GetSunElevation();
+		
+		/**
+		 * Get the sun's azimuth angle (compass direction)
+		 * @return Azimuth in degrees (0-360)
+		 */
+		static float GetSunAzimuth();
 		
 		// ========================================
 		// RENDER GLOBAL SKYBOX

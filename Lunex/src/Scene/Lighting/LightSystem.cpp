@@ -3,6 +3,7 @@
 #include "Scene/Scene.h"
 #include "Scene/Entity.h"
 #include "Scene/Components.h"
+#include "Renderer/SkyboxRenderer.h"
 #include "Log/Log.h"
 
 namespace Lunex {
@@ -22,6 +23,13 @@ namespace Lunex {
 		m_PointCount = 0;
 		m_SpotCount = 0;
 		
+		// Reset sun light state
+		m_HasSunLight = false;
+		m_SunLightDirection = glm::vec3(0.0f, -1.0f, 0.0f);
+		m_SunLightColor = glm::vec3(1.0f);
+		m_SunLightIntensity = 1.0f;
+		m_SunLightIntensityMultiplier = 1.0f;
+		
 		m_Initialized = true;
 		LNX_LOG_INFO("LightSystem initialized");
 	}
@@ -36,6 +44,10 @@ namespace Lunex {
 		if (!scene) return;
 		
 		m_Lights.clear();
+		
+		// Reset sun light tracking
+		m_HasSunLight = false;
+		bool foundSunLight = false;
 		
 		auto view = scene->GetAllEntitiesWith<LightComponent, TransformComponent>();
 		for (auto entityID : view) {
@@ -65,10 +77,40 @@ namespace Lunex {
 			entry.Properties.OuterConeAngle = light->GetOuterConeAngle();
 			entry.Properties.CastShadows = light->GetCastShadows();
 			
+			// Copy Sun/Sky settings
+			entry.Properties.SunSky = light->GetSunSkySettings();
+			
 			entry.IsActive = true;
 			entry.IsVisible = true;
 			
 			m_Lights.push_back(entry);
+			
+			// Check if this is the Sun Light (only first one found)
+			if (!foundSunLight && 
+				entry.Properties.Type == LightType::Directional && 
+				entry.Properties.SunSky.IsSunLight) {
+				
+				foundSunLight = true;
+				m_HasSunLight = true;
+				m_SunLightDirection = entry.WorldDirection;
+				m_SunLightColor = entry.Properties.Color;
+				m_SunLightIntensity = entry.Properties.Intensity;
+				m_SunLightIntensityMultiplier = entry.Properties.SunSky.SkyboxIntensityMultiplier;
+				
+				// Sync with SkyboxRenderer if link is enabled
+				if (entry.Properties.SunSky.LinkToSkyboxRotation) {
+					SkyboxRenderer::SetSyncWithSunLight(true);
+					SkyboxRenderer::UpdateSunLightDirection(entry.WorldDirection);
+					SkyboxRenderer::SetSunLightIntensityMultiplier(entry.Properties.SunSky.SkyboxIntensityMultiplier);
+				} else {
+					SkyboxRenderer::SetSyncWithSunLight(false);
+				}
+			}
+		}
+		
+		// If no sun light found, disable sync
+		if (!foundSunLight) {
+			SkyboxRenderer::SetSyncWithSunLight(false);
 		}
 		
 		UpdateLightCounts();
@@ -79,6 +121,9 @@ namespace Lunex {
 		m_DirectionalCount = 0;
 		m_PointCount = 0;
 		m_SpotCount = 0;
+		
+		m_HasSunLight = false;
+		SkyboxRenderer::SetSyncWithSunLight(false);
 	}
 
 	void LightSystem::CullLights(const ViewFrustum& frustum) {
@@ -94,6 +139,12 @@ namespace Lunex {
 		data.DirectionalLightCount = 0;
 		data.PointLightCount = 0;
 		data.SpotLightCount = 0;
+		
+		// Sun light data
+		data.HasSunLight = m_HasSunLight;
+		data.SunDirection = m_SunLightDirection;
+		data.SunColor = m_SunLightColor;
+		data.SunIntensity = m_SunLightIntensity;
 		
 		data.Lights.reserve(m_Lights.size());
 		

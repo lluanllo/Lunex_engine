@@ -601,7 +601,9 @@ namespace Lunex {
 			}
 		}
 
-		// Light properties accessors
+		// ========================================
+		// BASIC LIGHT PROPERTIES
+		// ========================================
 		void SetType(LightType type) { LightInstance->SetType(type); }
 		void SetColor(const glm::vec3& color) { LightInstance->SetColor(color); }
 		void SetIntensity(float intensity) { LightInstance->SetIntensity(intensity); }
@@ -619,6 +621,63 @@ namespace Lunex {
 		float GetInnerConeAngle() const { return LightInstance->GetInnerConeAngle(); }
 		float GetOuterConeAngle() const { return LightInstance->GetOuterConeAngle(); }
 		bool GetCastShadows() const { return LightInstance->GetCastShadows(); }
+		
+		// ========================================
+		// SUN/SKY SETTINGS (Directional Light only)
+		// ========================================
+		
+		// Mark this light as the "Sun" that controls the skybox
+		void SetIsSunLight(bool isSun) { LightInstance->SetIsSunLight(isSun); }
+		bool IsSunLight() const { return LightInstance->IsSunLight(); }
+		
+		// Link to skybox rotation
+		void SetLinkToSkyboxRotation(bool link) { LightInstance->SetLinkToSkyboxRotation(link); }
+		bool GetLinkToSkyboxRotation() const { return LightInstance->GetLinkToSkyboxRotation(); }
+		
+		// Skybox intensity multiplier
+		void SetSkyboxIntensityMultiplier(float mult) { LightInstance->SetSkyboxIntensityMultiplier(mult); }
+		float GetSkyboxIntensityMultiplier() const { return LightInstance->GetSkyboxIntensityMultiplier(); }
+		
+		// Atmosphere settings
+		void SetAffectAtmosphere(bool affect) { LightInstance->SetAffectAtmosphere(affect); }
+		bool GetAffectAtmosphere() const { return LightInstance->GetAffectAtmosphere(); }
+		
+		void SetAtmosphericDensity(float density) { LightInstance->SetAtmosphericDensity(density); }
+		float GetAtmosphericDensity() const { return LightInstance->GetAtmosphericDensity(); }
+		
+		// Sun disk appearance (for procedural sky)
+		void SetRenderSunDisk(bool render) { LightInstance->SetRenderSunDisk(render); }
+		bool GetRenderSunDisk() const { return LightInstance->GetRenderSunDisk(); }
+		
+		void SetSunDiskSize(float size) { LightInstance->SetSunDiskSize(size); }
+		float GetSunDiskSize() const { return LightInstance->GetSunDiskSize(); }
+		
+		void SetSunDiskIntensity(float intensity) { LightInstance->SetSunDiskIntensity(intensity); }
+		float GetSunDiskIntensity() const { return LightInstance->GetSunDiskIntensity(); }
+		
+		// Ambient contribution
+		void SetContributeToAmbient(bool contribute) { LightInstance->SetContributeToAmbient(contribute); }
+		bool GetContributeToAmbient() const { return LightInstance->GetContributeToAmbient(); }
+		
+		void SetAmbientContribution(float contribution) { LightInstance->SetAmbientContribution(contribution); }
+		float GetAmbientContribution() const { return LightInstance->GetAmbientContribution(); }
+		
+		void SetGroundColor(const glm::vec3& color) { LightInstance->SetGroundColor(color); }
+		const glm::vec3& GetGroundColor() const { return LightInstance->GetGroundColor(); }
+		
+		// Time of day
+		void SetUseTimeOfDay(bool use) { LightInstance->SetUseTimeOfDay(use); }
+		bool GetUseTimeOfDay() const { return LightInstance->GetUseTimeOfDay(); }
+		
+		void SetTimeOfDay(float time) { LightInstance->SetTimeOfDay(time); }
+		float GetTimeOfDay() const { return LightInstance->GetTimeOfDay(); }
+		
+		void SetTimeOfDaySpeed(float speed) { LightInstance->SetTimeOfDaySpeed(speed); }
+		float GetTimeOfDaySpeed() const { return LightInstance->GetTimeOfDaySpeed(); }
+		
+		// Get full Sun/Sky settings
+		const SunSkySettings& GetSunSkySettings() const { return LightInstance->GetSunSkySettings(); }
+		SunSkySettings& GetSunSkySettings() { return LightInstance->GetSunSkySettings(); }
 	};
 
 	struct CameraComponent {
