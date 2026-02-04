@@ -763,5 +763,103 @@ namespace Lunex::UI {
 		// Advance cursor
 		ImGui::Dummy(ToImVec2(size));
 	}
+	
+	// ============================================================================
+	// NEW COMPONENTS
+	// ============================================================================
+	
+	void BulletText(const std::string& text) {
+		ImGui::BulletText("%s", text.c_str());
+	}
+	
+	bool ComboBox(const std::string& id, int& selectedIndex, const char* const* items, int itemCount, const char* tooltip) {
+		if (itemCount <= 0) return false;
+		
+		ScopedID scopedID(id);
+		ImGui::SetNextItemWidth(-1);
+		
+		const char* currentItem = items[selectedIndex];
+		bool changed = false;
+		
+		if (ImGui::BeginCombo("##combo", currentItem)) {
+			for (int i = 0; i < itemCount; i++) {
+				bool isSelected = (selectedIndex == i);
+				if (ImGui::Selectable(items[i], isSelected)) {
+					selectedIndex = i;
+					changed = true;
+				}
+				if (isSelected) {
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+		
+		if (tooltip && ImGui::IsItemHovered()) {
+			ImGui::SetTooltip("%s", tooltip);
+		}
+		
+		return changed;
+	}
+	
+	bool Vec2Control(const std::string& label, glm::vec2& values, float resetValue, float columnWidth) {
+		ScopedID scopedID(label);
+		
+		ImGui::Columns(2, nullptr, false);
+		ImGui::SetColumnWidth(0, columnWidth);
+		
+		Label(label);
+		
+		ImGui::NextColumn();
+		
+		ScopedColor colors({
+			{ImGuiCol_FrameBg, Colors::BgMedium()},
+			{ImGuiCol_FrameBgHovered, Colors::BgHover()},
+			{ImGuiCol_FrameBgActive, Colors::Primary()}
+		});
+		
+		ImGui::SetNextItemWidth(-1);
+		bool changed = ImGui::DragFloat2("##vec2", glm::value_ptr(values), 0.01f);
+		
+		ImGui::Columns(1);
+		
+		return changed;
+	}
+	
+	bool PropertyVec2(const std::string& label, glm::vec2& value, float speed, const char* tooltip) {
+		BeginPropertyRow(label, tooltip);
+		ScopedColor colors({
+			{ImGuiCol_FrameBgActive, Colors::Primary()}
+		});
+		ImGui::SetNextItemWidth(-1);
+		bool changed = ImGui::DragFloat2(("##" + label).c_str(), glm::value_ptr(value), speed);
+		EndPropertyRow();
+		return changed;
+	}
+	
+	bool PropertyVec3(const std::string& label, glm::vec3& value, float speed, const char* tooltip) {
+		BeginPropertyRow(label, tooltip);
+		ScopedColor colors({
+			{ImGuiCol_FrameBgActive, Colors::Primary()}
+		});
+		ImGui::SetNextItemWidth(-1);
+		bool changed = ImGui::DragFloat3(("##" + label).c_str(), glm::value_ptr(value), speed);
+		EndPropertyRow();
+		return changed;
+	}
+	
+	bool ColorPreviewButton(const std::string& id, const Color& color, const Size& size) {
+		ScopedID scopedID(id);
+		ScopedColor btnColor(ImGuiCol_Button, color);
+		return ImGui::Button("##colorpreview", ToImVec2(size));
+	}
+	
+	void BeginDisabled(bool disabled) {
+		ImGui::BeginDisabled(disabled);
+	}
+	
+	void EndDisabled() {
+		ImGui::EndDisabled();
+	}
 
 } // namespace Lunex::UI

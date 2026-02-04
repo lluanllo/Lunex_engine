@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../UI/LunexUI.h"
 #include "Core/Core.h"
 #include "Scene/Scene.h"
 #include "Scene/Entity.h"

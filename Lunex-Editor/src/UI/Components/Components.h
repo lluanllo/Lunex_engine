@@ -56,6 +56,7 @@
  * | DirectoryTree   | Hierarchical folder tree              |
  * | FileGrid        | Grid of file/folder cards             |
  * | NavigationBar   | Navigation with back/forward/search   |
+ * | ComponentDrawer | ECS component section drawer          |
  */
 
 #pragma once
@@ -83,3 +84,6 @@
 // Feedback
 #include "Toast.h"
 #include "Dialog.h"
+
+// ECS
+#include "ComponentDrawer.h"

@@ -35,6 +35,8 @@ namespace Lunex::UI {
 	
 	void Badge(const std::string& text, const Color& bgColor, const Color& textColor = Colors::TextPrimary());
 	
+	void BulletText(const std::string& text);
+	
 	// ============================================================================
 	// BUTTON COMPONENTS
 	// ============================================================================
@@ -154,7 +156,7 @@ namespace Lunex::UI {
 	/**
 	 * @brief Color picker
 	 */
- bool ColorPicker(const std::string& id, Color& color, bool showAlpha = true);
+	bool ColorPicker(const std::string& id, Color& color, bool showAlpha = true);
 	bool ColorPicker3(const std::string& id, Color3& color);
 	
 	/**
@@ -169,6 +171,15 @@ namespace Lunex::UI {
 				  const char* const* options,
 				  int optionCount);
 	
+	/**
+	 * @brief Combo box (same as dropdown but can return the current item string)
+	 */
+	bool ComboBox(const std::string& id,
+				  int& selectedIndex,
+				  const char* const* items,
+				  int itemCount,
+				  const char* tooltip = nullptr);
+	
 	// ============================================================================
 	// SPECIALIZED CONTROLS
 	// ============================================================================
@@ -179,6 +190,14 @@ namespace Lunex::UI {
 	 */
 	bool Vec3Control(const std::string& label,
 					 glm::vec3& values,
+					 float resetValue = 0.0f,
+					 float columnWidth = SpacingValues::PropertyLabelWidth);
+	
+	/**
+	 * @brief Vec2 control
+	 */
+	bool Vec2Control(const std::string& label,
+					 glm::vec2& values,
 					 float resetValue = 0.0f,
 					 float columnWidth = SpacingValues::PropertyLabelWidth);
 	
@@ -216,6 +235,12 @@ namespace Lunex::UI {
 	bool PropertyDropdown(const std::string& label, int& selectedIndex,
 						  const char* const* options, int optionCount,
 						  const char* tooltip = nullptr);
+	
+	bool PropertyVec2(const std::string& label, glm::vec2& value,
+					  float speed = 0.01f, const char* tooltip = nullptr);
+	
+	bool PropertyVec3(const std::string& label, glm::vec3& value,
+					  float speed = 0.01f, const char* tooltip = nullptr);
 
 	// ============================================================================
 	// IMAGE & TEXTURE COMPONENTS
@@ -265,5 +290,17 @@ namespace Lunex::UI {
 				   const Size& size,
 				   bool selected = false,
 				   bool hovered = false);
+	
+	/**
+	 * @brief Color preview button
+	 */
+	bool ColorPreviewButton(const std::string& id, const Color& color, const Size& size);
+
+	// ============================================================================
+	// DISABLED STATE
+	// ============================================================================
+	
+	void BeginDisabled(bool disabled = true);
+	void EndDisabled();
 
 } // namespace Lunex::UI
