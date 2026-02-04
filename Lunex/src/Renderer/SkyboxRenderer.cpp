@@ -6,6 +6,7 @@
 #include "Renderer/Buffer.h"
 #include "Renderer/UniformBuffer.h"
 #include "RHI/RHI.h"
+#include "Scene/Lighting/Light.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -33,6 +34,12 @@ namespace Lunex {
 		bool Enabled = true;
 		Ref<EnvironmentMap> GlobalEnvironment;
 		glm::vec3 BackgroundColor = glm::vec3(0.2f, 0.2f, 0.2f);  // Default gray when no HDRI
+		
+		// Sun light synchronization
+		bool SyncWithSunLight = false;
+		glm::vec3 SunLightDirection = { 0.0f, -1.0f, 0.0f };  // Default: sun directly above
+		float SunLightIntensityMultiplier = 1.0f;
+		float ManualRotation = 0.0f;  // User-set rotation (when not synced to sun)
 	};
 	
 	static SkyboxRendererData s_Data;
@@ -151,11 +158,21 @@ namespace Lunex {
 		// Don't write to depth buffer (skybox should always be at maximum depth)
 		cmdList->SetDepthMask(false);
 		
+		// Calculate effective rotation (from sun light or manual)
+		float effectiveRotation = environment.GetRotation();
+		float effectiveIntensity = environment.GetIntensity();
+		
+		if (s_Data.SyncWithSunLight) {
+			// Override rotation from sun light direction
+			effectiveRotation = glm::radians(Light::CalculateSkyboxRotationFromDirection(s_Data.SunLightDirection));
+			effectiveIntensity *= s_Data.SunLightIntensityMultiplier;
+		}
+		
 		// Update uniform buffer
 		s_Data.UniformData.ViewRotation = view;
 		s_Data.UniformData.Projection = projection;
-		s_Data.UniformData.Intensity = environment.GetIntensity();
-		s_Data.UniformData.Rotation = environment.GetRotation();
+		s_Data.UniformData.Intensity = effectiveIntensity;
+		s_Data.UniformData.Rotation = effectiveRotation;
 		s_Data.UniformData.Blur = environment.GetBlur();
 		s_Data.UniformData.MaxMipLevel = static_cast<float>(environment.GetEnvironmentMap()->GetMipLevelCount() - 1);
 		s_Data.UniformData.Tint = environment.GetTint();
@@ -212,13 +229,18 @@ namespace Lunex {
 	}
 	
 	void SkyboxRenderer::SetRotation(float rotationDegrees) {
-		if (s_Data.GlobalEnvironment) {
+		s_Data.ManualRotation = rotationDegrees;
+		if (s_Data.GlobalEnvironment && !s_Data.SyncWithSunLight) {
 			s_Data.GlobalEnvironment->SetRotation(glm::radians(rotationDegrees));
 		}
 	}
 	
 	float SkyboxRenderer::GetRotation() {
-		return s_Data.GlobalEnvironment ? glm::degrees(s_Data.GlobalEnvironment->GetRotation()) : 0.0f;
+		if (s_Data.SyncWithSunLight) {
+			// Return calculated rotation from sun direction
+			return Light::CalculateSkyboxRotationFromDirection(s_Data.SunLightDirection);
+		}
+		return s_Data.ManualRotation;
 	}
 	
 	void SkyboxRenderer::SetTint(const glm::vec3& tint) {
@@ -262,6 +284,51 @@ namespace Lunex {
 			return s_Data.GlobalEnvironment->GetPath();
 		}
 		return "";
+	}
+	
+	// ========================================
+	// SUN LIGHT SYNCHRONIZATION
+	// ========================================
+	
+	void SkyboxRenderer::SetSyncWithSunLight(bool sync) {
+		s_Data.SyncWithSunLight = sync;
+		
+		// When disabling sync, restore manual rotation
+		if (!sync && s_Data.GlobalEnvironment) {
+			s_Data.GlobalEnvironment->SetRotation(glm::radians(s_Data.ManualRotation));
+		}
+	}
+	
+	bool SkyboxRenderer::IsSyncWithSunLight() {
+		return s_Data.SyncWithSunLight;
+	}
+	
+	void SkyboxRenderer::UpdateSunLightDirection(const glm::vec3& direction) {
+		s_Data.SunLightDirection = glm::normalize(direction);
+	}
+	
+	glm::vec3 SkyboxRenderer::GetSunLightDirection() {
+		return s_Data.SunLightDirection;
+	}
+	
+	void SkyboxRenderer::SetSunLightIntensityMultiplier(float multiplier) {
+		s_Data.SunLightIntensityMultiplier = glm::max(0.0f, multiplier);
+	}
+	
+	float SkyboxRenderer::GetSunLightIntensityMultiplier() {
+		return s_Data.SunLightIntensityMultiplier;
+	}
+	
+	float SkyboxRenderer::GetCalculatedSkyboxRotation() {
+		return Light::CalculateSkyboxRotationFromDirection(s_Data.SunLightDirection);
+	}
+	
+	float SkyboxRenderer::GetSunElevation() {
+		return Light::CalculateSunElevation(s_Data.SunLightDirection);
+	}
+	
+	float SkyboxRenderer::GetSunAzimuth() {
+		return Light::CalculateSunAzimuth(s_Data.SunLightDirection);
 	}
 	
 	void SkyboxRenderer::RenderGlobalSkybox(const EditorCamera& camera) {

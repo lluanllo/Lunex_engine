@@ -1,6 +1,7 @@
 #include "SettingsPanel.h"
 #include "imgui.h"
 #include "Renderer/SkyboxRenderer.h"
+#include "Scene/Lighting/LightSystem.h"
 #include "Log/Log.h"
 #include "ContentBrowserPanel.h"  // For ContentBrowserPayload
 
@@ -71,6 +72,44 @@ namespace Lunex {
 			
 			ImGui::Separator();
 			
+			// ========================================
+			// SUN LIGHT SYNCHRONIZATION
+			// ========================================
+			ImGui::Text("Sun Light Synchronization");
+			ImGui::Spacing();
+			
+			bool hasSunLight = LightSystem::Get().HasSunLight();
+			bool syncWithSun = SkyboxRenderer::IsSyncWithSunLight();
+			
+			if (hasSunLight) {
+				ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Sun Light: Active");
+				
+				// Show sun position info
+				float elevation = SkyboxRenderer::GetSunElevation();
+				float azimuth = SkyboxRenderer::GetSunAzimuth();
+				float skyboxRotation = SkyboxRenderer::GetCalculatedSkyboxRotation();
+				
+				ImGui::Text("  Elevation: %.1f deg", elevation);
+				ImGui::Text("  Azimuth: %.1f deg", azimuth);
+				
+				if (syncWithSun) {
+					ImGui::Text("  Skybox Rotation: %.1f deg (synced)", skyboxRotation);
+				}
+				
+				ImGui::Spacing();
+				
+				// Sync toggle is controlled by the LightComponent now
+				ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), 
+					"Sync is controlled by the Directional Light's\n'Link to Skybox' setting.");
+				
+			} else {
+				ImGui::TextColored(ImVec4(0.8f, 0.6f, 0.2f, 1.0f), "No Sun Light in scene");
+				ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), 
+					"Add a Directional Light and enable\n'Is Sun Light' to sync skybox rotation.");
+			}
+			
+			ImGui::Separator();
+			
 			// Environment settings (only if HDRI is loaded)
 			if (hasHDRI) {
 				// Intensity
@@ -79,10 +118,22 @@ namespace Lunex {
 					SkyboxRenderer::SetIntensity(intensity);
 				}
 				
-				// Rotation
-				float rotation = SkyboxRenderer::GetRotation();
-				if (ImGui::DragFloat("Rotation", &rotation, 1.0f, -180.0f, 180.0f, "%.1f deg")) {
-					SkyboxRenderer::SetRotation(rotation);
+				// Rotation (manual or synced)
+				if (syncWithSun) {
+					// Show calculated rotation (read-only)
+					float rotation = SkyboxRenderer::GetCalculatedSkyboxRotation();
+					ImGui::BeginDisabled();
+					ImGui::DragFloat("Rotation (Synced)", &rotation, 1.0f, -180.0f, 180.0f, "%.1f deg");
+					ImGui::EndDisabled();
+					if (ImGui::IsItemHovered()) {
+						ImGui::SetTooltip("Rotation is controlled by the Sun Light.\nDisable 'Link to Skybox' in the light component to use manual rotation.");
+					}
+				} else {
+					// Manual rotation
+					float rotation = SkyboxRenderer::GetRotation();
+					if (ImGui::DragFloat("Rotation", &rotation, 1.0f, -180.0f, 180.0f, "%.1f deg")) {
+						SkyboxRenderer::SetRotation(rotation);
+					}
 				}
 				
 				// Blur

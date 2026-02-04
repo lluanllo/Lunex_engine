@@ -6,6 +6,7 @@
  * 
  * AAA Architecture: LightSystem lives in Scene/Lighting/
  * Aggregates lights, performs culling, generates GPU buffers.
+ * Synchronizes "Sun" directional lights with the SkyboxRenderer.
  */
 
 #include "LightTypes.h"
@@ -44,6 +45,7 @@ namespace Lunex {
 	 * - Frustum culling for lights
 	 * - GPU buffer generation
 	 * - Shadow map assignment
+	 * - Sun Light detection and SkyboxRenderer synchronization
 	 */
 	class LightSystem {
 	public:
@@ -58,6 +60,7 @@ namespace Lunex {
 		
 		/**
 		 * @brief Sync all lights from scene entities
+		 * Also detects "Sun" lights and syncs with SkyboxRenderer
 		 */
 		void SyncFromScene(Scene* scene);
 		
@@ -99,6 +102,28 @@ namespace Lunex {
 		const glm::vec3& GetAmbientColor() const { return m_AmbientColor; }
 		float GetAmbientIntensity() const { return m_AmbientIntensity; }
 		
+		// ========== SUN LIGHT ==========
+		
+		/**
+		 * @brief Check if a Sun light is present in the scene
+		 */
+		bool HasSunLight() const { return m_HasSunLight; }
+		
+		/**
+		 * @brief Get the sun light direction
+		 */
+		const glm::vec3& GetSunLightDirection() const { return m_SunLightDirection; }
+		
+		/**
+		 * @brief Get the sun light color
+		 */
+		const glm::vec3& GetSunLightColor() const { return m_SunLightColor; }
+		
+		/**
+		 * @brief Get the sun light intensity
+		 */
+		float GetSunLightIntensity() const { return m_SunLightIntensity; }
+		
 		// ========== STATISTICS ==========
 		
 		uint32_t GetTotalLightCount() const { return static_cast<uint32_t>(m_Lights.size()); }
@@ -132,6 +157,13 @@ namespace Lunex {
 		uint32_t m_DirectionalCount = 0;
 		uint32_t m_PointCount = 0;
 		uint32_t m_SpotCount = 0;
+		
+		// Sun light tracking
+		bool m_HasSunLight = false;
+		glm::vec3 m_SunLightDirection = { 0.0f, -1.0f, 0.0f };
+		glm::vec3 m_SunLightColor = { 1.0f, 1.0f, 1.0f };
+		float m_SunLightIntensity = 1.0f;
+		float m_SunLightIntensityMultiplier = 1.0f;
 		
 		bool m_Initialized = false;
 	};
