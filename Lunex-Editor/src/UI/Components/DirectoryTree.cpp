@@ -5,6 +5,7 @@
 
 #include "stpch.h"
 #include "DirectoryTree.h"
+#include "../UILayout.h"
 
 namespace Lunex::UI {
 

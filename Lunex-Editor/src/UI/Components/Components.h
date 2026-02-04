@@ -52,6 +52,10 @@
  * | Toast           | Toast notifications                   |
  * | Breadcrumb      | Path navigation                       |
  * | Dialog          | Input and confirmation dialogs        |
+ * | Splitter        | Resizable panel splitter              |
+ * | DirectoryTree   | Hierarchical folder tree              |
+ * | FileGrid        | Grid of file/folder cards             |
+ * | NavigationBar   | Navigation with back/forward/search   |
  */
 
 #pragma once
@@ -65,6 +69,12 @@
 // Navigation
 #include "SearchBar.h"
 #include "Breadcrumb.h"
+#include "NavigationBar.h"
+
+// Layout
+#include "Splitter.h"
+#include "DirectoryTree.h"
+#include "FileGrid.h"
 
 // Bars
 #include "Toolbar.h"
