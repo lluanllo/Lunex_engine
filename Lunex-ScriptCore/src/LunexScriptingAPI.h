@@ -19,8 +19,13 @@
 
 namespace Lunex {
 
+    // ========================================================================
+    // AAA SCRIPTING API VERSION
+    // ========================================================================
+    
     // Versión de la API de scripting
-    constexpr uint32_t SCRIPTING_API_VERSION = 2;
+    // Increment when making breaking changes to EngineContext
+    constexpr uint32_t SCRIPTING_API_VERSION = 3;
 
     // Forward declarations
     class Entity;
