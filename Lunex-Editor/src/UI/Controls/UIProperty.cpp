@@ -191,7 +191,7 @@ namespace Lunex::UI {
 	bool PropertyColor4(const std::string& label, Color& color, const char* tooltip) {
 		BeginPropertyRow(label, tooltip);
 		ImGui::SetNextItemWidth(-1);
-		bool changed = ImGui::ColorEdit4(("##" + label).c_str(), glm::value_ptr(color), ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_AlphaBar);
+		bool changed = ImGui::ColorEdit4(("##" + label).c_str(), color.data(), ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_AlphaBar);
 		EndPropertyRow();
 		return changed;
 	}

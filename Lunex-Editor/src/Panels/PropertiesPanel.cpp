@@ -406,7 +406,10 @@ namespace Lunex {
 		ComponentDrawer::Draw<SpriteRendererComponent>("Sprite Renderer", entity, [](auto& component) {
 			ComponentDrawer::DrawSectionHeader("", "Appearance");
 			ComponentDrawer::BeginIndent();
-			PropertyColor4("Color", component.Color);
+			Color color(component.Color);
+			if (PropertyColor4("Color", color)) {
+				component.Color = glm::vec4(color);
+			}
 			ComponentDrawer::EndIndent();
 
 			ComponentDrawer::DrawSectionHeader("", "Texture");
@@ -469,7 +472,10 @@ namespace Lunex {
 			ComponentDrawer::DrawSectionHeader("", "Appearance");
 			ComponentDrawer::BeginIndent();
 
-			PropertyColor4("Color", component.Color);
+			Color color(component.Color);
+			if (PropertyColor4("Color", color)) {
+				component.Color = glm::vec4(color);
+			}
 			PropertySlider("Thickness", component.Thickness, 0.0f, 1.0f, "%.3f", "0 = Filled, 1 = Outline");
 			PropertySlider("Fade", component.Fade, 0.0f, 1.0f, "%.3f", "Edge softness");
 
@@ -745,9 +751,10 @@ namespace Lunex {
 			TextWrapped("Tip: Changes here create local overrides. Use 'Reset Overrides' to revert.", TextVariant::Muted);
 			AddSpacing(SpacingValues::XS);
 
-			glm::vec4 color = component.GetAlbedo();
+			glm::vec4 colorGlm = component.GetAlbedo();
+			Color color(colorGlm);
 			if (PropertyColor4("Base Color", color)) {
-				component.SetAlbedo(color, true);
+				component.SetAlbedo(glm::vec4(color), true);
 			}
 
 			float metallic = component.GetMetallic();

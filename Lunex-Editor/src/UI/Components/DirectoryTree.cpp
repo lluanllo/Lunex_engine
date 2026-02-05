@@ -14,10 +14,8 @@ namespace Lunex::UI {
 							   const std::filesystem::path& currentDirectory,
 							   Ref<Texture2D> folderIcon,
 							   const DirectoryTreeCallbacks& callbacks) {
-		ScopedStyle vars(
-			ImGuiStyleVar_IndentSpacing, m_Style.indentSpacing,
-			ImGuiStyleVar_ItemSpacing, ImVec2(0, m_Style.itemSpacing)
-		);
+		ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, m_Style.indentSpacing);
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, m_Style.itemSpacing));
 		
 		AddSpacing(SpacingValues::SM);
 		
@@ -77,6 +75,8 @@ namespace Lunex::UI {
 			}
 			ImGui::TreePop();
 		}
+		
+		ImGui::PopStyleVar(2);
 	}
 	
 	void DirectoryTree::RenderDirectoryNode(const std::filesystem::path& path,

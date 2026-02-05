@@ -161,9 +161,9 @@ namespace Lunex::UI {
 		ImGuiColorEditFlags flags = ImGuiColorEditFlags_NoLabel;
 		if (showAlpha) {
 			flags |= ImGuiColorEditFlags_AlphaBar;
-			return ImGui::ColorEdit4("##color", glm::value_ptr(color), flags);
+			return ImGui::ColorEdit4("##color", color.data(), flags);
 		}
-		return ImGui::ColorEdit3("##color", glm::value_ptr(color), flags);
+		return ImGui::ColorEdit3("##color", color.data(), flags);
 	}
 	
 	bool ColorPicker3(const std::string& id, Color3& color) {

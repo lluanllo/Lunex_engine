@@ -736,7 +736,14 @@ namespace Lunex {
 		auto* cmdList = RHI::GetImmediateCommandList();
 		if (cmdList) {
 			cmdList->SetViewport(0.0f, 0.0f, m_ViewportSize.x, m_ViewportSize.y);
-			cmdList->SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+			
+			// ✅ FIX: Use SkyboxRenderer's background color when no HDRI is loaded
+			if (!SkyboxRenderer::HasEnvironmentLoaded()) {
+				glm::vec3 bgColor = SkyboxRenderer::GetBackgroundColor();
+				cmdList->SetClearColor(glm::vec4(bgColor, 1.0f));
+			} else {
+				cmdList->SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+			}
 			cmdList->Clear();
 		}
 

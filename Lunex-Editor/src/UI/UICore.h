@@ -37,10 +37,82 @@ namespace Lunex::UI {
 	class Component;
 	
 	// ============================================================================
+	// COLOR CLASS
+	// ============================================================================
+	
+	/**
+	 * @brief Color class with conversion methods for ImGui compatibility
+	 * Compatible with both .R/.G/.B/.A and .r/.g/.b/.a access
+	 */
+	struct Color {
+		union {
+			struct { float R, G, B, A; };
+			struct { float r, g, b, a; };  // Lowercase aliases for compatibility
+		};
+		
+		// Constructors
+		constexpr Color() : R(0.0f), G(0.0f), B(0.0f), A(1.0f) {}
+		constexpr Color(float red, float green, float blue, float alpha = 1.0f) 
+			: R(red), G(green), B(blue), A(alpha) {}
+		constexpr Color(const glm::vec4& v) : R(v.r), G(v.g), B(v.b), A(v.a) {}
+		constexpr Color(const glm::vec3& v, float alpha = 1.0f) : R(v.r), G(v.g), B(v.b), A(alpha) {}
+		
+		// Conversion operators
+		operator glm::vec4() const { return glm::vec4(R, G, B, A); }
+		operator glm::vec3() const { return glm::vec3(R, G, B); }
+		
+		// Data pointer for glm::value_ptr compatibility
+		float* data() { return &R; }
+		const float* data() const { return &R; }
+		
+		// ImGui conversions
+		ImVec4 ToImVec4() const { return ImVec4(R, G, B, A); }
+		ImU32 ToImU32() const { return IM_COL32((int)(R * 255), (int)(G * 255), (int)(B * 255), (int)(A * 255)); }
+		
+		// Static constructors
+		static constexpr Color FromHex(uint32_t hex, float alpha = 1.0f) {
+			return Color(
+				((hex >> 16) & 0xFF) / 255.0f,
+				((hex >> 8) & 0xFF) / 255.0f,
+				(hex & 0xFF) / 255.0f,
+				alpha
+			);
+		}
+		
+		static Color FromImVec4(const ImVec4& c) { return Color(c.x, c.y, c.z, c.w); }
+		static Color FromImU32(ImU32 c) {
+			return Color(
+				((c >> IM_COL32_R_SHIFT) & 0xFF) / 255.0f,
+				((c >> IM_COL32_G_SHIFT) & 0xFF) / 255.0f,
+				((c >> IM_COL32_B_SHIFT) & 0xFF) / 255.0f,
+				((c >> IM_COL32_A_SHIFT) & 0xFF) / 255.0f
+			);
+		}
+		
+		// Color math
+		Color WithAlpha(float alpha) const { return Color(R, G, B, alpha); }
+		Color Lighter(float amount = 0.1f) const {
+			return Color(
+				std::min(R + amount, 1.0f),
+				std::min(G + amount, 1.0f),
+				std::min(B + amount, 1.0f),
+				A
+			);
+		}
+		Color Darker(float amount = 0.1f) const {
+			return Color(
+				std::max(R - amount, 0.0f),
+				std::max(G - amount, 0.0f),
+				std::max(B - amount, 0.0f),
+				A
+			);
+		}
+	};
+	
+	// ============================================================================
 	// TYPE ALIASES
 	// ============================================================================
 	
-	using Color = glm::vec4;
 	using Color3 = glm::vec3;
 	using Size = glm::vec2;
 	using Position = glm::vec2;
@@ -187,9 +259,9 @@ namespace Lunex::UI {
 	// UTILITY FUNCTIONS
 	// ============================================================================
 	
-	inline ImVec4 ToImVec4(const Color& c) { return ImVec4(c.r, c.g, c.b, c.a); }
+	inline ImVec4 ToImVec4(const Color& c) { return c.ToImVec4(); }
 	inline ImVec2 ToImVec2(const Size& s) { return ImVec2(s.x, s.y); }
-	inline Color FromImVec4(const ImVec4& c) { return Color(c.x, c.y, c.z, c.w); }
+	inline Color FromImVec4(const ImVec4& c) { return Color::FromImVec4(c); }
 	inline Size FromImVec2(const ImVec2& s) { return Size(s.x, s.y); }
 	
 	// ============================================================================
@@ -202,13 +274,24 @@ namespace Lunex::UI {
 	class ScopedColor {
 	public:
 		ScopedColor(ImGuiCol idx, const Color& color) : m_Count(1) {
-			ImGui::PushStyleColor(idx, ToImVec4(color));
+			ImGui::PushStyleColor(idx, color.ToImVec4());
+		}
+		
+		ScopedColor(ImGuiCol idx, const ImVec4& color) : m_Count(1) {
+			ImGui::PushStyleColor(idx, color);
 		}
 		
 		ScopedColor(std::initializer_list<std::pair<ImGuiCol, Color>> colors) 
 			: m_Count((int)colors.size()) {
 			for (const auto& [idx, color] : colors) {
-				ImGui::PushStyleColor(idx, ToImVec4(color));
+				ImGui::PushStyleColor(idx, color.ToImVec4());
+			}
+		}
+		
+		ScopedColor(std::initializer_list<std::pair<ImGuiCol, ImVec4>> colors)
+			: m_Count((int)colors.size()) {
+			for (const auto& [idx, color] : colors) {
+				ImGui::PushStyleColor(idx, color);
 			}
 		}
 		
@@ -231,27 +314,49 @@ namespace Lunex::UI {
 			ImGui::PushStyleVar(idx, val);
 		}
 		
-		template<typename... Args>
-		ScopedStyle(Args&&... args) : m_Count(0) {
-			PushMultiple(std::forward<Args>(args)...);
+		// Variadic constructor for multiple style vars of same type
+		ScopedStyle(ImGuiStyleVar idx1, float val1, ImGuiStyleVar idx2, float val2) : m_Count(2) {
+			ImGui::PushStyleVar(idx1, val1);
+			ImGui::PushStyleVar(idx2, val2);
+		}
+		
+		ScopedStyle(ImGuiStyleVar idx1, float val1, ImGuiStyleVar idx2, float val2, 
+					ImGuiStyleVar idx3, float val3) : m_Count(3) {
+			ImGui::PushStyleVar(idx1, val1);
+			ImGui::PushStyleVar(idx2, val2);
+			ImGui::PushStyleVar(idx3, val3);
+		}
+		
+		ScopedStyle(ImGuiStyleVar idx1, float val1, ImGuiStyleVar idx2, float val2,
+					ImGuiStyleVar idx3, float val3, ImGuiStyleVar idx4, float val4) : m_Count(4) {
+			ImGui::PushStyleVar(idx1, val1);
+			ImGui::PushStyleVar(idx2, val2);
+			ImGui::PushStyleVar(idx3, val3);
+			ImGui::PushStyleVar(idx4, val4);
+		}
+		
+		ScopedStyle(ImGuiStyleVar idx1, const ImVec2& val1, ImGuiStyleVar idx2, const ImVec2& val2) : m_Count(2) {
+			ImGui::PushStyleVar(idx1, val1);
+			ImGui::PushStyleVar(idx2, val2);
+		}
+		
+		ScopedStyle(std::initializer_list<std::pair<ImGuiStyleVar, float>> vars)
+			: m_Count((int)vars.size()) {
+			for (const auto& [idx, val] : vars) {
+				ImGui::PushStyleVar(idx, val);
+			}
+		}
+		
+		ScopedStyle(std::initializer_list<std::pair<ImGuiStyleVar, ImVec2>> vars)
+			: m_Count((int)vars.size()) {
+			for (const auto& [idx, val] : vars) {
+				ImGui::PushStyleVar(idx, val);
+			}
 		}
 		
 		~ScopedStyle() { ImGui::PopStyleVar(m_Count); }
 		
 	private:
-		template<typename T, typename... Rest>
-		void PushMultiple(ImGuiStyleVar idx, T val, Rest&&... rest) {
-			if constexpr (std::is_same_v<T, ImVec2>) {
-				ImGui::PushStyleVar(idx, val);
-			} else {
-				ImGui::PushStyleVar(idx, val);
-			}
-			m_Count++;
-			if constexpr (sizeof...(rest) > 0) {
-				PushMultiple(std::forward<Rest>(rest)...);
-			}
-		}
-		
 		int m_Count;
 	};
 	
