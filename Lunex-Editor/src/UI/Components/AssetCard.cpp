@@ -8,9 +8,23 @@
 
 namespace Lunex::UI {
 
+	Color AssetCard::GetTypeColor(const std::string& typeLabel) {
+		if (typeLabel == "MESH" || typeLabel == "LUMESH") return AssetTypeColors::Mesh();
+		if (typeLabel == "PREFAB") return AssetTypeColors::Prefab();
+		if (typeLabel == "MATERIAL") return AssetTypeColors::Material();
+		if (typeLabel == "HDRI" || typeLabel == "HDR") return AssetTypeColors::HDR();
+		if (typeLabel == "TEXTURE") return AssetTypeColors::Texture();
+		if (typeLabel == "SCENE") return AssetTypeColors::Scene();
+		if (typeLabel == "SCRIPT") return AssetTypeColors::Script();
+		if (typeLabel == "AUDIO") return AssetTypeColors::Audio();
+		if (typeLabel == "SHADER") return AssetTypeColors::Shader();
+		if (typeLabel == "FOLDER") return AssetTypeColors::Folder();
+		return AssetTypeColors::Default();
+	}
+
 	AssetCardResult AssetCard::Render(const std::string& id, const std::string& name,
 									  const std::string& typeLabel, Ref<Texture2D> thumbnail,
-									  bool isSelected, bool isDirectory) {
+									  bool isSelected, bool isDirectory, bool isWideAspect) {
 		AssetCardResult result;
 		
 		ScopedID scopedID(id);
@@ -18,26 +32,33 @@ namespace Lunex::UI {
 		ImVec2 cursorPos = ImGui::GetCursorScreenPos();
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
 		
+		// Calculate card dimensions
+		float cardWidth = isWideAspect ? (m_Style.width * 2.0f + 12.0f) : m_Style.width;  // Double width + padding for HDR
 		float cardHeight = m_Style.thumbnailHeight + 50.0f;
 		
 		ImVec2 cardMin = cursorPos;
-		ImVec2 cardMax = ImVec2(cursorPos.x + m_Style.width, cursorPos.y + cardHeight);
+		ImVec2 cardMax = ImVec2(cursorPos.x + cardWidth, cursorPos.y + cardHeight);
 		
 		// Render based on type
 		if (isDirectory) {
 			RenderDirectory(drawList, cursorPos, thumbnail);
 		} else {
-			RenderFile(drawList, cardMin, cardMax, thumbnail);
+			RenderFile(drawList, cardMin, cardMax, thumbnail, isWideAspect);
 		}
 		
 		// Render text
-		RenderText(drawList, cursorPos, name, typeLabel, isDirectory);
+		RenderText(drawList, cursorPos, cardWidth, name, typeLabel, isDirectory);
 		
 		// Invisible button for interaction
 		ImGui::SetCursorScreenPos(cardMin);
-		ImGui::InvisibleButton(id.c_str(), ImVec2(m_Style.width, cardHeight));
+		ImGui::InvisibleButton(id.c_str(), ImVec2(cardWidth, cardHeight));
 		
 		bool isHovered = ImGui::IsItemHovered();
+		
+		// Render type border (before selection effects so selection overlays it)
+		if (!isDirectory && m_Style.showTypeBorder) {
+			RenderTypeBorder(drawList, cardMin, cardMax, typeLabel, isDirectory);
+		}
 		
 		// Render selection/hover effects
 		RenderSelectionEffects(drawList, cardMin, cardMax, isSelected, isHovered);
@@ -70,7 +91,7 @@ namespace Lunex::UI {
 		}
 	}
 	
-	void AssetCard::RenderFile(ImDrawList* drawList, ImVec2 cardMin, ImVec2 cardMax, Ref<Texture2D> thumbnail) {
+	void AssetCard::RenderFile(ImDrawList* drawList, ImVec2 cardMin, ImVec2 cardMax, Ref<Texture2D> thumbnail, bool isWideAspect) {
 		// Shadow
 		if (m_Style.showShadow) {
 			ImVec2 shadowOffset(3.0f, 3.0f);
@@ -84,7 +105,8 @@ namespace Lunex::UI {
 		
 		// Thumbnail area
 		float padding = 8.0f;
-		float iconWidth = m_Style.width - (padding * 2);
+		float cardWidth = cardMax.x - cardMin.x;
+		float iconWidth = cardWidth - (padding * 2);
 		float iconHeight = m_Style.thumbnailHeight - (padding * 2);
 		
 		ImVec2 iconMin = ImVec2(cardMin.x + padding, cardMin.y + padding);
@@ -95,30 +117,57 @@ namespace Lunex::UI {
 		
 		// Thumbnail
 		if (thumbnail) {
+			// Calculate UV coordinates to properly fit the thumbnail
+			ImVec2 uv0(0, 1);
+			ImVec2 uv1(1, 0);
+			
+			// For HDR/wide images, we want to show the full image in the wide card
+			// For regular images, we maintain aspect ratio and center
+			if (!isWideAspect && thumbnail->GetWidth() > 0 && thumbnail->GetHeight() > 0) {
+				float texAspect = (float)thumbnail->GetWidth() / (float)thumbnail->GetHeight();
+				float cardAspect = iconWidth / iconHeight;
+				
+				if (texAspect > cardAspect) {
+					// Texture is wider than card - crop sides
+					float uvWidth = cardAspect / texAspect;
+					float uvOffset = (1.0f - uvWidth) * 0.5f;
+					uv0 = ImVec2(uvOffset, 1);
+					uv1 = ImVec2(uvOffset + uvWidth, 0);
+				} else {
+					// Texture is taller than card - crop top/bottom
+					float uvHeight = texAspect / cardAspect;
+					float uvOffset = (1.0f - uvHeight) * 0.5f;
+					uv0 = ImVec2(0, 1 - uvOffset);
+					uv1 = ImVec2(1, uvOffset);
+				}
+			}
+			
 			drawList->AddImageRounded(
 				(ImTextureID)(intptr_t)thumbnail->GetRendererID(),
 				iconMin, iconMax,
-				ImVec2(0, 1), ImVec2(1, 0),
+				uv0, uv1,
 				IM_COL32(255, 255, 255, 255),
 				4.0f
 			);
 		}
 	}
 	
-	void AssetCard::RenderText(ImDrawList* drawList, ImVec2 cursorPos, const std::string& name,
+	void AssetCard::RenderText(ImDrawList* drawList, ImVec2 cursorPos, float cardWidth, const std::string& name,
 							   const std::string& typeLabel, bool isDirectory) {
 		float textAreaY = cursorPos.y + m_Style.thumbnailHeight + 4.0f;
 		
-		// Truncate name if too long
+		// Truncate name if too long (adjust for card width)
 		std::string displayName = name;
-		const size_t maxChars = 15;
+		size_t maxChars = (size_t)(cardWidth / 7.0f);  // Approximate chars that fit
+		maxChars = maxChars < 8 ? 8 : maxChars;
+		
 		if (displayName.length() > maxChars) {
 			displayName = displayName.substr(0, maxChars - 2) + "..";
 		}
 		
 		// Draw name (centered)
 		float nameWidth = ImGui::CalcTextSize(displayName.c_str()).x;
-		float nameOffsetX = (m_Style.width - nameWidth) * 0.5f;
+		float nameOffsetX = (cardWidth - nameWidth) * 0.5f;
 		drawList->AddText(
 			ImVec2(cursorPos.x + nameOffsetX, textAreaY),
 			IM_COL32(245, 245, 245, 255),
@@ -128,20 +177,47 @@ namespace Lunex::UI {
 		// Type label (only for files)
 		if (!isDirectory && m_Style.showTypeLabel) {
 			float typeWidth = ImGui::CalcTextSize(typeLabel.c_str()).x;
-			float typeOffsetX = (m_Style.width - typeWidth) * 0.5f;
+			float typeOffsetX = (cardWidth - typeWidth) * 0.5f;
+			
+			// Use type color for the label text
+			Color typeColor = GetTypeColor(typeLabel);
+			ImU32 typeColorU32 = IM_COL32(
+				(int)(typeColor.r * 180), 
+				(int)(typeColor.g * 180), 
+				(int)(typeColor.b * 180), 
+				200
+			);
+			
 			drawList->AddText(
 				ImVec2(cursorPos.x + typeOffsetX, textAreaY + 16.0f),
-				IM_COL32(128, 128, 132, 255),
+				typeColorU32,
 				typeLabel.c_str()
 			);
 		}
+	}
+	
+	void AssetCard::RenderTypeBorder(ImDrawList* drawList, ImVec2 cardMin, ImVec2 cardMax,
+									 const std::string& typeLabel, bool isDirectory) {
+		if (isDirectory) return;
+		
+		Color borderColor = GetTypeColor(typeLabel);
+		if (borderColor.a < 0.01f) return;  // Skip if transparent
+		
+		ImU32 borderColorU32 = ImGui::ColorConvertFloat4ToU32(ToImVec4(borderColor));
+		
+		// Draw subtle border at the bottom of the card
+		float borderThickness = m_Style.typeBorderWidth;
+		ImVec2 borderMin = ImVec2(cardMin.x, cardMax.y - borderThickness - 1);
+		ImVec2 borderMax = ImVec2(cardMax.x, cardMax.y - 1);
+		
+		drawList->AddRectFilled(borderMin, borderMax, borderColorU32, m_Style.rounding, ImDrawFlags_RoundCornersBottom);
 	}
 	
 	void AssetCard::RenderSelectionEffects(ImDrawList* drawList, ImVec2 cardMin, ImVec2 cardMax,
 										   bool isSelected, bool isHovered) {
 		// Hover effect
 		if (isHovered && !isSelected) {
-			drawList->AddRect(cardMin, cardMax, IM_COL32(60, 60, 65, 255), m_Style.rounding, 0, 2.0f);
+			drawList->AddRect(cardMin, cardMax, IM_COL32(80, 80, 85, 255), m_Style.rounding, 0, 2.0f);
 		}
 		
 		// Selection effect
@@ -157,11 +233,11 @@ namespace Lunex::UI {
 	
 	AssetCardResult RenderAssetCard(const std::string& id, const std::string& name,
 									const std::string& typeLabel, Ref<Texture2D> thumbnail,
-									bool isSelected, bool isDirectory,
+									bool isSelected, bool isDirectory, bool isWideAspect,
 									const AssetCardStyle& style) {
 		AssetCard card;
 		card.SetStyle(style);
-		return card.Render(id, name, typeLabel, thumbnail, isSelected, isDirectory);
+		return card.Render(id, name, typeLabel, thumbnail, isSelected, isDirectory, isWideAspect);
 	}
 
 } // namespace Lunex::UI

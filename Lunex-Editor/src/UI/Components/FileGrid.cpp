@@ -5,6 +5,7 @@
 
 #include "stpch.h"
 #include "FileGrid.h"
+#include "AssetCard.h"  // For AssetCard::GetTypeColor
 #include <sstream>
 
 namespace Lunex::UI {
@@ -57,101 +58,127 @@ namespace Lunex::UI {
 		int columnCount = (int)(panelWidth / cellSize);
 		if (columnCount < 1) columnCount = 1;
 		
+		// Need at least 2 columns for HDR cards
+		if (columnCount < 2) columnCount = 2;
+		
 		ScopedStyle itemSpacing(ImGuiStyleVar_ItemSpacing, ImVec2(m_Style.padding, m_Style.padding + 8));
 		
-		if (ImGui::BeginTable("FileGridTable", columnCount, ImGuiTableFlags_None)) {
-			ScopedColor colors({
-				{ImGuiCol_Button, Color(0, 0, 0, 0)},
-				{ImGuiCol_ButtonHovered, Color(0.22f, 0.22f, 0.22f, 0.6f)},
-				{ImGuiCol_ButtonActive, Color(0.18f, 0.40f, 0.65f, 0.8f)}
-			});
+		// Manual grid rendering to handle HDR cards spanning 2 columns
+		int currentColumn = 0;
+		int currentRow = 0;
+		ImVec2 startPos = ImGui::GetCursorScreenPos();
+		float rowHeight = 0.0f;
+		float rowStartY = startPos.y;
+		
+		ScopedColor colors({
+			{ImGuiCol_Button, Color(0, 0, 0, 0)},
+			{ImGuiCol_ButtonHovered, Color(0.22f, 0.22f, 0.22f, 0.6f)},
+			{ImGuiCol_ButtonActive, Color(0.18f, 0.40f, 0.65f, 0.8f)}
+		});
+		
+		for (const auto& item : items) {
+			int cardSpan = item.isHDR ? 2 : 1;
 			
-			int itemIndex = 0;
-			for (const auto& item : items) {
-				if (itemIndex % columnCount == 0) {
-					ImGui::TableNextRow();
-				}
-				ImGui::TableSetColumnIndex(itemIndex % columnCount);
-				
-				ScopedID itemID(item.name);
-				ImGui::BeginGroup();
-				
-				ImVec2 cursorPos = ImGui::GetCursorScreenPos();
-				ImDrawList* drawList = ImGui::GetWindowDrawList();
-				
-				float cardWidth = GetCardWidth(item);
-				float cardHeight = GetCardHeight(item);
-				ImVec2 cardMin = cursorPos;
-				ImVec2 cardMax = ImVec2(cursorPos.x + cardWidth, cursorPos.y + cardHeight);
-				
-				// Render card based on type
-				if (item.isDirectory) {
-					RenderFolderCard(item, cursorPos, drawList);
-				} else {
-					RenderFileCard(item, cursorPos, drawList);
-				}
-				
-				// Invisible button for interaction
-				ImGui::SetCursorScreenPos(cardMin);
-				ImGui::InvisibleButton(item.name.c_str(), ImVec2(cardWidth, cardHeight));
-				
-				// Store bounds for selection rectangle
-				m_ItemBounds[item.path.string()] = ImRect(cardMin, cardMax);
-				
-				// Check selection rectangle
-				if (m_IsSelecting && IsInSelectionRectangle(m_ItemBounds[item.path.string()])) {
-					selectedItems.insert(item.path.string());
-				}
-				
-				bool isSelected = selectedItems.find(item.path.string()) != selectedItems.end();
-				bool isHovered = ImGui::IsItemHovered();
-				bool isDropTarget = item.isDirectory && ImGui::IsDragDropActive() && 
-									ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-				
-				// Selection effects
-				RenderSelectionEffects(cardMin, cardMax, isSelected, isHovered, isDropTarget);
-				
-				// Track hovered folder
-				if (item.isDirectory && isHovered) {
-					result.hoveredFolder = item.path;
-				}
-				
-				// Click handling
-				if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-					result.clickedItem = item.path;
-					if (callbacks.onItemClicked) {
-						callbacks.onItemClicked(item.path);
-					}
-					m_IsSelecting = false;
-				}
-				
-				if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-					result.doubleClickedItem = item.path;
-					if (callbacks.onItemDoubleClicked) {
-						callbacks.onItemDoubleClicked(item.path);
-					}
-				}
-				
-				if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-					result.rightClickedItem = item.path;
-					if (callbacks.onItemRightClicked) {
-						callbacks.onItemRightClicked(item.path);
-					}
-				}
-				
-				// Drag & drop
-				HandleDragDropSource(item, selectedItems);
-				
-				if (item.isDirectory) {
-					HandleDragDropTarget(item, callbacks);
-				}
-				
-				ImGui::EndGroup();
-				itemIndex++;
+			// Check if we need to move to next row
+			if (currentColumn + cardSpan > columnCount) {
+				currentColumn = 0;
+				rowStartY += rowHeight + m_Style.padding + 8;
+				rowHeight = 0.0f;
 			}
 			
-			ImGui::EndTable();
+			// Calculate position
+			float x = startPos.x + currentColumn * cellSize;
+			float y = rowStartY;
+			
+			ImGui::SetCursorScreenPos(ImVec2(x, y));
+			
+			ScopedID itemID(item.name);
+			ImGui::BeginGroup();
+			
+			ImVec2 cursorPos = ImGui::GetCursorScreenPos();
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			
+			float cardWidth = GetCardWidth(item);
+			float cardHeight = GetCardHeight(item);
+			ImVec2 cardMin = cursorPos;
+			ImVec2 cardMax = ImVec2(cursorPos.x + cardWidth, cursorPos.y + cardHeight);
+			
+			// Update row height
+			if (cardHeight > rowHeight) {
+				rowHeight = cardHeight;
+			}
+			
+			// Render card based on type
+			if (item.isDirectory) {
+				RenderFolderCard(item, cursorPos, drawList);
+			} else {
+				RenderFileCard(item, cursorPos, drawList);
+			}
+			
+			// Invisible button for interaction
+			ImGui::SetCursorScreenPos(cardMin);
+			ImGui::InvisibleButton(item.name.c_str(), ImVec2(cardWidth, cardHeight));
+			
+			// Store bounds for selection rectangle
+			m_ItemBounds[item.path.string()] = ImRect(cardMin, cardMax);
+			
+			// Check selection rectangle
+			if (m_IsSelecting && IsInSelectionRectangle(m_ItemBounds[item.path.string()])) {
+				selectedItems.insert(item.path.string());
+			}
+			
+			bool isSelected = selectedItems.find(item.path.string()) != selectedItems.end();
+			bool isHovered = ImGui::IsItemHovered();
+			bool isDropTarget = item.isDirectory && ImGui::IsDragDropActive() && 
+								ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+			
+			// Selection effects
+			RenderSelectionEffects(cardMin, cardMax, isSelected, isHovered, isDropTarget);
+			
+			// Track hovered folder
+			if (item.isDirectory && isHovered) {
+				result.hoveredFolder = item.path;
+			}
+			
+			// Click handling
+			if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+				result.clickedItem = item.path;
+				if (callbacks.onItemClicked) {
+					callbacks.onItemClicked(item.path);
+				}
+				m_IsSelecting = false;
+			}
+			
+			if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+				result.doubleClickedItem = item.path;
+				if (callbacks.onItemDoubleClicked) {
+					callbacks.onItemDoubleClicked(item.path);
+				}
+			}
+			
+			if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+				result.rightClickedItem = item.path;
+				if (callbacks.onItemRightClicked) {
+					callbacks.onItemRightClicked(item.path);
+				}
+			}
+			
+			// Drag & drop
+			HandleDragDropSource(item, selectedItems);
+			
+			if (item.isDirectory) {
+				HandleDragDropTarget(item, callbacks);
+			}
+			
+			ImGui::EndGroup();
+			
+			currentColumn += cardSpan;
 		}
+		
+		// Reserve space for the grid
+		float totalHeight = rowStartY + rowHeight - startPos.y;
+		ImGui::SetCursorScreenPos(ImVec2(startPos.x, startPos.y + totalHeight + m_Style.padding));
+		ImGui::Dummy(ImVec2(0, 0));
 		
 		// Deselect on empty space click
 		if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
@@ -225,11 +252,11 @@ namespace Lunex::UI {
 		float iconHeight;
 		
 		if (item.isHDR) {
-			// HDR: 2:1 aspect ratio
-			iconHeight = iconWidth / 2.0f;
+			// HDR: wide aspect ratio
+			iconHeight = (cardWidth - (m_Style.cardPadding * 2)) / 2.0f;
 		} else {
 			// Square thumbnails
-			iconHeight = iconWidth;
+			iconHeight = m_Style.thumbnailSize - (m_Style.cardPadding * 2);
 		}
 		
 		ImVec2 iconMin = ImVec2(cursorPos.x + m_Style.cardPadding, cursorPos.y + m_Style.cardPadding);
@@ -251,14 +278,27 @@ namespace Lunex::UI {
 			);
 		}
 		
+		// Type border (bottom of card)
+		Color typeColor = AssetCard::GetTypeColor(item.typeLabel);
+		if (typeColor.a > 0.01f) {
+			float borderThickness = 2.5f;
+			ImVec2 borderMin = ImVec2(cardMin.x, cardMax.y - borderThickness - 1);
+			ImVec2 borderMax = ImVec2(cardMax.x, cardMax.y - 1);
+			ImU32 borderColorU32 = ImGui::ColorConvertFloat4ToU32(ToImVec4(typeColor));
+			drawList->AddRectFilled(borderMin, borderMax, borderColorU32, 
+				m_Style.cardRounding, ImDrawFlags_RoundCornersBottom);
+		}
+		
 		// Text area
 		float textAreaY = iconMax.y + 4.0f;
 		
 		// Asset name
 		std::string displayName = item.name;
 		
-		// Truncate if needed
-		const int maxChars = 15;
+		// Truncate if needed (adjust for card width)
+		size_t maxChars = (size_t)(cardWidth / 7.0f);
+		maxChars = maxChars < 8 ? 8 : maxChars;
+		
 		if (displayName.length() > maxChars) {
 			displayName = displayName.substr(0, maxChars - 2) + "..";
 		}
@@ -272,12 +312,21 @@ namespace Lunex::UI {
 			displayName.c_str()
 		);
 		
-		// Type label
+		// Type label with color
 		float typeWidth = ImGui::CalcTextSize(item.typeLabel.c_str()).x;
 		float typeOffsetX = (cardWidth - typeWidth) * 0.5f;
+		
+		// Use muted type color
+		ImU32 typeLabelColor = IM_COL32(
+			(int)(typeColor.r * 180), 
+			(int)(typeColor.g * 180), 
+			(int)(typeColor.b * 180), 
+			200
+		);
+		
 		drawList->AddText(
 			ImVec2(cursorPos.x + typeOffsetX, textAreaY + 16.0f),
-			ImGui::ColorConvertFloat4ToU32(ToImVec4(m_Style.typeColor)),
+			typeLabelColor,
 			item.typeLabel.c_str()
 		);
 	}
@@ -325,13 +374,23 @@ namespace Lunex::UI {
 		if (item.isDirectory) {
 			return m_Style.thumbnailSize;
 		}
-		return item.isHDR ? m_Style.thumbnailSize * 2.0f : m_Style.thumbnailSize;
+		// HDR cards are double width
+		return item.isHDR ? (m_Style.thumbnailSize * 2.0f + m_Style.padding) : m_Style.thumbnailSize;
 	}
 	
 	float FileGrid::GetCardHeight(const FileGridItem& item) const {
 		if (item.isDirectory) {
 			return m_Style.thumbnailSize + 30.0f;
 		}
+		
+		if (item.isHDR) {
+			// HDR: calculate based on 2:1 thumbnail ratio
+			float cardWidth = m_Style.thumbnailSize * 2.0f + m_Style.padding;
+			float iconWidth = cardWidth - (m_Style.cardPadding * 2);
+			float iconHeight = iconWidth / 2.0f;
+			return iconHeight + (m_Style.cardPadding * 2) + 50.0f;
+		}
+		
 		return m_Style.thumbnailSize + 50.0f;
 	}
 	

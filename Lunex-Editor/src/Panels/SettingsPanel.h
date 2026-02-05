@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../UI/LunexUI.h"
 #include <string>
 #include <glm/glm.hpp>
 
@@ -17,6 +18,12 @@ namespace Lunex {
 		bool GetShowPhysics3DColliders() const { return m_ShowPhysics3DColliders; }
 		void SetShowPhysics3DColliders(bool show) { m_ShowPhysics3DColliders = show; }
 
+	private:
+		// Section drawing helpers
+		void DrawEnvironmentSection();
+		void DrawPhysics2DSection();
+		void DrawPhysics3DSection();
+		
 	private:
 		bool m_ShowPhysicsColliders = false;
 		bool m_ShowPhysics3DColliders = false;

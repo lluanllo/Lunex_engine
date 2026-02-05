@@ -36,8 +36,9 @@ namespace Lunex::UI {
 	inline AssetCardResult AssetCard(const std::string& id, const std::string& name,
 									 const std::string& typeLabel, Ref<Texture2D> thumbnail,
 									 bool isSelected = false, bool isDirectory = false,
+									 bool isWideAspect = false,
 									 const AssetCardStyle& style = AssetCardStyle()) {
-		return RenderAssetCard(id, name, typeLabel, thumbnail, isSelected, isDirectory, style);
+		return RenderAssetCard(id, name, typeLabel, thumbnail, isSelected, isDirectory, isWideAspect, style);
 	}
 	
 	inline EntityNodeResult EntityNode(const std::string& label, uint64_t entityID, int depth,
