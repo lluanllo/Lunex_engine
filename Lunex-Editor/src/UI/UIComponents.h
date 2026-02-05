@@ -10,6 +10,7 @@
  * - UIProperty.h  - Property grid components
  * - UIImage.h     - Image and texture components
  * - UIState.h     - State and utility functions
+ * - LogOutput.h   - Console log output component
  */
 
 #pragma once
@@ -21,3 +22,4 @@
 #include "Controls/UIProperty.h"
 #include "Controls/UIImage.h"
 #include "Controls/UIState.h"
+#include "Components/LogOutput.h"

@@ -10,6 +10,18 @@
 #include <filesystem>
 #include <fstream>
 
+// Forward declare ConsolePanel for compilation messages
+namespace Lunex {
+	class ConsolePanel;
+}
+
+// Console logging helper - defined later to avoid header dependency
+static void LogToConsole(const std::string& message, bool isError = false, bool isWarning = false);
+static void LogCompileStart(const std::string& scriptName);
+static void LogCompileSuccess(const std::string& scriptName);
+static void LogCompileError(const std::string& scriptName, const std::string& error);
+static void LogScriptMessage(const std::string& message, int level);
+
 namespace Lunex {
 
 	// Variables globales para el sistema de scripting (lambdas sin captura)
