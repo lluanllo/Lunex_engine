@@ -1,60 +1,95 @@
+/**
+ * @file JobSystemPanel.cpp
+ * @brief Job System Monitor Panel - Real-time performance monitoring
+ * 
+ * Features:
+ * - Overview (total jobs, throughput, latency)
+ * - Worker thread status visualization
+ * - Queue status with progress bars
+ * - Performance history graphs
+ * - Test controls for stress testing
+ */
+
 #include "JobSystemPanel.h"
+#include "Log/Log.h"
+
+// Lunex UI Framework
+#include "../UI/UICore.h"
+#include "../UI/UIComponents.h"
+#include "../UI/UILayout.h"
+
+#include <imgui.h>
 #include <chrono>
 #include <thread>
 
 namespace Lunex {
+
+	// ============================================================================
+	// CONSTRUCTOR
+	// ============================================================================
 
 	JobSystemPanel::JobSystemPanel() {
 		m_ThroughputHistory.reserve(m_HistorySize);
 		m_LatencyHistory.reserve(m_HistorySize);
 	}
 
+	// ============================================================================
+	// MAIN RENDER
+	// ============================================================================
+
 	void JobSystemPanel::OnImGuiRender() {
 		if (!m_IsOpen) return;
 
-		ImGui::Begin("Job System Monitor", &m_IsOpen, ImGuiWindowFlags_None);
+		using namespace UI;
 
-		// Get current metrics
-		JobMetricsSnapshot metrics = JobSystem::Get().GetMetrics();
+		if (BeginPanel("Job System Monitor", &m_IsOpen)) {
+			// Get current metrics
+			JobMetricsSnapshot metrics = JobSystem::Get().GetMetrics();
 
-		// Draw sections
-		DrawOverview(metrics);
-		ImGui::Separator();
-		DrawWorkerStatus(metrics);
-		ImGui::Separator();
-		DrawQueueStatus(metrics);
-		ImGui::Separator();
-		DrawPerformanceGraphs();
-		ImGui::Separator();
-		DrawTestControls();
-
-		ImGui::End();
+			// Draw sections
+			DrawOverview(metrics);
+			Separator();
+			DrawWorkerStatus(metrics);
+			Separator();
+			DrawQueueStatus(metrics);
+			Separator();
+			DrawPerformanceGraphs();
+			Separator();
+			DrawTestControls();
+		}
+		EndPanel();
 	}
 
-	void JobSystemPanel::DrawOverview(const JobMetricsSnapshot& metrics) {
-		if (ImGui::CollapsingHeader("Overview", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Indent();
+	// ============================================================================
+	// OVERVIEW SECTION
+	// ============================================================================
 
-			// Total jobs
+	void JobSystemPanel::DrawOverview(const JobMetricsSnapshot& metrics) {
+		using namespace UI;
+
+		if (ImGui::CollapsingHeader("Overview", ImGuiTreeNodeFlags_DefaultOpen)) {
+			Indent();
+
+			// Job counts
 			uint64_t scheduled = metrics.TotalJobsScheduled;
 			uint64_t completed = metrics.TotalJobsCompleted;
 			uint64_t stolen = metrics.TotalJobsStolen;
 
-			ImGui::Text("Total Jobs Scheduled: %llu", scheduled);
-			ImGui::Text("Total Jobs Completed: %llu", completed);
-			ImGui::Text("Total Jobs Stolen:    %llu", stolen);
+			StatItem("Total Jobs Scheduled", static_cast<uint32_t>(scheduled));
+			StatItem("Total Jobs Completed", static_cast<uint32_t>(completed));
+			StatItem("Total Jobs Stolen", static_cast<uint32_t>(stolen));
 
 			// Progress bar
 			float progress = scheduled > 0 ? (float)completed / (float)scheduled : 1.0f;
 			ImGui::ProgressBar(progress, ImVec2(-1, 0), "");
 
-			ImGui::Spacing();
+			AddSpacing(SpacingValues::SM);
 
 			// Throughput
 			float throughput = metrics.Throughput;
-			ImGui::Text("Throughput: %.1f jobs/sec", throughput);
+			StatItem("Throughput", throughput, "%.1f jobs/sec");
 
-			// Update history
+			// Update throughput history
 			if (m_ThroughputHistory.size() >= m_HistorySize) {
 				m_ThroughputHistory.erase(m_ThroughputHistory.begin());
 			}
@@ -62,9 +97,9 @@ namespace Lunex {
 
 			// Latency
 			float latency = metrics.AvgJobLatencyMs;
-			ImGui::Text("Avg Latency: %.2f ms", latency);
+			StatItem("Avg Latency", latency, "%.2f ms");
 
-			// Update history
+			// Update latency history
 			if (m_LatencyHistory.size() >= m_HistorySize) {
 				m_LatencyHistory.erase(m_LatencyHistory.begin());
 			}
@@ -73,80 +108,102 @@ namespace Lunex {
 			// Work stealing efficiency
 			if (completed > 0) {
 				float stealRate = (float)stolen / (float)completed * 100.0f;
-				ImGui::Text("Work Steal Rate: %.1f%%", stealRate);
+				StatItem("Work Steal Rate", stealRate, "%.1f%%");
 			}
 
-			ImGui::Unindent();
+			Unindent();
 		}
 	}
 
+	// ============================================================================
+	// WORKER STATUS SECTION
+	// ============================================================================
+
 	void JobSystemPanel::DrawWorkerStatus(const JobMetricsSnapshot& metrics) {
+		using namespace UI;
+
 		if (ImGui::CollapsingHeader("Worker Threads", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Indent();
+			Indent();
 
 			uint32_t active = metrics.ActiveWorkers;
 			uint32_t idle = metrics.IdleWorkers;
 			uint32_t total = active + idle;
 
-			ImGui::Text("Active Workers: %u / %u", active, total);
-			ImGui::Text("Idle Workers:   %u / %u", idle, total);
+			StatItem("Active Workers", static_cast<int>(active));
+			StatItem("Idle Workers", static_cast<int>(idle));
 
 			// Worker utilization bar
 			if (total > 0) {
 				float utilization = (float)active / (float)total;
 				ImGui::ProgressBar(utilization, ImVec2(-1, 0), "");
-				ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
-				ImGui::Text("%.0f%% Utilization", utilization * 100.0f);
+				SameLine();
+				
+				char utilText[32];
+				snprintf(utilText, sizeof(utilText), "%.0f%% Utilization", utilization * 100.0f);
+				TextStyled(utilText, TextVariant::Muted);
 			}
 
-			ImGui::Spacing();
+			AddSpacing(SpacingValues::SM);
 
 			// Per-worker queue sizes
-			ImGui::Text("Per-Worker Queue Sizes:");
+			TextStyled("Per-Worker Queue Sizes:", TextVariant::Secondary);
 			for (size_t i = 0; i < 16; ++i) {
 				uint32_t size = metrics.WorkerQueueSizes[i];
-				if (size > 0 || i < 8) { // Show first 8 or non-zero
-					ImGui::Text("  Worker %zu: %u jobs", i, size);
+				if (size > 0 || i < 8) {
+					char label[32];
+					snprintf(label, sizeof(label), "Worker %zu", i);
+					StatItem(label, static_cast<int>(size));
 				}
 			}
 
-			ImGui::Unindent();
+			Unindent();
 		}
 	}
 
+	// ============================================================================
+	// QUEUE STATUS SECTION
+	// ============================================================================
+
 	void JobSystemPanel::DrawQueueStatus(const JobMetricsSnapshot& metrics) {
+		using namespace UI;
+
 		if (ImGui::CollapsingHeader("Queues", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Indent();
+			Indent();
 
 			uint32_t globalSize = metrics.GlobalQueueSize;
 			uint32_t commandSize = metrics.CommandBufferSize;
 
-			ImGui::Text("Global Queue:         %u jobs", globalSize);
-			ImGui::Text("Main-Thread Commands: %u pending", commandSize);
+			StatItem("Global Queue", static_cast<int>(globalSize));
+			StatItem("Main-Thread Commands", static_cast<int>(commandSize));
 
-			// Visual queue indicators
-			ImGui::Spacing();
+			AddSpacing(SpacingValues::SM);
 
 			// Global queue bar
-			ImGui::Text("Global Queue:");
+			TextStyled("Global Queue:", TextVariant::Secondary);
 			float globalProgress = std::min(1.0f, (float)globalSize / 100.0f);
 			ImGui::ProgressBar(globalProgress, ImVec2(-1, 0), "");
 
 			// Command buffer bar
-			ImGui::Text("Command Buffer:");
+			TextStyled("Command Buffer:", TextVariant::Secondary);
 			float commandProgress = std::min(1.0f, (float)commandSize / 50.0f);
 			ImGui::ProgressBar(commandProgress, ImVec2(-1, 0), "");
 
-			ImGui::Unindent();
+			Unindent();
 		}
 	}
 
+	// ============================================================================
+	// PERFORMANCE GRAPHS SECTION
+	// ============================================================================
+
 	void JobSystemPanel::DrawPerformanceGraphs() {
+		using namespace UI;
+
 		if (ImGui::CollapsingHeader("Performance History", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Indent();
+			Indent();
 
 			// Throughput graph
-			ImGui::Text("Throughput (jobs/sec):");
+			TextStyled("Throughput (jobs/sec):", TextVariant::Secondary);
 			if (!m_ThroughputHistory.empty()) {
 				ImGui::PlotLines(
 					"##Throughput",
@@ -160,10 +217,10 @@ namespace Lunex {
 				);
 			}
 
-			ImGui::Spacing();
+			AddSpacing(SpacingValues::SM);
 
 			// Latency graph
-			ImGui::Text("Latency (ms):");
+			TextStyled("Latency (ms):", TextVariant::Secondary);
 			if (!m_LatencyHistory.empty()) {
 				ImGui::PlotLines(
 					"##Latency",
@@ -177,19 +234,27 @@ namespace Lunex {
 				);
 			}
 
-			ImGui::Unindent();
+			Unindent();
 		}
 	}
 
-	void JobSystemPanel::DrawTestControls() {
-		if (ImGui::CollapsingHeader("Test Controls")) {
-			ImGui::Indent();
+	// ============================================================================
+	// TEST CONTROLS SECTION
+	// ============================================================================
 
-			ImGui::Text("Stress Test:");
+	void JobSystemPanel::DrawTestControls() {
+		using namespace UI;
+
+		if (ImGui::CollapsingHeader("Test Controls")) {
+			Indent();
+
+			TextStyled("Stress Test:", TextVariant::Secondary);
 			ImGui::SliderInt("Job Count", &m_TestJobCount, 10, 10000);
 			ImGui::SliderInt("Job Duration (ms)", &m_TestJobDuration, 0, 100);
 
-			if (ImGui::Button("Run Test Jobs", ImVec2(-1, 0))) {
+			AddSpacing(SpacingValues::SM);
+
+			if (Button("Run Test Jobs", ButtonVariant::Primary, ButtonSize::Medium, Size(-1, 0))) {
 				LNX_LOG_INFO("Running {0} test jobs...", m_TestJobCount);
 
 				auto counter = JobSystem::Get().CreateCounter(m_TestJobCount);
@@ -219,16 +284,16 @@ namespace Lunex {
 				LNX_LOG_INFO("Test jobs scheduled. Check metrics for results.");
 			}
 
-			ImGui::Spacing();
+			AddSpacing(SpacingValues::SM);
 
-			if (ImGui::Button("Reset Metrics", ImVec2(-1, 0))) {
+			if (Button("Reset Metrics", ButtonVariant::Warning, ButtonSize::Medium, Size(-1, 0))) {
 				JobSystem::Get().ResetMetrics();
 				m_ThroughputHistory.clear();
 				m_LatencyHistory.clear();
 				LNX_LOG_INFO("Metrics reset");
 			}
 
-			ImGui::Unindent();
+			Unindent();
 		}
 	}
 

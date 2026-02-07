@@ -234,11 +234,28 @@ namespace Lunex {
 			return;
 		}
 
-		// Bind framebuffer
+		// ============================================================
+		// SAVE CURRENT OpenGL STATE before modifying anything
+		// This prevents the preview from corrupting the main scene rendering
+		// ============================================================
+		
+		// Save current viewport
+		GLint previousViewport[4];
+		glGetIntegerv(GL_VIEWPORT, previousViewport);
+		
+		// Save current framebuffer binding
+		GLint previousFramebuffer = 0;
+		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
+
+		// ============================================================
+		// RENDER PREVIEW TO ISOLATED FRAMEBUFFER
+		// ============================================================
+
+		// Bind our isolated framebuffer
 		m_Framebuffer->Bind();
 
-		// Set viewport to match framebuffer size
-		cmdList->SetViewport(0.0f, 0.0f, static_cast<float>(m_Width), static_cast<float>(m_Height));
+		// Set viewport to match our framebuffer size
+		glViewport(0, 0, m_Width, m_Height);
 
 		// Clear with background color
 		cmdList->SetClearColor(m_BackgroundColor);
@@ -247,10 +264,10 @@ namespace Lunex {
 		// Clear entity ID attachment to -1 (attachment index 1)
 		m_Framebuffer->ClearAttachment(1, -1);
 
-		// Begin scene with editor camera
+		// Begin scene with our isolated preview camera
 		Renderer3D::BeginScene(m_Camera);
 
-		// Update lights from preview scene
+		// Update lights from preview scene (isolated)
 		Renderer3D::UpdateLights(m_PreviewScene.get());
 
 		// Calculate transform with rotation
@@ -265,7 +282,11 @@ namespace Lunex {
 		if (!tempInstance) {
 			LNX_LOG_ERROR("MaterialPreviewRenderer::RenderInternal - Failed to create MaterialInstance");
 			Renderer3D::EndScene();
+			
+			// Restore state even on error
 			m_Framebuffer->Unbind();
+			glBindFramebuffer(GL_FRAMEBUFFER, previousFramebuffer);
+			glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
 			return;
 		}
 
@@ -288,8 +309,19 @@ namespace Lunex {
 
 		Renderer3D::EndScene();
 
-		// Unbind framebuffer
+		// Unbind our framebuffer
 		m_Framebuffer->Unbind();
+
+		// ============================================================
+		// RESTORE PREVIOUS OpenGL STATE
+		// This is CRITICAL to prevent corrupting main scene gizmos/frustums
+		// ============================================================
+		
+		// Restore previous framebuffer (usually the main scene framebuffer or default)
+		glBindFramebuffer(GL_FRAMEBUFFER, previousFramebuffer);
+		
+		// Restore previous viewport
+		glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
 	}
 
 	// ========== THUMBNAIL DISK CACHING ==========

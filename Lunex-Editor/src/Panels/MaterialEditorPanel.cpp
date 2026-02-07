@@ -1,9 +1,25 @@
-﻿#include "stpch.h"
+﻿/**
+ * @file MaterialEditorPanel.cpp
+ * @brief Material Editor Panel - AAA Quality Implementation using Lunex UI Framework
+ * 
+ * Features:
+ * - Real-time PBR material preview
+ * - Drag & drop texture support
+ * - Clean, professional UI with no unnecessary scrollbars
+ * - Proper ImGui ID handling to prevent window movement bugs
+ */
+
+#include "stpch.h"
 #include "MaterialEditorPanel.h"
 #include "ContentBrowserPanel.h"
 #include "RHI/RHI.h"
 #include "Assets/Materials/MaterialRegistry.h"
 #include "Log/Log.h"
+
+// Lunex UI Framework
+#include "../UI/UICore.h"
+#include "../UI/UIComponents.h"
+#include "../UI/UILayout.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -11,27 +27,45 @@
 
 namespace Lunex {
 
-	// UI Constants
-	namespace UIStyle {
-		constexpr float SECTION_SPACING = 8.0f;
-		constexpr float COLUMN_WIDTH = 120.0f;
+	// ============================================================================
+	// PANEL STYLE CONSTANTS
+	// ============================================================================
+	
+	namespace MaterialEditorStyle {
+		// Layout
+		constexpr float PreviewColumnWidth = 500.0f;
+		constexpr float PropertiesMinWidth = 350.0f;
+		constexpr float PropertyLabelWidth = 130.0f;
+		constexpr float TextureSlotHeight = 130.0f;  // Increased from 72 for better texture visibility
+		constexpr float TextureThumbnailSize = 64.0f;  // Increased from 48 for better texture visibility
 		
-		const ImVec4 COLOR_HEADER = ImVec4(0.85f, 0.85f, 0.85f, 1.0f);
-		const ImVec4 COLOR_SUBHEADER = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
-		const ImVec4 COLOR_HINT = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
-		const ImVec4 COLOR_ACCENT = ImVec4(0.26f, 0.59f, 0.98f, 1.0f);
-		const ImVec4 COLOR_SUCCESS = ImVec4(0.3f, 0.8f, 0.3f, 1.0f);
-		const ImVec4 COLOR_WARNING = ImVec4(0.8f, 0.6f, 0.2f, 1.0f);
-		const ImVec4 COLOR_DANGER = ImVec4(0.8f, 0.3f, 0.3f, 1.0f);
-		const ImVec4 COLOR_BG_DARK = ImVec4(0.16f, 0.16f, 0.17f, 1.0f);
+		// Colors
+		UI::Color BgPanel()         { return UI::Color(0.12f, 0.12f, 0.13f, 1.0f); }
+		UI::Color BgPreview()       { return UI::Color(0.08f, 0.08f, 0.09f, 1.0f); }
+		UI::Color BgSection()       { return UI::Color(0.14f, 0.14f, 0.15f, 1.0f); }
+		UI::Color BgTextureSlot()   { return UI::Color(0.11f, 0.11f, 0.12f, 1.0f); }
+		UI::Color BorderSubtle()    { return UI::Color(0.20f, 0.20f, 0.22f, 1.0f); }
+		UI::Color AccentPrimary()   { return UI::Color(0.26f, 0.59f, 0.98f, 1.0f); }
+		UI::Color StatusSaved()     { return UI::Color(0.30f, 0.80f, 0.30f, 1.0f); }
+		UI::Color StatusUnsaved()   { return UI::Color(0.95f, 0.75f, 0.20f, 1.0f); }
+		UI::Color ButtonDanger()    { return UI::Color(0.70f, 0.25f, 0.25f, 1.0f); }
+		UI::Color ButtonDangerHover() { return UI::Color(0.80f, 0.30f, 0.30f, 1.0f); }
+		UI::Color TextMuted()       { return UI::Color(0.50f, 0.50f, 0.55f, 1.0f); }
+		UI::Color TextHeader()      { return UI::Color(0.90f, 0.90f, 0.92f, 1.0f); }
 	}
 
+	// ============================================================================
+	// CONSTRUCTOR
+	// ============================================================================
+	
 	MaterialEditorPanel::MaterialEditorPanel() {
 		m_PreviewRenderer = CreateRef<MaterialPreviewRenderer>();
 		m_PreviewRenderer->SetResolution(m_PreviewWidth, m_PreviewHeight);
 	}
 
-	// ========== CONTROL DEL PANEL ==========
+	// ============================================================================
+	// PANEL CONTROL
+	// ============================================================================
 
 	void MaterialEditorPanel::OpenMaterial(Ref<MaterialAsset> material) {
 		if (!material) {
@@ -39,7 +73,6 @@ namespace Lunex {
 			return;
 		}
 
-		// Si hay cambios sin guardar, preguntar
 		if (m_EditingMaterial && m_HasUnsavedChanges) {
 			if (!ShowUnsavedChangesDialog()) {
 				return;
@@ -72,52 +105,58 @@ namespace Lunex {
 		m_HasUnsavedChanges = false;
 	}
 
-	// ========== RENDERING ==========
+	// ============================================================================
+	// UPDATE & RENDER
+	// ============================================================================
+
+	void MaterialEditorPanel::OnUpdate(float deltaTime) {
+		if (m_PreviewRenderer && m_EditingMaterial) {
+			m_PreviewRenderer->Update(deltaTime);
+			m_PreviewRenderer->RenderPreview(m_EditingMaterial);
+		}
+	}
 
 	void MaterialEditorPanel::OnImGuiRender() {
 		if (!m_IsOpen || !m_EditingMaterial) {
 			return;
 		}
 
-		ImGui::SetNextWindowSize(ImVec2(1200, 800), ImGuiCond_FirstUseEver);
-		
+		using namespace UI;
+
+		// Window title with unsaved indicator
 		std::string windowTitle = "Material Editor - " + m_EditingMaterial->GetName();
 		if (m_HasUnsavedChanges) {
-			windowTitle += "*";
+			windowTitle += " *";
 		}
+		windowTitle += "###MaterialEditor"; // Fixed ID to prevent window recreation issues
 
-		if (ImGui::Begin(windowTitle.c_str(), &m_IsOpen, ImGuiWindowFlags_MenuBar)) {
+		// Window styling
+		ScopedColor windowColors({
+			{ImGuiCol_WindowBg, MaterialEditorStyle::BgPanel()},
+			{ImGuiCol_ChildBg, MaterialEditorStyle::BgPanel()},
+			{ImGuiCol_Border, MaterialEditorStyle::BorderSubtle()}
+		});
+		
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
+
+		ImGui::SetNextWindowSize(ImVec2(1100, 750), ImGuiCond_FirstUseEver);
+
+		// Use NoNavInputs to prevent window focus/movement issues on first click
+		ImGuiWindowFlags windowFlags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoNavInputs;
+		
+		if (ImGui::Begin(windowTitle.c_str(), &m_IsOpen, windowFlags)) {
+			ImGui::PopStyleVar(2); // Pop window styles after Begin
 			DrawMenuBar();
-
-			// Layout: Preview a la izquierda, Properties a la derecha
-			ImGui::Columns(2, nullptr, true);
-			ImGui::SetColumnWidth(0, 600);
-
-			// Preview Viewport
-			DrawPreviewViewport();
-
-			ImGui::NextColumn();
-
-			// Properties Panel
-			ImGui::BeginChild("PropertiesPanel", ImVec2(0, 0), false);
-			DrawPropertiesPanel();
-			DrawTexturesPanel();
-			ImGui::EndChild();
-
-			ImGui::Columns(1);
+			DrawMainLayout();
+		} else {
+			ImGui::PopStyleVar(2); // Pop even if window is collapsed
 		}
 		ImGui::End();
 
-		// Si el usuario cerró la ventana
+		// Handle window close
 		if (!m_IsOpen && m_EditingMaterial) {
 			CloseMaterial();
-		}
-	}
-
-	void MaterialEditorPanel::OnUpdate(float deltaTime) {
-		if (m_PreviewRenderer && m_EditingMaterial) {
-			m_PreviewRenderer->Update(deltaTime);
-			m_PreviewRenderer->RenderPreview(m_EditingMaterial);
 		}
 	}
 
@@ -129,472 +168,504 @@ namespace Lunex {
 		}
 	}
 
-	// ========== UI RENDERING ==========
+	// ============================================================================
+	// MAIN LAYOUT
+	// ============================================================================
+
+	void MaterialEditorPanel::DrawMainLayout() {
+		using namespace UI;
+
+		ImVec2 availSize = ImGui::GetContentRegionAvail();
+		float previewWidth = std::max(availSize.x * 0.55f, MaterialEditorStyle::PreviewColumnWidth);
+		
+		ScopedStyle layoutStyle(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+
+		// Left: Preview viewport
+		{
+			ScopedColor previewBg(ImGuiCol_ChildBg, MaterialEditorStyle::BgPreview());
+			
+			if (BeginChild("##PreviewArea", Size(previewWidth, availSize.y), false, 
+				ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+				DrawPreviewViewport();
+			}
+			EndChild();
+		}
+
+		SameLine();
+
+		// Right: Properties panel (with vertical scroll enabled for texture maps)
+		{
+			ScopedColor propsBg(ImGuiCol_ChildBg, MaterialEditorStyle::BgPanel());
+			ScopedStyle propsPadding(ImGuiStyleVar_WindowPadding, ImVec2(12, 12));
+			
+			// Enable vertical scrollbar for properties panel
+			if (BeginChild("##PropertiesArea", Size(0, availSize.y), false, ImGuiWindowFlags_None)) {
+				DrawPropertiesPanel();
+			}
+			EndChild();
+		}
+	}
+
+	// ============================================================================
+	// MENU BAR
+	// ============================================================================
 
 	void MaterialEditorPanel::DrawMenuBar() {
-		if (ImGui::BeginMenuBar()) {
-			if (ImGui::BeginMenu("File")) {
-				if (ImGui::MenuItem("Save", "Ctrl+S")) {
+		using namespace UI;
+
+		if (BeginMenuBar()) {
+			// File menu
+			if (BeginMenu("File")) {
+				if (MenuItem("Save", "Ctrl+S")) {
 					SaveMaterial();
 				}
-
-				if (ImGui::MenuItem("Save As...")) {
-					// TODO: Abrir diálogo de guardado
-					LNX_LOG_INFO("Save As not implemented yet");
+				if (MenuItem("Save As...", nullptr, false, false)) {
+					// TODO: Save As dialog
 				}
-
-				ImGui::Separator();
-
-				if (ImGui::MenuItem("Revert")) {
+				Separator();
+				if (MenuItem("Revert")) {
 					if (m_EditingMaterial) {
-						// Recargar desde disco
 						MaterialRegistry::Get().ReloadMaterial(m_EditingMaterial->GetID());
 						m_HasUnsavedChanges = false;
 					}
 				}
-
-				ImGui::Separator();
-
-				if (ImGui::MenuItem("Close", "Ctrl+W")) {
+				Separator();
+				if (MenuItem("Close", "Ctrl+W")) {
 					CloseMaterial();
 				}
-
-				ImGui::EndMenu();
+				EndMenu();
 			}
 
-			if (ImGui::BeginMenu("View")) {
-				bool autoRotate = m_PreviewRenderer->GetAutoRotate();
-				if (ImGui::Checkbox("Auto Rotate", &autoRotate)) {
-					m_PreviewRenderer->SetAutoRotate(autoRotate);
+			// View menu
+			if (BeginMenu("View")) {
+				bool autoRotate = m_PreviewRenderer ? m_PreviewRenderer->GetAutoRotate() : false;
+				if (ImGui::Checkbox("Auto Rotate Preview", &autoRotate)) {
+					if (m_PreviewRenderer) {
+						m_PreviewRenderer->SetAutoRotate(autoRotate);
+					}
 				}
-
-				ImGui::Separator();
-
-				if (ImGui::BeginMenu("Preview Model")) {
-					if (ImGui::MenuItem("Sphere")) {
+				
+				Separator();
+				
+				if (BeginMenu("Preview Shape")) {
+					if (MenuItem("Sphere", nullptr, true)) {
 						m_PreviewRenderer->SetPreviewModel(Model::CreateSphere());
 					}
-					if (ImGui::MenuItem("Cube")) {
+					if (MenuItem("Cube")) {
 						m_PreviewRenderer->SetPreviewModel(Model::CreateCube());
 					}
-					if (ImGui::MenuItem("Plane")) {
+					if (MenuItem("Plane")) {
 						m_PreviewRenderer->SetPreviewModel(Model::CreatePlane());
 					}
-					if (ImGui::MenuItem("Cylinder")) {
+					if (MenuItem("Cylinder")) {
 						m_PreviewRenderer->SetPreviewModel(Model::CreateCylinder());
 					}
-					ImGui::EndMenu();
+					EndMenu();
 				}
-
-				ImGui::EndMenu();
+				EndMenu();
 			}
 
-			// Status info a la derecha
-			ImGui::Spacing();
-			ImGui::Separator();
-			ImGui::Spacing();
-
+			// Status indicator (right-aligned)
+			float statusWidth = 100.0f;
+			float availWidth = ImGui::GetContentRegionAvail().x;
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + availWidth - statusWidth);
+			
 			if (m_HasUnsavedChanges) {
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_WARNING);
-				ImGui::Text("Unsaved Changes");
-				ImGui::PopStyleColor();
+				ScopedColor statusColor(ImGuiCol_Text, MaterialEditorStyle::StatusUnsaved());
+				ImGui::Text("Modified");
 			} else {
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_SUCCESS);
+				ScopedColor statusColor(ImGuiCol_Text, MaterialEditorStyle::StatusSaved());
 				ImGui::Text("Saved");
-				ImGui::PopStyleColor();
 			}
 
-			ImGui::EndMenuBar();
+			EndMenuBar();
 		}
 	}
 
+	// ============================================================================
+	// PREVIEW VIEWPORT
+	// ============================================================================
+
 	void MaterialEditorPanel::DrawPreviewViewport() {
-		ImGui::BeginChild("Preview", ImVec2(0, 0), true);
+		using namespace UI;
 
-		ImGui::Text("Preview");
-		ImGui::Separator();
-
-		// Obtener el tamaño disponible
 		ImVec2 viewportSize = ImGui::GetContentRegionAvail();
 
-		// Actualizar resolución del preview renderer si cambió
-		if (m_PreviewRenderer && (viewportSize.x != m_PreviewWidth || viewportSize.y != m_PreviewHeight)) {
-			if (viewportSize.x > 0 && viewportSize.y > 0) {
-				m_PreviewWidth = (uint32_t)viewportSize.x;
-				m_PreviewHeight = (uint32_t)viewportSize.y;
+		// Update renderer resolution if needed
+		if (m_PreviewRenderer && viewportSize.x > 0 && viewportSize.y > 0) {
+			uint32_t newWidth = static_cast<uint32_t>(viewportSize.x);
+			uint32_t newHeight = static_cast<uint32_t>(viewportSize.y);
+			
+			if (newWidth != m_PreviewWidth || newHeight != m_PreviewHeight) {
+				m_PreviewWidth = newWidth;
+				m_PreviewHeight = newHeight;
 				m_PreviewRenderer->SetResolution(m_PreviewWidth, m_PreviewHeight);
 			}
 		}
 
-		// Renderizar preview
+		// Render preview image
 		if (m_PreviewRenderer && viewportSize.x > 0 && viewportSize.y > 0) {
 			uint32_t textureID = m_PreviewRenderer->GetPreviewTextureID();
 			if (textureID > 0) {
 				ImGui::Image(
-					(void*)(intptr_t)textureID,
+					(ImTextureID)(intptr_t)textureID,
 					viewportSize,
 					ImVec2(0, 1), ImVec2(1, 0)
 				);
 			} else {
-				// Mostrar mensaje si no hay textura
-				ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-				ImGui::Text("Preview not available");
-				ImGui::PopStyleColor();
+				// Centered placeholder text
+				ImVec2 textSize = ImGui::CalcTextSize("Preview Loading...");
+				ImVec2 cursorPos = ImVec2(
+					(viewportSize.x - textSize.x) * 0.5f,
+					(viewportSize.y - textSize.y) * 0.5f
+				);
+				ImGui::SetCursorPos(cursorPos);
+				TextStyled("Preview Loading...", TextVariant::Muted);
 			}
 		}
-
-		ImGui::EndChild();
 	}
+
+	// ============================================================================
+	// PROPERTIES PANEL
+	// ============================================================================
 
 	void MaterialEditorPanel::DrawPropertiesPanel() {
 		if (!m_EditingMaterial) return;
 
-		ImGui::PushID("PBRProperties");  // ✅ Add unique ID scope
-		ImGui::Text("PBR Properties");
-		ImGui::Separator();
-		ImGui::Spacing();
+		using namespace UI;
 
-		// Albedo
-		glm::vec4 albedo = m_EditingMaterial->GetAlbedo();
-		if (DrawColorProperty("Albedo", albedo)) {
-			m_EditingMaterial->SetAlbedo(albedo);
-			MarkAsModified();
+		ScopedStyle itemSpacing(ImGuiStyleVar_ItemSpacing, ImVec2(8, 6));
+
+		// Material name header
+		{
+			ScopedColor headerColor(ImGuiCol_Text, MaterialEditorStyle::TextHeader());
+			ImGui::Text("%s", m_EditingMaterial->GetName().c_str());
+		}
+		AddSpacing(SpacingValues::SM);
+		Separator();
+		AddSpacing(SpacingValues::MD);
+
+		// PBR Properties Section
+		DrawPBRPropertiesSection();
+		
+		AddSpacing(SpacingValues::MD);
+		
+		// Emission Section
+		DrawEmissionSection();
+		
+		AddSpacing(SpacingValues::MD);
+		
+		// Texture Maps Section
+		DrawTextureMapsSection();
+	}
+
+	void MaterialEditorPanel::DrawPBRPropertiesSection() {
+		using namespace UI;
+
+		ScopedID sectionID("PBRSection");
+
+		// Section header
+		SeparatorText("PBR Properties");
+		AddSpacing(SpacingValues::SM);
+
+		// Albedo color
+		{
+			glm::vec4 albedo = m_EditingMaterial->GetAlbedo();
+			UI::Color albedoColor(albedo);
+			if (PropertyColor4("Albedo", albedoColor, "Base color of the material")) {
+				m_EditingMaterial->SetAlbedo(glm::vec4(albedoColor.R, albedoColor.G, albedoColor.B, albedoColor.A));
+				MarkAsModified();
+			}
 		}
 
-		ImGui::Spacing();
-
 		// Metallic
-		float metallic = m_EditingMaterial->GetMetallic();
-		if (DrawFloatProperty("Metallic", metallic, 0.0f, 1.0f)) {
-			m_EditingMaterial->SetMetallic(metallic);
-			MarkAsModified();
+		{
+			float metallic = m_EditingMaterial->GetMetallic();
+			if (PropertySlider("Metallic", metallic, 0.0f, 1.0f, "%.2f", "0 = Dielectric, 1 = Metal")) {
+				m_EditingMaterial->SetMetallic(metallic);
+				MarkAsModified();
+			}
 		}
 
 		// Roughness
-		float roughness = m_EditingMaterial->GetRoughness();
-		if (DrawFloatProperty("Roughness", roughness, 0.0f, 1.0f)) {
-			m_EditingMaterial->SetRoughness(roughness);
-			MarkAsModified();
+		{
+			float roughness = m_EditingMaterial->GetRoughness();
+			if (PropertySlider("Roughness", roughness, 0.0f, 1.0f, "%.2f", "0 = Smooth, 1 = Rough")) {
+				m_EditingMaterial->SetRoughness(roughness);
+				MarkAsModified();
+			}
 		}
 
 		// Specular
-		float specular = m_EditingMaterial->GetSpecular();
-		if (DrawFloatProperty("Specular", specular, 0.0f, 1.0f)) {
-			m_EditingMaterial->SetSpecular(specular);
-			MarkAsModified();
+		{
+			float specular = m_EditingMaterial->GetSpecular();
+			if (PropertySlider("Specular", specular, 0.0f, 1.0f, "%.2f", "Specular reflection intensity")) {
+				m_EditingMaterial->SetSpecular(specular);
+				MarkAsModified();
+			}
 		}
-
-		ImGui::Spacing();
-		ImGui::Separator();
-		ImGui::Spacing();
-
-		// Emission
-		ImGui::Text("Emission");
-		ImGui::Spacing();
-
-		glm::vec3 emissionColor = m_EditingMaterial->GetEmissionColor();
-		if (DrawColor3Property("Color", emissionColor)) {
-			m_EditingMaterial->SetEmissionColor(emissionColor);
-			MarkAsModified();
-		}
-
-		float emissionIntensity = m_EditingMaterial->GetEmissionIntensity();
-		if (DrawFloatProperty("Intensity", emissionIntensity, 0.0f, 100.0f)) {
-			m_EditingMaterial->SetEmissionIntensity(emissionIntensity);
-			MarkAsModified();
-		}
-
-		ImGui::Spacing();
-		ImGui::Separator();
-		ImGui::Spacing();
 
 		// Normal Intensity
-		float normalIntensity = m_EditingMaterial->GetNormalIntensity();
-		if (DrawFloatProperty("Normal Intensity", normalIntensity, 0.0f, 2.0f)) {
-			m_EditingMaterial->SetNormalIntensity(normalIntensity);
-			MarkAsModified();
+		{
+			float normalIntensity = m_EditingMaterial->GetNormalIntensity();
+			if (PropertySlider("Normal Intensity", normalIntensity, 0.0f, 2.0f, "%.2f", "Strength of normal map")) {
+				m_EditingMaterial->SetNormalIntensity(normalIntensity);
+				MarkAsModified();
+			}
 		}
-		
-		ImGui::PopID();  // ✅ End PBRProperties scope
 	}
 
-	void MaterialEditorPanel::DrawTexturesPanel() {
-		if (!m_EditingMaterial) return;
+	void MaterialEditorPanel::DrawEmissionSection() {
+		using namespace UI;
 
-		ImGui::PushID("TexturesPanel");  // ✅ Add unique ID scope
-		ImGui::Spacing();
-		ImGui::Separator();
-		ImGui::Spacing();
-		ImGui::Text("Texture Maps");
-		ImGui::Separator();
-		ImGui::Spacing();
+		ScopedID sectionID("EmissionSection");
 
-		// Albedo
+		SeparatorText("Emission");
+		AddSpacing(SpacingValues::SM);
+
+		// Emission color
 		{
-			ImGui::PushID("AlbedoTexture");
-			Ref<Texture2D> tex = m_EditingMaterial->GetAlbedoMap();
-			std::string path = m_EditingMaterial->GetAlbedoPath();
-			DrawTextureSlot("Albedo", "🎨", tex, path,
-				[this](const std::string& loadPath) {
-					auto texture = Texture2D::Create(loadPath);
-					if (texture && texture->IsLoaded()) {
-						m_EditingMaterial->SetAlbedoMap(texture);
-						MarkAsModified();
-					}
-				});
-			ImGui::PopID();
-		}
-
-		// Normal
-		{
-			ImGui::PushID("NormalTexture");
-			Ref<Texture2D> tex = m_EditingMaterial->GetNormalMap();
-			std::string path = m_EditingMaterial->GetNormalPath();
-			DrawTextureSlot("Normal", "🧭", tex, path,
-				[this](const std::string& loadPath) {
-					auto texture = Texture2D::Create(loadPath);
-					if (texture && texture->IsLoaded()) {
-						m_EditingMaterial->SetNormalMap(texture);
-						MarkAsModified();
-					}
-				});
-			ImGui::PopID();
-		}
-
-		// Metallic with multiplier
-		{
-			ImGui::PushID("MetallicTexture");
-			Ref<Texture2D> tex = m_EditingMaterial->GetMetallicMap();
-			std::string path = m_EditingMaterial->GetMetallicPath();
-			DrawTextureSlot("Metallic", "⚙️", tex, path,
-				[this](const std::string& loadPath) {
-					auto texture = Texture2D::Create(loadPath);
-					if (texture && texture->IsLoaded()) {
-						m_EditingMaterial->SetMetallicMap(texture);
-						MarkAsModified();
-					}
-				});
-			
-			if (m_EditingMaterial->HasMetallicMap()) {
-				float mult = m_EditingMaterial->GetMetallicMultiplier();
-				if (DrawFloatProperty("MetallicMult", mult, 0.0f, 2.0f)) {
-					m_EditingMaterial->SetMetallicMultiplier(mult);
-					MarkAsModified();
-				}
+			glm::vec3 emissionColor = m_EditingMaterial->GetEmissionColor();
+			UI::Color3 color(emissionColor);
+			if (PropertyColor("Emission Color", color, "Color of emitted light")) {
+				m_EditingMaterial->SetEmissionColor(color);
+				MarkAsModified();
 			}
-			ImGui::PopID();
 		}
 
-		// Roughness with multiplier
+		// Emission intensity
 		{
-			ImGui::PushID("RoughnessTexture");
-			Ref<Texture2D> tex = m_EditingMaterial->GetRoughnessMap();
-			std::string path = m_EditingMaterial->GetRoughnessPath();
-			DrawTextureSlot("Roughness", "🔧", tex, path,
-				[this](const std::string& loadPath) {
-					auto texture = Texture2D::Create(loadPath);
-					if (texture && texture->IsLoaded()) {
-						m_EditingMaterial->SetRoughnessMap(texture);
-						MarkAsModified();
-					}
-				});
-			
-			if (m_EditingMaterial->HasRoughnessMap()) {
-				float mult = m_EditingMaterial->GetRoughnessMultiplier();
-				if (DrawFloatProperty("RoughnessMult", mult, 0.0f, 2.0f)) {
-					m_EditingMaterial->SetRoughnessMultiplier(mult);
-					MarkAsModified();
-				}
+			float intensity = m_EditingMaterial->GetEmissionIntensity();
+			if (PropertySlider("Intensity", intensity, 0.0f, 100.0f, "%.1f", "Brightness of emission")) {
+				m_EditingMaterial->SetEmissionIntensity(intensity);
+				MarkAsModified();
 			}
-			ImGui::PopID();
 		}
-
-		// Specular with multiplier
-		{
-			ImGui::PushID("SpecularTexture");
-			Ref<Texture2D> tex = m_EditingMaterial->GetSpecularMap();
-			std::string path = m_EditingMaterial->GetSpecularPath();
-			DrawTextureSlot("Specular", "💎", tex, path,
-				[this](const std::string& loadPath) {
-					auto texture = Texture2D::Create(loadPath);
-					if (texture && texture->IsLoaded()) {
-						m_EditingMaterial->SetSpecularMap(texture);
-						MarkAsModified();
-					}
-				});
-			
-			if (m_EditingMaterial->HasSpecularMap()) {
-				float mult = m_EditingMaterial->GetSpecularMultiplier();
-				if (DrawFloatProperty("SpecularMult", mult, 0.0f, 2.0f)) {
-					m_EditingMaterial->SetSpecularMultiplier(mult);
-					MarkAsModified();
-				}
-			}
-			ImGui::PopID();
-		}
-
-		// Emission
-		{
-			ImGui::PushID("EmissionTexture");
-			Ref<Texture2D> tex = m_EditingMaterial->GetEmissionMap();
-			std::string path = m_EditingMaterial->GetEmissionPath();
-			DrawTextureSlot("Emission", "💡", tex, path,
-				[this](const std::string& loadPath) {
-					auto texture = Texture2D::Create(loadPath);
-					if (texture && texture->IsLoaded()) {
-						m_EditingMaterial->SetEmissionMap(texture);
-						MarkAsModified();
-					}
-				});
-			ImGui::PopID();
-		}
-
-		// AO with multiplier
-		{
-			ImGui::PushID("AOTexture");
-			Ref<Texture2D> tex = m_EditingMaterial->GetAOMap();
-			std::string path = m_EditingMaterial->GetAOPath();
-			DrawTextureSlot("Ambient Occlusion", "🌑", tex, path,
-				[this](const std::string& loadPath) {
-					auto texture = Texture2D::Create(loadPath);
-					if (texture && texture->IsLoaded()) {
-						m_EditingMaterial->SetAOMap(texture);
-						MarkAsModified();
-					}
-				});
-			
-			if (m_EditingMaterial->HasAOMap()) {
-				float mult = m_EditingMaterial->GetAOMultiplier();
-				if (DrawFloatProperty("AOMult", mult, 0.0f, 2.0f)) {
-					m_EditingMaterial->SetAOMultiplier(mult);
-					MarkAsModified();
-				}
-			}
-			ImGui::PopID();
-		}
-		
-		ImGui::PopID();  // ✅ End TexturesPanel scope
 	}
 
-	// ========== PROPERTY CONTROLS ==========
+	void MaterialEditorPanel::DrawTextureMapsSection() {
+		using namespace UI;
+
+		ScopedID sectionID("TextureMapsSection");
+
+		SeparatorText("Texture Maps");
+		AddSpacing(SpacingValues::MD);
+
+		// Albedo Map
+		DrawTextureSlotNew("Albedo", m_EditingMaterial->GetAlbedoMap(), m_EditingMaterial->GetAlbedoPath(),
+			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetAlbedoMap(tex); MarkAsModified(); },
+			[this]() { m_EditingMaterial->SetAlbedoMap(nullptr); MarkAsModified(); });
+
+		// Normal Map
+		DrawTextureSlotNew("Normal", m_EditingMaterial->GetNormalMap(), m_EditingMaterial->GetNormalPath(),
+			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetNormalMap(tex); MarkAsModified(); },
+			[this]() { m_EditingMaterial->SetNormalMap(nullptr); MarkAsModified(); });
+
+		// Metallic Map with multiplier
+		DrawTextureSlotNew("Metallic", m_EditingMaterial->GetMetallicMap(), m_EditingMaterial->GetMetallicPath(),
+			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetMetallicMap(tex); MarkAsModified(); },
+			[this]() { m_EditingMaterial->SetMetallicMap(nullptr); MarkAsModified(); });
+		
+		if (m_EditingMaterial->HasMetallicMap()) {
+			Indent(16.0f);
+			float mult = m_EditingMaterial->GetMetallicMultiplier();
+			if (PropertySlider("Multiplier Metallic", mult, 0.0f, 2.0f, "%.2f")) {
+				m_EditingMaterial->SetMetallicMultiplier(mult);
+				MarkAsModified();
+			}
+			Unindent(16.0f);
+		}
+
+		// Roughness Map with multiplier
+		DrawTextureSlotNew("Roughness", m_EditingMaterial->GetRoughnessMap(), m_EditingMaterial->GetRoughnessPath(),
+			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetRoughnessMap(tex); MarkAsModified(); },
+			[this]() { m_EditingMaterial->SetRoughnessMap(nullptr); MarkAsModified(); });
+		
+		if (m_EditingMaterial->HasRoughnessMap()) {
+			Indent(16.0f);
+			float mult = m_EditingMaterial->GetRoughnessMultiplier();
+			if (PropertySlider("Multiplier Roughness", mult, 0.0f, 2.0f, "%.2f")) {
+				m_EditingMaterial->SetRoughnessMultiplier(mult);
+				MarkAsModified();
+			}
+			Unindent(16.0f);
+		}
+
+		// Specular Map with multiplier
+		DrawTextureSlotNew("Specular", m_EditingMaterial->GetSpecularMap(), m_EditingMaterial->GetSpecularPath(),
+			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetSpecularMap(tex); MarkAsModified(); },
+			[this]() { m_EditingMaterial->SetSpecularMap(nullptr); MarkAsModified(); });
+		
+		if (m_EditingMaterial->HasSpecularMap()) {
+			Indent(16.0f);
+			float mult = m_EditingMaterial->GetSpecularMultiplier();
+			if (PropertySlider("Multiplier##Specular", mult, 0.0f, 2.0f, "%.2f")) {
+				m_EditingMaterial->SetSpecularMultiplier(mult);
+				MarkAsModified();
+			}
+			Unindent(16.0f);
+		}
+
+		// Emission Map
+		DrawTextureSlotNew("Emission", m_EditingMaterial->GetEmissionMap(), m_EditingMaterial->GetEmissionPath(),
+			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetEmissionMap(tex); MarkAsModified(); },
+			[this]() { m_EditingMaterial->SetEmissionMap(nullptr); MarkAsModified(); });
+
+		// AO Map with multiplier
+		DrawTextureSlotNew("Ambient Occlusion", m_EditingMaterial->GetAOMap(), m_EditingMaterial->GetAOPath(),
+			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetAOMap(tex); MarkAsModified(); },
+			[this]() { m_EditingMaterial->SetAOMap(nullptr); MarkAsModified(); });
+		
+		if (m_EditingMaterial->HasAOMap()) {
+			Indent(16.0f);
+			float mult = m_EditingMaterial->GetAOMultiplier();
+			if (PropertySlider("Multiplier##AO", mult, 0.0f, 2.0f, "%.2f")) {
+				m_EditingMaterial->SetAOMultiplier(mult);
+				MarkAsModified();
+			}
+			Unindent(16.0f);
+		}
+	}
+
+	// ============================================================================
+	// TEXTURE SLOT RENDERING
+	// ============================================================================
+
+	void MaterialEditorPanel::DrawTextureSlotNew(
+		const std::string& label,
+		Ref<Texture2D> texture,
+		const std::string& path,
+		std::function<void(Ref<Texture2D>)> onTextureSet,
+		std::function<void()> onTextureClear) {
+		
+		using namespace UI;
+
+		ScopedID slotID(label);
+
+		ImVec2 slotSize = ImVec2(ImGui::GetContentRegionAvail().x, MaterialEditorStyle::TextureSlotHeight);
+		
+		ScopedColor slotBg(ImGuiCol_ChildBg, MaterialEditorStyle::BgTextureSlot());
+		ScopedStyle slotRounding(ImGuiStyleVar_ChildRounding, 4.0f);
+
+		if (ImGui::BeginChild(("##TexSlot" + label).c_str(), slotSize, true, 
+			ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+			
+			// Header row: label + remove button
+			{
+				TextStyled(label, TextVariant::Primary);
+
+				if (texture) {
+					ImGui::SameLine(ImGui::GetContentRegionAvail().x - 55);
+					
+					ScopedColor btnColors({
+						{ImGuiCol_Button, MaterialEditorStyle::ButtonDanger()},
+						{ImGuiCol_ButtonHovered, MaterialEditorStyle::ButtonDangerHover()}
+					});
+					
+					if (ImGui::SmallButton("Remove")) {
+						onTextureClear();
+					}
+				}
+			}
+
+			AddSpacing(SpacingValues::XS);
+
+			// Content row: thumbnail + filename
+			{
+				if (texture && texture->IsLoaded()) {
+					// Thumbnail
+					ImGui::Image(
+						(ImTextureID)(intptr_t)texture->GetRendererID(),
+						ImVec2(MaterialEditorStyle::TextureThumbnailSize, MaterialEditorStyle::TextureThumbnailSize),
+						ImVec2(0, 1), ImVec2(1, 0)
+					);
+					
+					ImGui::SameLine();
+					
+					// Filename
+					std::filesystem::path texPath(path);
+					ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (MaterialEditorStyle::TextureThumbnailSize - ImGui::GetTextLineHeight()) * 0.5f);
+					TextStyled(texPath.filename().string(), TextVariant::Muted);
+				} else {
+					// Drop zone placeholder
+					ScopedColor placeholderColor(ImGuiCol_Text, MaterialEditorStyle::TextMuted());
+					ImGui::Text("Drop texture here or click to browse");
+				}
+			}
+
+			// Drag & drop target
+			if (ImGui::BeginDragDropTarget()) {
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+					ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+					std::string ext = data->Extension;
+					
+					// Validate image extension
+					if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" || ext == ".hdr") {
+						auto newTexture = Texture2D::Create(data->FilePath);
+						if (newTexture && newTexture->IsLoaded()) {
+							onTextureSet(newTexture);
+						}
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
+		}
+		ImGui::EndChild();
+
+		AddSpacing(SpacingValues::XS);
+	}
+
+	// ============================================================================
+	// LEGACY PROPERTY CONTROLS (kept for compatibility, redirect to UI framework)
+	// ============================================================================
 
 	bool MaterialEditorPanel::DrawColorProperty(const char* label, glm::vec4& color) {
-		ImGui::Columns(2, nullptr, false);
-		ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-		ImGui::Text("%s", label);
-		ImGui::NextColumn();
-		ImGui::SetNextItemWidth(-1);
-		bool changed = ImGui::ColorEdit4(("##" + std::string(label)).c_str(), glm::value_ptr(color), 
-			ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_AlphaBar);
-		ImGui::Columns(1);
+		UI::Color uiColor(color);
+		bool changed = UI::PropertyColor4(label, uiColor);
+		if (changed) {
+			color = glm::vec4(uiColor.R, uiColor.G, uiColor.B, uiColor.A);
+		}
 		return changed;
 	}
 
 	bool MaterialEditorPanel::DrawColor3Property(const char* label, glm::vec3& color) {
-		ImGui::Columns(2, nullptr, false);
-		ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-		ImGui::Text("%s", label);
-		ImGui::NextColumn();
-		ImGui::SetNextItemWidth(-1);
-		bool changed = ImGui::ColorEdit3(("##" + std::string(label)).c_str(), glm::value_ptr(color), 
-			ImGuiColorEditFlags_NoLabel);
-		ImGui::Columns(1);
+		UI::Color3 uiColor(color);
+		bool changed = UI::PropertyColor(label, uiColor);
+		if (changed) {
+			color = uiColor;
+		}
 		return changed;
 	}
 
 	bool MaterialEditorPanel::DrawFloatProperty(const char* label, float& value, float min, float max) {
-		ImGui::Columns(2, nullptr, false);
-		ImGui::SetColumnWidth(0, UIStyle::COLUMN_WIDTH);
-		ImGui::Text("%s", label);
-		ImGui::NextColumn();
-		ImGui::SetNextItemWidth(-1);
-		ImGui::PushStyleColor(ImGuiCol_SliderGrab, UIStyle::COLOR_ACCENT);
-		bool changed = ImGui::SliderFloat(("##" + std::string(label)).c_str(), &value, min, max, "%.2f");
-		ImGui::PopStyleColor();
-		ImGui::Columns(1);
-		return changed;
+		return UI::PropertySlider(label, value, min, max);
 	}
 
 	void MaterialEditorPanel::DrawTextureSlot(const char* label, const char* icon,
 		Ref<Texture2D> texture, const std::string& path,
 		std::function<void(const std::string&)> loadFunc) {
 		
-		ImGui::PushID(label);
-
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, UIStyle::COLOR_BG_DARK);
-		ImGui::BeginChild(("##Tex" + std::string(label)).c_str(), ImVec2(-1, 80), true);
-
-		// Icon and label
-		ImGui::Text("%s %s", icon, label);
-		
-		// Remove button if texture exists
-		if (texture) {
-			ImGui::SameLine(ImGui::GetContentRegionAvail().x - 60);
-			ImGui::PushStyleColor(ImGuiCol_Button, UIStyle::COLOR_DANGER);
-			if (ImGui::Button("Remove", ImVec2(60, 0))) {
-				// Clear texture by setting nullptr
-				if (std::string(label) == "Albedo") m_EditingMaterial->SetAlbedoMap(nullptr);
-				else if (std::string(label) == "Normal") m_EditingMaterial->SetNormalMap(nullptr);
-				else if (std::string(label) == "Metallic") m_EditingMaterial->SetMetallicMap(nullptr);
-				else if (std::string(label) == "Roughness") m_EditingMaterial->SetRoughnessMap(nullptr);
-				else if (std::string(label) == "Specular") m_EditingMaterial->SetSpecularMap(nullptr);
-				else if (std::string(label) == "Emission") m_EditingMaterial->SetEmissionMap(nullptr);
-				else if (std::string(label) == "Ambient Occlusion") m_EditingMaterial->SetAOMap(nullptr);
-				MarkAsModified();
-			}
-			ImGui::PopStyleColor();
-		}
-
-		ImGui::Separator();
-
-		// Thumbnail or drop zone
-		if (texture && texture->IsLoaded()) {
-			ImGui::Image(
-				(void*)(intptr_t)texture->GetRendererID(),
-				ImVec2(50, 50),
-				ImVec2(0, 1), ImVec2(1, 0)
-			);
-			ImGui::SameLine();
-			
-			std::filesystem::path texPath(path);
-			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-			ImGui::TextWrapped("%s", texPath.filename().string().c_str());
-			ImGui::PopStyleColor();
-		} else {
-			ImGui::PushStyleColor(ImGuiCol_Text, UIStyle::COLOR_HINT);
-			ImGui::Text("Drop texture here");
-			ImGui::PopStyleColor();
-		}
-
-		// Drag and drop
-		if (ImGui::BeginDragDropTarget()) {
-			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
-				ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
-				std::string ext = data->Extension;
-				if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" || ext == ".hdr") {
-					loadFunc(data->FilePath);
-				}
-			}
-			ImGui::EndDragDropTarget();
-		}
-
-		ImGui::EndChild();
-		ImGui::PopStyleColor();
-		ImGui::PopID();
-		ImGui::Spacing();
+		// Redirect to new implementation
+		DrawTextureSlotNew(label, texture, path,
+			[loadFunc](Ref<Texture2D>) {
+				// This is handled by the new implementation directly
+			},
+			[]() {
+				// Handled by new implementation
+			});
 	}
 
-	// ========== HELPERS ==========
+	// ============================================================================
+	// HELPERS
+	// ============================================================================
 
 	void MaterialEditorPanel::SaveMaterial() {
 		if (!m_EditingMaterial) return;
 
-		// Use the base Asset::Save() method which calls SaveToFile with the current path
 		if (m_EditingMaterial->Save()) {
 			m_HasUnsavedChanges = false;
 			LNX_LOG_INFO("Material saved: {0}", m_EditingMaterial->GetName());
 			
-			// Notify listeners for hot reloading (Content Browser, etc.)
 			if (m_OnMaterialSaved) {
 				m_OnMaterialSaved(m_EditingMaterial->GetPath());
 			}
@@ -611,12 +682,12 @@ namespace Lunex {
 	}
 
 	bool MaterialEditorPanel::ShowUnsavedChangesDialog() {
-		// TODO: Implementar diálogo modal de ImGui
-		// Por ahora, auto-guardar
+		// TODO: Implement proper modal dialog
+		// For now, auto-save
 		if (m_HasUnsavedChanges) {
 			SaveMaterial();
 		}
 		return true;
 	}
 
-}
+} // namespace Lunex

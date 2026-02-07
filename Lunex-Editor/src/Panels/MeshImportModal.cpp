@@ -1,10 +1,32 @@
+/**
+ * @file MeshImportModal.cpp
+ * @brief Mesh Import Modal - 3D model import configuration dialog
+ * 
+ * Features:
+ * - Asset name configuration
+ * - Transform settings (scale, rotation, translation)
+ * - Processing settings (normals, tangents, optimization)
+ * - LOD generation settings
+ * - Collision generation settings
+ * - Model preview information
+ */
+
 #include "stpch.h"
 #include "MeshImportModal.h"
 #include "Log/Log.h"
 
+// Lunex UI Framework
+#include "../UI/UICore.h"
+#include "../UI/UIComponents.h"
+#include "../UI/UILayout.h"
+
 #include <imgui.h>
 
 namespace Lunex {
+
+	// ============================================================================
+	// MODAL CONTROL
+	// ============================================================================
 
 	void MeshImportModal::Open(const std::filesystem::path& sourcePath, const std::filesystem::path& outputDir) {
 		if (!std::filesystem::exists(sourcePath)) {
@@ -38,159 +60,196 @@ namespace Lunex {
 		m_HasPreviewInfo = false;
 	}
 
+	// ============================================================================
+	// MAIN RENDER
+	// ============================================================================
+
 	void MeshImportModal::OnImGuiRender() {
 		if (!m_IsOpen) return;
 
-		ImGui::SetNextWindowSize(ImVec2(500, 600), ImGuiCond_FirstUseEver);
-		
-		if (ImGui::Begin("Import 3D Model", &m_IsOpen, ImGuiWindowFlags_NoCollapse)) {
-			// Header
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.85f, 0.85f, 1.0f));
-			ImGui::Text("Import: %s", m_SourcePath.filename().string().c_str());
-			ImGui::PopStyleColor();
-			
-			ImGui::Separator();
-			ImGui::Spacing();
+		using namespace UI;
 
-			// Asset name
-			ImGui::Text("Asset Name:");
+		ImGui::SetNextWindowSize(ImVec2(500, 600), ImGuiCond_FirstUseEver);
+		CenterNextWindow();
+		
+		if (BeginPanel("Import 3D Model", &m_IsOpen, ImGuiWindowFlags_NoCollapse)) {
+			// Header
+			{
+				ScopedColor headerColor(ImGuiCol_Text, Color(0.85f, 0.85f, 0.85f, 1.0f));
+				ImGui::Text("Import: %s", m_SourcePath.filename().string().c_str());
+			}
+			
+			Separator();
+			AddSpacing(SpacingValues::SM);
+
+			// Asset name input
+			TextStyled("Asset Name:", TextVariant::Secondary);
 			char nameBuffer[256];
 			strncpy_s(nameBuffer, m_AssetName.c_str(), sizeof(nameBuffer));
-			if (ImGui::InputText("##AssetName", nameBuffer, sizeof(nameBuffer))) {
+			if (InputText("##AssetName", nameBuffer, sizeof(nameBuffer))) {
 				m_AssetName = nameBuffer;
 			}
 
-			ImGui::Spacing();
+			AddSpacing(SpacingValues::SM);
 
 			// Output directory
-			ImGui::Text("Output: %s", m_OutputDirectory.string().c_str());
+			TextStyled("Output: " + m_OutputDirectory.string(), TextVariant::Muted);
 
-			ImGui::Spacing();
-			ImGui::Separator();
-			ImGui::Spacing();
+			AddSpacing(SpacingValues::SM);
+			Separator();
+			AddSpacing(SpacingValues::SM);
 
 			// Preview info
 			DrawPreview();
 
-			ImGui::Spacing();
-			ImGui::Separator();
-			ImGui::Spacing();
+			AddSpacing(SpacingValues::SM);
+			Separator();
+			AddSpacing(SpacingValues::SM);
 
 			// Import settings
 			DrawImportSettings();
 
-			ImGui::Spacing();
-			ImGui::Separator();
-			ImGui::Spacing();
+			AddSpacing(SpacingValues::SM);
+			Separator();
+			AddSpacing(SpacingValues::MD);
 
-			// Import button
-			float buttonWidth = 120.0f;
-			float windowWidth = ImGui::GetWindowWidth();
-			
-			ImGui::SetCursorPosX((windowWidth - buttonWidth * 2 - 10) / 2);
-			
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
-			if (ImGui::Button("Import", ImVec2(buttonWidth, 35))) {
-				DoImport();
-			}
-			ImGui::PopStyleColor(2);
-
-			ImGui::SameLine();
-
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
-			if (ImGui::Button("Cancel", ImVec2(buttonWidth, 35))) {
-				Close();
-			}
-			ImGui::PopStyleColor();
+			// Action buttons
+			DrawActionButtons();
 		}
-		ImGui::End();
+		EndPanel();
 
 		if (!m_IsOpen) {
 			Close();
 		}
 	}
 
+	// ============================================================================
+	// PREVIEW SECTION
+	// ============================================================================
+
 	void MeshImportModal::DrawPreview() {
-		ImGui::Text("Model Information:");
-		ImGui::Indent();
+		using namespace UI;
+
+		TextStyled("Model Information:", TextVariant::Secondary);
+		Indent();
 
 		if (m_HasPreviewInfo) {
-			ImGui::Text("Meshes: %d", m_ModelInfo.MeshCount);
-			ImGui::Text("Vertices: %d", m_ModelInfo.TotalVertices);
-			ImGui::Text("Triangles: %d", m_ModelInfo.TotalTriangles);
+			StatItem("Meshes", m_ModelInfo.MeshCount);
+			StatItem("Vertices", m_ModelInfo.TotalVertices);
+			StatItem("Triangles", m_ModelInfo.TotalTriangles);
 
 			if (m_ModelInfo.HasAnimations) {
-				ImGui::TextColored(ImVec4(0.3f, 0.8f, 0.3f, 1.0f), "? Has Animations");
+				TextColored(Colors::Success(), "? Has Animations");
 			}
 
 			if (m_ModelInfo.HasBones) {
-				ImGui::TextColored(ImVec4(0.3f, 0.8f, 0.3f, 1.0f), "? Has Skeleton");
+				TextColored(Colors::Success(), "? Has Skeleton");
 			}
 
 			if (!m_ModelInfo.MaterialNames.empty()) {
-				ImGui::Text("Materials:");
-				ImGui::Indent();
+				AddSpacing(SpacingValues::XS);
+				TextStyled("Materials:", TextVariant::Secondary);
+				Indent();
 				for (const auto& name : m_ModelInfo.MaterialNames) {
-					ImGui::BulletText("%s", name.c_str());
+					BulletText(name);
 				}
-				ImGui::Unindent();
+				Unindent();
 			}
 		}
 		else {
-			ImGui::TextColored(ImVec4(0.8f, 0.6f, 0.2f, 1.0f), "Could not read model info");
+			TextColored(Colors::Warning(), "Could not read model info");
 		}
 
-		ImGui::Unindent();
+		Unindent();
 	}
 
+	// ============================================================================
+	// IMPORT SETTINGS
+	// ============================================================================
+
 	void MeshImportModal::DrawImportSettings() {
+		using namespace UI;
+
+		// Transform Settings
 		if (ImGui::CollapsingHeader("Transform Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Indent();
+			Indent();
 			
 			ImGui::DragFloat("Scale", &m_ImportSettings.Scale, 0.01f, 0.001f, 100.0f, "%.3f");
 			ImGui::DragFloat3("Rotation", &m_ImportSettings.Rotation.x, 1.0f, -360.0f, 360.0f, "%.1f°");
 			ImGui::DragFloat3("Translation", &m_ImportSettings.Translation.x, 0.1f);
 			
-			ImGui::Unindent();
+			Unindent();
 		}
 
+		// Processing Settings
 		if (ImGui::CollapsingHeader("Processing Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Indent();
+			Indent();
 			
-			ImGui::Checkbox("Flip UVs", &m_ImportSettings.FlipUVs);
-			ImGui::Checkbox("Generate Normals", &m_ImportSettings.GenerateNormals);
-			ImGui::Checkbox("Generate Tangents", &m_ImportSettings.GenerateTangents);
-			ImGui::Checkbox("Optimize Mesh", &m_ImportSettings.OptimizeMesh);
+			Checkbox("Flip UVs", m_ImportSettings.FlipUVs);
+			Checkbox("Generate Normals", m_ImportSettings.GenerateNormals);
+			Checkbox("Generate Tangents", m_ImportSettings.GenerateTangents);
+			Checkbox("Optimize Mesh", m_ImportSettings.OptimizeMesh);
 			
-			ImGui::Unindent();
+			Unindent();
 		}
 
+		// LOD Settings
 		if (ImGui::CollapsingHeader("LOD Settings")) {
-			ImGui::Indent();
+			Indent();
 			
-			ImGui::Checkbox("Generate LODs", &m_ImportSettings.GenerateLODs);
+			Checkbox("Generate LODs", m_ImportSettings.GenerateLODs);
 			
 			if (m_ImportSettings.GenerateLODs) {
 				ImGui::SliderInt("LOD Levels", &m_ImportSettings.LODLevels, 1, 6);
 				ImGui::SliderFloat("Reduction Factor", &m_ImportSettings.LODReductionFactor, 0.1f, 0.9f, "%.2f");
 			}
 			
-			ImGui::Unindent();
+			Unindent();
 		}
 
+		// Collision Settings
 		if (ImGui::CollapsingHeader("Collision Settings")) {
-			ImGui::Indent();
+			Indent();
 			
-			ImGui::Checkbox("Generate Collision", &m_ImportSettings.GenerateCollision);
+			Checkbox("Generate Collision", m_ImportSettings.GenerateCollision);
 			
 			if (m_ImportSettings.GenerateCollision) {
-				ImGui::Checkbox("Use Convex Hull", &m_ImportSettings.UseConvexCollision);
+				Checkbox("Use Convex Hull", m_ImportSettings.UseConvexCollision);
 			}
 			
-			ImGui::Unindent();
+			Unindent();
 		}
 	}
+
+	// ============================================================================
+	// ACTION BUTTONS
+	// ============================================================================
+
+	void MeshImportModal::DrawActionButtons() {
+		using namespace UI;
+
+		float buttonWidth = 120.0f;
+		float windowWidth = ImGui::GetWindowWidth();
+		
+		// Center buttons
+		ImGui::SetCursorPosX((windowWidth - buttonWidth * 2 - 10) / 2);
+		
+		// Import button
+		if (Button("Import", ButtonVariant::Success, ButtonSize::Large, Size(buttonWidth, 35))) {
+			DoImport();
+		}
+
+		SameLine(0, 10);
+
+		// Cancel button
+		if (Button("Cancel", ButtonVariant::Default, ButtonSize::Large, Size(buttonWidth, 35))) {
+			Close();
+		}
+	}
+
+	// ============================================================================
+	// IMPORT EXECUTION
+	// ============================================================================
 
 	void MeshImportModal::DoImport() {
 		MeshImportResult result = MeshImporter::ImportAs(
@@ -215,4 +274,4 @@ namespace Lunex {
 		}
 	}
 
-}
+} // namespace Lunex

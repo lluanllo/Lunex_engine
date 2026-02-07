@@ -1,3 +1,16 @@
+/**
+ * @file MeshImportModal.h
+ * @brief Mesh Import Modal - 3D model import configuration dialog
+ * 
+ * Features:
+ * - Asset name configuration
+ * - Transform settings (scale, rotation, translation)
+ * - Processing settings (normals, tangents, optimization)
+ * - LOD generation settings
+ * - Collision generation settings
+ * - Model preview information
+ */
+
 #pragma once
 
 #include "Core/Core.h"
@@ -9,11 +22,6 @@
 
 namespace Lunex {
 
-	// ============================================================================
-	// MESH IMPORT MODAL
-	// Modal dialog for configuring mesh import settings when dropping
-	// a 3D model file onto the viewport or content browser
-	// ============================================================================
 	class MeshImportModal {
 	public:
 		using OnImportCallback = std::function<void(Ref<MeshAsset> meshAsset)>;
@@ -21,24 +29,24 @@ namespace Lunex {
 		MeshImportModal() = default;
 		~MeshImportModal() = default;
 
-		// Show the modal for a specific source file
+		// Modal control
 		void Open(const std::filesystem::path& sourcePath, const std::filesystem::path& outputDir = "");
-		
-		// Close the modal
 		void Close();
-		
-		// Check if modal is open
 		bool IsOpen() const { return m_IsOpen; }
 
-		// Render the modal (call every frame)
+		// Render
 		void OnImGuiRender();
 
-		// Set callback for when import is complete
+		// Callback
 		void SetOnImportCallback(OnImportCallback callback) { m_OnImportCallback = callback; }
 
 	private:
-		void DrawImportSettings();
+		// Render sections
 		void DrawPreview();
+		void DrawImportSettings();
+		void DrawActionButtons();
+		
+		// Import execution
 		void DoImport();
 
 	private:
@@ -60,4 +68,4 @@ namespace Lunex {
 		OnImportCallback m_OnImportCallback;
 	};
 
-}
+} // namespace Lunex
