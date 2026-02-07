@@ -1,171 +1,275 @@
-﻿#include "stpch.h"
+﻿/**
+ * @file MenuBarPanel.cpp
+ * @brief Menu Bar Panel - Main application menu bar
+ * 
+ * Features:
+ * - File menu (Project & Scene operations)
+ * - Edit menu (Undo/Redo, Clipboard)
+ * - View menu (Panel visibility)
+ * - Preferences menu (Settings)
+ * - Help menu
+ * - Logo display
+ * - Project/Scene name display
+ */
+
+#include "stpch.h"
 #include "MenuBarPanel.h"
+
+// Lunex UI Framework
+#include "../UI/UICore.h"
+#include "../UI/UIComponents.h"
+#include "../UI/UILayout.h"
+
 #include <imgui.h>
 
 namespace Lunex {
+
+	// ============================================================================
+	// MENU BAR STYLE CONSTANTS
+	// ============================================================================
+	
+	namespace MenuBarStyle {
+		constexpr float LogoPadding = 4.0f;
+		constexpr float LogoSpacing = 10.0f;
+		constexpr float FramePaddingX = 20.0f;
+		constexpr float FramePaddingY = 20.0f;
+		
+		inline UI::Color SceneNameColor()   { return UI::Color(0.80f, 0.80f, 0.80f, 1.0f); }
+		inline UI::Color ProjectNameColor() { return UI::Color(0.60f, 0.60f, 0.60f, 1.0f); }
+	}
+
+	// ============================================================================
+	// MAIN RENDER
+	// ============================================================================
+
 	void MenuBarPanel::OnImGuiRender() {
-		// ✅ FIX: Aumentar altura de la menu bar significativamente
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(20.0f, 20.0f)); // Padding horizontal y vertical
+		using namespace UI;
+		
+		// Increase menu bar height
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(MenuBarStyle::FramePaddingX, MenuBarStyle::FramePaddingY));
 
-		if (ImGui::BeginMenuBar()) {
-			// Renderizar logo al inicio de la barra de menú
-			if (!m_LogoTexture) {
-				m_LogoTexture = Texture2D::Create("Resources/Icons/LunexLogo/LunexLogo.png");
-			}
-
-			if (m_LogoTexture && m_LogoTexture->IsLoaded()) {
-				float menuBarHeight = ImGui::GetFrameHeight();
-				// ✅ FIX: Logo más grande y mejor centrado
-				float logoSize = menuBarHeight - 4.0f; // Más grande (era -8.0f)
-
-				// ✅ FIX: Centrar verticalmente el logo
-				ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2.0f);
-
-				ImGui::Image(
-					(void*)(intptr_t)m_LogoTexture->GetRendererID(),
-					ImVec2(logoSize, logoSize),
-					ImVec2(0, 1), ImVec2(1, 0) // Flip vertical para OpenGL
-				);
-				ImGui::SameLine();
-				// ✅ FIX: Más espacio después del logo
-				ImGui::Dummy(ImVec2(10.0f, 0.0f));
-				ImGui::SameLine();
-			}
-
+		if (BeginMenuBar()) {
+			// Logo
+			RenderLogo();
+			
 			// File Menu
-			if (ImGui::BeginMenu("File")) {
-				// Project section
-				ImGui::SeparatorText("Project");
-
-				if (ImGui::MenuItem("New Project", "Ctrl+Shift+N")) {
-					if (m_OnNewProject) m_OnNewProject();
-				}
-
-				if (ImGui::MenuItem("Open Project...", "Ctrl+Shift+O")) {
-					if (m_OnOpenProject) m_OnOpenProject();
-				}
-
-				if (ImGui::MenuItem("Save Project", "Ctrl+Shift+S")) {
-					if (m_OnSaveProject) m_OnSaveProject();
-				}
-
-				if (ImGui::MenuItem("Save Project As...")) {
-					if (m_OnSaveProjectAs) m_OnSaveProjectAs();
-				}
-
-				ImGui::Separator();
-
-				// Scene section
-				ImGui::SeparatorText("Scene");
-
-				if (ImGui::MenuItem("New Scene", "Ctrl+N")) {
-					if (m_OnNewScene) m_OnNewScene();
-				}
-
-				if (ImGui::MenuItem("Open Scene...", "Ctrl+O")) {
-					if (m_OnOpenScene) m_OnOpenScene();
-				}
-
-				if (ImGui::MenuItem("Save Scene", "Ctrl+S")) {
-					if (m_OnSaveScene) m_OnSaveScene();
-				}
-
-				if (ImGui::MenuItem("Save Scene As...", "Ctrl+Alt+S")) {
-					if (m_OnSaveSceneAs) m_OnSaveSceneAs();
-				}
-
-				ImGui::Separator();
-
-				if (ImGui::MenuItem("Exit")) {
-					if (m_OnExit) m_OnExit();
-				}
-
-				ImGui::EndMenu();
-			}
-
+			RenderFileMenu();
+			
 			// Edit Menu
-			if (ImGui::BeginMenu("Edit")) {
-				if (ImGui::MenuItem("Undo", "Ctrl+Z", false, false)) {}
-				if (ImGui::MenuItem("Redo", "Ctrl+Y", false, false)) {}
-				ImGui::Separator();
-				if (ImGui::MenuItem("Cut", "Ctrl+X", false, false)) {}
-				if (ImGui::MenuItem("Copy", "Ctrl+C", false, false)) {}
-				if (ImGui::MenuItem("Paste", "Ctrl+V", false, false)) {}
-				ImGui::EndMenu();
-			}
-
+			RenderEditMenu();
+			
 			// View Menu
-			if (ImGui::BeginMenu("View")) {
-				ImGui::MenuItem("Scene Hierarchy", nullptr, nullptr, false);
-				ImGui::MenuItem("Properties", nullptr, nullptr, false);
-				ImGui::MenuItem("Content Browser", nullptr, nullptr, false);
-				ImGui::MenuItem("Console", nullptr, nullptr, false);
-				ImGui::MenuItem("Stats", nullptr, nullptr, false);
-				ImGui::EndMenu();
-			}
-
+			RenderViewMenu();
+			
 			// Preferences Menu
-			if (ImGui::BeginMenu("Preferences")) {
-				if (ImGui::MenuItem("Input Settings", "Ctrl+K")) {
-					if (m_OnOpenInputSettings) m_OnOpenInputSettings();
-				}
-				
-				if (ImGui::MenuItem("JobSystem Monitor")) {
-					if (m_OnOpenJobSystemPanel) m_OnOpenJobSystemPanel();
-				}
-				
-				ImGui::Separator();
-				if (ImGui::MenuItem("Editor Settings", nullptr, false, false)) {
-					// TODO: Implement editor settings
-				}
-				if (ImGui::MenuItem("Theme", nullptr, false, false)) {
-					// TODO: Implement theme selection
-				}
-				ImGui::EndMenu();
-			}
-
+			RenderPreferencesMenu();
+			
 			// Help Menu
-			if (ImGui::BeginMenu("Help")) {
-				if (ImGui::MenuItem("Documentation")) {}
-				if (ImGui::MenuItem("About Lunex Editor")) {}
-				ImGui::EndMenu();
-			}
+			RenderHelpMenu();
+			
+			// Scene & Project names (right side)
+			RenderStatusInfo();
 
-			// Calculate available space
-			float availWidth = ImGui::GetContentRegionAvail().x;
-
-			// Display scene name in the center
-			std::string sceneText = m_SceneName;
-			float sceneTextWidth = ImGui::CalcTextSize(sceneText.c_str()).x;
-
-			// Display project version on the right
-			std::string versionText = m_ProjectName;
-			float versionTextWidth = ImGui::CalcTextSize(versionText.c_str()).x;
-
-			// Calculate center position for scene name
-			float centerPos = (availWidth - sceneTextWidth) * 0.5f;
-
-			// Make sure scene name doesn't overlap with version
-			if (centerPos > 10.0f && centerPos + sceneTextWidth < availWidth - versionTextWidth - 20.0f) {
-				ImGui::SetCursorPosX(ImGui::GetCursorPosX() + centerPos);
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.8f, 0.8f, 0.8f, 1.0f));
-				ImGui::Text("%s", m_SceneName.c_str());
-				ImGui::PopStyleColor();
-
-				// Display version on the right
-				ImGui::SameLine();
-				float rightPos = availWidth - versionTextWidth - 10.0f;
-				if (rightPos > ImGui::GetCursorPosX()) {
-					ImGui::SetCursorPosX(ImGui::GetCursorPosX() + rightPos - ImGui::GetCursorPosX());
-					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
-					ImGui::Text("%s", m_ProjectName.c_str());
-					ImGui::PopStyleColor();
-				}
-			}
-
-			ImGui::EndMenuBar();
+			EndMenuBar();
 		}
 
-		ImGui::PopStyleVar(); // FramePadding
+		ImGui::PopStyleVar();
 	}
-}
+
+	// ============================================================================
+	// LOGO
+	// ============================================================================
+
+	void MenuBarPanel::RenderLogo() {
+		if (!m_LogoTexture) {
+			m_LogoTexture = Texture2D::Create("Resources/Icons/LunexLogo/LunexLogo.png");
+		}
+
+		if (m_LogoTexture && m_LogoTexture->IsLoaded()) {
+			float menuBarHeight = ImGui::GetFrameHeight();
+			float logoSize = menuBarHeight - MenuBarStyle::LogoPadding;
+
+			// Center vertically
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2.0f);
+
+			ImGui::Image(
+				(void*)(intptr_t)m_LogoTexture->GetRendererID(),
+				ImVec2(logoSize, logoSize),
+				ImVec2(0, 1), ImVec2(1, 0)
+			);
+			
+			UI::SameLine();
+			ImGui::Dummy(ImVec2(MenuBarStyle::LogoSpacing, 0.0f));
+			UI::SameLine();
+		}
+	}
+
+	// ============================================================================
+	// FILE MENU
+	// ============================================================================
+
+	void MenuBarPanel::RenderFileMenu() {
+		using namespace UI;
+		
+		if (BeginMenu("File")) {
+			// Project section
+			SeparatorText("Project");
+
+			if (MenuItem("New Project", "Ctrl+Shift+N")) {
+				if (m_OnNewProject) m_OnNewProject();
+			}
+
+			if (MenuItem("Open Project...", "Ctrl+Shift+O")) {
+				if (m_OnOpenProject) m_OnOpenProject();
+			}
+
+			if (MenuItem("Save Project", "Ctrl+Shift+S")) {
+				if (m_OnSaveProject) m_OnSaveProject();
+			}
+
+			if (MenuItem("Save Project As...")) {
+				if (m_OnSaveProjectAs) m_OnSaveProjectAs();
+			}
+
+			Separator();
+
+			// Scene section
+			SeparatorText("Scene");
+
+			if (MenuItem("New Scene", "Ctrl+N")) {
+				if (m_OnNewScene) m_OnNewScene();
+			}
+
+			if (MenuItem("Open Scene...", "Ctrl+O")) {
+				if (m_OnOpenScene) m_OnOpenScene();
+			}
+
+			if (MenuItem("Save Scene", "Ctrl+S")) {
+				if (m_OnSaveScene) m_OnSaveScene();
+			}
+
+			if (MenuItem("Save Scene As...", "Ctrl+Alt+S")) {
+				if (m_OnSaveSceneAs) m_OnSaveSceneAs();
+			}
+
+			Separator();
+
+			if (MenuItem("Exit")) {
+				if (m_OnExit) m_OnExit();
+			}
+
+			EndMenu();
+		}
+	}
+
+	// ============================================================================
+	// EDIT MENU
+	// ============================================================================
+
+	void MenuBarPanel::RenderEditMenu() {
+		using namespace UI;
+		
+		if (BeginMenu("Edit")) {
+			MenuItem("Undo", "Ctrl+Z", false, false);
+			MenuItem("Redo", "Ctrl+Y", false, false);
+			Separator();
+			MenuItem("Cut", "Ctrl+X", false, false);
+			MenuItem("Copy", "Ctrl+C", false, false);
+			MenuItem("Paste", "Ctrl+V", false, false);
+			EndMenu();
+		}
+	}
+
+	// ============================================================================
+	// VIEW MENU
+	// ============================================================================
+
+	void MenuBarPanel::RenderViewMenu() {
+		using namespace UI;
+		
+		if (BeginMenu("View")) {
+			MenuItem("Scene Hierarchy", nullptr, false, false);
+			MenuItem("Properties", nullptr, false, false);
+			MenuItem("Content Browser", nullptr, false, false);
+			MenuItem("Console", nullptr, false, false);
+			MenuItem("Stats", nullptr, false, false);
+			EndMenu();
+		}
+	}
+
+	// ============================================================================
+	// PREFERENCES MENU
+	// ============================================================================
+
+	void MenuBarPanel::RenderPreferencesMenu() {
+		using namespace UI;
+		
+		if (BeginMenu("Preferences")) {
+			if (MenuItem("Input Settings", "Ctrl+K")) {
+				if (m_OnOpenInputSettings) m_OnOpenInputSettings();
+			}
+			
+			if (MenuItem("JobSystem Monitor")) {
+				if (m_OnOpenJobSystemPanel) m_OnOpenJobSystemPanel();
+			}
+			
+			Separator();
+			MenuItem("Editor Settings", nullptr, false, false);
+			MenuItem("Theme", nullptr, false, false);
+			EndMenu();
+		}
+	}
+
+	// ============================================================================
+	// HELP MENU
+	// ============================================================================
+
+	void MenuBarPanel::RenderHelpMenu() {
+		using namespace UI;
+		
+		if (BeginMenu("Help")) {
+			MenuItem("Documentation");
+			MenuItem("About Lunex Editor");
+			EndMenu();
+		}
+	}
+
+	// ============================================================================
+	// STATUS INFO (Scene & Project names)
+	// ============================================================================
+
+	void MenuBarPanel::RenderStatusInfo() {
+		using namespace UI;
+		
+		float availWidth = ImGui::GetContentRegionAvail().x;
+
+		// Calculate text widths
+		float sceneTextWidth = ImGui::CalcTextSize(m_SceneName.c_str()).x;
+		float versionTextWidth = ImGui::CalcTextSize(m_ProjectName.c_str()).x;
+
+		// Center position for scene name
+		float centerPos = (availWidth - sceneTextWidth) * 0.5f;
+
+		// Check if there's enough space
+		if (centerPos > 10.0f && centerPos + sceneTextWidth < availWidth - versionTextWidth - 20.0f) {
+			// Scene name (centered)
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + centerPos);
+			
+			{
+				ScopedColor sceneColor(ImGuiCol_Text, MenuBarStyle::SceneNameColor());
+				ImGui::Text("%s", m_SceneName.c_str());
+			}
+
+			// Project name (right-aligned)
+			SameLine();
+			float rightPos = availWidth - versionTextWidth - 10.0f;
+			if (rightPos > ImGui::GetCursorPosX()) {
+				ImGui::SetCursorPosX(ImGui::GetCursorPosX() + rightPos - ImGui::GetCursorPosX());
+				
+				ScopedColor projectColor(ImGuiCol_Text, MenuBarStyle::ProjectNameColor());
+				ImGui::Text("%s", m_ProjectName.c_str());
+			}
+		}
+	}
+
+} // namespace Lunex
