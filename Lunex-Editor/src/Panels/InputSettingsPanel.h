@@ -1,3 +1,15 @@
+/**
+ * @file InputSettingsPanel.h
+ * @brief Input Settings Panel - Keyboard Shortcuts Configuration
+ * 
+ * Features:
+ * - Visual key binding list with inline remapping
+ * - Click on key to remap (shows "..." during capture)
+ * - Search/filter actions
+ * - Save/Load bindings
+ * - Reset to defaults
+ */
+
 #pragma once
 
 #include "Core/Core.h"
@@ -7,16 +19,6 @@
 
 namespace Lunex {
 
-	/**
-	 * InputSettingsPanel - ImGui panel for remapping input bindings
-	 * 
-	 * Features:
-	 * - Visual key binding list with inline remapping
-	 * - Click on key to remap (shows "..." during capture)
-	 * - Search/filter actions
-	 * - Save/Load bindings
-	 * - Reset to defaults
-	 */
 	class InputSettingsPanel {
 	public:
 		InputSettingsPanel() = default;
@@ -30,23 +32,30 @@ namespace Lunex {
 		bool IsOpen() const { return m_Open; }
 
 	private:
+		// UI Sections
+		void DrawToolbar();
 		void RenderActionList();
+		void RenderKeyBindingCell(const std::string& actionName, Ref<Action> action);
 		void RenderConfirmDialog();
 
+		// Key capture
+		void CaptureKeyPress(const std::string& actionName);
 		void BeginRemap(const std::string& actionName);
 		void CancelRemap();
 		void ApplyRemap(const std::string& actionName, KeyCode key, uint8_t modifiers);
 
+		// Persistence
 		void ResetToDefaults();
 		void SaveBindings();
 		void LoadBindings();
 
+		// Helpers
 		std::string GetKeyNameForAction(const std::string& actionName);
 
 	private:
 		bool m_Open = false;
 		
-		// Remap state (inline capture)
+		// Remap state
 		bool m_IsRemapping = false;
 		std::string m_RemapActionName;
 

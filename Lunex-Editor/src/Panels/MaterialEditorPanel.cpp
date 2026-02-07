@@ -40,18 +40,18 @@ namespace Lunex {
 		constexpr float TextureThumbnailSize = 64.0f;  // Increased from 48 for better texture visibility
 		
 		// Colors
-		inline UI::Color BgPanel()         { return UI::Color(0.12f, 0.12f, 0.13f, 1.0f); }
-		inline UI::Color BgPreview()       { return UI::Color(0.08f, 0.08f, 0.09f, 1.0f); }
-		inline UI::Color BgSection()       { return UI::Color(0.14f, 0.14f, 0.15f, 1.0f); }
-		inline UI::Color BgTextureSlot()   { return UI::Color(0.11f, 0.11f, 0.12f, 1.0f); }
-		inline UI::Color BorderSubtle()    { return UI::Color(0.20f, 0.20f, 0.22f, 1.0f); }
-		inline UI::Color AccentPrimary()   { return UI::Color(0.26f, 0.59f, 0.98f, 1.0f); }
-		inline UI::Color StatusSaved()     { return UI::Color(0.30f, 0.80f, 0.30f, 1.0f); }
-		inline UI::Color StatusUnsaved()   { return UI::Color(0.95f, 0.75f, 0.20f, 1.0f); }
-		inline UI::Color ButtonDanger()    { return UI::Color(0.70f, 0.25f, 0.25f, 1.0f); }
-		inline UI::Color ButtonDangerHover() { return UI::Color(0.80f, 0.30f, 0.30f, 1.0f); }
-		inline UI::Color TextMuted()       { return UI::Color(0.50f, 0.50f, 0.55f, 1.0f); }
-		inline UI::Color TextHeader()      { return UI::Color(0.90f, 0.90f, 0.92f, 1.0f); }
+		UI::Color BgPanel()         { return UI::Color(0.12f, 0.12f, 0.13f, 1.0f); }
+		UI::Color BgPreview()       { return UI::Color(0.08f, 0.08f, 0.09f, 1.0f); }
+		UI::Color BgSection()       { return UI::Color(0.14f, 0.14f, 0.15f, 1.0f); }
+		UI::Color BgTextureSlot()   { return UI::Color(0.11f, 0.11f, 0.12f, 1.0f); }
+		UI::Color BorderSubtle()    { return UI::Color(0.20f, 0.20f, 0.22f, 1.0f); }
+		UI::Color AccentPrimary()   { return UI::Color(0.26f, 0.59f, 0.98f, 1.0f); }
+		UI::Color StatusSaved()     { return UI::Color(0.30f, 0.80f, 0.30f, 1.0f); }
+		UI::Color StatusUnsaved()   { return UI::Color(0.95f, 0.75f, 0.20f, 1.0f); }
+		UI::Color ButtonDanger()    { return UI::Color(0.70f, 0.25f, 0.25f, 1.0f); }
+		UI::Color ButtonDangerHover() { return UI::Color(0.80f, 0.30f, 0.30f, 1.0f); }
+		UI::Color TextMuted()       { return UI::Color(0.50f, 0.50f, 0.55f, 1.0f); }
+		UI::Color TextHeader()      { return UI::Color(0.90f, 0.90f, 0.92f, 1.0f); }
 	}
 
 	// ============================================================================

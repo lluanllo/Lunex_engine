@@ -26,7 +26,6 @@ namespace Lunex::UI {
 	using MaterialPreviewStyle = ::Lunex::UI::MaterialPreviewStyle;
 	using MaterialPreviewResult = ::Lunex::UI::MaterialPreviewResult;
 	using ScriptEntryResult = ::Lunex::UI::ScriptEntryResult;
-	using ToolbarStyle = ::Lunex::UI::ToolbarStyle;
 	using StatusBarStyle = ::Lunex::UI::StatusBarStyle;
 	using BreadcrumbItem = ::Lunex::UI::BreadcrumbItem;
 	using InputDialogResult = ::Lunex::UI::InputDialogResult;

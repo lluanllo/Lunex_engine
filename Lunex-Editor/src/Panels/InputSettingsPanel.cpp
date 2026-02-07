@@ -1,30 +1,50 @@
+/**
+ * @file InputSettingsPanel.cpp
+ * @brief Input Settings Panel - Migrated to Lunex UI Framework
+ * 
+ * Features:
+ * - Visual key binding list with inline remapping
+ * - Click on key to remap (shows "..." during capture)
+ * - Search/filter actions
+ * - Save/Load bindings
+ * - Reset to defaults
+ */
+
 #include "InputSettingsPanel.h"
 #include "Core/Input.h"
 #include "Log/Log.h"
+
+// Lunex UI Framework
+#include "../UI/UICore.h"
+#include "../UI/UIComponents.h"
+#include "../UI/UILayout.h"
+
 #include <imgui.h>
 #include <algorithm>
+#include <map>
 
 namespace Lunex {
 
-	// Modern UI Style constants with better contrast and readability
+	// ============================================================================
+	// PANEL STYLE CONSTANTS
+	// ============================================================================
+	
+	namespace InputSettingsStyle {
+		// Colors
+		inline UI::Color BgPanel()         { return UI::Color(0.08f, 0.08f, 0.10f, 0.95f); }
+		inline UI::Color KeyBg()           { return UI::Color(0.15f, 0.20f, 0.25f, 1.0f); }
+		inline UI::Color KeyText()         { return UI::Color(0.40f, 0.80f, 1.0f, 1.0f); }
+		inline UI::Color CaptureBg()       { return UI::Color(0.25f, 0.35f, 0.45f, 1.0f); }
+		inline UI::Color CaptureText()     { return UI::Color(1.0f, 1.0f, 1.0f, 1.0f); }
+		inline UI::Color CategoryText()    { return UI::Color(0.26f, 0.59f, 0.98f, 1.0f); }
+		inline UI::Color TableHeader()     { return UI::Color(0.15f, 0.20f, 0.25f, 1.0f); }
+	}
+
+	// ============================================================================
+	// HELPER: ImGuiKey to KeyCode conversion
+	// ============================================================================
+	
 	namespace {
-		const ImVec4 COLOR_HEADER = ImVec4(0.95f, 0.95f, 0.95f, 1.0f);
-		const ImVec4 COLOR_SUBHEADER = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
-		const ImVec4 COLOR_HINT = ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
-		const ImVec4 COLOR_ACCENT = ImVec4(0.2f, 0.5f, 0.9f, 1.0f);
-		const ImVec4 COLOR_ACCENT_HOVER = ImVec4(0.3f, 0.6f, 1.0f, 1.0f);
-		const ImVec4 COLOR_SUCCESS = ImVec4(0.2f, 0.7f, 0.3f, 1.0f);
-		const ImVec4 COLOR_SUCCESS_HOVER = ImVec4(0.3f, 0.8f, 0.4f, 1.0f);
-		const ImVec4 COLOR_WARNING = ImVec4(0.9f, 0.7f, 0.2f, 1.0f);
-		const ImVec4 COLOR_WARNING_HOVER = ImVec4(1.0f, 0.8f, 0.3f, 1.0f);
-		const ImVec4 COLOR_DANGER = ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
-		const ImVec4 COLOR_DANGER_HOVER = ImVec4(0.9f, 0.3f, 0.3f, 1.0f);
-		const ImVec4 COLOR_KEY_BG = ImVec4(0.15f, 0.2f, 0.25f, 1.0f);
-		const ImVec4 COLOR_KEY_TEXT = ImVec4(0.4f, 0.8f, 1.0f, 1.0f);
-		const ImVec4 COLOR_CAPTURE_BG = ImVec4(0.25f, 0.35f, 0.45f, 1.0f);
-		const ImVec4 COLOR_CAPTURE_TEXT = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-		
-		// Convert ImGuiKey to Lunex KeyCode
 		KeyCode ImGuiKeyToKeyCode(ImGuiKey key) {
 			switch (key) {
 				case ImGuiKey_Space: return Key::Space;
@@ -102,93 +122,46 @@ namespace Lunex {
 				case ImGuiKey_RightCtrl: return Key::RightControl;
 				case ImGuiKey_RightAlt: return Key::RightAlt;
 				case ImGuiKey_GraveAccent: return Key::GraveAccent;
-				default: return Key::Space; // Fallback
+				default: return Key::Space;
 			}
 		}
 	}
 
-	void InputSettingsPanel::OnImGuiRender() {
-		if (!m_Open)
-			return;
+	// ============================================================================
+	// MAIN RENDER
+	// ============================================================================
 
-		// Better default size and positioning
+	void InputSettingsPanel::OnImGuiRender() {
+		if (!m_Open) return;
+
+		using namespace UI;
+
+		// Window setup
 		ImGui::SetNextWindowSize(ImVec2(950, 700), ImGuiCond_FirstUseEver);
-		ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
+		CenterNextWindow();
 		
-		// Modern window styling
+		// Window styling - push individual style vars
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(15, 15));
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 8));
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 4.0f);
 		
-		if (ImGui::Begin("Input Settings", &m_Open, ImGuiWindowFlags_NoCollapse)) {
-			// Modern header with better typography
-			ImGui::PushStyleColor(ImGuiCol_Text, COLOR_HEADER);
-			ImGui::SetWindowFontScale(1.2f);
-			ImGui::Text("Keyboard Shortcuts Configuration");
-			ImGui::SetWindowFontScale(1.0f);
-			ImGui::PopStyleColor();
+		if (BeginPanel("Input Settings", &m_Open, ImGuiWindowFlags_NoCollapse)) {
+			// Header
+			Heading("Keyboard Shortcuts Configuration", 1);
+			AddSpacing(SpacingValues::SM);
+			TextStyled("Click on any key binding to remap it. Changes are saved when you click 'Save'.", TextVariant::Muted);
 			
-			ImGui::Spacing();
-			ImGui::PushStyleColor(ImGuiCol_Text, COLOR_HINT);
-			ImGui::TextWrapped("Click on any key binding to remap it. Changes are saved when you click 'Save'.");
-			ImGui::PopStyleColor();
-			
-			ImGui::Spacing();
-			ImGui::Separator();
-			ImGui::Spacing();
+			AddSpacing(SpacingValues::MD);
+			Separator();
+			AddSpacing(SpacingValues::MD);
 
-			// Modern toolbar with better button styling
-			ImGui::PushStyleColor(ImGuiCol_Button, COLOR_SUCCESS);
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COLOR_SUCCESS_HOVER);
-			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12, 6));
-			if (ImGui::Button("Save", ImVec2(110, 0))) {
-				SaveBindings();
-			}
-			ImGui::PopStyleVar();
-			ImGui::PopStyleColor(2);
-			if (ImGui::IsItemHovered()) {
-				ImGui::SetTooltip("Save all changes to disk");
-			}
+			// Toolbar
+			DrawToolbar();
 
-			ImGui::SameLine();
-			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12, 6));
-			if (ImGui::Button("Load", ImVec2(110, 0))) {
-				LoadBindings();
-			}
-			ImGui::PopStyleVar();
-			if (ImGui::IsItemHovered()) {
-				ImGui::SetTooltip("Reload from disk (discards unsaved changes)");
-			}
-
-			ImGui::SameLine();
-			ImGui::PushStyleColor(ImGuiCol_Button, COLOR_WARNING);
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COLOR_WARNING_HOVER);
-			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12, 6));
-			if (ImGui::Button("Reset to Defaults", ImVec2(160, 0))) {
-				m_ShowConfirmReset = true;
-			}
-			ImGui::PopStyleVar();
-			ImGui::PopStyleColor(2);
-			if (ImGui::IsItemHovered()) {
-				ImGui::SetTooltip("Reset all shortcuts to default values");
-			}
-
-			ImGui::SameLine();
-			ImGui::Spacing();
-			ImGui::SameLine();
-			ImGui::Spacing();
-			ImGui::SameLine();
-
-			// Modern search box
-			ImGui::SetNextItemWidth(280.0f);
-			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 6));
-			ImGui::InputTextWithHint("##Search", "Search actions...", m_SearchBuffer, IM_ARRAYSIZE(m_SearchBuffer));
-			ImGui::PopStyleVar();
-
-			ImGui::Spacing();
-			ImGui::Separator();
-			ImGui::Spacing();
+			AddSpacing(SpacingValues::MD);
+			Separator();
+			AddSpacing(SpacingValues::MD);
 
 			// Action list
 			RenderActionList();
@@ -196,268 +169,328 @@ namespace Lunex {
 			// Confirm reset dialog
 			RenderConfirmDialog();
 		}
-		ImGui::End();
+		EndPanel();
 		
 		ImGui::PopStyleVar(4);
 	}
 
+	// ============================================================================
+	// TOOLBAR
+	// ============================================================================
+
+	void InputSettingsPanel::DrawToolbar() {
+		using namespace UI;
+
+		// Save button
+		if (Button("Save", ButtonVariant::Success, ButtonSize::Medium, Size(110, 0))) {
+			SaveBindings();
+		}
+		if (IsItemHovered()) {
+			SetTooltip("Save all changes to disk");
+		}
+
+		SameLine();
+
+		// Load button
+		if (Button("Load", ButtonVariant::Default, ButtonSize::Medium, Size(110, 0))) {
+			LoadBindings();
+		}
+		if (IsItemHovered()) {
+			SetTooltip("Reload from disk (discards unsaved changes)");
+		}
+
+		SameLine();
+
+		// Reset button
+		if (Button("Reset to Defaults", ButtonVariant::Warning, ButtonSize::Medium, Size(160, 0))) {
+			m_ShowConfirmReset = true;
+		}
+		if (IsItemHovered()) {
+			SetTooltip("Reset all shortcuts to default values");
+		}
+
+		SameLine();
+		AddSpacing(SpacingValues::LG);
+		SameLine();
+
+		// Search box
+		ImGui::SetNextItemWidth(280.0f);
+		ScopedStyle searchStyle(ImGuiStyleVar_FramePadding, ImVec2(10, 6));
+		InputText("##Search", m_SearchBuffer, sizeof(m_SearchBuffer), "Search actions...");
+	}
+
+	// ============================================================================
+	// ACTION LIST
+	// ============================================================================
+
 	void InputSettingsPanel::RenderActionList() {
+		using namespace UI;
+
 		auto& registry = InputManager::Get().GetRegistry();
 		auto& keyMap = InputManager::Get().GetKeyMap();
 
-		// Better child window styling
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.08f, 0.08f, 0.1f, 0.95f));
-		ImGui::BeginChild("ActionList", ImVec2(0, -50), true, ImGuiWindowFlags_HorizontalScrollbar);
-		ImGui::PopStyleColor();
-
-		// Modern table with better flags
-		if (ImGui::BeginTable("ActionTable", 3, 
-			ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | 
-			ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_HighlightHoveredColumn))
-		{
-			// Setup columns
-			ImGui::TableSetupColumn("Action Name", ImGuiTableColumnFlags_WidthFixed, 350.0f);
-			ImGui::TableSetupColumn("Shortcut", ImGuiTableColumnFlags_WidthFixed, 220.0f);
-			ImGui::TableSetupColumn("Description", ImGuiTableColumnFlags_WidthStretch);
-			ImGui::TableSetupScrollFreeze(0, 1); // Freeze header row
-
-			// Better header styling
-			ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, ImVec4(0.15f, 0.2f, 0.25f, 1.0f));
-			ImGui::TableHeadersRow();
-			ImGui::PopStyleColor();
-
-			// Filter actions
-			std::string searchTerm(m_SearchBuffer);
-			std::transform(searchTerm.begin(), searchTerm.end(), searchTerm.begin(), ::tolower);
-
-			// Group actions by category for better organization
-			std::map<std::string, std::vector<std::pair<std::string, Ref<Action>>>> groupedActions;
-			for (const auto& [actionName, action] : registry.GetAllActions()) {
-				// Apply search filter
-				if (!searchTerm.empty()) {
-					std::string lowerActionName = actionName;
-					std::transform(lowerActionName.begin(), lowerActionName.end(), lowerActionName.begin(), ::tolower);
-					std::string lowerDesc = action->GetDescription();
-					std::transform(lowerDesc.begin(), lowerDesc.end(), lowerDesc.begin(), ::tolower);
-
-					if (lowerActionName.find(searchTerm) == std::string::npos &&
-						lowerDesc.find(searchTerm) == std::string::npos) {
-						continue;
-					}
-				}
-
-				// Extract category from action name (e.g., "Camera.MoveForward" -> "Camera")
-				std::string category = "Other";
-				size_t dotPos = actionName.find('.');
-				if (dotPos != std::string::npos) {
-					category = actionName.substr(0, dotPos);
-				}
-				
-				groupedActions[category].push_back({actionName, action});
-			}
-
-			// Render grouped actions
-			for (const auto& [category, actions] : groupedActions) {
-				// Category header
-				ImGui::TableNextRow();
-				ImGui::TableNextColumn();
-				ImGui::PushStyleColor(ImGuiCol_Text, COLOR_ACCENT);
-				ImGui::SetWindowFontScale(1.1f);
-				ImGui::Text("%s", category.c_str());
-				ImGui::SetWindowFontScale(1.0f);
-				ImGui::PopStyleColor();
-
-				// Render actions in this category
-				for (const auto& [actionName, action] : actions) {
-					ImGui::PushID(actionName.c_str());
-					ImGui::TableNextRow();
-
-					// Column 0: Action name
-					ImGui::TableNextColumn();
-					ImGui::Indent(15.0f);
-					ImGui::PushStyleColor(ImGuiCol_Text, COLOR_HEADER);
-					ImGui::Text("%s", actionName.c_str());
-					ImGui::PopStyleColor();
-					ImGui::Unindent(15.0f);
-
-					// Column 1: Current binding (CLICKABLE for remapping)
-					ImGui::TableNextColumn();
-					
-					bool isCapturing = (m_IsRemapping && m_RemapActionName == actionName);
-					std::string bindingText = GetKeyNameForAction(actionName);
-					
-					// Display text based on state
-					std::string displayText;
-					ImVec4 buttonColor;
-					ImVec4 textColor;
-					
-					if (isCapturing) {
-						// Show "..." while capturing
-						displayText = "...";
-						buttonColor = COLOR_CAPTURE_BG;
-						textColor = COLOR_CAPTURE_TEXT;
-					}
-					else if (bindingText.empty()) {
-						displayText = "(Unbound)";
-						buttonColor = COLOR_KEY_BG;
-						textColor = COLOR_HINT;
-					}
-					else {
-						displayText = bindingText;
-						buttonColor = COLOR_KEY_BG;
-						textColor = COLOR_KEY_TEXT;
-					}
-
-					// Render clickable button
-					if (action->IsRemappable()) {
-						ImGui::PushStyleColor(ImGuiCol_Button, buttonColor);
-						ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COLOR_ACCENT);
-						ImGui::PushStyleColor(ImGuiCol_Text, textColor);
-						ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12, 6));
-						ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
-						
-						if (ImGui::Button(displayText.c_str(), ImVec2(-1, 0))) {
-							// Start capturing for this action
-							BeginRemap(actionName);
-						}
-						
-						ImGui::PopStyleVar(2);
-						ImGui::PopStyleColor(3);
-						
-						if (ImGui::IsItemHovered()) {
-							ImGui::SetTooltip("Click to remap this binding");
-						}
-
-						// Key capture logic (only when capturing this action)
-						if (isCapturing) {
-							ImGuiIO& io = ImGui::GetIO();
-							
-							// Iterate through valid ImGui named keys
-							for (int key = ImGuiKey_NamedKey_BEGIN; key < ImGuiKey_NamedKey_END; key++) {
-								ImGuiKey imguiKey = (ImGuiKey)key;
-								
-								// Skip modifier keys
-								if (imguiKey == ImGuiKey_LeftCtrl || imguiKey == ImGuiKey_RightCtrl ||
-									imguiKey == ImGuiKey_LeftShift || imguiKey == ImGuiKey_RightShift ||
-									imguiKey == ImGuiKey_LeftAlt || imguiKey == ImGuiKey_RightAlt ||
-									imguiKey == ImGuiKey_LeftSuper || imguiKey == ImGuiKey_RightSuper) {
-									continue;
-								}
-								
-								if (ImGui::IsKeyPressed(imguiKey, false)) {
-									// Convert ImGuiKey to KeyCode
-									KeyCode capturedKey = ImGuiKeyToKeyCode(imguiKey);
-
-									// Capture modifiers
-									uint8_t capturedModifiers = KeyModifiers::None;
-									if (io.KeyCtrl)  capturedModifiers |= KeyModifiers::Ctrl;
-									if (io.KeyShift) capturedModifiers |= KeyModifiers::Shift;
-									if (io.KeyAlt)   capturedModifiers |= KeyModifiers::Alt;
-									if (io.KeySuper) capturedModifiers |= KeyModifiers::Super;
-
-									// Apply the new binding
-									ApplyRemap(actionName, capturedKey, capturedModifiers);
-									break;
-								}
-							}
-						}
-					}
-					else {
-						// Non-remappable - show as static text
-						ImGui::PushStyleColor(ImGuiCol_Text, COLOR_HINT);
-						ImGui::Text("%s (Fixed)", bindingText.c_str());
-						ImGui::PopStyleColor();
-					}
-
-					// Column 2: Description
-					ImGui::TableNextColumn();
-					ImGui::PushStyleColor(ImGuiCol_Text, COLOR_HINT);
-					ImGui::TextWrapped("%s", action->GetDescription().c_str());
-					ImGui::PopStyleColor();
-
-					ImGui::PopID();
-				}
-			}
-
-			ImGui::EndTable();
-		}
-
-		ImGui::EndChild();
-
-		// Modern footer with better info display
-		ImGui::Spacing();
-		ImGui::Separator();
-		ImGui::Spacing();
+		// Child window for list
+		ScopedColor childBg(ImGuiCol_ChildBg, InputSettingsStyle::BgPanel());
 		
-		ImGui::PushStyleColor(ImGuiCol_Text, COLOR_HINT);
-		ImGui::Text("Total: %d actions  |  %d bindings  |  Tip: Press Ctrl+K to open this panel", 
-			(int)registry.GetActionCount(), (int)keyMap.GetBindingCount());
-		ImGui::PopStyleColor();
+		if (BeginChild("ActionList", Size(0, -50), true, ImGuiWindowFlags_HorizontalScrollbar)) {
+			
+			// Table
+			if (ImGui::BeginTable("ActionTable", 3, 
+				ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | 
+				ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_HighlightHoveredColumn))
+			{
+				// Columns setup
+				ImGui::TableSetupColumn("Action Name", ImGuiTableColumnFlags_WidthFixed, 350.0f);
+				ImGui::TableSetupColumn("Shortcut", ImGuiTableColumnFlags_WidthFixed, 220.0f);
+				ImGui::TableSetupColumn("Description", ImGuiTableColumnFlags_WidthStretch);
+				ImGui::TableSetupScrollFreeze(0, 1);
+
+				// Header
+				{
+					ScopedColor headerBg(ImGuiCol_TableHeaderBg, InputSettingsStyle::TableHeader());
+					ImGui::TableHeadersRow();
+				}
+
+				// Filter and group actions
+				std::string searchTerm(m_SearchBuffer);
+				std::transform(searchTerm.begin(), searchTerm.end(), searchTerm.begin(), ::tolower);
+
+				std::map<std::string, std::vector<std::pair<std::string, Ref<Action>>>> groupedActions;
+				
+				for (const auto& [actionName, action] : registry.GetAllActions()) {
+					// Apply search filter
+					if (!searchTerm.empty()) {
+						std::string lowerActionName = actionName;
+						std::transform(lowerActionName.begin(), lowerActionName.end(), lowerActionName.begin(), ::tolower);
+						std::string lowerDesc = action->GetDescription();
+						std::transform(lowerDesc.begin(), lowerDesc.end(), lowerDesc.begin(), ::tolower);
+
+						if (lowerActionName.find(searchTerm) == std::string::npos &&
+							lowerDesc.find(searchTerm) == std::string::npos) {
+							continue;
+						}
+					}
+
+					// Extract category
+					std::string category = "Other";
+					size_t dotPos = actionName.find('.');
+					if (dotPos != std::string::npos) {
+						category = actionName.substr(0, dotPos);
+					}
+					
+					groupedActions[category].push_back({actionName, action});
+				}
+
+				// Render grouped actions
+				for (const auto& [category, actions] : groupedActions) {
+					// Category header row
+					ImGui::TableNextRow();
+					ImGui::TableNextColumn();
+					
+					{
+						ScopedColor categoryColor(ImGuiCol_Text, InputSettingsStyle::CategoryText());
+						ImGui::SetWindowFontScale(1.1f);
+						ImGui::Text("%s", category.c_str());
+						ImGui::SetWindowFontScale(1.0f);
+					}
+
+					// Action rows
+					for (const auto& [actionName, action] : actions) {
+						ScopedID actionID(actionName);
+						ImGui::TableNextRow();
+
+						// Column 0: Action name
+						ImGui::TableNextColumn();
+						Indent(15.0f);
+						TextStyled(actionName, TextVariant::Primary);
+						Unindent(15.0f);
+
+						// Column 1: Key binding (clickable)
+						ImGui::TableNextColumn();
+						RenderKeyBindingCell(actionName, action);
+
+						// Column 2: Description
+						ImGui::TableNextColumn();
+						TextStyled(action->GetDescription(), TextVariant::Muted);
+					}
+				}
+
+				ImGui::EndTable();
+			}
+		}
+		EndChild();
+
+		// Footer
+		AddSpacing(SpacingValues::SM);
+		Separator();
+		AddSpacing(SpacingValues::SM);
+		
+		TextStyled(
+			"Total: " + std::to_string(registry.GetActionCount()) + " actions  |  " +
+			std::to_string(keyMap.GetBindingCount()) + " bindings  |  Tip: Press Ctrl+K to open this panel",
+			TextVariant::Muted
+		);
 	}
 
-	void InputSettingsPanel::RenderConfirmDialog() {
-		if (!m_ShowConfirmReset)
-			return;
+	// ============================================================================
+	// KEY BINDING CELL
+	// ============================================================================
 
-		ImGui::OpenPopup("Confirm Reset");
+	void InputSettingsPanel::RenderKeyBindingCell(const std::string& actionName, Ref<Action> action) {
+		using namespace UI;
 
-		// Better dialog styling
-		ImGui::SetNextWindowSize(ImVec2(500, 200), ImGuiCond_Always);
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20, 20));
+		bool isCapturing = (m_IsRemapping && m_RemapActionName == actionName);
+		std::string bindingText = GetKeyNameForAction(actionName);
 		
-		if (ImGui::BeginPopupModal("Confirm Reset", nullptr, ImGuiWindowFlags_NoResize)) {
-			ImGui::PushStyleColor(ImGuiCol_Text, COLOR_WARNING);
-			ImGui::SetWindowFontScale(1.2f);
-			ImGui::Text("Reset to Default Bindings");
-			ImGui::SetWindowFontScale(1.0f);
-			ImGui::PopStyleColor();
-			
-			ImGui::Spacing();
-			ImGui::Separator();
-			ImGui::Spacing();
+		// Determine display state
+		std::string displayText;
+		Color buttonColor;
+		Color textColor;
+		
+		if (isCapturing) {
+			displayText = "...";
+			buttonColor = InputSettingsStyle::CaptureBg();
+			textColor = InputSettingsStyle::CaptureText();
+		}
+		else if (bindingText.empty()) {
+			displayText = "(Unbound)";
+			buttonColor = InputSettingsStyle::KeyBg();
+			textColor = Colors::TextMuted();
+		}
+		else {
+			displayText = bindingText;
+			buttonColor = InputSettingsStyle::KeyBg();
+			textColor = InputSettingsStyle::KeyText();
+		}
 
-			ImGui::TextWrapped("Are you sure you want to reset all keyboard shortcuts to their default values?");
-			ImGui::Spacing();
-			ImGui::PushStyleColor(ImGuiCol_Text, COLOR_HINT);
-			ImGui::TextWrapped("This action cannot be undone. All your custom bindings will be lost.");
-			ImGui::PopStyleColor();
+		// Render button or static text
+		if (action->IsRemappable()) {
+			ScopedColor btnColors({
+				{ImGuiCol_Button, buttonColor},
+				{ImGuiCol_ButtonHovered, Colors::Primary()},
+				{ImGuiCol_Text, textColor}
+			});
 			
-			ImGui::Spacing();
-			ImGui::Spacing();
-			ImGui::Separator();
-			ImGui::Spacing();
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12, 6));
+			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+			
+			if (ImGui::Button(displayText.c_str(), ImVec2(-1, 0))) {
+				BeginRemap(actionName);
+			}
+			
+			ImGui::PopStyleVar(2);
+			
+			if (IsItemHovered()) {
+				SetTooltip("Click to remap this binding");
+			}
 
-			// Better button layout
+			// Key capture logic
+			if (isCapturing) {
+				CaptureKeyPress(actionName);
+			}
+		}
+		else {
+			// Non-remappable
+			TextStyled(bindingText + " (Fixed)", TextVariant::Muted);
+		}
+	}
+
+	// ============================================================================
+	// KEY CAPTURE
+	// ============================================================================
+
+	void InputSettingsPanel::CaptureKeyPress(const std::string& actionName) {
+		ImGuiIO& io = ImGui::GetIO();
+		
+		for (int key = ImGuiKey_NamedKey_BEGIN; key < ImGuiKey_NamedKey_END; key++) {
+			ImGuiKey imguiKey = (ImGuiKey)key;
+			
+			// Skip modifier keys
+			if (imguiKey == ImGuiKey_LeftCtrl || imguiKey == ImGuiKey_RightCtrl ||
+				imguiKey == ImGuiKey_LeftShift || imguiKey == ImGuiKey_RightShift ||
+				imguiKey == ImGuiKey_LeftAlt || imguiKey == ImGuiKey_RightAlt ||
+				imguiKey == ImGuiKey_LeftSuper || imguiKey == ImGuiKey_RightSuper) {
+				continue;
+			}
+			
+			if (ImGui::IsKeyPressed(imguiKey, false)) {
+				KeyCode capturedKey = ImGuiKeyToKeyCode(imguiKey);
+
+				// Capture modifiers
+				uint8_t capturedModifiers = KeyModifiers::None;
+				if (io.KeyCtrl)  capturedModifiers |= KeyModifiers::Ctrl;
+				if (io.KeyShift) capturedModifiers |= KeyModifiers::Shift;
+				if (io.KeyAlt)   capturedModifiers |= KeyModifiers::Alt;
+				if (io.KeySuper) capturedModifiers |= KeyModifiers::Super;
+
+				ApplyRemap(actionName, capturedKey, capturedModifiers);
+				break;
+			}
+		}
+	}
+
+	// ============================================================================
+	// CONFIRM DIALOG
+	// ============================================================================
+
+	void InputSettingsPanel::RenderConfirmDialog() {
+		if (!m_ShowConfirmReset) return;
+
+		using namespace UI;
+
+		OpenPopup("Confirm Reset");
+
+		ImGui::SetNextWindowSize(ImVec2(500, 200), ImGuiCond_Always);
+		CenterNextWindow();
+		
+		ScopedStyle modalPadding(ImGuiStyleVar_WindowPadding, ImVec2(20, 20));
+		
+		if (BeginModal("Confirm Reset", nullptr, Size(500, 200), ImGuiWindowFlags_NoResize)) {
+			{
+				ScopedColor warningColor(ImGuiCol_Text, Colors::Warning());
+				Heading("Reset to Default Bindings", 2);
+			}
+			
+			AddSpacing(SpacingValues::SM);
+			Separator();
+			AddSpacing(SpacingValues::MD);
+
+			UI::TextWrapped("Are you sure you want to reset all keyboard shortcuts to their default values?");
+			AddSpacing(SpacingValues::SM);
+			UI::TextWrapped("This action cannot be undone. All your custom bindings will be lost.", TextVariant::Muted);
+			
+			AddSpacing(SpacingValues::LG);
+			Separator();
+			AddSpacing(SpacingValues::MD);
+
+			// Centered buttons
 			float buttonWidth = 150.0f;
 			float spacing = 10.0f;
 			float totalWidth = buttonWidth * 2 + spacing;
 			ImGui::SetCursorPosX((ImGui::GetWindowWidth() - totalWidth) * 0.5f);
 
-			ImGui::PushStyleColor(ImGuiCol_Button, COLOR_DANGER);
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COLOR_DANGER_HOVER);
-			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12, 8));
-			if (ImGui::Button("Yes, Reset", ImVec2(buttonWidth, 0))) {
+			if (Button("Yes, Reset", ButtonVariant::Danger, ButtonSize::Medium, Size(buttonWidth, 0))) {
 				ResetToDefaults();
 				m_ShowConfirmReset = false;
 				ImGui::CloseCurrentPopup();
 			}
-			ImGui::PopStyleVar();
-			ImGui::PopStyleColor(2);
 
-			ImGui::SameLine(0, spacing);
-			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12, 8));
-			if (ImGui::Button("Cancel", ImVec2(buttonWidth, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+			SameLine(0, spacing);
+
+			if (Button("Cancel", ButtonVariant::Default, ButtonSize::Medium, Size(buttonWidth, 0)) || 
+				ImGui::IsKeyPressed(ImGuiKey_Escape)) {
 				m_ShowConfirmReset = false;
 				ImGui::CloseCurrentPopup();
 			}
-			ImGui::PopStyleVar();
 
-			ImGui::EndPopup();
+			EndModal();
 		}
-		
-		ImGui::PopStyleVar();
 	}
 	
+	// ============================================================================
+	// REMAP OPERATIONS
+	// ============================================================================
+
 	void InputSettingsPanel::BeginRemap(const std::string& actionName) {
 		m_IsRemapping = true;
 		m_RemapActionName = actionName;
@@ -483,9 +516,11 @@ namespace Lunex {
 		// Stop capturing
 		m_IsRemapping = false;
 		m_RemapActionName.clear();
-		
-		// UI will automatically refresh on next frame
 	}
+
+	// ============================================================================
+	// PERSISTENCE
+	// ============================================================================
 
 	void InputSettingsPanel::ResetToDefaults() {
 		InputManager::Get().ResetToDefaults();
@@ -517,7 +552,6 @@ namespace Lunex {
 		if (bindings.empty())
 			return "";
 
-		// Return first binding
 		return bindings[0].ToString();
 	}
 
