@@ -98,10 +98,13 @@ namespace Lunex {
 			return;
 		}
 		
-		if (m_SelectedEntity) {
+		if (m_SelectedEntity && m_SelectedEntity.GetScene() == m_Context.get()) {
 			DrawComponents(m_SelectedEntity);
 		}
 		else {
+			if (m_SelectedEntity && m_SelectedEntity.GetScene() != m_Context.get()) {
+				m_SelectedEntity = {};
+			}
 			DrawEmptyState();
 		}
 

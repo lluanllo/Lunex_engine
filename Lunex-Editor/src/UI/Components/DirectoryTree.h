@@ -21,11 +21,11 @@ namespace Lunex::UI {
 		float itemSpacing = 2.0f;
 		float iconSize = 16.0f;
 		float arrowWidth = 20.0f;
-		Color headerColor = Color(0.20f, 0.20f, 0.20f, 0.0f);
-		Color hoverColor = Color(0.25f, 0.25f, 0.25f, 1.0f);
-		Color selectedColor = Color(0.18f, 0.40f, 0.65f, 1.0f);
-		Color textColor = Color(0.90f, 0.90f, 0.90f, 1.0f);
-		Color labelColor = Color(0.60f, 0.60f, 0.60f, 1.0f);
+		Color headerColor = Color(0.14f, 0.14f, 0.14f, 0.0f);
+		Color hoverColor = Color(0.18f, 0.18f, 0.18f, 1.0f);
+		Color selectedColor = Color(0.91f, 0.57f, 0.18f, 0.30f);
+		Color textColor = Color(0.92f, 0.92f, 0.92f, 1.0f);
+		Color labelColor = Color(0.55f, 0.55f, 0.55f, 1.0f);
 	};
 	
 	struct DirectoryTreeCallbacks {

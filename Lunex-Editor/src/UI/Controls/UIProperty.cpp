@@ -30,7 +30,7 @@ namespace Lunex::UI {
 			ScopedColor xColors({
 				{ImGuiCol_Button, Colors::AxisX()},
 				{ImGuiCol_ButtonHovered, Colors::AxisXHover()},
-				{ImGuiCol_ButtonActive, Color(0.60f, 0.15f, 0.15f, 1.0f)}
+				{ImGuiCol_ButtonActive, Color(0.75f, 0.15f, 0.15f, 1.0f)}
 			});
 			
 			if (ImGui::Button("X", ImVec2(25, 25))) {
@@ -43,9 +43,9 @@ namespace Lunex::UI {
 		
 		{
 			ScopedColor frameColors({
-				{ImGuiCol_FrameBg, Color(0.25f, 0.15f, 0.15f, 1.0f)},
-				{ImGuiCol_FrameBgHovered, Color(0.30f, 0.18f, 0.18f, 1.0f)},
-				{ImGuiCol_FrameBgActive, Color(0.70f, 0.20f, 0.20f, 0.50f)}
+				{ImGuiCol_FrameBg, Color(0.18f, 0.10f, 0.10f, 1.0f)},
+				{ImGuiCol_FrameBgHovered, Color(0.25f, 0.12f, 0.12f, 1.0f)},
+				{ImGuiCol_FrameBgActive, Color(0.89f, 0.22f, 0.21f, 0.40f)}
 			});
 			
 			if (ImGui::DragFloat("##X", &values.x, 0.1f, 0.0f, 0.0f, "%.2f")) {
@@ -74,9 +74,9 @@ namespace Lunex::UI {
 		
 		{
 			ScopedColor frameColors({
-				{ImGuiCol_FrameBg, Color(0.15f, 0.25f, 0.15f, 1.0f)},
-				{ImGuiCol_FrameBgHovered, Color(0.18f, 0.30f, 0.18f, 1.0f)},
-				{ImGuiCol_FrameBgActive, Color(0.20f, 0.70f, 0.20f, 0.50f)}
+				{ImGuiCol_FrameBg, Color(0.10f, 0.18f, 0.10f, 1.0f)},
+				{ImGuiCol_FrameBgHovered, Color(0.12f, 0.25f, 0.12f, 1.0f)},
+				{ImGuiCol_FrameBgActive, Color(0.27f, 0.75f, 0.27f, 0.40f)}
 			});
 			
 			if (ImGui::DragFloat("##Y", &values.y, 0.1f, 0.0f, 0.0f, "%.2f")) {
@@ -105,9 +105,9 @@ namespace Lunex::UI {
 		
 		{
 			ScopedColor frameColors({
-				{ImGuiCol_FrameBg, Color(0.15f, 0.18f, 0.30f, 1.0f)},
-				{ImGuiCol_FrameBgHovered, Color(0.18f, 0.22f, 0.35f, 1.0f)},
-				{ImGuiCol_FrameBgActive, Color(0.20f, 0.40f, 0.90f, 0.50f)}
+				{ImGuiCol_FrameBg, Color(0.10f, 0.12f, 0.22f, 1.0f)},
+				{ImGuiCol_FrameBgHovered, Color(0.12f, 0.16f, 0.30f, 1.0f)},
+				{ImGuiCol_FrameBgActive, Color(0.22f, 0.46f, 0.93f, 0.40f)}
 			});
 			
 			if (ImGui::DragFloat("##Z", &values.z, 0.1f, 0.0f, 0.0f, "%.2f")) {

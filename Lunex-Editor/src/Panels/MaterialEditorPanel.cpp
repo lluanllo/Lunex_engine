@@ -373,7 +373,7 @@ namespace Lunex {
 			glm::vec4 albedo = m_EditingMaterial->GetAlbedo();
 			UI::Color albedoColor(albedo);
 			if (PropertyColor4("Albedo", albedoColor, "Base color of the material")) {
-				m_EditingMaterial->SetAlbedo(glm::vec4(albedoColor.R, albedoColor.G, albedoColor.B, albedoColor.A));
+				m_EditingMaterial->SetAlbedo(glm::vec4(albedoColor.r, albedoColor.g, albedoColor.b, albedoColor.a));
 				MarkAsModified();
 			}
 		}
@@ -623,7 +623,7 @@ namespace Lunex {
 		UI::Color uiColor(color);
 		bool changed = UI::PropertyColor4(label, uiColor);
 		if (changed) {
-			color = glm::vec4(uiColor.R, uiColor.G, uiColor.B, uiColor.A);
+			color = glm::vec4(uiColor.r, uiColor.g, uiColor.b, uiColor.a);
 		}
 		return changed;
 	}

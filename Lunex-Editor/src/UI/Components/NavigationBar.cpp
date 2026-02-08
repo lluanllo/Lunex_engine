@@ -23,8 +23,8 @@ namespace Lunex::UI {
 			{ImGuiCol_ButtonHovered, m_Style.buttonHoverColor},
 			{ImGuiCol_ButtonActive, m_Style.buttonActiveColor},
 			{ImGuiCol_FrameBg, m_Style.buttonColor},
-			{ImGuiCol_FrameBgHovered, Color(0.20f, 0.20f, 0.21f, 1.0f)},
-			{ImGuiCol_Border, Color(0.08f, 0.08f, 0.09f, 1.0f)}
+			{ImGuiCol_FrameBgHovered, Color(0.14f, 0.14f, 0.14f, 1.0f)},
+			{ImGuiCol_Border, Color(0.055f, 0.055f, 0.055f, 1.0f)}
 		});
 		
 		ScopedStyle padding(ImGuiStyleVar_FramePadding, ImVec2(6, 6));
@@ -128,7 +128,7 @@ namespace Lunex::UI {
 		ScopedColor searchColors({
 			{ImGuiCol_FrameBg, m_Style.searchBgColor},
 			{ImGuiCol_FrameBgHovered, m_Style.searchHoverColor},
-			{ImGuiCol_FrameBgActive, Color(0.26f, 0.59f, 0.98f, 0.3f)},
+			{ImGuiCol_FrameBgActive, Color(0.91f, 0.57f, 0.18f, 0.30f)},
 			{ImGuiCol_Text, m_Style.searchTextColor}
 		});
 		

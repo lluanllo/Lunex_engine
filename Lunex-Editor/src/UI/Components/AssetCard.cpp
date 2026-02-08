@@ -10,15 +10,15 @@ namespace Lunex::UI {
 
 	Color AssetCard::GetTypeColor(const std::string& typeLabel) {
 		if (typeLabel == "MESH" || typeLabel == "LUMESH") return AssetTypeColors::Mesh();
-		if (typeLabel == "PREFAB") return AssetTypeColors::Prefab();
+		if (typeLabel == "PREFAB" ) return AssetTypeColors::Prefab();
 		if (typeLabel == "MATERIAL") return AssetTypeColors::Material();
 		if (typeLabel == "HDRI" || typeLabel == "HDR") return AssetTypeColors::HDR();
 		if (typeLabel == "TEXTURE") return AssetTypeColors::Texture();
-		if (typeLabel == "SCENE") return AssetTypeColors::Scene();
-		if (typeLabel == "SCRIPT") return AssetTypeColors::Script();
-		if (typeLabel == "AUDIO") return AssetTypeColors::Audio();
-		if (typeLabel == "SHADER") return AssetTypeColors::Shader();
-		if (typeLabel == "FOLDER") return AssetTypeColors::Folder();
+		if (typeLabel == "SCENE" ) return AssetTypeColors::Scene();
+		if (typeLabel == "SCRIPT" ) return AssetTypeColors::Script();
+		if (typeLabel == "AUDIO"  ) return AssetTypeColors::Audio();
+		if (typeLabel == "SHADER" ) return AssetTypeColors::Shader();
+		if (typeLabel == "FOLDER" ) return AssetTypeColors::Folder();
 		return AssetTypeColors::Default();
 	}
 
@@ -97,11 +97,11 @@ namespace Lunex::UI {
 			ImVec2 shadowOffset(3.0f, 3.0f);
 			ImVec2 shadowMin = ImVec2(cardMin.x + shadowOffset.x, cardMin.y + shadowOffset.y);
 			ImVec2 shadowMax = ImVec2(cardMax.x + shadowOffset.x, cardMax.y + shadowOffset.y);
-			drawList->AddRectFilled(shadowMin, shadowMax, IM_COL32(0, 0, 0, 80), m_Style.rounding);
+			drawList->AddRectFilled(shadowMin, shadowMax, IM_COL32(0, 0, 0, 100), m_Style.rounding);
 		}
 		
 		// Card background
-		drawList->AddRectFilled(cardMin, cardMax, IM_COL32(45, 45, 48, 255), m_Style.rounding);
+		drawList->AddRectFilled(cardMin, cardMax, IM_COL32(30, 30, 30, 255), m_Style.rounding);
 		
 		// Thumbnail area
 		float padding = 8.0f;
@@ -113,7 +113,7 @@ namespace Lunex::UI {
 		ImVec2 iconMax = ImVec2(iconMin.x + iconWidth, iconMin.y + iconHeight);
 		
 		// Icon background
-		drawList->AddRectFilled(iconMin, iconMax, IM_COL32(55, 55, 58, 255), 4.0f);
+		drawList->AddRectFilled(iconMin, iconMax, IM_COL32(20, 20, 20, 255), 3.0f);
 		
 		// Thumbnail
 		if (thumbnail) {
@@ -170,7 +170,7 @@ namespace Lunex::UI {
 		float nameOffsetX = (cardWidth - nameWidth) * 0.5f;
 		drawList->AddText(
 			ImVec2(cursorPos.x + nameOffsetX, textAreaY),
-			IM_COL32(245, 245, 245, 255),
+			IM_COL32(235, 235, 235, 255),
 			displayName.c_str()
 		);
 		
@@ -182,10 +182,10 @@ namespace Lunex::UI {
 			// Use type color for the label text
 			Color typeColor = GetTypeColor(typeLabel);
 			ImU32 typeColorU32 = IM_COL32(
-				(int)(typeColor.r * 180), 
-				(int)(typeColor.g * 180), 
-				(int)(typeColor.b * 180), 
-				200
+				(int)(typeColor.r * 170), 
+				(int)(typeColor.g * 170), 
+				(int)(typeColor.b * 170), 
+				180
 			);
 			
 			drawList->AddText(
@@ -217,13 +217,13 @@ namespace Lunex::UI {
 										   bool isSelected, bool isHovered) {
 		// Hover effect
 		if (isHovered && !isSelected) {
-			drawList->AddRect(cardMin, cardMax, IM_COL32(80, 80, 85, 255), m_Style.rounding, 0, 2.0f);
+			drawList->AddRect(cardMin, cardMax, IM_COL32(60, 60, 60, 200), m_Style.rounding, 0, 1.5f);
 		}
 		
-		// Selection effect
+		// Selection effect (orange accent matching Hazel)
 		if (isSelected) {
-			drawList->AddRect(cardMin, cardMax, IM_COL32(66, 150, 250, 255), m_Style.rounding, 0, 2.5f);
-			drawList->AddRectFilled(cardMin, cardMax, IM_COL32(66, 150, 250, 40), m_Style.rounding);
+			drawList->AddRect(cardMin, cardMax, IM_COL32(232, 145, 45, 255), m_Style.rounding, 0, 2.0f);
+			drawList->AddRectFilled(cardMin, cardMax, IM_COL32(232, 145, 45, 30), m_Style.rounding);
 		}
 	}
 	
