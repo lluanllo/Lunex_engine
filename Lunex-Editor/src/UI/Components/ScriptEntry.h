@@ -8,6 +8,9 @@
 #include "../UICore.h"
 #include "../UIComponents.h"
 #include "../UILayout.h"
+#include "ScriptVarEditor.h"
+#include "../../Lunex-ScriptCore/src/LunexScriptingAPI.h"
+#include <vector>
 
 namespace Lunex::UI {
 
@@ -18,6 +21,7 @@ namespace Lunex::UI {
 	struct ScriptEntryResult {
 		bool removeClicked = false;
 		bool openClicked = false;
+		bool varsChanged = false;
 	};
 	
 	/**
@@ -28,6 +32,7 @@ namespace Lunex::UI {
 	 * - Script file name
 	 * - Load status indicator
 	 * - Remove button
+	 * - Public variable editor (when script is loaded)
 	 */
 	class ScriptEntry {
 	public:
@@ -40,17 +45,22 @@ namespace Lunex::UI {
 		 * @param scriptPath Path to the script file
 		 * @param index Script index in the list
 		 * @param isLoaded Whether the script is loaded
+		 * @param publicVars Public variables from reflection (empty if not loaded)
 		 * @return Interaction result
 		 */
 		ScriptEntryResult Render(const std::string& id,
 								 const std::string& scriptPath,
 								 int index,
-								 bool isLoaded);
+								 bool isLoaded,
+								 std::vector<Lunex::VarMetadata> publicVars = {});
 		
 	private:
 		void RenderHeader(int index, bool& removeClicked);
 		void RenderFileInfo(const std::string& scriptPath);
 		void RenderStatus(bool isLoaded);
+		bool RenderPublicVars(std::vector<Lunex::VarMetadata>& vars);
+		
+		ScriptVarEditor m_VarEditor;
 	};
 	
 	// ============================================================================
@@ -60,6 +70,7 @@ namespace Lunex::UI {
 	ScriptEntryResult RenderScriptEntry(const std::string& id,
 										const std::string& scriptPath,
 										int index,
-										bool isLoaded);
+										bool isLoaded,
+										std::vector<Lunex::VarMetadata> publicVars = {});
 
 } // namespace Lunex::UI

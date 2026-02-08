@@ -250,46 +250,24 @@ namespace Lunex {
 				ScopedID scriptID((int)i);
 
 				const std::string& scriptPath = component.GetScriptPath(i);
-				std::filesystem::path path(scriptPath);
-				std::string filename = path.filename().string();
 				bool isLoaded = component.IsScriptLoaded(i);
+				
+				// Get public variables for loaded scripts
+				auto publicVars = isLoaded ? component.GetPublicVariables(i) : std::vector<VarMetadata>{};
 
-				if (ComponentDrawer::BeginInfoCard("##ScriptCard" + std::to_string(i), 100.0f)) {
-					{
-						ScopedColor textColor(ImGuiCol_Text, ComponentStyle::HintColor());
-						Text("Script #%d", (int)i + 1);
-					}
-					
-					SameLine(ImGui::GetContentRegionAvail().x - 65);
-					
-					if (Button("Remove", ButtonVariant::Danger, ButtonSize::Small, Size(65, 0))) {
-						component.RemoveScript(i);
-						ComponentDrawer::EndInfoCard();
-						break;
-					}
-					
-					Separator();
-					AddSpacing(SpacingValues::XS);
-					
-					{
-						ScopedColor textColor(ImGuiCol_Text, ComponentStyle::AccentColor());
-						Text("File:");
-					}
-					SameLine();
-					TextWrapped(filename, TextVariant::Primary);
-					
-					AddSpacing(SpacingValues::XS);
-					
-					Text("Status:");
-					SameLine();
-					if (isLoaded) {
-						TextStyled("Loaded", TextVariant::Success);
-					}
-					else {
-						TextStyled("Will compile on Play", TextVariant::Warning);
-					}
+				auto result = RenderScriptEntry(
+					"##ScriptEntry" + std::to_string(i),
+					scriptPath,
+					(int)i,
+					isLoaded,
+					std::move(publicVars)
+				);
+
+				if (result.removeClicked) {
+					component.RemoveScript(i);
+					break;
 				}
-				ComponentDrawer::EndInfoCard();
+
 				AddSpacing(SpacingValues::XS);
 			}
 
@@ -312,8 +290,20 @@ namespace Lunex {
 				ContentBrowserPayload* data = (ContentBrowserPayload*)payloadData;
 				std::string ext = data->Extension;
 				if (ext == ".cpp" || ext == ".h") {
-					component.AddScript(data->RelativePath);
-					LNX_LOG_INFO("Added script: {0}", data->RelativePath);
+					std::string scriptPath = data->RelativePath;
+					// Fallback: compute relative path from FilePath if RelativePath is empty
+					if (scriptPath.empty() && data->FilePath[0] != '\0') {
+						std::filesystem::path fullPath(data->FilePath);
+						std::filesystem::path assetsDir("assets");
+						try {
+							scriptPath = std::filesystem::relative(fullPath, assetsDir).string();
+						}
+						catch (...) {
+							scriptPath = fullPath.filename().string();
+						}
+					}
+					component.AddScript(scriptPath);
+					LNX_LOG_INFO("Added script: {0}", scriptPath);
 				}
 				else {
 					LNX_LOG_WARN("Only .cpp files are valid C++ scripts");
@@ -323,10 +313,27 @@ namespace Lunex {
 			ComponentDrawer::EndIndent();
 
 			if (component.GetScriptCount() > 0) {
-				ComponentDrawer::DrawSectionHeader("", "Script Properties");
-				ComponentDrawer::BeginIndent();
-				TextWrapped("Public variables will appear here when the reflection system is implemented.", TextVariant::Muted);
-				ComponentDrawer::EndIndent();
+				bool anyLoaded = false;
+				bool anyHasVars = false;
+				for (size_t i = 0; i < component.GetScriptCount(); i++) {
+					if (component.IsScriptLoaded(i)) {
+						anyLoaded = true;
+						if (!component.GetPublicVariables(i).empty())
+							anyHasVars = true;
+					}
+				}
+				
+				if (!anyLoaded) {
+					ComponentDrawer::DrawSectionHeader("", "Script Properties");
+					ComponentDrawer::BeginIndent();
+					TextWrapped("Press Play to compile scripts and expose public variables.", TextVariant::Muted);
+					ComponentDrawer::EndIndent();
+				} else if (!anyHasVars) {
+					ComponentDrawer::DrawSectionHeader("", "Script Properties");
+					ComponentDrawer::BeginIndent();
+					TextWrapped("No public variables registered. Use RegisterVar() in your script's Start() method.", TextVariant::Muted);
+					ComponentDrawer::EndIndent();
+				}
 			}
 		});
 	}
@@ -1007,7 +1014,7 @@ namespace Lunex {
 			ComponentDrawer::BeginIndent();
 
 			const char* bodyTypes[] = { "Static", "Dynamic", "Kinematic" };
-			int currentType = (int)component.Type;
+		 int currentType = (int)component.Type;
 
 			if (PropertyDropdown("Type", currentType, bodyTypes, 3, "Defines how the body responds to physics")) {
 				component.Type = (Rigidbody2DComponent::BodyType)currentType;

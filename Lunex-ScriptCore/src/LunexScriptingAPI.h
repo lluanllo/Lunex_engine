@@ -641,12 +641,15 @@ namespace Lunex {
             time = TimeAPI(ctx);
             debug = DebugAPI(ctx);
             
-            // Call user Start
+            // Clear previously registered variables and call user Start
+            m_PublicVariables.clear();
             Start();
+            m_Initialized = true;
         }
         
         void OnUnload() final {
             OnDestroy();
+            m_Initialized = false;
         }
         
         void OnUpdate(float deltaTime) final {
@@ -654,11 +657,17 @@ namespace Lunex {
         }
         
         void OnPlayModeEnter() final {
-            Start();
+            // Only call Start if OnLoad hasn't already called it
+            if (!m_Initialized) {
+                m_PublicVariables.clear();
+                Start();
+                m_Initialized = true;
+            }
         }
         
         void OnPlayModeExit() final {
             OnDestroy();
+            m_Initialized = false;
         }
         
         std::vector<VarMetadata> GetPublicVariables() final {
@@ -723,6 +732,7 @@ namespace Lunex {
     private:
         EngineContext* m_Context = nullptr;
         std::vector<VarMetadata> m_PublicVariables;
+        bool m_Initialized = false;
     };
 
 } // namespace Lunex

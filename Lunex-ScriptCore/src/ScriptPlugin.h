@@ -48,6 +48,9 @@ namespace Lunex {
         // Obtiene la versión de la API del plugin
         uint32_t GetAPIVersion() const { return m_APIVersion; }
 
+        // Obtiene el módulo del script (para reflexión)
+        IScriptModule* GetModule() const { return m_Module; }
+
         // Llama a OnUpdate del módulo
         void Update(float deltaTime);
 

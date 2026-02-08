@@ -66,6 +66,7 @@
 #include "EntityNode.h"
 #include "MaterialPreview.h"
 #include "ScriptEntry.h"
+#include "ScriptVarEditor.h"
 
 // Navigation
 #include "SearchBar.h"

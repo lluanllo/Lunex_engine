@@ -736,6 +736,44 @@ namespace Lunex {
 			}
 		};
 
+		m_EngineContext->IsActive3D = [](void* entity) -> bool {
+			if (!entity || !g_CurrentScene) return false;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					return body->IsActive();
+				}
+			}
+			return false;
+		};
+
+		m_EngineContext->IsKinematic3D = [](void* entity) -> bool {
+			if (!entity || !g_CurrentScene) return false;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				return rb3d.Type == Rigidbody3DComponent::BodyType::Kinematic;
+			}
+			return false;
+		};
+
+		m_EngineContext->SetKinematic3D = [](void* entity, bool kinematic) {
+			if (!entity || !g_CurrentScene) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				rb3d.Type = kinematic ? Rigidbody3DComponent::BodyType::Kinematic : Rigidbody3DComponent::BodyType::Dynamic;
+			}
+		};
+
 		// CurrentEntity se establecerá cuando se cargue el script
 		m_EngineContext->CurrentEntity = nullptr;
 
@@ -745,6 +783,34 @@ namespace Lunex {
 	}
 
 	void ScriptingEngine::OnScriptsStart(entt::registry& registry) {
+		// ===== ENSURE g_CurrentScene IS UP TO DATE =====
+		// Scene::Copy creates a new Scene which calls Initialize in its constructor,
+		// but if another ScriptingEngine was initialized after us (e.g. editor scene),
+		// g_CurrentScene could be stale. Re-set it here.
+		g_CurrentScene = m_CurrentScene;
+
+		// ===== CLEANUP OLD INSTANCES FIRST =====
+		// Unload all previously loaded scripts to allow recompilation
+		for (auto& [uuid, plugin] : m_ScriptInstances) {
+			if (plugin) {
+				plugin->OnPlayModeExit();
+				plugin->Unload();
+			}
+		}
+		m_ScriptInstances.clear();
+		
+		// Reset all script loaded states and plugin pointers
+		auto resetView = registry.view<ScriptComponent>();
+		for (auto entity : resetView) {
+			auto& scriptComp = resetView.get<ScriptComponent>(entity);
+			for (size_t i = 0; i < scriptComp.GetScriptCount(); i++) {
+				if (i < scriptComp.ScriptLoadedStates.size())
+					scriptComp.ScriptLoadedStates[i] = false;
+				if (i < scriptComp.ScriptPluginInstances.size())
+					scriptComp.ScriptPluginInstances[i] = nullptr;
+			}
+		}
+		
 		// ===== PARALLELIZED SCRIPT COMPILATION =====
 		// Collect all scripts that need compilation
 		struct ScriptCompileTask {
@@ -752,6 +818,7 @@ namespace Lunex {
 			size_t ScriptIndex;
 			std::string ScriptPath;
 			uint64_t EntityID;
+			bool ForceRecompile = false;
 		};
 		
 		std::vector<ScriptCompileTask> compileTasks;
@@ -772,7 +839,8 @@ namespace Lunex {
 						static_cast<uint32_t>(entityHandle), 
 						i, 
 						scriptPath, 
-						static_cast<uint64_t>(idComp.ID)
+						static_cast<uint64_t>(idComp.ID),
+						scriptComp.ForceRecompile
 					});
 				}
 			}
@@ -793,7 +861,7 @@ namespace Lunex {
 				JobSystem::Get().Schedule(
 					[this, task, taskIdx, compiledResults]() {
 						std::string dllPath;
-						if (CompileScript(task.ScriptPath, dllPath)) {
+						if (CompileScript(task.ScriptPath, dllPath, task.ForceRecompile)) {
 							(*compiledResults)[taskIdx] = { taskIdx, dllPath };
 							LNX_LOG_INFO("? Script #{0} compiled: {1}", task.ScriptIndex + 1, dllPath);
 						}
@@ -910,6 +978,9 @@ namespace Lunex {
 	void ScriptingEngine::OnScriptsUpdate(float deltaTime) {
 		// Actualizar deltaTime global
 		g_CurrentDeltaTime = deltaTime;
+		
+		// Ensure g_CurrentScene is always pointing to this engine's scene
+		g_CurrentScene = m_CurrentScene;
 
 		// ===== PARALLELIZED SCRIPT UPDATES =====
 		if (m_ScriptInstances.empty()) {
@@ -948,7 +1019,7 @@ namespace Lunex {
 		JobSystem::Get().Wait(counter);
 	}
 
-	bool ScriptingEngine::CompileScript(const std::string& scriptPath, std::string& outDLLPath) {
+	bool ScriptingEngine::CompileScript(const std::string& scriptPath, std::string& outDLLPath, bool forceRecompile) {
 		std::filesystem::path fullScriptPath = std::filesystem::path("assets") / scriptPath;
 		std::filesystem::path scriptDir = fullScriptPath.parent_path();
 		std::filesystem::path scriptName = fullScriptPath.stem();
@@ -973,16 +1044,19 @@ namespace Lunex {
 
 		// === DESCARGAR DLL ANTIGUA SI EXISTE ===
 		if (std::filesystem::exists(dllPath)) {
-			auto dllTime = std::filesystem::last_write_time(dllPath);
-			auto scriptTime = std::filesystem::last_write_time(fullScriptPath);
+			if (!forceRecompile) {
+				auto dllTime = std::filesystem::last_write_time(dllPath);
+				auto scriptTime = std::filesystem::last_write_time(fullScriptPath);
 
-			if (dllTime >= scriptTime) {
-				outDLLPath = dllPath.string();
-				LNX_LOG_INFO("Found up-to-date compiled DLL: {0}", outDLLPath);
-				return true;
+				if (dllTime >= scriptTime) {
+					outDLLPath = dllPath.string();
+					LNX_LOG_INFO("Found up-to-date compiled DLL: {0}", outDLLPath);
+					return true;
+				}
 			}
 
-			LNX_LOG_INFO("Script has been modified, recompiling...");
+			LNX_LOG_INFO("Script has been modified{0}, recompiling...", forceRecompile ? " (forced)" : "");
+
 			LNX_LOG_WARN("IMPORTANT: Unloading old DLL before recompilation...");
 
 			// Descargar la DLL del plugin si está cargada

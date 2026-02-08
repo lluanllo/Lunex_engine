@@ -422,6 +422,16 @@ namespace Lunex::UI {
 			ContentBrowserPayload payload = {};
 			strncpy_s(payload.FilePath, item.path.string().c_str(), _TRUNCATE);
 			
+			// Compute relative path from "assets" directory
+			try {
+				std::filesystem::path assetsDir("assets");
+				std::filesystem::path relativePath = std::filesystem::relative(item.path, assetsDir);
+				strncpy_s(payload.RelativePath, relativePath.string().c_str(), _TRUNCATE);
+			}
+			catch (...) {
+				strncpy_s(payload.RelativePath, item.path.filename().string().c_str(), _TRUNCATE);
+			}
+			
 			std::string ext = item.path.extension().string();
 			std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 			strncpy_s(payload.Extension, ext.c_str(), _TRUNCATE);

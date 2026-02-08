@@ -28,7 +28,7 @@ namespace Lunex {
 		void OnScriptsUpdate(float deltaTime);
 
 		// Compilación de scripts
-		bool CompileScript(const std::string& scriptPath, std::string& outDLLPath);
+		bool CompileScript(const std::string& scriptPath, std::string& outDLLPath, bool forceRecompile = false);
 
 		// Obtener el contexto del engine
 		EngineContext* GetEngineContext() { return m_EngineContext.get(); }

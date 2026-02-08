@@ -21,6 +21,10 @@
 // NEW LIGHTING SYSTEM - AAA Architecture
 #include "Scene/Lighting/LightTypes.h"
 
+// SCRIPTING REFLECTION - For ScriptComponent public variable access
+#include "../../Lunex-ScriptCore/src/LunexScriptingAPI.h"
+#include "../../Lunex-ScriptCore/src/ScriptPlugin.h"
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -855,6 +859,7 @@ namespace Lunex {
 		std::vector<bool> ScriptLoadedStates;          // Estado de carga de cada script
 		
 		bool AutoCompile = true;         // Auto-compilar al entrar en Play mode
+		bool ForceRecompile = false;     // Forzar recompilación incluso si la DLL existe
 		
 		// Runtime data (no serializar) - un plugin por script
 		std::vector<void*> ScriptPluginInstances;  // Punteros a ScriptPlugin*
@@ -866,6 +871,7 @@ namespace Lunex {
 			, CompiledDLLPaths(other.CompiledDLLPaths)
 			, ScriptLoadedStates(other.ScriptPaths.size(), false)
 			, AutoCompile(other.AutoCompile)
+			, ForceRecompile(other.ForceRecompile)
 		{
 		}
 		
@@ -922,6 +928,27 @@ namespace Lunex {
 				ScriptPaths[0] = path;
 				ScriptLoadedStates[0] = false;
 			}
+		}
+		
+		// ===== REFLECTION API =====
+		
+		// Get the ScriptPlugin for a loaded script (returns nullptr if not loaded)
+		ScriptPlugin* GetScriptPlugin(size_t index) const {
+			if (index >= ScriptPluginInstances.size() || !ScriptPluginInstances[index])
+				return nullptr;
+			return static_cast<ScriptPlugin*>(ScriptPluginInstances[index]);
+		}
+		
+		// Get the IScriptModule for a loaded script (returns nullptr if not loaded)
+		IScriptModule* GetScriptModule(size_t index) const {
+			auto* plugin = GetScriptPlugin(index);
+			return plugin ? plugin->GetModule() : nullptr;
+		}
+		
+		// Get the public variables for a loaded script
+		std::vector<VarMetadata> GetPublicVariables(size_t index) const {
+			auto* module = GetScriptModule(index);
+			return module ? module->GetPublicVariables() : std::vector<VarMetadata>{};
 		}
 	};
 

@@ -51,8 +51,6 @@ namespace Lunex::UI {
 	// ============================================================================
 	
 	bool BeginCard(const std::string& id, const Size& size, const CardStyle& style) {
-		ScopedID scopedID(id);
-		
 		ImVec2 pos = ImGui::GetCursorScreenPos();
 		ImVec2 cardSize = ToImVec2(size);
 		

@@ -990,61 +990,36 @@ Entities:
 		} while (std::filesystem::exists(scriptPath));
 
 		std::string scriptContent = R"(#include "../../Lunex-ScriptCore/src/LunexScriptingAPI.h"
-#include <iostream>
 
 namespace Lunex {
 
-    class )" + baseName + R"( : public IScriptModule
+    class )" + baseName + R"( : public Script
     {
     public:
-        )" + baseName + R"(() = default;
-        ~)" + baseName + R"(() override = default;
+        // Public variables (exposed in editor)
+        float Speed = 5.0f;
 
-        void OnLoad(EngineContext* context) override
+    protected:
+        void Start() override
         {
-            m_Context = context;
-            
-            if (m_Context && m_Context->LogInfo)
-            {
-                m_Context->LogInfo("[)" + baseName + R"(] Script loaded!");
-            }
+            // Register public variables for editor reflection
+            RegisterVar("Speed", &Speed);
+
+            debug.Log("[)" + baseName + R"(] Script started!");
         }
 
-        void OnUnload() override
+        void Update() override
         {
-            if (m_Context && m_Context->LogInfo)
-            {
-                m_Context->LogInfo("[)" + baseName + R"(] Script unloading...");
-            }
-            m_Context = nullptr;
+            // Example: Move forward with W key
+            // if (input.IsKeyPressed(LNX_KEY_W)) {
+            //     transform.Translate(Vec3::Forward() * Speed * time.DeltaTime());
+            // }
         }
 
-        void OnUpdate(float deltaTime) override
+        void OnDestroy() override
         {
+            debug.Log("[)" + baseName + R"(] Script destroyed!");
         }
-
-        void OnRender() override
-        {
-        }
-
-        void OnPlayModeEnter() override
-        {
-            if (m_Context && m_Context->LogInfo)
-            {
-                m_Context->LogInfo("[)" + baseName + R"(] Entering Play Mode!");
-            }
-        }
-
-        void OnPlayModeExit() override
-        {
-            if (m_Context && m_Context->LogInfo)
-            {
-                m_Context->LogInfo("[)" + baseName + R"(] Exiting Play Mode!");
-            }
-        }
-
-    private:
-        EngineContext* m_Context = nullptr;
     };
 
 } // namespace Lunex
