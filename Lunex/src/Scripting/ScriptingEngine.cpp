@@ -724,8 +724,51 @@ namespace Lunex {
 			}
 		};
 
+		m_EngineContext->IsActive3D = [](void* entity) -> bool {
+			if (!entity || !g_CurrentScene) return false;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					return body->IsActive();
+				}
+			}
+			return false;
+		};
+
+		m_EngineContext->IsKinematic3D = [](void* entity) -> bool {
+			if (!entity || !g_CurrentScene) return false;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					return body->IsKinematic();
+				}
+			}
+			return false;
+		};
+
+		m_EngineContext->SetKinematic3D = [](void* entity, bool kinematic) {
+			if (!entity || !g_CurrentScene) return;
+			auto entityHandle = static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity));
+			Entity ent{ entityHandle, g_CurrentScene };
+			
+			if (ent.HasComponent<Rigidbody3DComponent>()) {
+				auto& rb3d = ent.GetComponent<Rigidbody3DComponent>();
+				if (rb3d.RuntimeBody) {
+					RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+					body->SetKinematic(kinematic);
+				}
+			}
+		};
+
 		// CurrentEntity se establecerá cuando se cargue el script
-		m_EngineContext->CurrentEntity = nullptr;
 
 		for (int i = 0; i < 16; ++i) {
 			m_EngineContext->reserved[i] = nullptr;
@@ -899,7 +942,6 @@ namespace Lunex {
 		// Actualizar deltaTime global
 		g_CurrentDeltaTime = deltaTime;
 
-		// ===== PARALLELIZED SCRIPT UPDATES =====
 		if (m_ScriptInstances.empty()) {
 			return;
 		}
@@ -918,22 +960,13 @@ namespace Lunex {
 			return;
 		}
 		
-		// ? PARALLEL: Update all scripts concurrently
-		auto counter = JobSystem::Get().ParallelFor(
-			0,
-			static_cast<uint32_t>(activeScripts.size()),
-			[deltaTime, &activeScripts](uint32_t index) {
-				ScriptPlugin* plugin = activeScripts[index];
-				if (plugin && plugin->IsLoaded()) {
-					plugin->Update(deltaTime);
-				}
-			},
-			8,  // Grain size: process 8 scripts per job
-			JobPriority::Normal
-		);
-		
-		// Wait for all script updates to complete
-		JobSystem::Get().Wait(counter);
+		// Update all scripts sequentially - scripts access the entt registry
+		// via EngineContext callbacks which is NOT thread-safe
+		for (auto* plugin : activeScripts) {
+			if (plugin && plugin->IsLoaded()) {
+				plugin->Update(deltaTime);
+			}
+		}
 	}
 
 	bool ScriptingEngine::CompileScript(const std::string& scriptPath, std::string& outDLLPath) {
