@@ -3,6 +3,7 @@
  * @brief Implementation of LogOutput component
  */
 
+#include "stpch.h"
 #include "LogOutput.h"
 #include <algorithm>
 

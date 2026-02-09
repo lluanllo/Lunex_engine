@@ -3,9 +3,10 @@
  * @brief Stat Item Component Implementation
  */
 
+#include "stpch.h"
 #include "StatItem.h"
-#include <imgui.h>
 #include <cstdio>
+#include <imgui.h>
 
 namespace Lunex::UI {
 

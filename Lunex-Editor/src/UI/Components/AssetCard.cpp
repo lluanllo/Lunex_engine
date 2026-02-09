@@ -81,7 +81,7 @@ namespace Lunex::UI {
 	void AssetCard::RenderDirectory(ImDrawList* drawList, ImVec2 cursorPos, Ref<Texture2D> thumbnail) {
 		float iconSize = m_Style.thumbnailHeight;
 		
-		if (thumbnail) {
+		if (thumbnail && thumbnail->GetRendererID() != 0) {
 			drawList->AddImage(
 				(ImTextureID)(intptr_t)thumbnail->GetRendererID(),
 				cursorPos,
@@ -116,7 +116,7 @@ namespace Lunex::UI {
 		drawList->AddRectFilled(iconMin, iconMax, IM_COL32(20, 20, 20, 255), 3.0f);
 		
 		// Thumbnail
-		if (thumbnail) {
+		if (thumbnail && thumbnail->GetRendererID() != 0) {
 			// Calculate UV coordinates to properly fit the thumbnail
 			ImVec2 uv0(0, 1);
 			ImVec2 uv1(1, 0);

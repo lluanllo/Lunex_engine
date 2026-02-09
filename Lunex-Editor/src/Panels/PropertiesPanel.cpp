@@ -1237,6 +1237,12 @@ namespace Lunex {
 		if (!m_SelectedEntity.HasComponent<T>()) {
 			if (UI::MenuItem(entryName.c_str())) {
 				m_SelectedEntity.AddComponent<T>();
+				// Auto-add MaterialComponent when MeshComponent is created via UI
+				if constexpr (std::is_same_v<T, MeshComponent>) {
+					if (!m_SelectedEntity.HasComponent<MaterialComponent>()) {
+						m_SelectedEntity.AddComponent<MaterialComponent>();
+					}
+				}
 				ImGui::CloseCurrentPopup();
 			}
 		}

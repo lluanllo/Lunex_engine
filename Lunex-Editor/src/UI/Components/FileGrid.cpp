@@ -6,6 +6,7 @@
 #include "stpch.h"
 #include "FileGrid.h"
 #include "AssetCard.h"  // For AssetCard::GetTypeColor
+#include "../../Panels/ContentBrowserPanel.h"  // For ContentBrowserPayload
 #include <sstream>
 
 namespace Lunex::UI {
@@ -410,16 +411,8 @@ namespace Lunex::UI {
 			ImGui::Text("%d items", (int)selectedItems.size());
 		}
 		else {
-			// Single item payload - use raw struct data
-			struct ContentBrowserPayload {
-				char FilePath[512];
-				char RelativePath[512];
-				char Extension[32];
-				bool IsDirectory;
-				int ItemCount;
-			};
-			
-			ContentBrowserPayload payload = {};
+			// Single item payload - use canonical ContentBrowserPayload struct
+			Lunex::ContentBrowserPayload payload = {};
 			strncpy_s(payload.FilePath, item.path.string().c_str(), _TRUNCATE);
 			
 			std::string ext = item.path.extension().string();

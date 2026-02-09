@@ -57,7 +57,7 @@ namespace Lunex::UI {
 		}
 		
 		bool backClicked = false;
-		if (backIcon) {
+		if (backIcon && backIcon->GetRendererID() != 0) {
 			backClicked = ImGui::ImageButton("##BackButton",
 				(ImTextureID)(intptr_t)backIcon->GetRendererID(),
 				ImVec2(m_Style.buttonSize, m_Style.buttonSize),
@@ -86,7 +86,7 @@ namespace Lunex::UI {
 		}
 		
 		bool forwardClicked = false;
-		if (forwardIcon) {
+		if (forwardIcon && forwardIcon->GetRendererID() != 0) {
 			forwardClicked = ImGui::ImageButton("##ForwardButton",
 				(ImTextureID)(intptr_t)forwardIcon->GetRendererID(),
 				ImVec2(m_Style.buttonSize, m_Style.buttonSize),

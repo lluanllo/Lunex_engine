@@ -3,6 +3,7 @@
  * @brief Toolbar Button Component Implementation
  */
 
+#include "stpch.h"
 #include "ToolbarButton.h"
 #include <imgui.h>
 
@@ -30,7 +31,7 @@ namespace Lunex::UI {
 		Color tint = props.IsEnabled ? props.Tint : props.Tint.WithAlpha(0.4f);
 		
 		// Render icon button or text fallback
-		if (props.Icon) {
+		if (props.Icon && props.Icon->GetRendererID() != 0) {
 			clicked = ImGui::ImageButton(
 				("##" + props.Id).c_str(),
 				(ImTextureID)(intptr_t)props.Icon->GetRendererID(),

@@ -119,6 +119,7 @@ namespace Lunex {
 
 	void ViewportPanel::RenderFramebufferImage(Ref<Framebuffer> framebuffer) {
 		uint64_t textureID = framebuffer->GetColorAttachmentRendererID();
+		if (textureID == 0) return;
 		ImGui::Image(
 			reinterpret_cast<void*>(textureID), 
 			ImVec2(m_ViewportSize.x, m_ViewportSize.y), 
@@ -257,12 +258,14 @@ namespace Lunex {
 		ImVec2 imageMin = previewPos;
 		ImVec2 imageMax = ImVec2(previewPos.x + previewWidth, previewPos.y + previewHeight);
 		
-		drawList->AddImage(
-			reinterpret_cast<void*>(textureID),
-			imageMin,
-			imageMax,
-			ImVec2(0, 1), ImVec2(1, 0)  // Flip Y for OpenGL
-		);
+		if (textureID != 0) {
+			drawList->AddImage(
+				reinterpret_cast<void*>(textureID),
+				imageMin,
+				imageMax,
+				ImVec2(0, 1), ImVec2(1, 0)  // Flip Y for OpenGL
+			);
+		}
 		
 		// Border
 		drawList->AddRect(imageMin, imageMax, ViewportStyle::BorderColor().ToImU32(), 0.0f, 0, 1.0f);

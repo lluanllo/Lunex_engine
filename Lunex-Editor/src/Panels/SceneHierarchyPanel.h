@@ -133,6 +133,12 @@ namespace Lunex {
 		void CreateEntityWithComponent(const std::string& name) {
 			Entity entity = m_Context->CreateEntity(name);
 			entity.AddComponent<T>();
+			// Auto-add MaterialComponent when MeshComponent is created via UI
+			if constexpr (std::is_same_v<T, MeshComponent>) {
+				if (!entity.HasComponent<MaterialComponent>()) {
+					entity.AddComponent<MaterialComponent>();
+				}
+			}
 			SelectEntity(entity);
 			LNX_LOG_INFO("Created entity: {0}", name);
 		}
