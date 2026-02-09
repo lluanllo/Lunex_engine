@@ -3,7 +3,7 @@
 /**
  * @file ScriptHotReloader.h
  * @brief AAA Architecture: Hot-reload system for scripts
- * 
+ *
  * Monitors script files for changes and reloads them automatically
  * while preserving script state.
  */
@@ -48,7 +48,7 @@ namespace Lunex {
      */
     class ScriptHotReloader {
     public:
-        ScriptHotReloader(ScriptSystem& scriptSystem);
+        ScriptHotReloader(ScriptSystemAdvanced& scriptSystem);
         ~ScriptHotReloader();
 
         /**
@@ -118,11 +118,11 @@ namespace Lunex {
         void CheckForChanges();
         void ProcessPendingReloads();
         bool ReloadScript(uint32_t instanceId);
-        
+
         std::filesystem::file_time_type GetFileModTime(const std::string& path);
 
     private:
-        ScriptSystem& m_ScriptSystem;
+        ScriptSystemAdvanced& m_ScriptSystem;
         ScriptCompiler m_Compiler;
         HotReloadConfig m_Config;
         ReloadStats m_Stats;
@@ -130,13 +130,13 @@ namespace Lunex {
         // File watching
         std::unordered_map<uint32_t, FileWatchEntry> m_WatchedFiles;
         std::vector<uint32_t> m_PendingReloads;
-        
+
         // Timing
         std::chrono::steady_clock::time_point m_LastCheckTime;
-        
+
         // Thread safety
         mutable std::mutex m_Mutex;
-        std::atomic<bool> m_IsWatching{false};
+        std::atomic<bool> m_IsWatching{ false };
     };
 
 } // namespace Lunex

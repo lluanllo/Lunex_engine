@@ -441,11 +441,6 @@ namespace Lunex {
 
 	template<>
 	void Scene::OnComponentAdded<MeshComponent>(Entity entity, MeshComponent& component) {
-		// NOTE: Do NOT auto-add MaterialComponent here.
-		// Adding components inside OnComponentAdded can cause heap corruption
-		// when called during bulk component copy (e.g., Scene::Copy, DuplicateEntity)
-		// because it mutates the registry's internal data structures mid-iteration.
-		// MaterialComponent is added explicitly at the call sites that create MeshComponent.
 	}
 
 	template<>

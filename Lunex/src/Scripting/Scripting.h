@@ -3,18 +3,18 @@
 /**
  * @file Scripting.h
  * @brief AAA Architecture: Main include for the Lunex Scripting System
- * 
+ *
  * Include this header to access the full scripting system API:
  * - ScriptSystem: ISceneSystem implementation for ECS integration
  * - ScriptCompiler: Automated C++ script compilation
  * - ScriptHotReloader: File watching and hot-reload support
  * - ScriptInstance: Script state management
  * - ScriptComponents: POD components for ECS
- * 
+ *
  * For DLL script development, include LunexScriptingAPI.h instead.
  */
 
-// Core scripting components
+ // Core scripting components
 #include "ScriptComponents.h"
 #include "ScriptInstance.h"
 #include "ScriptSystem.h"
@@ -31,7 +31,7 @@ namespace Lunex {
 
     /**
      * @brief Initialize the scripting subsystem
-     * 
+     *
      * Call this once at engine startup before using any scripting features.
      * Detects compiler installation and sets up default paths.
      */

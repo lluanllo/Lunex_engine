@@ -3,7 +3,7 @@
 /**
  * @file ScriptCompiler.h
  * @brief AAA Architecture: Automated script compilation system
- * 
+ *
  * Compiles C++ scripts into DLLs using the system compiler.
  * Supports Visual Studio on Windows and GCC/Clang on Unix.
  */
@@ -26,16 +26,16 @@ namespace Lunex {
         std::string configuration = "Debug";   // "Debug" or "Release"
         bool verbose = true;
         bool includeDebugSymbols = true;
-        
+
         // Additional include paths
         std::vector<std::string> includePaths;
-        
+
         // Additional library paths
         std::vector<std::string> libraryPaths;
-        
+
         // Additional libraries to link
         std::vector<std::string> libraries;
-        
+
         // Preprocessor defines
         std::vector<std::string> defines;
     };
@@ -50,7 +50,7 @@ namespace Lunex {
         std::string output;              // Compiler stdout
         std::string errors;              // Compiler stderr
         double compileTimeMs = 0.0;
-        
+
         // Warnings and errors parsed from output
         std::vector<std::string> warnings;
         std::vector<std::string> errorMessages;
@@ -127,7 +127,7 @@ namespace Lunex {
     private:
         CompileResult CompileWindows(const std::string& scriptPath, const CompileOptions& options);
         CompileResult CompileUnix(const std::string& scriptPath, const CompileOptions& options);
-        
+
         std::string ExecuteCommand(const std::string& command);
         void ParseCompilerOutput(const std::string& output, CompileResult& result);
         void ReportProgress(const std::string& status, float progress);
@@ -136,7 +136,7 @@ namespace Lunex {
         std::string m_VCVarsPath;
         std::string m_CLPath;
         bool m_VSDetected = false;
-        
+
         ProgressCallback m_ProgressCallback;
     };
 
