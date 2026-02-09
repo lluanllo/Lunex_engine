@@ -21,19 +21,19 @@ namespace Lunex::UI {
 	struct FileGridStyle {
 		float thumbnailSize = 96.0f;
 		float padding = 12.0f;
-		float cardRounding = 6.0f;
+		float cardRounding = 4.0f;
 		float cardPadding = 8.0f;
-		Color cardBgColor = Color(0.176f, 0.176f, 0.188f, 1.0f);  // #2D2D30
-		Color iconBgColor = Color(0.216f, 0.216f, 0.227f, 1.0f);   // #37373A
-		Color shadowColor = Color(0, 0, 0, 0.31f);
-		Color textColor = Color(0.96f, 0.96f, 0.96f, 1.0f);
-		Color typeColor = Color(0.5f, 0.5f, 0.52f, 1.0f);
-		Color hoverColor = Color(0.235f, 0.235f, 0.255f, 1.0f);
-		Color selectedBorderColor = Color(0.259f, 0.588f, 0.98f, 1.0f);
-		Color selectedFillColor = Color(0.259f, 0.588f, 0.98f, 0.157f);
-		Color selectionRectFill = Color(0.353f, 0.588f, 1.0f, 0.196f);
-		Color selectionRectBorder = Color(0.353f, 0.588f, 1.0f, 0.784f);
-		Color dropTargetColor = Color(0.353f, 0.588f, 1.0f, 1.0f);
+		Color cardBgColor = Colors::BgCard();
+		Color iconBgColor = Colors::BgDark();
+		Color shadowColor = Colors::Shadow();
+		Color textColor = Colors::TextPrimary();
+		Color typeColor = Colors::TextMuted();
+		Color hoverColor = Colors::BgHover();
+		Color selectedBorderColor = Colors::SelectedBorder();
+		Color selectedFillColor = Colors::Selected();
+		Color selectionRectFill = Color(0.16f, 0.47f, 1.0f, 0.12f);
+		Color selectionRectBorder = Color(0.16f, 0.47f, 1.0f, 0.55f);
+		Color dropTargetColor = Colors::Primary();
 	};
 	
 	struct FileGridItem {

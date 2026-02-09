@@ -10,11 +10,13 @@
 namespace Lunex::UI {
 
 	void Image(Ref<Texture2D> texture, const Size& size, bool flipY, const Color& tint) {
-		if (!texture) return;
+		if (!texture || texture->GetRendererID() == 0) return;
 		Image(texture->GetRendererID(), size, flipY, tint);
 	}
 	
 	void Image(uint32_t textureID, const Size& size, bool flipY, const Color& tint) {
+		if (textureID == 0) return;
+		
 		ImVec2 uv0 = flipY ? ImVec2(0, 1) : ImVec2(0, 0);
 		ImVec2 uv1 = flipY ? ImVec2(1, 0) : ImVec2(1, 1);
 		
@@ -28,7 +30,7 @@ namespace Lunex::UI {
 	}
 	
 	bool ImageButton(const std::string& id, Ref<Texture2D> texture, const Size& size, bool flipY, const char* tooltip) {
-		if (!texture) return false;
+		if (!texture || texture->GetRendererID() == 0) return false;
 		
 		ImVec2 uv0 = flipY ? ImVec2(0, 1) : ImVec2(0, 0);
 		ImVec2 uv1 = flipY ? ImVec2(1, 0) : ImVec2(1, 1);
@@ -70,7 +72,7 @@ namespace Lunex::UI {
 		ImGui::Separator();
 		
 		// Thumbnail or drop zone
-		if (currentTexture && currentTexture->IsLoaded()) {
+		if (currentTexture && currentTexture->IsLoaded() && currentTexture->GetRendererID() != 0) {
 			ImGui::Image(
 				(ImTextureID)(intptr_t)currentTexture->GetRendererID(),
 				ImVec2(50, 50),
@@ -109,7 +111,7 @@ namespace Lunex::UI {
 		drawList->AddRectFilled(pos, max, ImGui::ColorConvertFloat4ToU32(ToImVec4(Colors::BgMedium())), 4.0f);
 		
 		// Image
-		if (texture) {
+		if (texture && texture->GetRendererID() != 0) {
 			drawList->AddImageRounded(
 				(ImTextureID)(intptr_t)texture->GetRendererID(),
 				pos, max,

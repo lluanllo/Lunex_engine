@@ -59,30 +59,30 @@ namespace Lunex::UI {
 	
 	struct LogOutputStyle {
 		// Background colors
-		Color Background = Color(0.05f, 0.05f, 0.07f, 1.0f);
-		Color FilterBarBg = Color(0.12f, 0.12f, 0.12f, 1.0f);
+		Color Background = Colors::BgDark();
+		Color FilterBarBg = Color::FromHex(0x1A1A1A);
 		
 		// Text colors by level
-		Color TraceColor = Color(0.5f, 0.5f, 0.5f, 1.0f);
-		Color InfoColor = Color(0.9f, 0.9f, 0.9f, 1.0f);
-		Color WarningColor = Color(1.0f, 0.8f, 0.2f, 1.0f);
-		Color ErrorColor = Color(1.0f, 0.3f, 0.3f, 1.0f);
-		Color CriticalColor = Color(1.0f, 0.0f, 0.0f, 1.0f);
+		Color TraceColor = Color(0.45f, 0.45f, 0.45f, 1.0f);
+		Color InfoColor = Color(0.82f, 0.82f, 0.84f, 1.0f);
+		Color WarningColor = Color(0.94f, 0.76f, 0.20f, 1.0f);
+		Color ErrorColor = Color(0.93f, 0.33f, 0.31f, 1.0f);
+		Color CriticalColor = Color(1.0f, 0.15f, 0.15f, 1.0f);
 		
 		// Script colors
-		Color ScriptInfoColor = Color(0.4f, 0.8f, 1.0f, 1.0f);
-		Color ScriptWarningColor = Color(1.0f, 0.7f, 0.3f, 1.0f);
-		Color ScriptErrorColor = Color(1.0f, 0.4f, 0.4f, 1.0f);
+		Color ScriptInfoColor = Color(0.35f, 0.75f, 0.95f, 1.0f);
+		Color ScriptWarningColor = Color(0.94f, 0.76f, 0.25f, 1.0f);
+		Color ScriptErrorColor = Color(0.95f, 0.35f, 0.35f, 1.0f);
 		
 		// Compilation colors
-		Color CompileStartColor = Color(0.5f, 0.7f, 1.0f, 1.0f);
-		Color CompileSuccessColor = Color(0.3f, 0.9f, 0.3f, 1.0f);
-		Color CompileErrorColor = Color(1.0f, 0.2f, 0.2f, 1.0f);
-		Color CompileWarningColor = Color(1.0f, 0.6f, 0.2f, 1.0f);
+		Color CompileStartColor = Color(0.45f, 0.65f, 0.95f, 1.0f);
+		Color CompileSuccessColor = Color(0.30f, 0.69f, 0.31f, 1.0f);
+		Color CompileErrorColor = Color(0.93f, 0.33f, 0.33f, 1.0f);
+		Color CompileWarningColor = Color(1.0f, 0.65f, 0.0f, 1.0f);
 		
 		// UI colors
-		Color TimestampColor = Color(0.5f, 0.5f, 0.5f, 1.0f);
-		Color CategoryColor = Color(0.6f, 0.8f, 1.0f, 1.0f);
+		Color TimestampColor = Color(0.35f, 0.35f, 0.37f, 1.0f);
+		Color CategoryColor = Color(0.45f, 0.65f, 0.85f, 1.0f);
 		
 		// Sizing
 		float MessageSpacing = 2.0f;

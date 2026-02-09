@@ -45,29 +45,26 @@ namespace Lunex::UI {
 	 * Compatible with both .R/.G/.B/.A and .r/.g/.b/.a access
 	 */
 	struct Color {
-		union {
-			struct { float R, G, B, A; };
-			struct { float r, g, b, a; };  // Lowercase aliases for compatibility
-		};
+		float r, g, b, a;
 		
 		// Constructors
-		constexpr Color() : R(0.0f), G(0.0f), B(0.0f), A(1.0f) {}
+		constexpr Color() : r(0.0f), g(0.0f), b(0.0f), a(1.0f) {}
 		constexpr Color(float red, float green, float blue, float alpha = 1.0f) 
-			: R(red), G(green), B(blue), A(alpha) {}
-		constexpr Color(const glm::vec4& v) : R(v.r), G(v.g), B(v.b), A(v.a) {}
-		constexpr Color(const glm::vec3& v, float alpha = 1.0f) : R(v.r), G(v.g), B(v.b), A(alpha) {}
+			: r(red), g(green), b(blue), a(alpha) {}
+		constexpr Color(const glm::vec4& v) : r(v.r), g(v.g), b(v.b), a(v.a) {}
+		constexpr Color(const glm::vec3& v, float alpha = 1.0f) : r(v.r), g(v.g), b(v.b), a(alpha) {}
 		
 		// Conversion operators
-		operator glm::vec4() const { return glm::vec4(R, G, B, A); }
-		operator glm::vec3() const { return glm::vec3(R, G, B); }
+		operator glm::vec4() const { return glm::vec4(r, g, b, a); }
+		operator glm::vec3() const { return glm::vec3(r, g, b); }
 		
 		// Data pointer for glm::value_ptr compatibility
-		float* data() { return &R; }
-		const float* data() const { return &R; }
+		float* data() { return &r; }
+		const float* data() const { return &r; }
 		
 		// ImGui conversions
-		ImVec4 ToImVec4() const { return ImVec4(R, G, B, A); }
-		ImU32 ToImU32() const { return IM_COL32((int)(R * 255), (int)(G * 255), (int)(B * 255), (int)(A * 255)); }
+		ImVec4 ToImVec4() const { return ImVec4(r, g, b, a); }
+		ImU32 ToImU32() const { return IM_COL32((int)(r * 255), (int)(g * 255), (int)(b * 255), (int)(a * 255)); }
 		
 		// Static constructors
 		static constexpr Color FromHex(uint32_t hex, float alpha = 1.0f) {
@@ -90,21 +87,21 @@ namespace Lunex::UI {
 		}
 		
 		// Color math
-		Color WithAlpha(float alpha) const { return Color(R, G, B, alpha); }
+		Color WithAlpha(float alpha) const { return Color(r, g, b, alpha); }
 		Color Lighter(float amount = 0.1f) const {
 			return Color(
-				std::min(R + amount, 1.0f),
-				std::min(G + amount, 1.0f),
-				std::min(B + amount, 1.0f),
-				A
+				std::min(r + amount, 1.0f),
+				std::min(g + amount, 1.0f),
+				std::min(b + amount, 1.0f),
+				a
 			);
 		}
 		Color Darker(float amount = 0.1f) const {
 			return Color(
-				std::max(R - amount, 0.0f),
-				std::max(G - amount, 0.0f),
-				std::max(B - amount, 0.0f),
-				A
+				std::max(r - amount, 0.0f),
+				std::max(g - amount, 0.0f),
+				std::max(b - amount, 0.0f),
+				a
 			);
 		}
 	};
@@ -127,46 +124,46 @@ namespace Lunex::UI {
 	// ============================================================================
 	
 	namespace Colors {
-		// Primary palette
-		inline Color Primary()      { return Color(0.26f, 0.59f, 0.98f, 1.0f); }
-		inline Color PrimaryHover() { return Color(0.36f, 0.69f, 1.0f, 1.0f); }
-		inline Color PrimaryActive(){ return Color(0.20f, 0.50f, 0.90f, 1.0f); }
+		// Primary palette (Hazel-style subtle warm accent - not orange)
+		inline Color Primary()      { return Color::FromHex(0x2979FF); }      // Clean blue accent
+		inline Color PrimaryHover() { return Color::FromHex(0x448AFF); }      // Lighter blue
+		inline Color PrimaryActive(){ return Color::FromHex(0x2962FF); }      // Deeper blue
 		
 		// Semantic colors
-		inline Color Success()      { return Color(0.30f, 0.80f, 0.30f, 1.0f); }
-		inline Color Warning()      { return Color(0.80f, 0.60f, 0.20f, 1.0f); }
-		inline Color Danger()       { return Color(0.80f, 0.30f, 0.30f, 1.0f); }
-		inline Color Info()         { return Color(0.26f, 0.59f, 0.98f, 1.0f); }
+		inline Color Success()      { return Color::FromHex(0x4CAF50); }      // Material green
+		inline Color Warning()      { return Color::FromHex(0xFFA726); }      // Amber
+		inline Color Danger()       { return Color::FromHex(0xEF5350); }      // Material red
+		inline Color Info()         { return Color::FromHex(0x42A5F5); }      // Light blue
 		
-		// Text colors
-		inline Color TextPrimary()  { return Color(0.95f, 0.95f, 0.95f, 1.0f); }
-		inline Color TextSecondary(){ return Color(0.70f, 0.70f, 0.70f, 1.0f); }
-		inline Color TextMuted()    { return Color(0.50f, 0.50f, 0.50f, 1.0f); }
-		inline Color TextDisabled() { return Color(0.40f, 0.40f, 0.40f, 1.0f); }
+		// Text colors (proper contrast hierarchy)
+		inline Color TextPrimary()  { return Color(0.90f, 0.90f, 0.92f, 1.0f); }  // Near white, cool
+		inline Color TextSecondary(){ return Color(0.56f, 0.56f, 0.58f, 1.0f); }  // Medium gray
+		inline Color TextMuted()    { return Color(0.38f, 0.38f, 0.40f, 1.0f); }  // Dark gray
+		inline Color TextDisabled() { return Color(0.28f, 0.28f, 0.30f, 1.0f); }  // Very dark gray
 		
-		// Background colors
-		inline Color BgDark()       { return Color(0.10f, 0.10f, 0.11f, 1.0f); }
-		inline Color BgMedium()     { return Color(0.14f, 0.14f, 0.15f, 1.0f); }
-		inline Color BgLight()      { return Color(0.18f, 0.18f, 0.19f, 1.0f); }
-		inline Color BgCard()       { return Color(0.16f, 0.16f, 0.17f, 1.0f); }
-		inline Color BgHover()      { return Color(0.22f, 0.22f, 0.24f, 1.0f); }
+		// Background colors (Hazel-style dark with cool undertone)
+		inline Color BgDark()       { return Color::FromHex(0x181818); }      // Darkest background
+		inline Color BgMedium()     { return Color::FromHex(0x1E1E1E); }      // Main panel background
+		inline Color BgLight()      { return Color::FromHex(0x252526); }      // Elevated panels
+		inline Color BgCard()       { return Color::FromHex(0x222222); }      // Card background
+		inline Color BgHover()      { return Color::FromHex(0x2A2D2E); }      // Hover state (cool)
 		
 		// Border colors
-		inline Color Border()       { return Color(0.08f, 0.08f, 0.09f, 1.0f); }
-		inline Color BorderLight()  { return Color(0.20f, 0.20f, 0.22f, 1.0f); }
-		inline Color BorderFocus()  { return Color(0.26f, 0.59f, 0.98f, 0.50f); }
+		inline Color Border()       { return Color::FromHex(0x1A1A1A); }      // Dark border
+		inline Color BorderLight()  { return Color::FromHex(0x333333); }      // Subtle border
+		inline Color BorderFocus()  { return Color(0.16f, 0.47f, 1.0f, 0.50f); } // Blue focus glow
 		
-		// Axis colors (for Vec3 controls)
-		inline Color AxisX()        { return Color(0.70f, 0.20f, 0.20f, 1.0f); }
-		inline Color AxisXHover()   { return Color(0.80f, 0.30f, 0.30f, 1.0f); }
-		inline Color AxisY()        { return Color(0.20f, 0.70f, 0.20f, 1.0f); }
-		inline Color AxisYHover()   { return Color(0.30f, 0.80f, 0.30f, 1.0f); }
-		inline Color AxisZ()        { return Color(0.20f, 0.40f, 0.90f, 1.0f); }
-		inline Color AxisZHover()   { return Color(0.30f, 0.50f, 1.0f, 1.0f); }
+		// Axis colors (standard R/G/B)
+		inline Color AxisX()        { return Color(0.89f, 0.22f, 0.21f, 1.0f); }  // Red
+		inline Color AxisXHover()   { return Color(1.00f, 0.32f, 0.31f, 1.0f); }
+		inline Color AxisY()        { return Color(0.27f, 0.75f, 0.27f, 1.0f); }  // Green
+		inline Color AxisYHover()   { return Color(0.37f, 0.85f, 0.37f, 1.0f); }
+		inline Color AxisZ()        { return Color(0.22f, 0.46f, 0.93f, 1.0f); }  // Blue
+		inline Color AxisZHover()   { return Color(0.32f, 0.56f, 1.00f, 1.0f); }
 		
-		// Selection colors
-		inline Color Selected()     { return Color(0.26f, 0.59f, 0.98f, 0.35f); }
-		inline Color SelectedBorder(){ return Color(0.26f, 0.59f, 0.98f, 1.0f); }
+		// Selection colors (blue tinted)
+		inline Color Selected()     { return Color(0.16f, 0.47f, 1.0f, 0.18f); }
+		inline Color SelectedBorder(){ return Color::FromHex(0x2979FF); }
 		
 		// Shadow
 		inline Color Shadow()       { return Color(0.0f, 0.0f, 0.0f, 0.50f); }
@@ -203,9 +200,9 @@ namespace Lunex::UI {
 		constexpr float PropertyLabelWidth = 120.0f;
 		constexpr float SectionIndent = 12.0f;
 		
-		constexpr float CardRounding = 6.0f;
-		constexpr float ButtonRounding = 4.0f;
-		constexpr float InputRounding = 3.0f;
+		constexpr float CardRounding = 4.0f;
+		constexpr float ButtonRounding = 3.0f;
+		constexpr float InputRounding = 2.0f;
 	}
 
 	// ============================================================================

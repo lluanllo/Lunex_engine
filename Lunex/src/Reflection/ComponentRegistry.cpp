@@ -6,9 +6,9 @@ namespace Lunex {
 
     void ComponentRegistry::Initialize() {
         if (m_Initialized) return;
-        
+
         LNX_LOG_INFO("Initializing Component Registry...");
-        
+
         // Register core components with EnTT Meta
         RegisterComponents<
             IDComponent,
@@ -16,7 +16,7 @@ namespace Lunex {
             TransformComponent,
             RelationshipComponent
         >();
-        
+
         // Register rendering components
         RegisterComponents<
             SpriteRendererComponent,
@@ -27,7 +27,7 @@ namespace Lunex {
             CameraComponent,
             EnvironmentComponent
         >();
-        
+
         // Register physics components
         RegisterComponents<
             Rigidbody2DComponent,
@@ -39,15 +39,15 @@ namespace Lunex {
             CapsuleCollider3DComponent,
             MeshCollider3DComponent
         >();
-        
+
         // Register scripting components
         RegisterComponents<
             NativeScriptComponent,
             ScriptComponent
         >();
-        
+
         m_Initialized = true;
-        
+
         // Log registered types count
         size_t count = 0;
         ForEachType([&count](auto, auto) { ++count; });

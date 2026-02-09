@@ -441,10 +441,6 @@ namespace Lunex {
 
 	template<>
 	void Scene::OnComponentAdded<MeshComponent>(Entity entity, MeshComponent& component) {
-		// Auto-create MaterialComponent when MeshComponent is added
-		if (!entity.HasComponent<MaterialComponent>()) {
-			entity.AddComponent<MaterialComponent>();
-		}
 	}
 
 	template<>

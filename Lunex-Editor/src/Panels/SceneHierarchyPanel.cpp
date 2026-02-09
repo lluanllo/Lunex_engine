@@ -43,8 +43,8 @@ namespace Lunex {
 			{ImGuiCol_ChildBg, m_Style.ChildBg},
 			{ImGuiCol_Border, m_Style.Border},
 			{ImGuiCol_Header, m_Style.ItemSelected},
-			{ImGuiCol_HeaderHovered, Color(m_Style.ItemSelected.R, m_Style.ItemSelected.G, m_Style.ItemSelected.B, 0.50f)},
-			{ImGuiCol_HeaderActive, Color(m_Style.ItemSelected.R, m_Style.ItemSelected.G, m_Style.ItemSelected.B, 0.65f)},
+			{ImGuiCol_HeaderHovered, Color(m_Style.ItemSelected.r, m_Style.ItemSelected.g, m_Style.ItemSelected.b, 0.50f)},
+			{ImGuiCol_HeaderActive, Color(m_Style.ItemSelected.r, m_Style.ItemSelected.g, m_Style.ItemSelected.b, 0.65f)},
 			{ImGuiCol_Text, m_Style.TextPrimary}
 		});
 		

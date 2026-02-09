@@ -31,13 +31,16 @@ namespace Lunex {
 			
 			template<typename T>
 			T& GetComponent() {
-				LNX_CORE_ASSERT(HasComponent<T>(), "Entity does not have component!");
+				LNX_CORE_ASSERT(m_Scene && m_EntityHandle != entt::null && m_Scene->m_Registry.valid(m_EntityHandle), "Entity is not valid!");
+				LNX_CORE_ASSERT(m_Scene->m_Registry.all_of<T>(m_EntityHandle), "Entity does not have component!");
 				return m_Scene->m_Registry.get<T>(m_EntityHandle);
 			}
 			
 			template<typename T>
 			bool HasComponent() {
-				return m_Scene->m_Registry.all_of<T>(m_EntityHandle);
+				if (!m_Scene || m_EntityHandle == entt::null)
+					return false;
+				return m_Scene->m_Registry.valid(m_EntityHandle) && m_Scene->m_Registry.all_of<T>(m_EntityHandle);
 			}
 			
 			template<typename T>
@@ -46,7 +49,7 @@ namespace Lunex {
 				m_Scene->m_Registry.remove<T>(m_EntityHandle);
 			}
 			
-			operator bool() const { return m_EntityHandle != entt::null; }
+			operator bool() const { return m_EntityHandle != entt::null && m_Scene != nullptr; }
 			operator entt::entity() const { return m_EntityHandle; }
 			operator uint32_t() const { return (uint32_t)m_EntityHandle; }
 			

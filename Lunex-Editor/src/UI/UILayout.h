@@ -51,8 +51,8 @@ namespace Lunex::UI {
 		float rounding = SpacingValues::CardRounding;
 		float padding = SpacingValues::MD;
 		bool shadow = true;
-		Size shadowOffset = Size(3, 3);
-		Color shadowColor = Color(0, 0, 0, 0.3f);
+		Size shadowOffset = Size(2, 2);
+		Color shadowColor = Color(0, 0, 0, 0.40f);
 	};
 	
 	/**

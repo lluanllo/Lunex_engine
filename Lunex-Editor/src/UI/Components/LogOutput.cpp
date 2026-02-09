@@ -3,6 +3,7 @@
  * @brief Implementation of LogOutput component
  */
 
+#include "stpch.h"
 #include "LogOutput.h"
 #include <algorithm>
 
@@ -66,7 +67,7 @@ namespace Lunex::UI {
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, m_Style.FilterBarBg.ToImVec4());
 		
 		if (ImGui::BeginChild("##LogFilters", ImVec2(0, m_Style.FilterBarHeight), true, ImGuiWindowFlags_NoScrollbar)) {
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.26f, 0.59f, 0.98f, 0.50f));
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ToImVec4(Colors::BorderFocus()));
 			
 			ImGui::PushID("LogLevelFilters");
 			
@@ -125,7 +126,7 @@ namespace Lunex::UI {
 			
 			// Search filter
 			ImGui::SetNextItemWidth(180);
-			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.26f, 0.59f, 0.98f, 0.50f));
+			ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ToImVec4(Colors::BorderFocus()));
 			ImGui::InputTextWithHint("##SearchFilter", "Search...", m_Filters.SearchFilter, sizeof(m_Filters.SearchFilter));
 			ImGui::PopStyleColor();
 			

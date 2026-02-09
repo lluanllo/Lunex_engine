@@ -6,6 +6,7 @@
 #include "stpch.h"
 #include "FileGrid.h"
 #include "AssetCard.h"  // For AssetCard::GetTypeColor
+#include "../../Panels/ContentBrowserPanel.h"  // For ContentBrowserPayload
 #include <sstream>
 
 namespace Lunex::UI {
@@ -72,8 +73,8 @@ namespace Lunex::UI {
 		
 		ScopedColor colors({
 			{ImGuiCol_Button, Color(0, 0, 0, 0)},
-			{ImGuiCol_ButtonHovered, Color(0.22f, 0.22f, 0.22f, 0.6f)},
-			{ImGuiCol_ButtonActive, Color(0.18f, 0.40f, 0.65f, 0.8f)}
+			{ImGuiCol_ButtonHovered, Color(0.16f, 0.16f, 0.16f, 0.6f)},
+			{ImGuiCol_ButtonActive, Colors::BorderFocus()}
 		});
 		
 		for (const auto& item : items) {
@@ -410,16 +411,8 @@ namespace Lunex::UI {
 			ImGui::Text("%d items", (int)selectedItems.size());
 		}
 		else {
-			// Single item payload - use raw struct data
-			struct ContentBrowserPayload {
-				char FilePath[512];
-				char RelativePath[512];
-				char Extension[32];
-				bool IsDirectory;
-				int ItemCount;
-			};
-			
-			ContentBrowserPayload payload = {};
+			// Single item payload - use canonical ContentBrowserPayload struct
+			Lunex::ContentBrowserPayload payload = {};
 			strncpy_s(payload.FilePath, item.path.string().c_str(), _TRUNCATE);
 			
 			std::string ext = item.path.extension().string();

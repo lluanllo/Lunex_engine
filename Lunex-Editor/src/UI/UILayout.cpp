@@ -16,7 +16,9 @@ namespace Lunex::UI {
 		ScopedColor colors({
 			{ImGuiCol_WindowBg, Colors::BgMedium()},
 			{ImGuiCol_ChildBg, Colors::BgMedium()},
-			{ImGuiCol_Border, Colors::Border()}
+			{ImGuiCol_Border, Colors::Border()},
+			{ImGuiCol_TitleBg, Color::FromHex(0x141414)},
+			{ImGuiCol_TitleBgActive, Color::FromHex(0x1A1A1A)}
 		});
 		
 		return ImGui::Begin(title.c_str(), open, flags);
@@ -128,9 +130,9 @@ namespace Lunex::UI {
 		
 		ScopedStyle framePadding(ImGuiStyleVar_FramePadding, ImVec2(6, 6));
 		ScopedColor colors({
-			{ImGuiCol_Header, Colors::BgHover()},
-			{ImGuiCol_HeaderHovered, Color(0.26f, 0.26f, 0.28f, 1.0f)},
-			{ImGuiCol_HeaderActive, Color(0.30f, 0.30f, 0.32f, 1.0f)}
+			{ImGuiCol_Header, Color::FromHex(0x1E1E1E)},
+			{ImGuiCol_HeaderHovered, Color::FromHex(0x282828)},
+			{ImGuiCol_HeaderActive, Color::FromHex(0x2E2E2E)}
 		});
 		
 		std::string displayTitle = icon ? (std::string(icon) + " " + title) : title;
@@ -164,9 +166,9 @@ namespace Lunex::UI {
 		float lineHeight = ImGui::GetTextLineHeight() + ImGui::GetStyle().FramePadding.y * 2.0f;
 		
 		ScopedColor colors({
-			{ImGuiCol_Header, Colors::BgHover()},
-			{ImGuiCol_HeaderHovered, Color(0.26f, 0.26f, 0.28f, 1.0f)},
-			{ImGuiCol_HeaderActive, Color(0.30f, 0.30f, 0.32f, 1.0f)}
+			{ImGuiCol_Header, Color::FromHex(0x1E1E1E)},
+			{ImGuiCol_HeaderHovered, Color::FromHex(0x282828)},
+			{ImGuiCol_HeaderActive, Color::FromHex(0x2E2E2E)}
 		});
 		
 		result.isOpen = ImGui::TreeNodeEx((void*)title.c_str(), flags, "%s", title.c_str());
@@ -176,9 +178,9 @@ namespace Lunex::UI {
 		
 		ScopedID buttonID(title.c_str());
 		ScopedColor buttonColors({
-			{ImGuiCol_Button, Color(0.3f, 0.3f, 0.32f, 1.0f)},
-			{ImGuiCol_ButtonHovered, Color(0.4f, 0.4f, 0.42f, 1.0f)},
-			{ImGuiCol_ButtonActive, Color(0.35f, 0.35f, 0.37f, 1.0f)}
+			{ImGuiCol_Button, Color(0.18f, 0.18f, 0.18f, 1.0f)},
+			{ImGuiCol_ButtonHovered, Color(0.28f, 0.28f, 0.28f, 1.0f)},
+			{ImGuiCol_ButtonActive, Color(0.14f, 0.14f, 0.14f, 1.0f)}
 		});
 		
 		if (!canRemove) {
@@ -232,7 +234,7 @@ namespace Lunex::UI {
 		// Style vars popped automatically by ScopedStyle
 	}
 	
-	void BeginColumns(int count, bool border) {
+	 void BeginColumns(int count, bool border) {
 		ImGui::Columns(count, nullptr, border);
 	}
 	

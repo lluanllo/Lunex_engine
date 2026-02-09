@@ -23,15 +23,15 @@ namespace Lunex::UI {
 	
 	namespace ToolbarButtonColors {
 		// Button colors (translucent with subtle effects)
-		inline Color ButtonBg()          { return Color(0.15f, 0.15f, 0.15f, 0.70f); }
-		inline Color ButtonHover()       { return Color(0.25f, 0.25f, 0.25f, 0.85f); }
-		inline Color ButtonActive()      { return Color(0.30f, 0.30f, 0.30f, 0.90f); }
-		inline Color ButtonSelected()    { return Color(0.26f, 0.59f, 0.98f, 0.90f); }
-		inline Color ButtonSelectedHover() { return Color(0.36f, 0.69f, 1.0f, 1.0f); }
+		inline Color ButtonBg()          { return Color(0.12f, 0.12f, 0.12f, 0.70f); }
+		inline Color ButtonHover()       { return Color(0.22f, 0.22f, 0.22f, 0.85f); }
+		inline Color ButtonActive()      { return Color(0.08f, 0.08f, 0.08f, 0.90f); }
+		inline Color ButtonSelected()    { return Colors::Primary().WithAlpha(0.85f); }
+		inline Color ButtonSelectedHover() { return Colors::PrimaryHover(); }
 		
 		// Tooltip colors
-		inline Color TooltipTitle()      { return Color(0.90f, 0.90f, 0.90f, 1.0f); }
-		inline Color TooltipDesc()       { return Color(0.70f, 0.70f, 0.70f, 1.0f); }
+		inline Color TooltipTitle()      { return Colors::TextPrimary(); }
+		inline Color TooltipDesc()       { return Colors::TextSecondary(); }
 	}
 	
 	// Sizing constants

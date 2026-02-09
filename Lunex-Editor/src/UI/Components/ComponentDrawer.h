@@ -22,15 +22,15 @@ namespace Lunex::UI {
 		static constexpr float INDENT_SIZE = 12.0f;
 		static constexpr float COLUMN_WIDTH = 120.0f;
 		
-		static Color HeaderColor() { return Color(0.85f, 0.85f, 0.85f, 1.0f); }
-		static Color SubheaderColor() { return Color(0.7f, 0.7f, 0.7f, 1.0f); }
-		static Color HintColor() { return Color(0.5f, 0.5f, 0.5f, 1.0f); }
-		static Color AccentColor() { return Color(0.26f, 0.59f, 0.98f, 1.0f); }
-		static Color SuccessColor() { return Color(0.3f, 0.8f, 0.3f, 1.0f); }
-		static Color WarningColor() { return Color(0.8f, 0.6f, 0.2f, 1.0f); }
-		static Color DangerColor() { return Color(0.8f, 0.3f, 0.3f, 1.0f); }
-		static Color BgDark() { return Color(0.16f, 0.16f, 0.17f, 1.0f); }
-		static Color BgMedium() { return Color(0.22f, 0.22f, 0.24f, 1.0f); }
+		static Color HeaderColor() { return Colors::TextPrimary(); }
+		static Color SubheaderColor() { return Colors::TextSecondary(); }
+		static Color HintColor() { return Colors::TextMuted(); }
+		static Color AccentColor() { return Colors::Primary(); }
+		static Color SuccessColor() { return Colors::Success(); }
+		static Color WarningColor() { return Colors::Warning(); }
+		static Color DangerColor() { return Colors::Danger(); }
+		static Color BgDark() { return Colors::BgDark(); }
+		static Color BgMedium() { return Colors::BgLight(); }
 	};
 	
 	// ============================================================================
@@ -138,9 +138,9 @@ namespace Lunex::UI {
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 6));
 		float lineHeight = ImGui::GetTextLineHeight() + ImGui::GetStyle().FramePadding.y * 2.0f;
 		
-		ImGui::PushStyleColor(ImGuiCol_Header, ToImVec4(ComponentStyle::BgMedium()));
-		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.26f, 0.26f, 0.28f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.30f, 0.30f, 0.32f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_Header, ToImVec4(Colors::BgDark()));
+		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ToImVec4(Colors::BgHover()));
+		ImGui::PushStyleColor(ImGuiCol_HeaderActive, ToImVec4(Colors::BgLight()));
 		
 		result.isOpen = ImGui::TreeNodeEx((void*)typeid(T).hash_code(), treeNodeFlags, "%s", name.c_str());
 		
@@ -156,9 +156,9 @@ namespace Lunex::UI {
 			ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.5f);
 		}
 		
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.3f, 0.32f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.4f, 0.42f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.35f, 0.35f, 0.37f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_Button, ToImVec4(Colors::BgLight()));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ToImVec4(Colors::BgHover()));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ToImVec4(Colors::BgDark()));
 		
 		if (ImGui::Button("+", ImVec2(lineHeight, lineHeight))) {
 			if (canRemove) {

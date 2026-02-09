@@ -88,6 +88,8 @@ namespace Lunex::UI {
 	}
 	
 	void EntityNode::RenderIcon(Ref<Texture2D> icon) {
+		if (!icon || icon->GetRendererID() == 0) return;
+		
 		ImVec2 iconPos = ImGui::GetCursorPos();
 		ImGui::SetCursorPosY(iconPos.y + 2.0f);
 		

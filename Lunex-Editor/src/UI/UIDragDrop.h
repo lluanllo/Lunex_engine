@@ -22,7 +22,7 @@ namespace Lunex::UI {
 	 */
 	struct ContentPayload {
 		char FilePath[512] = {};
-		char RelativePath[256] = {};
+		char RelativePath[512] = {};
 		char Extension[32] = {};
 		bool IsDirectory = false;
 		uint32_t ItemCount = 1;
@@ -169,3 +169,4 @@ namespace Lunex::UI {
 								  const Size& size = Size(-1, 60));
 
 } // namespace Lunex::UI
+ 

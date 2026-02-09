@@ -44,13 +44,13 @@ namespace Lunex::UI {
 						 bool isActive, const char* tooltip) {
 		ScopedID scopedID(id);
 		
-		Color btnColor = isActive ? Colors::Primary() : Color(0.15f, 0.15f, 0.15f, 0.7f);
-		Color hoverColor = isActive ? Colors::PrimaryHover() : Color(0.25f, 0.25f, 0.25f, 0.85f);
+		Color btnColor = isActive ? Colors::Primary() : Color(0.12f, 0.12f, 0.12f, 0.70f);
+		Color hoverColor = isActive ? Colors::PrimaryHover() : Color(0.22f, 0.22f, 0.22f, 0.85f);
 		
 		ScopedColor colors({
 			{ImGuiCol_Button, btnColor},
 			{ImGuiCol_ButtonHovered, hoverColor},
-			{ImGuiCol_ButtonActive, Color(0.30f, 0.30f, 0.30f, 0.9f)}
+			{ImGuiCol_ButtonActive, Color(0.08f, 0.08f, 0.08f, 0.9f)}
 		});
 		ScopedStyle rounding(ImGuiStyleVar_FrameRounding, m_Style.buttonRounding);
 		

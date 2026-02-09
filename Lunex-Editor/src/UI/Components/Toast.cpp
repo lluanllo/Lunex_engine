@@ -112,13 +112,13 @@ namespace Lunex::UI {
 	Color ToastManager::GetToastColor(ToastType type, float alpha) const {
 		switch (type) {
 			case ToastType::Success:
-				return Color(0.2f, 0.5f, 0.2f, alpha * 0.95f);
+				return Color(0.10f, 0.30f, 0.15f, alpha * 0.95f);
 			case ToastType::Warning:
-				return Color(0.5f, 0.4f, 0.1f, alpha * 0.95f);
+				return Color(0.35f, 0.25f, 0.08f, alpha * 0.95f);
 			case ToastType::Error:
-				return Color(0.5f, 0.2f, 0.2f, alpha * 0.95f);
+				return Color(0.35f, 0.10f, 0.10f, alpha * 0.95f);
 			default:
-				return Color(0.2f, 0.2f, 0.3f, alpha * 0.95f);
+				return Color(0.10f, 0.10f, 0.18f, alpha * 0.95f);
 		}
 	}
 	
