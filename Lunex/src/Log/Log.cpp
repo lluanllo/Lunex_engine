@@ -33,6 +33,15 @@ namespace Lunex {
 		s_ClientLogger->flush_on(spdlog::level::trace);
 	}
 	
+	void Log::Shutdown() {
+		ClearLogCallback();
+		s_ClientLogger.reset();
+		s_CoreLogger.reset();
+		s_CallbackSink.reset();
+		spdlog::drop_all();
+		spdlog::shutdown();
+	}
+	
 	void Log::SetLogCallback(LogCallback callback) {
 		if (s_CallbackSink) {
 			s_CallbackSink->SetCallback(callback);

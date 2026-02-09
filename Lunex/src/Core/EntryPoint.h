@@ -17,5 +17,16 @@
 		LNX_PROFILE_BEGIN_SESSION("Runtime", "LunexProfile-Runtime.json");
 		app->Run();
 		LNX_PROFILE_END_SESSION();
+		
+		// Explicitly destroy the application before static destructors run.
+		// This prevents use-after-free crashes caused by MSVC's destructor tombstones
+		// when shared_ptrs in static storage are accessed after being destroyed.
+		app.reset();
+		
+		// Shutdown logging system: clears static shared_ptrs and shuts down spdlog
+		// before C++ runtime static destructors run.
+		Lunex::Log::Shutdown();
+		
+		return 0;
 	}
 #endif
