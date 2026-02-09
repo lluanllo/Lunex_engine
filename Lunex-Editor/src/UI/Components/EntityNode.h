@@ -17,8 +17,8 @@ namespace Lunex::UI {
 	
 	struct EntityNodeStyle {
 		Color backgroundColor = Color(0, 0, 0, 0);
-		Color selectedColor = Color(0.91f, 0.57f, 0.18f, 0.25f);
-		Color hoverColor = Color(0.16f, 0.16f, 0.16f, 0.60f);
+		Color selectedColor = Colors::Selected();
+		Color hoverColor = Color(0.17f, 0.17f, 0.18f, 0.60f);
 		float iconSize = SpacingValues::IconMD;
 		float indentPerLevel = 16.0f;
 	};

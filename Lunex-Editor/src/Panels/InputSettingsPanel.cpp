@@ -33,10 +33,10 @@ namespace Lunex {
 		// Colors
 		inline UI::Color BgPanel()         { return UI::Color(0.06f, 0.06f, 0.06f, 0.95f); }
 		inline UI::Color KeyBg()           { return UI::Color(0.12f, 0.12f, 0.12f, 1.0f); }
-		inline UI::Color KeyText()         { return UI::Color(0.91f, 0.57f, 0.18f, 1.0f); }
-		inline UI::Color CaptureBg()       { return UI::Color(0.30f, 0.20f, 0.08f, 1.0f); }
+		inline UI::Color KeyText()         { return UI::Colors::Primary(); }
+		inline UI::Color CaptureBg()       { return UI::Color(0.10f, 0.18f, 0.38f, 1.0f); }
 		inline UI::Color CaptureText()     { return UI::Color(1.0f, 1.0f, 1.0f, 1.0f); }
-		inline UI::Color CategoryText()    { return UI::Color(0.91f, 0.57f, 0.18f, 1.0f); }
+		inline UI::Color CategoryText()    { return UI::Colors::Primary(); }
 		inline UI::Color TableHeader()     { return UI::Color(0.10f, 0.10f, 0.10f, 1.0f); }
 	}
 

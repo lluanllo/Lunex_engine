@@ -138,32 +138,32 @@ namespace Lunex {
 		style.ButtonTextAlign = ImVec2(0.5f, 0.5f);
 		style.SelectableTextAlign = ImVec2(0.0f, 0.5f);
 		
-		// ===== COLOR PALETTE (HAZEL-INSPIRED WARM DARK) =====
+		// ===== COLOR PALETTE (PROFESSIONAL DARK) =====
 		
 		// Dark backgrounds with clear hierarchy
-		const ImVec4 bgVeryDark    = ImVec4(0.078f, 0.078f, 0.078f, 1.0f);  // #141414 - Deepest
-		const ImVec4 bgDark        = ImVec4(0.102f, 0.102f, 0.102f, 1.0f);  // #1A1A1A - Main panels
-		const ImVec4 bgMedium      = ImVec4(0.141f, 0.141f, 0.141f, 1.0f);  // #242424 - Elevated
-		const ImVec4 bgLight       = ImVec4(0.168f, 0.168f, 0.168f, 1.0f);  // #2B2B2B - Controls
+		const ImVec4 bgVeryDark    = ImVec4(0.094f, 0.094f, 0.094f, 1.0f);  // #181818 - Deepest
+		const ImVec4 bgDark        = ImVec4(0.118f, 0.118f, 0.118f, 1.0f);  // #1E1E1E - Main panels
+		const ImVec4 bgMedium      = ImVec4(0.145f, 0.145f, 0.149f, 1.0f);  // #252526 - Elevated
+		const ImVec4 bgLight       = ImVec4(0.165f, 0.176f, 0.180f, 1.0f);  // #2A2D2E - Controls
 		const ImVec4 bgHeader      = ImVec4(0.118f, 0.118f, 0.118f, 1.0f);  // #1E1E1E - Headers
 		
-		// Warm orange accent (Hazel signature)
-		const ImVec4 accent        = ImVec4(0.91f, 0.57f, 0.18f, 1.0f);     // #E8912D - Primary orange
-		const ImVec4 accentHover   = ImVec4(0.94f, 0.63f, 0.29f, 1.0f);     // Lighter hover
-		const ImVec4 accentActive  = ImVec4(0.78f, 0.48f, 0.13f, 1.0f);     // Darker active
-		const ImVec4 accentDim     = ImVec4(0.91f, 0.57f, 0.18f, 0.50f);    // Semi-transparent
-		const ImVec4 accentSubtle  = ImVec4(0.91f, 0.57f, 0.18f, 0.15f);    // Very subtle
+		// Blue accent (professional, not intrusive)
+		const ImVec4 accent        = ImVec4(0.16f, 0.47f, 1.0f, 1.0f);      // #2979FF - Primary blue
+		const ImVec4 accentHover   = ImVec4(0.27f, 0.54f, 1.0f, 1.0f);      // Lighter hover
+		const ImVec4 accentActive  = ImVec4(0.16f, 0.38f, 1.0f, 1.0f);      // Deeper active
+		const ImVec4 accentDim     = ImVec4(0.16f, 0.47f, 1.0f, 0.50f);     // Semi-transparent
+		const ImVec4 accentSubtle  = ImVec4(0.16f, 0.47f, 1.0f, 0.12f);     // Very subtle
 		
 		// Text with proper contrast
-		const ImVec4 text          = ImVec4(0.92f, 0.92f, 0.92f, 1.0f);     // Primary text
+		const ImVec4 text          = ImVec4(0.90f, 0.90f, 0.92f, 1.0f);     // Primary text
 		const ImVec4 textBright    = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);        // Highlighted
-		const ImVec4 textDisabled  = ImVec4(0.42f, 0.42f, 0.42f, 1.0f);     // Disabled
-		const ImVec4 textDim       = ImVec4(0.62f, 0.62f, 0.62f, 1.0f);     // Secondary
+		const ImVec4 textDisabled  = ImVec4(0.40f, 0.40f, 0.42f, 1.0f);     // Disabled
+		const ImVec4 textDim       = ImVec4(0.56f, 0.56f, 0.58f, 1.0f);     // Secondary
 		
 		// Subtle borders
-		const ImVec4 border        = ImVec4(0.055f, 0.055f, 0.055f, 1.0f);  // #0E0E0E
-		const ImVec4 borderLight   = ImVec4(0.19f, 0.19f, 0.19f, 1.0f);     // #303030
-		const ImVec4 separator     = ImVec4(0.19f, 0.19f, 0.19f, 0.50f);
+		const ImVec4 border        = ImVec4(0.10f, 0.10f, 0.10f, 1.0f);     // #1A1A1A
+		const ImVec4 borderLight   = ImVec4(0.20f, 0.20f, 0.20f, 1.0f);     // #333333
+		const ImVec4 separator     = ImVec4(0.20f, 0.20f, 0.20f, 0.50f);
 		
 		// ===== APPLY COLORS =====
 		

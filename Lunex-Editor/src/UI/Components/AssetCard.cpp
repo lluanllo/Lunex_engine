@@ -94,14 +94,14 @@ namespace Lunex::UI {
 	void AssetCard::RenderFile(ImDrawList* drawList, ImVec2 cardMin, ImVec2 cardMax, Ref<Texture2D> thumbnail, bool isWideAspect) {
 		// Shadow
 		if (m_Style.showShadow) {
-			ImVec2 shadowOffset(3.0f, 3.0f);
+			ImVec2 shadowOffset(2.0f, 2.0f);
 			ImVec2 shadowMin = ImVec2(cardMin.x + shadowOffset.x, cardMin.y + shadowOffset.y);
 			ImVec2 shadowMax = ImVec2(cardMax.x + shadowOffset.x, cardMax.y + shadowOffset.y);
-			drawList->AddRectFilled(shadowMin, shadowMax, IM_COL32(0, 0, 0, 100), m_Style.rounding);
+			drawList->AddRectFilled(shadowMin, shadowMax, IM_COL32(0, 0, 0, 60), m_Style.rounding);
 		}
 		
 		// Card background
-		drawList->AddRectFilled(cardMin, cardMax, IM_COL32(30, 30, 30, 255), m_Style.rounding);
+		drawList->AddRectFilled(cardMin, cardMax, Colors::BgCard().ToImU32(), m_Style.rounding);
 		
 		// Thumbnail area
 		float padding = 8.0f;
@@ -217,13 +217,16 @@ namespace Lunex::UI {
 										   bool isSelected, bool isHovered) {
 		// Hover effect
 		if (isHovered && !isSelected) {
-			drawList->AddRect(cardMin, cardMax, IM_COL32(60, 60, 60, 200), m_Style.rounding, 0, 1.5f);
+			drawList->AddRect(cardMin, cardMax, IM_COL32(70, 70, 75, 200), m_Style.rounding, 0, 1.0f);
 		}
 		
-		// Selection effect (orange accent matching Hazel)
+		// Selection effect (blue accent)
 		if (isSelected) {
-			drawList->AddRect(cardMin, cardMax, IM_COL32(232, 145, 45, 255), m_Style.rounding, 0, 2.0f);
-			drawList->AddRectFilled(cardMin, cardMax, IM_COL32(232, 145, 45, 30), m_Style.rounding);
+			Color sel = Colors::SelectedBorder();
+			ImU32 borderCol = IM_COL32((int)(sel.r * 255), (int)(sel.g * 255), (int)(sel.b * 255), 220);
+			ImU32 fillCol = IM_COL32((int)(sel.r * 255), (int)(sel.g * 255), (int)(sel.b * 255), 20);
+			drawList->AddRect(cardMin, cardMax, borderCol, m_Style.rounding, 0, 1.5f);
+			drawList->AddRectFilled(cardMin, cardMax, fillCol, m_Style.rounding);
 		}
 	}
 	

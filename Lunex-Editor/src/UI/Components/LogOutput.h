@@ -59,30 +59,30 @@ namespace Lunex::UI {
 	
 	struct LogOutputStyle {
 		// Background colors
-		Color Background = Color::FromHex(0x0E0E0E);
-		Color FilterBarBg = Color::FromHex(0x161616);
+		Color Background = Colors::BgDark();
+		Color FilterBarBg = Color::FromHex(0x1A1A1A);
 		
 		// Text colors by level
 		Color TraceColor = Color(0.45f, 0.45f, 0.45f, 1.0f);
-		Color InfoColor = Color(0.85f, 0.85f, 0.85f, 1.0f);
+		Color InfoColor = Color(0.82f, 0.82f, 0.84f, 1.0f);
 		Color WarningColor = Color(0.94f, 0.76f, 0.20f, 1.0f);
-		Color ErrorColor = Color(0.91f, 0.30f, 0.24f, 1.0f);
-		Color CriticalColor = Color(1.0f, 0.10f, 0.10f, 1.0f);
+		Color ErrorColor = Color(0.93f, 0.33f, 0.31f, 1.0f);
+		Color CriticalColor = Color(1.0f, 0.15f, 0.15f, 1.0f);
 		
 		// Script colors
 		Color ScriptInfoColor = Color(0.35f, 0.75f, 0.95f, 1.0f);
-		Color ScriptWarningColor = Color(0.94f, 0.65f, 0.25f, 1.0f);
+		Color ScriptWarningColor = Color(0.94f, 0.76f, 0.25f, 1.0f);
 		Color ScriptErrorColor = Color(0.95f, 0.35f, 0.35f, 1.0f);
 		
 		// Compilation colors
 		Color CompileStartColor = Color(0.45f, 0.65f, 0.95f, 1.0f);
-		Color CompileSuccessColor = Color(0.18f, 0.80f, 0.44f, 1.0f);
-		Color CompileErrorColor = Color(0.91f, 0.22f, 0.22f, 1.0f);
-		Color CompileWarningColor = Color(0.91f, 0.57f, 0.18f, 1.0f);
+		Color CompileSuccessColor = Color(0.30f, 0.69f, 0.31f, 1.0f);
+		Color CompileErrorColor = Color(0.93f, 0.33f, 0.33f, 1.0f);
+		Color CompileWarningColor = Color(1.0f, 0.65f, 0.0f, 1.0f);
 		
 		// UI colors
-		Color TimestampColor = Color(0.40f, 0.40f, 0.40f, 1.0f);
-		Color CategoryColor = Color(0.50f, 0.70f, 0.90f, 1.0f);
+		Color TimestampColor = Color(0.35f, 0.35f, 0.37f, 1.0f);
+		Color CategoryColor = Color(0.45f, 0.65f, 0.85f, 1.0f);
 		
 		// Sizing
 		float MessageSpacing = 2.0f;

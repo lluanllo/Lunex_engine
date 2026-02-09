@@ -15,9 +15,9 @@ namespace Lunex::UI {
 	// ============================================================================
 	
 	namespace StatStyle {
-		inline Color LabelColor()    { return Color(0.62f, 0.62f, 0.62f, 1.0f); }
-		inline Color ValueColor()    { return Color(0.92f, 0.92f, 0.92f, 1.0f); }
-		inline Color HeaderColor()   { return Color(0.91f, 0.57f, 0.18f, 1.0f); }
+		inline Color LabelColor()    { return Colors::TextSecondary(); }
+		inline Color ValueColor()    { return Colors::TextPrimary(); }
+		inline Color HeaderColor()   { return Colors::Primary(); }
 		inline Color SectionBg()     { return Color(0.08f, 0.08f, 0.08f, 0.80f); }
 	}
 

@@ -15,9 +15,9 @@ namespace Lunex::UI {
 	
 	struct SearchBarStyle {
 		float width = 200.0f;
-		Color backgroundColor = Color::FromHex(0x141414);
-		Color hoverColor = Color::FromHex(0x1E1E1E);
-		Color focusColor = Color(0.91f, 0.57f, 0.18f, 0.40f);
+		Color backgroundColor = Colors::BgDark();
+		Color hoverColor = Colors::BgMedium();
+		Color focusColor = Colors::BorderFocus();
 		const char* icon = "??";
 	};
 	

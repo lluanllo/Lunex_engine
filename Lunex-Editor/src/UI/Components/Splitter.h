@@ -16,8 +16,8 @@ namespace Lunex::UI {
 	struct SplitterStyle {
 		float thickness = 4.0f;
 		Color normalColor = Color(0, 0, 0, 0);
-		Color hoverColor = Color(0.91f, 0.57f, 0.18f, 0.30f);
-		Color activeColor = Color(0.91f, 0.57f, 0.18f, 0.50f);
+		Color hoverColor = Color(0.16f, 0.47f, 1.0f, 0.25f);
+		Color activeColor = Color(0.16f, 0.47f, 1.0f, 0.45f);
 	};
 	
 	/**

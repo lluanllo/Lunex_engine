@@ -128,7 +128,7 @@ namespace Lunex::UI {
 		ScopedColor searchColors({
 			{ImGuiCol_FrameBg, m_Style.searchBgColor},
 			{ImGuiCol_FrameBgHovered, m_Style.searchHoverColor},
-			{ImGuiCol_FrameBgActive, Color(0.91f, 0.57f, 0.18f, 0.30f)},
+			{ImGuiCol_FrameBgActive, Colors::BorderFocus()},
 			{ImGuiCol_Text, m_Style.searchTextColor}
 		});
 		
