@@ -278,6 +278,10 @@ namespace Lunex {
 		// Begin scene with our isolated preview camera
 		Renderer3D::BeginScene(m_Camera);
 
+		// Disable IBL to prevent main scene's environment map from contaminating the preview
+		// The preview uses its own directional lights for consistent material visualization
+		Renderer3D::UnbindEnvironment();
+
 		// Update lights from preview scene (isolated)
 		Renderer3D::UpdateLights(m_PreviewScene.get());
 

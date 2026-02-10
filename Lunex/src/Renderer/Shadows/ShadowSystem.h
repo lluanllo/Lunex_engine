@@ -13,9 +13,6 @@
 #include "Core/Core.h"
 #include "Renderer/Shader.h"
 #include "Renderer/UniformBuffer.h"
-#include "RHI/RHITexture.h"
-#include "RHI/RHIFramebuffer.h"
-#include "RHI/RHISampler.h"
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -94,19 +91,18 @@ namespace Lunex {
 		// Render helpers
 		void RenderSceneDepthOnly(Scene* scene, const glm::mat4& lightVP);
 		void RenderSceneDepthPoint(Scene* scene, const glm::vec3& lightPos, float lightRange,
-								   const glm::mat4 faceVPs[6]);
+			const glm::mat4 faceVPs[6]);
 
 	private:
 		ShadowConfig m_Config;
 		bool m_Enabled = true;
 		bool m_Initialized = false;
 
-		// Shadow atlas (RHI-abstracted)
-		Ref<RHI::RHITexture2DArray> m_AtlasDepthTexture;
-		Ref<RHI::RHIFramebuffer> m_AtlasFBO;
-		Ref<RHI::RHISampler> m_ShadowSampler;
+		// Shadow atlas FBO and texture
+		uint32_t m_AtlasFBO = 0;
+		uint32_t m_AtlasDepthTexture = 0;   // GL_TEXTURE_2D_ARRAY
 		uint32_t m_AtlasMaxLayers = 0;
-		uint32_t m_AtlasResolution = 0;
+		uint32_t m_AtlasResolution = 0;      // Uniform resolution for all layers
 		std::vector<bool> m_LayerOccupancy;
 
 		// Shadow casters for current frame
