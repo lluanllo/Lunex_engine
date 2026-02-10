@@ -8,6 +8,7 @@
 #include "Scene/Camera/EditorCamera.h"
 #include "Resources/Mesh/Model.h"
 #include "Log/Log.h"
+#include "RHI/RHI.h"
 
 #include <glad/glad.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -31,38 +32,31 @@ namespace Lunex {
 		m_Config = config;
 
 		// ---- Calculate total atlas layers needed (worst case) ----
-		// 4 cascades + 16 lights * 6 faces = 100 layers worst case
-		// In practice we cap at a reasonable number.
 		m_AtlasMaxLayers = MAX_SHADOW_CASCADES + MAX_SHADOW_LIGHTS * 6;
 		m_LayerOccupancy.resize(m_AtlasMaxLayers, false);
 
-		// ---- Create depth texture array (atlas) ----
-		// All layers use the same resolution (the max of all types)
+		// ---- All layers use the same resolution (max of all types) ----
 		m_AtlasResolution = std::max({ m_Config.DirectionalResolution,
 								  m_Config.SpotResolution,
 								  m_Config.PointResolution });
 
-		glGenTextures(1, &m_AtlasDepthTexture);
-		glBindTexture(GL_TEXTURE_2D_ARRAY, m_AtlasDepthTexture);
-		glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, GL_DEPTH_COMPONENT32F,
-			m_AtlasResolution, m_AtlasResolution, m_AtlasMaxLayers);
+		// ---- Create depth texture array (atlas) via RHI ----
+		m_AtlasDepthTexture = RHI::RHITexture2DArray::Create(
+			m_AtlasResolution, m_AtlasResolution, m_AtlasMaxLayers,
+			RHI::TextureFormat::Depth32F, 1
+		);
 
-		// Shadow comparison sampler state
-		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
-		glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
-		float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
-		glTexParameterfv(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_BORDER_COLOR, borderColor);
+		m_ShadowSampler = RHI::RHISampler::CreateShadow();
 
-		glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+		// ---- Create depth-only FBO via RHI ----
+		RHI::FramebufferDesc fboDesc;
+		fboDesc.Width = m_AtlasResolution;
+		fboDesc.Height = m_AtlasResolution;
+		fboDesc.HasDepth = false; // We attach layers dynamically
+		fboDesc.DebugName = "ShadowAtlasFBO";
+		m_AtlasFBO = RHI::RHIFramebuffer::Create(fboDesc);
 
-		// ---- Create FBO for shadow rendering ----
-		glGenFramebuffers(1, &m_AtlasFBO);
-
-		// ---- Create UBO (binding = 7, avoids conflict with Skybox at binding 4) ----
+		// ---- Create UBO (binding = 7) ----
 		m_ShadowUBO = UniformBuffer::Create(sizeof(ShadowUniformData), 7);
 		memset(&m_GPUData, 0, sizeof(m_GPUData));
 
@@ -76,20 +70,15 @@ namespace Lunex {
 
 		m_Initialized = true;
 		LNX_LOG_INFO("ShadowSystem initialized: atlas {0}x{0} x{1} layers, Depth32F",
-			m_AtlasResolution, m_AtlasMaxLayers);
+					 m_AtlasResolution, m_AtlasMaxLayers);
 	}
 
 	void ShadowSystem::Shutdown() {
 		if (!m_Initialized) return;
 
-		if (m_AtlasFBO) {
-			glDeleteFramebuffers(1, &m_AtlasFBO);
-			m_AtlasFBO = 0;
-		}
-		if (m_AtlasDepthTexture) {
-			glDeleteTextures(1, &m_AtlasDepthTexture);
-			m_AtlasDepthTexture = 0;
-		}
+		m_AtlasFBO.reset();
+		m_AtlasDepthTexture.reset();
+		m_ShadowSampler.reset();
 
 		m_DepthShader.reset();
 		m_DepthPointShader.reset();
@@ -109,6 +98,8 @@ namespace Lunex {
 	void ShadowSystem::Update(Scene* scene, const EditorCamera& camera) {
 		if (!m_Initialized || !m_Enabled || !scene) return;
 
+		LightSystem::Get().SyncFromScene(scene);
+
 		glm::mat4 view = camera.GetViewMatrix();
 		glm::mat4 proj = camera.GetProjection();
 		glm::vec3 pos = camera.GetPosition();
@@ -121,11 +112,23 @@ namespace Lunex {
 	void ShadowSystem::Update(Scene* scene, const Camera& camera, const glm::mat4& cameraTransform) {
 		if (!m_Initialized || !m_Enabled || !scene) return;
 
+		LightSystem::Get().SyncFromScene(scene);
+
 		glm::mat4 view = glm::inverse(cameraTransform);
 		glm::mat4 proj = camera.GetProjection();
 		glm::vec3 pos = glm::vec3(cameraTransform[3]);
 
-		UpdateInternal(scene, view, proj, pos, 0.1f, 1000.0f);
+		float nearClip = 0.1f;
+		float farClip = 1000.0f;
+
+		if (std::abs(proj[2][3] + 1.0f) < 0.001f) {
+			float a = proj[2][2];
+			float b = proj[3][2];
+			nearClip = b / (a - 1.0f);
+			farClip = b / (a + 1.0f);
+		}
+
+		UpdateInternal(scene, view, proj, pos, nearClip, farClip);
 	}
 
 	// ========================================================================
@@ -135,9 +138,13 @@ namespace Lunex {
 	void ShadowSystem::BindForSceneRendering() {
 		if (!m_Initialized || !m_Enabled) return;
 
+		m_AtlasDepthTexture->Bind(11);
+		m_ShadowSampler->Bind(11);
+
+		auto* cmdList = RHI::GetImmediateCommandList();
+
 		// Bind shadow atlas to texture slot 11 (comparison sampler)
-		glActiveTexture(GL_TEXTURE11);
-		glBindTexture(GL_TEXTURE_2D_ARRAY, m_AtlasDepthTexture);
+		cmdList->SetTexture(m_AtlasDepthTexture.get(), 11);
 
 		// Upload UBO
 		m_ShadowUBO->SetData(&m_GPUData, sizeof(ShadowUniformData));
@@ -149,8 +156,8 @@ namespace Lunex {
 
 	void ShadowSystem::SetConfig(const ShadowConfig& config) {
 		bool needsResize = (config.DirectionalResolution != m_Config.DirectionalResolution ||
-			config.SpotResolution != m_Config.SpotResolution ||
-			config.PointResolution != m_Config.PointResolution);
+							config.SpotResolution != m_Config.SpotResolution ||
+							config.PointResolution != m_Config.PointResolution);
 		m_Config = config;
 
 		if (needsResize && m_Initialized) {
@@ -179,7 +186,7 @@ namespace Lunex {
 		CollectShadowCasters(cameraPos);
 
 		if (m_ShadowCasters.empty()) {
-			// No shadow casters � zero out GPU data
+			// No shadow casters - zero out GPU data
 			memset(&m_GPUData, 0, sizeof(m_GPUData));
 			m_ShadowUBO->SetData(&m_GPUData, sizeof(ShadowUniformData));
 			return;
@@ -188,7 +195,7 @@ namespace Lunex {
 		// 2. Allocate atlas layers
 		AllocateAtlasLayers();
 
-		// 3. Compute light-space matrices (CSM splits, spot perspective, point cubemap)
+		// 3. Compute light-space matrices
 		ComputeLightMatrices(cameraView, cameraProj, cameraNear, cameraFar);
 
 		// 4. Render depth into shadow atlas
@@ -225,7 +232,7 @@ namespace Lunex {
 			switch (light.Properties.Type) {
 			case LightType::Directional:
 				info.Type = ShadowType::Directional_CSM;
-				info.Priority = 1000.0f; // Always highest priority
+				info.Priority = 1000.0f / (glm::distance(cameraPos, light.WorldPosition) + 1.0f);
 				info.Bias = m_Config.DirectionalBias;
 				break;
 			case LightType::Spot:
@@ -245,13 +252,11 @@ namespace Lunex {
 			m_ShadowCasters.push_back(info);
 		}
 
-		// Sort by priority (highest first)
 		std::sort(m_ShadowCasters.begin(), m_ShadowCasters.end(),
 			[](const ShadowCasterInfo& a, const ShadowCasterInfo& b) {
 				return a.Priority > b.Priority;
 			});
 
-		// Limit to max shadow-casting lights
 		if (m_ShadowCasters.size() > MAX_SHADOW_LIGHTS) {
 			m_ShadowCasters.resize(MAX_SHADOW_LIGHTS);
 		}
@@ -284,7 +289,6 @@ namespace Lunex {
 			}
 
 			if (nextLayer + caster.LayerCount > static_cast<int>(m_AtlasMaxLayers)) {
-				// No room � skip this light
 				caster.AtlasFirstLayer = -1;
 				continue;
 			}
@@ -337,7 +341,7 @@ namespace Lunex {
 					caster.Position,
 					caster.Position + caster.Direction,
 					glm::abs(glm::dot(caster.Direction, glm::vec3(0, 1, 0))) > 0.999f
-					? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0)
+						? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0)
 				);
 				caster.ViewProjections[0] = proj * view;
 				break;
@@ -380,29 +384,44 @@ namespace Lunex {
 	void ShadowSystem::RenderShadowMaps(Scene* scene) {
 		LNX_PROFILE_FUNCTION();
 
-		// Save GL state
-		GLint prevFBO = 0;
-		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
-		GLint prevViewport[4];
-		glGetIntegerv(GL_VIEWPORT, prevViewport);
-		GLboolean prevCullFace = glIsEnabled(GL_CULL_FACE);
-		GLint prevCullMode;
-		glGetIntegerv(GL_CULL_FACE_MODE, &prevCullMode);
+		auto* cmd = RHI::GetImmediateCommandList();
+
+		// Save current state
+		int prevViewport[4];
+		cmd->GetViewport(prevViewport);
+		uint64_t prevFBO = cmd->GetBoundFramebuffer();
+
+		// Save cull state (RHI)
+		RHI::CullMode prevCullMode = RHI::CullMode::None;
+		{
+			const GLboolean prevCullEnabledGL = glIsEnabled(GL_CULL_FACE);
+			if (!prevCullEnabledGL) {
+				prevCullMode = RHI::CullMode::None;
+			} else {
+				GLint prevCullFaceModeGL = GL_BACK;
+				glGetIntegerv(GL_CULL_FACE_MODE, &prevCullFaceModeGL);
+				prevCullMode = (prevCullFaceModeGL == GL_FRONT) ? RHI::CullMode::Front : RHI::CullMode::Back;
+			}
+		}
+
+		// Disable culling for shadow pass (matches reference)
+		cmd->SetCullMode(RHI::CullMode::None);
+
+		uint64_t fboHandle = m_AtlasFBO->GetNativeHandle();
+		uint64_t texHandle = m_AtlasDepthTexture->GetNativeHandle();
 
 		// Bind our FBO
-		glBindFramebuffer(GL_FRAMEBUFFER, m_AtlasFBO);
+		cmd->BindFramebufferByHandle(fboHandle);
 
-		// No color attachment � must tell OpenGL explicitly
-		glDrawBuffer(GL_NONE);
-		glReadBuffer(GL_NONE);
+		// No color attachment - depth only
+		cmd->SetNoColorOutput();
 
 		// Enable depth writing, disable color
-		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-		glEnable(GL_DEPTH_TEST);
-		glDepthMask(GL_TRUE);
-		glDepthFunc(GL_LESS);
+		cmd->SetColorMask(false, false, false, false);
+		cmd->SetDepthTestEnabled(true);
+		cmd->SetDepthMask(true);
+		cmd->SetDepthFunc(RHI::CompareFunc::Less);
 
-		// All layers use the full atlas resolution
 		uint32_t res = m_AtlasResolution;
 
 		for (auto& caster : m_ShadowCasters) {
@@ -415,24 +434,22 @@ namespace Lunex {
 				for (int face = 0; face < 6; ++face) {
 					int layer = caster.AtlasFirstLayer + face;
 
-					glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-						m_AtlasDepthTexture, 0, layer);
-					glViewport(0, 0, res, res);
-					glClear(GL_DEPTH_BUFFER_BIT);
+					cmd->AttachDepthTextureLayer(fboHandle, texHandle, layer);
+				    cmd->SetViewport(0.0f, 0.0f, static_cast<float>(res), static_cast<float>(res));
+					cmd->ClearDepthOnly();
 
-					// Disable face culling for point shadows to capture all geometry
-					glDisable(GL_CULL_FACE);
+					// Disable face culling for point shadows
+					cmd->SetCullMode(RHI::CullMode::None);
 
 					// Polygon offset for bias
-					glEnable(GL_POLYGON_OFFSET_FILL);
-					glPolygonOffset(caster.Bias * 4.0f, caster.Bias * 4.0f);
+					cmd->SetPolygonOffset(true, caster.Bias * 4.0f, caster.Bias * 4.0f);
 
 					// Set UBO data for this face
 					m_DepthUBOData.LightVP = caster.ViewProjections[face];
 					m_DepthUBOData.LightPosAndRange = glm::vec4(caster.Position, caster.Range);
 					RenderSceneDepthPoint(scene, caster.Position, caster.Range, caster.ViewProjections);
 
-					glDisable(GL_POLYGON_OFFSET_FILL);
+					cmd->SetPolygonOffset(false);
 					m_Stats.PointFacesRendered++;
 				}
 				m_Stats.ShadowMapsRendered++;
@@ -441,30 +458,27 @@ namespace Lunex {
 				// Directional / Spot: standard depth shader
 				m_DepthShader->Bind();
 
-				// Disable face culling to capture all geometry (thin planes, single-sided meshes)
-				glDisable(GL_CULL_FACE);
+				// Disable face culling to capture all geometry
+				cmd->SetCullMode(RHI::CullMode::None);
 
 				for (int m = 0; m < caster.NumMatrices; ++m) {
 					int layer = caster.AtlasFirstLayer + m;
 
-					glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-						m_AtlasDepthTexture, 0, layer);
-					glViewport(0, 0, res, res);
-					glClear(GL_DEPTH_BUFFER_BIT);
+					cmd->AttachDepthTextureLayer(fboHandle, texHandle, layer);
+					cmd->SetViewport(0.0f, 0.0f, static_cast<float>(res), static_cast<float>(res));
+					cmd->ClearDepthOnly();
 
 					// Polygon offset bias
-					glEnable(GL_POLYGON_OFFSET_FILL);
-					glPolygonOffset(caster.Bias * 2.0f, caster.Bias * 2.0f);
+					cmd->SetPolygonOffset(true, caster.Bias * 2.0f, caster.Bias * 2.0f);
 
 					m_DepthUBOData.LightVP = caster.ViewProjections[m];
 					RenderSceneDepthOnly(scene, caster.ViewProjections[m]);
 
-					glDisable(GL_POLYGON_OFFSET_FILL);
+					cmd->SetPolygonOffset(false);
 
 					if (caster.Type == ShadowType::Directional_CSM) {
 						m_Stats.CascadesRendered++;
-					}
-					else {
+					} else {
 						m_Stats.SpotMapsRendered++;
 					}
 				}
@@ -472,19 +486,21 @@ namespace Lunex {
 			}
 		}
 
-		// Restore GL state
-		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		// Restore ALL state that was modified
+		cmd->SetColorMask(true, true, true, true);
 
-		if (prevCullFace) {
-			glEnable(GL_CULL_FACE);
-		}
-		else {
-			glDisable(GL_CULL_FACE);
-		}
-		glCullFace(prevCullMode);
+		// Restore cull state exactly as it was (via RHI)
+		cmd->SetCullMode(prevCullMode);
 
-		glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
-		glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+		cmd->SetPolygonOffset(false);
+		cmd->SetDepthFunc(RHI::CompareFunc::Less);
+		cmd->SetDepthMask(true);
+		cmd->SetDepthTestEnabled(true);
+
+		// Restore previously bound FBO (NOT 0 — the editor scene FBO was bound)
+		cmd->BindFramebufferByHandle(prevFBO);
+		cmd->SetViewport(static_cast<float>(prevViewport[0]), static_cast<float>(prevViewport[1]),
+						 static_cast<float>(prevViewport[2]), static_cast<float>(prevViewport[3]));
 	}
 
 	// ========================================================================
@@ -492,7 +508,8 @@ namespace Lunex {
 	// ========================================================================
 
 	void ShadowSystem::RenderSceneDepthOnly(Scene* scene, const glm::mat4& lightVP) {
-		// Iterate all mesh entities and draw with depth-only shader
+		auto* cmd = RHI::GetImmediateCommandList();
+
 		auto view = scene->GetAllEntitiesWith<TransformComponent, MeshComponent>();
 		for (auto entityID : view) {
 			Entity entity{ entityID, scene };
@@ -505,14 +522,12 @@ namespace Lunex {
 			m_DepthUBOData.Model = worldTransform;
 			m_DepthShaderUBO->SetData(&m_DepthUBOData, sizeof(DepthShaderUBOData));
 
-			// Draw all submeshes (depth only � no material)
+			// Draw all submeshes (depth only - no material)
 			for (const auto& submesh : mesh.MeshModel->GetMeshes()) {
 				auto va = submesh->GetVertexArray();
 				if (va) {
 					va->Bind();
-					glDrawElements(GL_TRIANGLES,
-						static_cast<GLsizei>(submesh->GetIndices().size()),
-						GL_UNSIGNED_INT, nullptr);
+					cmd->DrawIndexed(static_cast<uint32_t>(submesh->GetIndices().size()));
 					m_Stats.ShadowDrawCalls++;
 				}
 			}
@@ -520,9 +535,10 @@ namespace Lunex {
 	}
 
 	void ShadowSystem::RenderSceneDepthPoint(Scene* scene, const glm::vec3& lightPos,
-		float lightRange, const glm::mat4 faceVPs[6])
+											  float lightRange, const glm::mat4 faceVPs[6])
 	{
-		// For point lights � same as depth only but with the point shader bound
+		auto* cmd = RHI::GetImmediateCommandList();
+
 		auto view = scene->GetAllEntitiesWith<TransformComponent, MeshComponent>();
 		for (auto entityID : view) {
 			Entity entity{ entityID, scene };
@@ -539,9 +555,7 @@ namespace Lunex {
 				auto va = submesh->GetVertexArray();
 				if (va) {
 					va->Bind();
-					glDrawElements(GL_TRIANGLES,
-						static_cast<GLsizei>(submesh->GetIndices().size()),
-						GL_UNSIGNED_INT, nullptr);
+					cmd->DrawIndexed(static_cast<uint32_t>(submesh->GetIndices().size()));
 					m_Stats.ShadowDrawCalls++;
 				}
 			}
@@ -563,7 +577,6 @@ namespace Lunex {
 		m_GPUData.SkyTintStrength = m_Config.EnableSkyColorTint ? m_Config.SkyTintStrength : 0.0f;
 
 		// Fill cascade data from first directional light
-		// Use the STORED split depths from CascadedShadowMap calculation
 		for (const auto& caster : m_ShadowCasters) {
 			if (caster.Type == ShadowType::Directional_CSM && caster.AtlasFirstLayer >= 0) {
 				for (uint32_t c = 0; c < m_Config.CSMCascadeCount && c < MAX_SHADOW_CASCADES; ++c) {

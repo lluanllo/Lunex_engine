@@ -89,8 +89,13 @@ namespace Lunex {
 		}
 		
 		// ========== 3D RENDERING ==========
-		Renderer3D::BeginScene(camera);
+		// Update lights first (syncs LightSystem, uploads SSBO)
 		Renderer3D::UpdateLights(m_Context->OwningScene);
+		
+		// Update shadow maps BEFORE BeginScene (BeginScene binds atlas for reading)
+		Renderer3D::UpdateShadows(m_Context->OwningScene, camera);
+		
+		Renderer3D::BeginScene(camera);
 		
 		RenderMeshes(camera, camera.GetViewMatrix());
 		
@@ -114,8 +119,13 @@ namespace Lunex {
 		Renderer2D::EndScene();
 		
 		// ========== 3D RENDERING ==========
-		Renderer3D::BeginScene(camera, cameraTransform);
+		// Update lights first (syncs LightSystem, uploads SSBO)
 		Renderer3D::UpdateLights(m_Context->OwningScene);
+		
+		// Update shadow maps BEFORE BeginScene (BeginScene binds atlas for reading)
+		Renderer3D::UpdateShadows(m_Context->OwningScene, camera, cameraTransform);
+		
+		Renderer3D::BeginScene(camera, cameraTransform);
 		
 		RenderMeshes(camera, cameraTransform);
 		

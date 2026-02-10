@@ -13,6 +13,7 @@
 #include "Core/Core.h"
 #include "Renderer/Shader.h"
 #include "Renderer/UniformBuffer.h"
+#include "RHI/RHI.h"
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -98,9 +99,10 @@ namespace Lunex {
 		bool m_Enabled = true;
 		bool m_Initialized = false;
 
-		// Shadow atlas FBO and texture
-		uint32_t m_AtlasFBO = 0;
-		uint32_t m_AtlasDepthTexture = 0;   // GL_TEXTURE_2D_ARRAY
+		// Shadow atlas (RHI resources)
+		Ref<RHI::RHITexture2DArray> m_AtlasDepthTexture;   // Depth texture array
+		Ref<RHI::RHIFramebuffer>    m_AtlasFBO;             // Depth-only FBO
+		Ref<RHI::RHISampler> m_ShadowSampler;
 		uint32_t m_AtlasMaxLayers = 0;
 		uint32_t m_AtlasResolution = 0;      // Uniform resolution for all layers
 		std::vector<bool> m_LayerOccupancy;
