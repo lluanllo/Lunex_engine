@@ -27,6 +27,8 @@ namespace Lunex {
 		static void EndScene();
 
 		static void UpdateLights(Scene* scene);
+		static void UpdateShadows(Scene* scene, const EditorCamera& camera);
+		static void UpdateShadows(Scene* scene, const Camera& camera, const glm::mat4& cameraTransform);
 		
 		// IBL Environment binding
 		static void BindEnvironment(const Ref<EnvironmentMap>& environment);
