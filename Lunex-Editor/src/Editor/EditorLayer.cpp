@@ -787,7 +787,7 @@ namespace Lunex {
 		}
 
 		m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
-		m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
+		//m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
 
 		OnOverlayRender();
 
@@ -796,9 +796,18 @@ namespace Lunex {
 		// ========================================
 		// CAMERA PREVIEW RENDERING (after main scene, separate pass)
 		// ========================================
+
+		// Material Editor Preview (has own UBOs but shares bindings)
+		m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
+		
 		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
 		if (selectedEntity && selectedEntity.HasComponent<CameraComponent>() && m_SceneState == SceneState::Edit) {
 			RenderCameraPreview(selectedEntity);
+		}
+
+		if (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Simulate) {
+			Renderer3D::BeginScene(m_EditorCamera);
+			Renderer3D::EndScene();
 		}
 	}
 
