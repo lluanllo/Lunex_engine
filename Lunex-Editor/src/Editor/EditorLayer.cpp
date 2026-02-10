@@ -736,7 +736,14 @@ namespace Lunex {
 		auto* cmdList = RHI::GetImmediateCommandList();
 		if (cmdList) {
 			cmdList->SetViewport(0.0f, 0.0f, m_ViewportSize.x, m_ViewportSize.y);
-			cmdList->SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+			
+			// ✅ FIX: Use SkyboxRenderer's background color when no HDRI is loaded
+			if (!SkyboxRenderer::HasEnvironmentLoaded()) {
+				glm::vec3 bgColor = SkyboxRenderer::GetBackgroundColor();
+				cmdList->SetClearColor(glm::vec4(bgColor, 1.0f));
+			} else {
+				cmdList->SetClearColor({ 0.1f, 0.1f, 0.1f, 1 });
+			}
 			cmdList->Clear();
 		}
 
@@ -780,7 +787,7 @@ namespace Lunex {
 		}
 
 		m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
-		m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
+		//m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
 
 		OnOverlayRender();
 
@@ -789,9 +796,18 @@ namespace Lunex {
 		// ========================================
 		// CAMERA PREVIEW RENDERING (after main scene, separate pass)
 		// ========================================
+
+		// Material Editor Preview (has own UBOs but shares bindings)
+		m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
+		
 		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
 		if (selectedEntity && selectedEntity.HasComponent<CameraComponent>() && m_SceneState == SceneState::Edit) {
 			RenderCameraPreview(selectedEntity);
+		}
+
+		if (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Simulate) {
+			Renderer3D::BeginScene(m_EditorCamera);
+			Renderer3D::EndScene();
 		}
 	}
 
@@ -1102,7 +1118,8 @@ namespace Lunex {
 	}
 
 	void EditorLayer::NewScene() {
-		m_ActiveScene = CreateRef<Scene>();
+		m_EditorScene = CreateRef<Scene>();
+		m_ActiveScene = m_EditorScene;
 		m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
 		m_PropertiesPanel.SetContext(m_ActiveScene);

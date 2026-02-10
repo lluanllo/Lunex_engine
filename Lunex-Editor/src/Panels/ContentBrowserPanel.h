@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../UI/LunexUI.h"
 #include "Renderer/Texture.h"
 #include "Renderer/MaterialPreviewRenderer.h"
 #include "Assets/Materials/MaterialAsset.h"
@@ -10,8 +11,6 @@
 #include <set>
 #include <unordered_map>
 #include <functional>
-#include <imgui.h>
-#include <imgui_internal.h>
 
 namespace Lunex {
 	class Event;
@@ -53,7 +52,7 @@ namespace Lunex {
 		void InvalidateMaterialThumbnail(const std::filesystem::path& materialPath);
 		void RefreshAllThumbnails();
 		
-		// ? NEW: Invalidate disk cache for thumbnails
+		// NEW: Invalidate disk cache for thumbnails
 		void InvalidateThumbnailDiskCache(const std::filesystem::path& materialPath);
 
 		// ========================================
@@ -80,11 +79,18 @@ namespace Lunex {
 		void RenderSidebar();
 		void RenderFileGrid();
 		void RenderContextMenu();
+		void RenderBottomBar();
+		
+		// Item context menus
+		void RenderItemContextMenu(const std::filesystem::path& path);
 
 		// Icons & Thumbnails
 		Ref<Texture2D> GetIconForFile(const std::filesystem::path& path);
 		Ref<Texture2D> GetThumbnailForFile(const std::filesystem::path& path);
 		std::string GetAssetTypeLabel(const std::filesystem::path& path);
+		
+		// Build items for FileGrid
+		std::vector<UI::FileGridItem> BuildFileGridItems();
 
 		// File operations
 		void CreateNewFolder();
@@ -104,6 +110,7 @@ namespace Lunex {
 		// Navigation
 		void NavigateToParent();
 		void NavigateToDirectory(const std::filesystem::path& directory);
+		void AddToHistory(const std::filesystem::path& directory);
 
 		// Selection
 		bool IsSelected(const std::filesystem::path& path) const;
@@ -111,10 +118,24 @@ namespace Lunex {
 		void RemoveFromSelection(const std::filesystem::path& path);
 		void ToggleSelection(const std::filesystem::path& path);
 		void SelectRange(const std::filesystem::path& from, const std::filesystem::path& to);
+		
+		// File Grid callbacks
+		void OnFileGridItemClicked(const std::filesystem::path& path);
+		void OnFileGridItemDoubleClicked(const std::filesystem::path& path);
+		void OnFileGridItemRightClicked(const std::filesystem::path& path);
+		void OnFileGridItemDropped(const std::filesystem::path& target, const void* data, size_t size);
+		void OnFileGridMultiItemDropped(const std::filesystem::path& target, const std::string& data);
+		
+		// Directory tree callbacks
+		void OnDirectorySelected(const std::filesystem::path& path);
+		void OnDirectorySingleItemDropped(const std::filesystem::path& target, const void* data, size_t size);
+		void OnDirectoryMultiItemDropped(const std::filesystem::path& target, const std::string& data);
 
 		// Utilities
 		std::string GetFileSizeString(uintmax_t size);
 		std::string GetLastModifiedString(const std::filesystem::path& path);
+		std::string GetDisplayName(const std::filesystem::path& path);
+		bool MatchesSearchFilter(const std::string& filename);
 
 	private:
 		std::filesystem::path m_BaseDirectory;
@@ -132,21 +153,21 @@ namespace Lunex {
 		bool m_ShowRenameDialog = false;
 		char m_NewItemName[256] = "NewFolder";
 		std::filesystem::path m_ItemToRename;
+		std::filesystem::path m_ContextMenuTargetItem;
 
 		// File drop
 		bool m_IsHovered = false;
 		std::filesystem::path m_HoveredFolder;
 
 		// Selection
-		std::set<std::string> m_SelectedItems; // Store paths as strings (changed to set for consistency)
+		std::set<std::string> m_SelectedItems;
 		std::filesystem::path m_LastSelectedItem;
-		bool m_IsSelecting = false;
-		ImVec2 m_SelectionStart;
-		ImVec2 m_SelectionEnd;
 
 		// View settings
-		float m_ThumbnailSize = 96.0f; // ? Aumentado de 80 a 96 para cards más grandes
-		float m_Padding = 12.0f;
+		float m_ThumbnailSize = 96.0f;
+		float m_SidebarWidth = 200.0f;
+		static constexpr float MIN_SIDEBAR_WIDTH = 150.0f;
+		static constexpr float MAX_SIDEBAR_WIDTH = 400.0f;
 
 		// Icons
 		Ref<Texture2D> m_DirectoryIcon;
@@ -161,21 +182,18 @@ namespace Lunex {
 		Ref<Texture2D> m_AudioIcon;
 		Ref<Texture2D> m_ScriptIcon;
 		Ref<Texture2D> m_MaterialIcon;
-		Ref<Texture2D> m_MeshIcon;  // Icon for .lumesh files
-		Ref<Texture2D> m_PrefabIcon;  // Icon for .luprefab files
+		Ref<Texture2D> m_MeshIcon;
+		Ref<Texture2D> m_PrefabIcon;
 
 		// Texture preview cache
 		std::unordered_map<std::string, Ref<Texture2D>> m_TextureCache;
 		
-		// Material preview renderer and cache (stores standalone textures, not framebuffer IDs)
+		// Material preview renderer and cache
 		Scope<MaterialPreviewRenderer> m_MaterialPreviewRenderer;
 		std::unordered_map<std::string, Ref<Texture2D>> m_MaterialThumbnailCache;
 		
-		// Mesh/Prefab preview cache (3D model thumbnails)
+		// Mesh/Prefab preview cache
 		std::unordered_map<std::string, Ref<Texture2D>> m_MeshThumbnailCache;
-
-		// Item positions for selection rectangle
-		std::unordered_map<std::string, ImRect> m_ItemBounds;
 
 		// Clipboard
 		enum class ClipboardOperation { None, Copy, Cut };
@@ -184,5 +202,11 @@ namespace Lunex {
 		
 		// Callbacks
 		std::function<void(const std::filesystem::path&)> m_OnMaterialOpenCallback;
+		
+		// UI Components
+		UI::FileGrid m_FileGrid;
+		UI::DirectoryTree m_DirectoryTree;
+		UI::NavigationBar m_NavigationBar;
+		UI::Splitter m_Splitter;
 	};
 }

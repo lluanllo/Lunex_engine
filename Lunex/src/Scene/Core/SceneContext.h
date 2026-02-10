@@ -41,6 +41,8 @@ namespace Lunex {
 		// Pointer back to owning scene (for complex operations)
 		Scene* OwningScene = nullptr;
 		
+		Scene* ActiveScene = nullptr; // For static access in systems (set by Scene on update)
+		
 		// ========== SCENE STATE ==========
 		
 		// Current scene mode

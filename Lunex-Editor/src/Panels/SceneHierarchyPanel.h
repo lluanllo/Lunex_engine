@@ -6,12 +6,49 @@
 #include "Scene/Entity.h"
 #include "Renderer/Texture.h"
 #include "Asset/Prefab.h"
+#include "../UI/UICore.h"
+#include "../UI/UILayout.h"
 
 #include <set>
 #include <vector>
 #include <functional>
 
 namespace Lunex {
+
+	// ============================================================================
+	// HIERARCHY PANEL STYLE
+	// ============================================================================
+	
+	struct HierarchyPanelStyle {
+		// Colors
+		UI::Color WindowBg = UI::Color(0.11f, 0.11f, 0.12f, 1.0f);
+		UI::Color ChildBg = UI::Color(0.11f, 0.11f, 0.12f, 1.0f);
+		UI::Color ItemEven = UI::Color(0.11f, 0.11f, 0.12f, 1.0f);
+		UI::Color ItemOdd = UI::Color(0.13f, 0.13f, 0.14f, 1.0f);
+		UI::Color ItemHover = UI::Color(0.20f, 0.20f, 0.22f, 1.0f);
+		UI::Color ItemSelected = UI::Color(0.18f, 0.40f, 0.68f, 0.35f);
+		UI::Color ItemSelectedBorder = UI::Color(0.26f, 0.59f, 0.98f, 0.80f);
+		UI::Color TextPrimary = UI::Color(0.92f, 0.92f, 0.94f, 1.0f);
+		UI::Color TextMuted = UI::Color(0.60f, 0.60f, 0.62f, 1.0f);
+		UI::Color Border = UI::Color(0.08f, 0.08f, 0.09f, 1.0f);
+		UI::Color SeparatorLine = UI::Color(0.25f, 0.25f, 0.28f, 1.0f);
+		
+		// Entity type indicator colors
+		UI::Color TypeCamera = UI::Color(0.40f, 0.75f, 0.95f, 1.0f);    // Light Blue
+		UI::Color TypeLight = UI::Color(0.95f, 0.85f, 0.30f, 1.0f);     // Yellow
+		UI::Color TypeMesh = UI::Color(0.30f, 0.85f, 0.40f, 1.0f);      // Green
+		UI::Color TypeSprite = UI::Color(0.80f, 0.50f, 0.80f, 1.0f);    // Purple
+		UI::Color TypeDefault = UI::Color(0.65f, 0.65f, 0.68f, 1.0f);   // Gray
+		
+		// Sizing
+		float IndentSpacing = 16.0f;
+		float ItemHeight = 24.0f;
+		float IconSize = 16.0f;
+		float TypeIndicatorWidth = 3.0f;
+		float SearchBarHeight = 28.0f;
+		float ToolbarHeight = 32.0f;
+	};
+
 	class SceneHierarchyPanel {
 	public:
 		SceneHierarchyPanel() = default;
@@ -60,10 +97,18 @@ namespace Lunex {
 		// ========================================
 		void AddEntityToSelection(Entity entity);
 		void ToggleEntitySelection(Entity entity);
+		
+		// Style access
+		HierarchyPanelStyle& GetStyle() { return m_Style; }
+		const HierarchyPanelStyle& GetStyle() const { return m_Style; }
 
 	private:
 		void DrawEntityNode(Entity entity, int depth = 0);
-		void RenderTopBar();
+		void RenderToolbar();
+		void RenderSearchBar();
+		void RenderEntityList();
+		void RenderContextMenu();
+		void RenderEntityContextMenu(Entity entity);
 		
 		// Selection operations
 		void SelectEntity(Entity entity, bool clearPrevious = true);
@@ -76,14 +121,24 @@ namespace Lunex {
 		void SetEntityParent(Entity child, Entity parent);
 		void UnparentEntity(Entity entity);
 		
+		// Helper functions
+		UI::Color GetEntityTypeColor(Entity entity) const;
+		const char* GetEntityTypeIcon(Entity entity) const;
+		
 		// Sorting
 		enum class SortMode { None, Name, Type };
-		std::vector<Entity> GetSortedRootEntities();  // Only root entities (no parent)
+		std::vector<Entity> GetSortedRootEntities();
 		
 		template<typename T>
 		void CreateEntityWithComponent(const std::string& name) {
 			Entity entity = m_Context->CreateEntity(name);
 			entity.AddComponent<T>();
+			// Auto-add MaterialComponent when MeshComponent is created via UI
+			if constexpr (std::is_same_v<T, MeshComponent>) {
+				if (!entity.HasComponent<MaterialComponent>()) {
+					entity.AddComponent<MaterialComponent>();
+				}
+			}
 			SelectEntity(entity);
 			LNX_LOG_INFO("Created entity: {0}", name);
 		}
@@ -99,17 +154,18 @@ namespace Lunex {
 		// Prefabs
 		std::filesystem::path m_PrefabsDirectory;
 		
-		// Iconos para la jerarquía
+		// Icons
 		Ref<Texture2D> m_CameraIcon;
 		Ref<Texture2D> m_EntityIcon;
 		Ref<Texture2D> m_LightIcon;
 		Ref<Texture2D> m_MeshIcon;
 		Ref<Texture2D> m_SpriteIcon;
 		
-		// Para colores alternos
-		int m_EntityIndexCounter = 0;
+		// Style
+		HierarchyPanelStyle m_Style;
 		
-		// Search and filter
+		// State
+		int m_EntityIndexCounter = 0;
 		char m_SearchFilter[256] = "";
 		SortMode m_SortMode = SortMode::None;
 		
@@ -122,7 +178,10 @@ namespace Lunex {
 		int m_TotalEntities = 0;
 		int m_VisibleEntities = 0;
 		
-		// Drag & drop for parenting
+		// Drag & drop
 		Entity m_DraggedEntity;
+		
+		// UI state
+		bool m_ShowCreateMenu = false;
 	};
 }

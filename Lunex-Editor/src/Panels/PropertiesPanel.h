@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../UI/LunexUI.h"
 #include "Core/Core.h"
 #include "Scene/Scene.h"
 #include "Scene/Entity.h"
@@ -31,6 +32,29 @@ namespace Lunex {
 
 	private:
 		void DrawComponents(Entity entity);
+		void DrawEmptyState();
+		
+		// Component drawing helpers
+		void DrawTransformComponent(Entity entity);
+		void DrawScriptComponent(Entity entity);
+		void DrawCameraComponent(Entity entity);
+		void DrawSpriteRendererComponent(Entity entity);
+		void DrawCircleRendererComponent(Entity entity);
+		void DrawMeshComponent(Entity entity);
+		void DrawMaterialComponent(Entity entity);
+		void DrawLightComponent(Entity entity);
+		
+		// 2D Physics
+		void DrawRigidbody2DComponent(Entity entity);
+		void DrawBoxCollider2DComponent(Entity entity);
+		void DrawCircleCollider2DComponent(Entity entity);
+		
+		// 3D Physics
+		void DrawRigidbody3DComponent(Entity entity);
+		void DrawBoxCollider3DComponent(Entity entity);
+		void DrawSphereCollider3DComponent(Entity entity);
+		void DrawCapsuleCollider3DComponent(Entity entity);
+		void DrawMeshCollider3DComponent(Entity entity);
 
 		template<typename T>
 		void DisplayAddComponentEntry(const std::string& entryName);
@@ -46,7 +70,6 @@ namespace Lunex {
 		std::function<void(Ref<MaterialAsset>)> m_OnMaterialEditCallback;
 		
 		// ===== THUMBNAIL CACHE =====
-		// Maps MaterialAsset UUID -> Standalone Texture
 		std::unordered_map<UUID, Ref<Texture2D>> m_ThumbnailCache;
 		Scope<MaterialPreviewRenderer> m_PreviewRenderer;
 	};

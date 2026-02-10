@@ -1,120 +1,148 @@
+/**
+ * @file SettingsPanel.cpp
+ * @brief Settings Panel Implementation using Lunex UI Framework
+ */
+
+#include "stpch.h"
 #include "SettingsPanel.h"
-#include "imgui.h"
+#include "ContentBrowserPanel.h"
+
 #include "Renderer/SkyboxRenderer.h"
 #include "Scene/Lighting/LightSystem.h"
 #include "Log/Log.h"
-#include "ContentBrowserPanel.h"  // For ContentBrowserPayload
 
 #include <filesystem>
+#include <algorithm>
 
 namespace Lunex {
+
 	void SettingsPanel::OnImGuiRender() {
-		ImGui::Begin("Settings");
+		using namespace UI;
 		
-		// ========================================
-		// SKYBOX / ENVIRONMENT
-		// ========================================
-		if (ImGui::CollapsingHeader("Environment", ImGuiTreeNodeFlags_DefaultOpen)) {
+		if (!BeginPanel("Settings")) {
+			EndPanel();
+			return;
+		}
+		
+		DrawEnvironmentSection();
+		
+		Separator();
+		
+		DrawPhysics2DSection();
+		
+		DrawPhysics3DSection();
+		
+		EndPanel();
+	}
+	
+	void SettingsPanel::DrawEnvironmentSection() {
+		using namespace UI;
+		
+		if (BeginSection("Environment", true)) {
 			// Enable/Disable skybox
 			bool skyboxEnabled = SkyboxRenderer::IsEnabled();
-			if (ImGui::Checkbox("Enable Skybox", &skyboxEnabled)) {
+			if (PropertyCheckbox("Enable Skybox", skyboxEnabled)) {
 				SkyboxRenderer::SetEnabled(skyboxEnabled);
 			}
 			
-			ImGui::Separator();
+			Separator();
 			
 			// HDRI Path with drag-drop support
-			ImGui::Text("HDRI Environment");
+			Text("HDRI Environment");
 			
-			// Display current path
 			bool hasHDRI = SkyboxRenderer::HasEnvironmentLoaded();
 			if (hasHDRI) {
-				ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Loaded: %s", 
+				TextColored(Colors::Success(), "Loaded: %s", 
 					m_HDRIPath.empty() ? "(unknown)" : std::filesystem::path(m_HDRIPath).filename().string().c_str());
 			} else {
-				ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.4f, 1.0f), "No HDRI loaded (using background color)");
+				TextColored(Colors::Warning(), "No HDRI loaded (using background color)");
 			}
 			
-			// Drop target for HDRI files
-			ImGui::Button("Drop HDRI Here", ImVec2(-1, 40));
-			if (ImGui::BeginDragDropTarget()) {
-				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
-					// ContentBrowserPayload uses char[], not wchar_t*
-					ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
-					std::filesystem::path hdriPath(data->FilePath);
-					
-					std::string ext = hdriPath.extension().string();
-					std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-					
-					if (ext == ".hdr" || ext == ".exr") {
-						m_HDRIPath = hdriPath.string();
-						if (SkyboxRenderer::LoadHDRI(m_HDRIPath)) {
-							LNX_LOG_INFO("Loaded HDRI: {0}", m_HDRIPath);
+			// Drop target for HDRI files - Manual implementation
+			{
+				ScopedColor colors({
+					{ImGuiCol_Button, Colors::BgMedium()},
+					{ImGuiCol_ButtonHovered, Colors::BgHover()},
+					{ImGuiCol_Border, Colors::Primary()}
+				});
+				ScopedStyle borderSize(ImGuiStyleVar_FrameBorderSize, 1.5f);
+				
+				ImGui::Button("Drop HDRI Here (.hdr, .exr)", ImVec2(-1, 40));
+				
+				if (ImGui::BeginDragDropTarget()) {
+					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+						ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+						std::filesystem::path hdriPath(data->FilePath);
+						
+						std::string ext = hdriPath.extension().string();
+						std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+						
+						if (ext == ".hdr" || ext == ".exr") {
+							m_HDRIPath = hdriPath.string();
+							if (SkyboxRenderer::LoadHDRI(m_HDRIPath)) {
+								LNX_LOG_INFO("Loaded HDRI: {0}", m_HDRIPath);
+							} else {
+								LNX_LOG_ERROR("Failed to load HDRI: {0}", m_HDRIPath);
+							}
 						} else {
-							LNX_LOG_ERROR("Failed to load HDRI: {0}", m_HDRIPath);
+							LNX_LOG_WARN("Invalid file type for HDRI. Expected .hdr or .exr, got: {0}", ext);
 						}
-					} else {
-						LNX_LOG_WARN("Invalid file type for HDRI. Expected .hdr or .exr, got: {0}", ext);
 					}
+					ImGui::EndDragDropTarget();
 				}
-				ImGui::EndDragDropTarget();
 			}
 			
 			// Clear HDRI button
 			if (hasHDRI) {
-				if (ImGui::Button("Clear HDRI")) {
+				if (Button("Clear HDRI", ButtonVariant::Danger)) {
 					SkyboxRenderer::LoadHDRI("");
 					m_HDRIPath.clear();
-					// Re-apply background clear color via SkyboxRenderer API
 					SkyboxRenderer::ApplyBackgroundClearColor();
 				}
 			}
 			
-			ImGui::Separator();
+			Separator();
 			
 			// ========================================
 			// SUN LIGHT SYNCHRONIZATION
 			// ========================================
-			ImGui::Text("Sun Light Synchronization");
-			ImGui::Spacing();
+			Text("Sun Light Synchronization");
+			AddSpacing(SpacingValues::XS);
 			
 			bool hasSunLight = LightSystem::Get().HasSunLight();
 			bool syncWithSun = SkyboxRenderer::IsSyncWithSunLight();
 			
 			if (hasSunLight) {
-				ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Sun Light: Active");
+				TextColored(Colors::Success(), "Sun Light: Active");
 				
 				// Show sun position info
 				float elevation = SkyboxRenderer::GetSunElevation();
 				float azimuth = SkyboxRenderer::GetSunAzimuth();
 				float skyboxRotation = SkyboxRenderer::GetCalculatedSkyboxRotation();
 				
-				ImGui::Text("  Elevation: %.1f deg", elevation);
-				ImGui::Text("  Azimuth: %.1f deg", azimuth);
+				Text("  Elevation: %.1f deg", elevation);
+				Text("  Azimuth: %.1f deg", azimuth);
 				
 				if (syncWithSun) {
-					ImGui::Text("  Skybox Rotation: %.1f deg (synced)", skyboxRotation);
+					Text("  Skybox Rotation: %.1f deg (synced)", skyboxRotation);
 				}
 				
-				ImGui::Spacing();
+				AddSpacing(SpacingValues::XS);
 				
-				// Sync toggle is controlled by the LightComponent now
-				ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), 
-					"Sync is controlled by the Directional Light's\n'Link to Skybox' setting.");
+				TextWrapped("Sync is controlled by the Directional Light's 'Link to Skybox' setting.", TextVariant::Muted);
 				
 			} else {
-				ImGui::TextColored(ImVec4(0.8f, 0.6f, 0.2f, 1.0f), "No Sun Light in scene");
-				ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), 
-					"Add a Directional Light and enable\n'Is Sun Light' to sync skybox rotation.");
+				TextColored(Colors::Warning(), "No Sun Light in scene");
+				TextWrapped("Add a Directional Light and enable 'Is Sun Light' to sync skybox rotation.", TextVariant::Muted);
 			}
 			
-			ImGui::Separator();
+			Separator();
 			
 			// Environment settings (only if HDRI is loaded)
 			if (hasHDRI) {
 				// Intensity
 				float intensity = SkyboxRenderer::GetIntensity();
-				if (ImGui::DragFloat("Intensity", &intensity, 0.01f, 0.0f, 10.0f)) {
+				if (PropertyFloat("Intensity", intensity, 0.01f, 0.0f, 10.0f)) {
 					SkyboxRenderer::SetIntensity(intensity);
 				}
 				
@@ -122,64 +150,75 @@ namespace Lunex {
 				if (syncWithSun) {
 					// Show calculated rotation (read-only)
 					float rotation = SkyboxRenderer::GetCalculatedSkyboxRotation();
-					ImGui::BeginDisabled();
-					ImGui::DragFloat("Rotation (Synced)", &rotation, 1.0f, -180.0f, 180.0f, "%.1f deg");
-					ImGui::EndDisabled();
-					if (ImGui::IsItemHovered()) {
-						ImGui::SetTooltip("Rotation is controlled by the Sun Light.\nDisable 'Link to Skybox' in the light component to use manual rotation.");
+					BeginDisabled(true);
+					PropertyFloat("Rotation (Synced)", rotation, 1.0f, -180.0f, 180.0f);
+					EndDisabled();
+					if (IsItemHovered()) {
+						SetTooltip("Rotation is controlled by the Sun Light.\nDisable 'Link to Skybox' in the light component to use manual rotation.");
 					}
 				} else {
 					// Manual rotation
 					float rotation = SkyboxRenderer::GetRotation();
-					if (ImGui::DragFloat("Rotation", &rotation, 1.0f, -180.0f, 180.0f, "%.1f deg")) {
+					if (PropertyFloat("Rotation", rotation, 1.0f, -180.0f, 180.0f)) {
 						SkyboxRenderer::SetRotation(rotation);
 					}
 				}
 				
 				// Blur
 				float blur = SkyboxRenderer::GetBlur();
-				if (ImGui::SliderFloat("Blur", &blur, 0.0f, 1.0f)) {
+				if (PropertySlider("Blur", blur, 0.0f, 1.0f)) {
 					SkyboxRenderer::SetBlur(blur);
 				}
 				
 				// Tint
 				glm::vec3 tint = SkyboxRenderer::GetTint();
-				if (ImGui::ColorEdit3("Tint", &tint.x)) {
+				if (PropertyColor("Tint", tint)) {
 					SkyboxRenderer::SetTint(tint);
 				}
 			} else {
 				// Background color (when no HDRI) - applies to clear color
 				glm::vec3 bgColor = SkyboxRenderer::GetBackgroundColor();
-				if (ImGui::ColorEdit3("Background Color", &bgColor.x)) {
+				
+				// Use manual column layout for color
+				BeginColumns(2, false);
+				SetColumnWidth(0, SpacingValues::PropertyLabelWidth);
+				Label("Background Color");
+				NextColumn();
+				
+				ImGui::SetNextItemWidth(-1);
+				if (ImGui::ColorEdit3("##BackgroundColor", glm::value_ptr(bgColor), ImGuiColorEditFlags_NoLabel)) {
 					SkyboxRenderer::SetBackgroundColor(bgColor);
-					// Update the clear color via SkyboxRenderer API (UI does not call RenderCommand directly)
 					SkyboxRenderer::ApplyBackgroundClearColor();
 				}
+				
+				EndColumns();
 			}
+			
+			EndSection();
 		}
+	}
+	
+	void SettingsPanel::DrawPhysics2DSection() {
+		using namespace UI;
 		
-		ImGui::Separator();
-		
-		// ========================================
-		// PHYSICS 2D
-		// ========================================
-		if (ImGui::CollapsingHeader("Physics 2D")) {
-			ImGui::Checkbox("Show 2D colliders", &m_ShowPhysicsColliders);
-			if (ImGui::IsItemHovered()) {
-				ImGui::SetTooltip("Display Box2D colliders in red");
+		if (BeginSection("Physics 2D", false)) {
+			if (PropertyCheckbox("Show 2D colliders", m_ShowPhysicsColliders, "Display Box2D colliders in red")) {
+				// Value updated by reference
 			}
+			
+			EndSection();
 		}
+	}
+	
+	void SettingsPanel::DrawPhysics3DSection() {
+		using namespace UI;
 		
-		// ========================================
-		// PHYSICS 3D
-		// ========================================
-		if (ImGui::CollapsingHeader("Physics 3D")) {
-			ImGui::Checkbox("Show 3D colliders", &m_ShowPhysics3DColliders);
-			if (ImGui::IsItemHovered()) {
-				ImGui::SetTooltip("Display Bullet3D colliders in green");
+		if (BeginSection("Physics 3D", false)) {
+			if (PropertyCheckbox("Show 3D colliders", m_ShowPhysics3DColliders, "Display Bullet3D colliders in green")) {
+				// Value updated by reference
 			}
+			
+			EndSection();
 		}
-		
-		ImGui::End();
 	}
 }

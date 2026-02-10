@@ -405,6 +405,7 @@ project "Lunex-ScriptCore"
         "%{prj.name}/src",
         "Lunex/src",
         "vendor/spdlog/include",
+        "%{IncludeDir.entt}",
         "%{IncludeDir.glm}"
     }
 
