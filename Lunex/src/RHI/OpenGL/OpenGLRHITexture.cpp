@@ -440,6 +440,126 @@ namespace RHI {
 	}
 
 	// ============================================================================
+	// OPENGL RHI TEXTURE 2D ARRAY IMPLEMENTATION
+	// ============================================================================
+	
+	OpenGLRHITexture2DArray::OpenGLRHITexture2DArray(const TextureDesc& desc) {
+		m_Desc = desc;
+		m_InternalFormat = OpenGLTextureUtils::GetInternalFormat(m_Desc.Format);
+		
+		glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_TextureID);
+		glTextureStorage3D(m_TextureID, m_Desc.MipLevels, m_InternalFormat,
+						   m_Desc.Width, m_Desc.Height, m_Desc.ArrayLayers);
+		
+		// Default sampling
+		glTextureParameteri(m_TextureID, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTextureParameteri(m_TextureID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTextureParameteri(m_TextureID, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+		glTextureParameteri(m_TextureID, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+		glTextureParameteri(m_TextureID, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+		glTextureParameteri(m_TextureID, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+		float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+		glTextureParameterfv(m_TextureID, GL_TEXTURE_BORDER_COLOR, borderColor);
+		
+		if (auto* device = dynamic_cast<OpenGLRHIDevice*>(RHIDevice::Get())) {
+			device->TrackAllocation(GetGPUMemorySize());
+		}
+	}
+	
+	OpenGLRHITexture2DArray::~OpenGLRHITexture2DArray() {
+		if (m_TextureID) {
+			if (auto* device = dynamic_cast<OpenGLRHIDevice*>(RHIDevice::Get())) {
+				device->TrackDeallocation(GetGPUMemorySize());
+			}
+			glDeleteTextures(1, &m_TextureID);
+		}
+	}
+	
+	void OpenGLRHITexture2DArray::SetData(const void* data, uint64_t size, const TextureRegion& region) {
+		if (!m_TextureID) return;
+		
+		GLenum format = OpenGLTextureUtils::GetFormat(m_Desc.Format);
+		GLenum type = OpenGLTextureUtils::GetType(m_Desc.Format);
+		
+		uint32_t w = region.Width > 0 ? region.Width : m_Desc.Width;
+		uint32_t h = region.Height > 0 ? region.Height : m_Desc.Height;
+		
+		glTextureSubImage3D(m_TextureID, region.MipLevel,
+							region.X, region.Y, region.ArrayLayer,
+							w, h, 1,
+							format, type, data);
+	}
+	
+	void OpenGLRHITexture2DArray::GetData(void* data, uint64_t size, const TextureRegion& region) const {
+		if (!m_TextureID) return;
+		
+		GLenum format = OpenGLTextureUtils::GetFormat(m_Desc.Format);
+		GLenum type = OpenGLTextureUtils::GetType(m_Desc.Format);
+		
+		glGetTextureImage(m_TextureID, region.MipLevel, format, type, static_cast<GLsizei>(size), data);
+	}
+	
+	void OpenGLRHITexture2DArray::GenerateMipmaps() {
+		if (m_TextureID && m_Desc.MipLevels > 1) {
+			glGenerateTextureMipmap(m_TextureID);
+		}
+	}
+	
+	void OpenGLRHITexture2DArray::SetLayerData(uint32_t layer, const void* data, uint64_t size, uint32_t mipLevel) {
+		if (!m_TextureID || layer >= m_Desc.ArrayLayers) return;
+		
+		GLenum format = OpenGLTextureUtils::GetFormat(m_Desc.Format);
+		GLenum type = OpenGLTextureUtils::GetType(m_Desc.Format);
+		
+		uint32_t mipWidth = m_Desc.Width >> mipLevel;
+		uint32_t mipHeight = m_Desc.Height >> mipLevel;
+		if (mipWidth == 0) mipWidth = 1;
+		if (mipHeight == 0) mipHeight = 1;
+		
+		glTextureSubImage3D(m_TextureID, mipLevel, 0, 0, layer,
+							mipWidth, mipHeight, 1, format, type, data);
+	}
+	
+	void OpenGLRHITexture2DArray::Bind(uint32_t slot) const {
+		if (m_TextureID) {
+			glBindTextureUnit(slot, m_TextureID);
+		}
+	}
+	
+	void OpenGLRHITexture2DArray::Unbind(uint32_t slot) const {
+		glBindTextureUnit(slot, 0);
+	}
+	
+	void OpenGLRHITexture2DArray::BindAsImage(uint32_t slot, BufferAccess access, uint32_t mipLevel) const {
+		if (!m_TextureID) return;
+		
+		GLenum glAccess = GL_READ_WRITE;
+		if (access == BufferAccess::Read) glAccess = GL_READ_ONLY;
+		else if (access == BufferAccess::Write) glAccess = GL_WRITE_ONLY;
+		
+		glBindImageTexture(slot, m_TextureID, mipLevel, GL_TRUE, 0, glAccess, m_InternalFormat);
+	}
+	
+	void OpenGLRHITexture2DArray::OnDebugNameChanged() {
+		if (m_TextureID && GLAD_GL_KHR_debug) {
+			glObjectLabel(GL_TEXTURE, m_TextureID, -1, m_DebugName.c_str());
+		}
+	}
+	
+	// Factory
+	Ref<RHITexture2DArray> RHITexture2DArray::Create(uint32_t width, uint32_t height, uint32_t layers,
+													 TextureFormat format, uint32_t mipLevels) {
+		TextureDesc desc;
+		desc.Width = width;
+		desc.Height = height;
+		desc.ArrayLayers = layers;
+		desc.Format = format;
+		desc.MipLevels = mipLevels;
+		desc.IsRenderTarget = true;
+		return CreateRef<OpenGLRHITexture2DArray>(desc);
+	}
+
+	// ============================================================================
 	// TEXTURE MEMORY CALCULATION
 	// ============================================================================
 	

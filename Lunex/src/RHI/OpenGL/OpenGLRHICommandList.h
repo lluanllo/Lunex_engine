@@ -42,6 +42,12 @@ namespace RHI {
 		void GetViewport(int* viewport) const override;
 		void SetDrawBuffers(const std::vector<uint32_t>& attachments) override;
 		
+		// Render state for shadow mapping
+		void SetColorMask(bool r, bool g, bool b, bool a) override;
+		void SetPolygonOffset(bool enabled, float factor = 0.0f, float units = 0.0f) override;
+		void SetCullMode(CullMode mode) override;
+		void AttachDepthTextureLayer(uint64_t framebufferHandle, uint64_t textureHandle, uint32_t layer) override;
+		
 		// Render pass
 		void BeginRenderPass(const RenderPassBeginInfo& info) override;
 		void EndRenderPass() override;

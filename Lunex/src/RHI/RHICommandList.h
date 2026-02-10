@@ -217,6 +217,42 @@ namespace RHI {
 		virtual void SetDrawBuffers(const std::vector<uint32_t>& attachments) = 0;
 		
 		// ============================================
+		// RENDER STATE (for shadow mapping and advanced rendering)
+		// ============================================
+		
+		/**
+		 * @brief Enable or disable writing to color channels
+		 * @param r Red channel write mask
+		 * @param g Green channel write mask
+		 * @param b Blue channel write mask
+		 * @param a Alpha channel write mask
+		 */
+		virtual void SetColorMask(bool r, bool g, bool b, bool a) = 0;
+		
+		/**
+		 * @brief Enable or disable polygon offset (depth bias)
+		 * @param enabled Whether polygon offset is enabled
+		 * @param factor Scale factor for polygon offset
+		 * @param units Constant bias for polygon offset
+		 */
+		virtual void SetPolygonOffset(bool enabled, float factor = 0.0f, float units = 0.0f) = 0;
+		
+		/**
+		 * @brief Set face culling mode
+		 * @param mode Cull mode (None disables culling, Front, Back)
+		 */
+		virtual void SetCullMode(CullMode mode) = 0;
+		
+		/**
+		 * @brief Attach a specific layer of a texture array to the current framebuffer's depth attachment
+		 * Used for rendering into individual shadow map layers.
+		 * @param framebufferHandle Native framebuffer handle
+		 * @param textureHandle Native texture handle (GL_TEXTURE_2D_ARRAY)
+		 * @param layer The array layer to attach
+		 */
+		virtual void AttachDepthTextureLayer(uint64_t framebufferHandle, uint64_t textureHandle, uint32_t layer) = 0;
+		
+		// ============================================
 		// RENDER PASS
 		// ============================================
 		
