@@ -825,6 +825,17 @@ namespace Lunex {
 			Renderer3D::UpdateLights(m_ActiveScene.get());
 			Renderer3D::EndScene();
 		}
+		else if (m_SceneState == SceneState::Play) {
+			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
+			if (camera) {
+				auto& cameraComp = camera.GetComponent<CameraComponent>();
+				auto& transformComp = camera.GetComponent<TransformComponent>();
+				glm::mat4 cameraTransform = transformComp.GetTransform();
+				Renderer3D::BeginScene(cameraComp.Camera, cameraTransform);
+				Renderer3D::UpdateLights(m_ActiveScene.get());
+				Renderer3D::EndScene();
+			}
+		}
 	}
 
 	void EditorLayer::OnImGuiRender() {
