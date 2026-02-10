@@ -322,6 +322,7 @@ namespace Lunex {
 				);
 				for (uint32_t c = 0; c < cascades.size() && c < MAX_SHADOW_CASCADES; ++c) {
 					caster.ViewProjections[c] = cascades[c].ViewProjection;
+					caster.CascadeSplitDepths[c] = cascades[c].SplitDepth;
 				}
 				break;
 			}
@@ -345,15 +346,14 @@ namespace Lunex {
 			case ShadowType::Point_Cubemap: {
 				glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, caster.Range);
 
-				// 6 cubemap face directions (same order as GL_TEXTURE_CUBE_MAP_POSITIVE_X, etc.)
 				struct FaceDir { glm::vec3 target; glm::vec3 up; };
 				FaceDir faces[6] = {
-					{{ 1, 0, 0}, {0,-1, 0}},  // +X
-					{{-1, 0, 0}, {0,-1, 0}},  // -X
-					{{ 0, 1, 0}, {0, 0, 1}},  // +Y
-					{{ 0,-1, 0}, {0, 0,-1}},  // -Y
-					{{ 0, 0, 1}, {0,-1, 0}},  // +Z
-					{{ 0, 0,-1}, {0,-1, 0}},  // -Z
+					{{ 1, 0, 0}, {0,-1, 0}},
+					{{-1, 0, 0}, {0,-1, 0}},
+					{{ 0, 1, 0}, {0, 0, 1}},
+					{{ 0,-1, 0}, {0, 0,-1}},
+					{{ 0, 0, 1}, {0,-1, 0}},
+					{{ 0, 0,-1}, {0,-1, 0}},
 				};
 
 				for (int f = 0; f < 6; ++f) {
@@ -391,6 +391,10 @@ namespace Lunex {
 
 		// Bind our FBO
 		glBindFramebuffer(GL_FRAMEBUFFER, m_AtlasFBO);
+
+		// No color attachment — must tell OpenGL explicitly
+		glDrawBuffer(GL_NONE);
+		glReadBuffer(GL_NONE);
 
 		// Enable depth writing, disable color
 		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
@@ -552,22 +556,17 @@ namespace Lunex {
 		m_GPUData.NumShadowLights = static_cast<int>(m_ShadowCasters.size());
 		m_GPUData.CSMCascadeCount = m_Config.CSMCascadeCount;
 		m_GPUData.MaxShadowDistance = m_Config.MaxShadowDistance;
+		m_GPUData.DistanceSofteningStart = m_Config.DistanceSofteningStart;
+		m_GPUData.DistanceSofteningMax = m_Config.DistanceSofteningMax;
+		m_GPUData.SkyTintStrength = m_Config.EnableSkyColorTint ? m_Config.SkyTintStrength : 0.0f;
 
 		// Fill cascade data from first directional light
+		// Use the STORED split depths from CascadedShadowMap calculation
 		for (const auto& caster : m_ShadowCasters) {
 			if (caster.Type == ShadowType::Directional_CSM && caster.AtlasFirstLayer >= 0) {
-				// We already have the VPs in caster.ViewProjections
-				// We just need split depths — recalculate quickly
-				float nearDist = 0.1f;
-				float farDist = m_Config.MaxShadowDistance;
 				for (uint32_t c = 0; c < m_Config.CSMCascadeCount && c < MAX_SHADOW_CASCADES; ++c) {
 					m_GPUData.Cascades[c].ViewProjection = caster.ViewProjections[c];
-
-					float p = static_cast<float>(c + 1) / static_cast<float>(m_Config.CSMCascadeCount);
-					float logSplit = nearDist * std::pow(farDist / nearDist, p);
-					float uniformSplit = nearDist + (farDist - nearDist) * p;
-					m_GPUData.Cascades[c].SplitDepth = m_Config.CSMSplitLambda * logSplit +
-														(1.0f - m_Config.CSMSplitLambda) * uniformSplit;
+					m_GPUData.Cascades[c].SplitDepth = caster.CascadeSplitDepths[c];
 				}
 				break; // Only first directional gets CSM cascade data
 			}
@@ -592,7 +591,6 @@ namespace Lunex {
 				static_cast<float>(caster.Type)
 			);
 
-			// All layers use the same atlas resolution
 			sd.ShadowParams2 = glm::vec4(
 				caster.Range,
 				m_Config.PCFRadius,

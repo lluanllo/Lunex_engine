@@ -30,6 +30,14 @@ namespace Lunex {
 		bool EnablePCF = true;
 		float PCFRadius = 1.5f;
 
+		// Distance-based shadow softening
+		float DistanceSofteningStart = 50.0f;   // Start softening shadows beyond this distance
+		float DistanceSofteningMax = 4.0f;       // Max PCF radius multiplier at max distance
+
+		// Sky color tinting (ambient light contamination on shadows)
+		bool EnableSkyColorTint = true;
+		float SkyTintStrength = 0.15f;           // How much sky color bleeds into shadows
+
 		// Bias
 		float DefaultDepthBias = 0.005f;
 		float DefaultNormalBias = 0.02f;
@@ -87,11 +95,16 @@ namespace Lunex {
 		int NumShadowLights;              // 4
 		int CSMCascadeCount;              // 4
 		float MaxShadowDistance;          // 4
-		float _pad0;                      // 4  ? 16 bytes
+		float DistanceSofteningStart;     // 4
+
+		float DistanceSofteningMax;       // 4
+		float SkyTintStrength;            // 4
+		float _pad1;                      // 4
+		float _pad2;                      // 4  ? 32 bytes
 
 		ShadowCascadeGPU Cascades[MAX_SHADOW_CASCADES]; // 80 × 4 = 320 bytes
 		ShadowLightGPU Shadows[MAX_SHADOW_LIGHTS];      // 400 × 16 = 6400 bytes
-		// Total ? 6736 bytes
+		// Total ? 6752 bytes
 	};
 
 	// ============================================================================
@@ -110,6 +123,9 @@ namespace Lunex {
 		// Light-space matrices (computed per frame)
 		glm::mat4 ViewProjections[6];    // 1 for spot, 4 for CSM, 6 for point
 		int NumMatrices = 0;
+
+		// CSM cascade split depths (stored from actual computation)
+		float CascadeSplitDepths[MAX_SHADOW_CASCADES] = { 0.0f };
 
 		// Light properties needed for rendering
 		glm::vec3 Position;

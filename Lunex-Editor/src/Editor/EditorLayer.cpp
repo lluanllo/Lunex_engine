@@ -822,6 +822,7 @@ namespace Lunex {
 
 		if (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Simulate) {
 			Renderer3D::BeginScene(m_EditorCamera);
+			Renderer3D::UpdateLights(m_ActiveScene.get());
 			Renderer3D::EndScene();
 		}
 	}

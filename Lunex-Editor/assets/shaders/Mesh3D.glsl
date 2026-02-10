@@ -138,7 +138,12 @@ layout(std140, binding = 7) uniform ShadowData {
 	int u_NumShadowLights;
 	int u_CSMCascadeCount;
 	float u_MaxShadowDistance;
-	float _shadowPad;
+	float u_DistanceSofteningStart;
+
+	float u_DistanceSofteningMax;
+	float u_SkyTintStrength;
+	float _shadowPad1;
+	float _shadowPad2;
 	ShadowCascadeData u_Cascades[MAX_SHADOW_CASCADES];
 	ShadowLightData u_Shadows[MAX_SHADOW_LIGHTS];
 };
@@ -807,6 +812,29 @@ void main() {
 	// ========== FINAL COMPOSITION ==========
 	
 	vec3 color = ambient + directLighting + emission + emissiveContribution;
+	
+	// Sky color tinting on shadowed areas
+	// In real life, shadows receive indirect light from the sky, giving them a blue/cool tint
+	if (u_SkyTintStrength > 0.0 && u_NumShadowLights > 0) {
+		// Estimate sky color: use IBL if available, otherwise use a default sky color
+		vec3 skyColor;
+		if (u_UseIBL != 0) {
+			// Sample the sky from above (upward hemisphere)
+			skyColor = texture(u_IrradianceMap, vec3(0.0, 1.0, 0.0)).rgb;
+		} else {
+			skyColor = vec3(0.4, 0.5, 0.7); // Default sky blue
+		}
+		
+		// Calculate how much this fragment is in shadow (average across all light contributions)
+		// Use the ratio: if directLighting is very low compared to what it could be, we're in shadow
+		float luminanceDirect = dot(directLighting, vec3(0.2126, 0.7152, 0.0722));
+		float luminanceAmbient = dot(ambient, vec3(0.2126, 0.7152, 0.0722));
+		float shadowAmount = 1.0 - clamp(luminanceDirect / max(luminanceAmbient + luminanceDirect, 0.001), 0.0, 1.0);
+		
+		// Apply sky color contamination to shadowed areas
+		vec3 skyTint = skyColor * u_SkyTintStrength * shadowAmount * albedo;
+		color += skyTint;
+	}
 	
 	// Tone mapping
 	color = ACESFilm(color);
