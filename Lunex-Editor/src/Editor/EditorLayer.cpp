@@ -1143,7 +1143,7 @@ namespace Lunex {
 						* glm::toMat4(glm::quat(tc.Rotation))
 						* glm::scale(glm::mat4(1.0f), scale);
 
-					Renderer2D::DrawRect(transform, glm::vec4(0, 1, 0, 1));
+					Renderer2D::DrawWireBox(transform, glm::vec4(0, 1, 0, 1));
 				}
 			}
 			{
@@ -1157,7 +1157,7 @@ namespace Lunex {
 					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
 						* glm::scale(glm::mat4(1.0f), scale);
 
-					Renderer2D::DrawCircle(transform, glm::vec4(0, 1, 0, 1), 0.01f);
+					Renderer2D::DrawWireSphere(transform, glm::vec4(0, 1, 0, 1));
 				}
 			}
 			{
@@ -1166,13 +1166,12 @@ namespace Lunex {
 					auto [tc, cc3d] = view.get<TransformComponent, CapsuleCollider3DComponent>(entityID);
 
 					glm::vec3 translation = tc.Translation + cc3d.Offset;
-					glm::vec3 scale = tc.Scale * glm::vec3(cc3d.Radius * 2.0f, cc3d.Height, cc3d.Radius * 2.0f);
 
 					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
 						* glm::toMat4(glm::quat(tc.Rotation))
-						* glm::scale(glm::mat4(1.0f), scale);
+						* glm::scale(glm::mat4(1.0f), tc.Scale);
 
-					Renderer2D::DrawRect(transform, glm::vec4(0, 1, 0, 1));
+					Renderer2D::DrawWireCapsule(transform, cc3d.Radius, cc3d.Height, glm::vec4(0, 1, 0, 1));
 				}
 			}
 		}

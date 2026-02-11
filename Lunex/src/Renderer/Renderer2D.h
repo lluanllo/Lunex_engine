@@ -51,6 +51,11 @@ namespace Lunex  {
 			// Camera Frustum Gizmo
 			static void DrawCameraFrustum(const glm::mat4& projection, const glm::mat4& view, const glm::vec4& color = glm::vec4(1.0f, 0.8f, 0.2f, 1.0f), int entityID = -1);
 			
+			// 3D Wireframe shapes (for collider visualization)
+			static void DrawWireBox(const glm::mat4& transform, const glm::vec4& color, int entityID = -1);
+			static void DrawWireSphere(const glm::mat4& transform, const glm::vec4& color, int segments = 32, int entityID = -1);
+			static void DrawWireCapsule(const glm::mat4& transform, float radius, float height, const glm::vec4& color, int segments = 16, int entityID = -1);
+			
 			// ========================================
 			// LIGHT GIZMOS
 			// ========================================
