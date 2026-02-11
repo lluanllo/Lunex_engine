@@ -199,6 +199,7 @@ namespace Lunex {
 		
 		m_MenuBarPanel.SetOnOpenInputSettingsCallback([this]() { m_InputSettingsPanel.Open(); });
 		m_MenuBarPanel.SetOnOpenJobSystemPanelCallback([this]() { m_JobSystemPanel.Toggle(); });
+		m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferencesPanel.Toggle(); });
 
 		// ========================================
 		// MATERIAL EDITOR PANEL CALLBACKS
@@ -911,6 +912,7 @@ namespace Lunex {
 		m_InputSettingsPanel.OnImGuiRender();
 		m_JobSystemPanel.OnImGuiRender();
 		m_MeshImportModal.OnImGuiRender();  // NEW: Mesh import modal
+		m_OutlinePreferencesPanel.OnImGuiRender();
 
 		// Render dialogs (on top)
 		m_ProjectCreationDialog.OnImGuiRender();
@@ -1083,7 +1085,7 @@ namespace Lunex {
 					selectedEntities,
 					viewProjection,
 					sceneFBOHandle,
-					glm::vec4(1.0f, 0.5f, 0.0f, 1.0f)  // Orange outline
+					m_OutlinePreferencesPanel.GetOutlineColor()
 				);
 			}
 
@@ -1093,11 +1095,15 @@ namespace Lunex {
 
 		// ========================================
 		// COLLIDER VISUALIZATION (Renderer2D wireframe lines)
-		// Uses line drawing for clean independent outlines per entity.
 		// ========================================
 
-		// Draw 2D Physics Colliders (Red wireframe lines)
+		// Apply collider line width from settings
+		float previousLineWidth = Renderer2D::GetLineWidth();
+		Renderer2D::SetLineWidth(m_OutlinePreferencesPanel.GetColliderLineWidth());
+
+		// Draw 2D Physics Colliders
 		if (m_SettingsPanel.GetShowPhysicsColliders()) {
+			glm::vec4 collider2DColor = m_OutlinePreferencesPanel.GetCollider2DColor();
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, BoxCollider2DComponent>();
 				for (auto entityID : view) {
@@ -1110,7 +1116,7 @@ namespace Lunex {
 						* glm::rotate(glm::mat4(1.0f), tc.Rotation.z, glm::vec3(0.0f, 0.0f, 1.0f))
 						* glm::scale(glm::mat4(1.0f), scale);
 
-					Renderer2D::DrawRect(transform, glm::vec4(1, 0, 0, 1));
+					Renderer2D::DrawRect(transform, collider2DColor);
 				}
 			}
 			{
@@ -1124,13 +1130,14 @@ namespace Lunex {
 					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
 						* glm::scale(glm::mat4(1.0f), scale);
 
-					Renderer2D::DrawCircle(transform, glm::vec4(1, 0, 0, 1), 0.01f);
+					Renderer2D::DrawCircle(transform, collider2DColor, 0.01f);
 				}
 			}
 		}
 
-		// Draw 3D Physics Colliders (Green wireframe lines)
+		// Draw 3D Physics Colliders
 		if (m_SettingsPanel.GetShowPhysics3DColliders()) {
+			glm::vec4 collider3DColor = m_OutlinePreferencesPanel.GetCollider3DColor();
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, BoxCollider3DComponent>();
 				for (auto entityID : view) {
@@ -1143,7 +1150,7 @@ namespace Lunex {
 						* glm::toMat4(glm::quat(tc.Rotation))
 						* glm::scale(glm::mat4(1.0f), scale);
 
-					Renderer2D::DrawWireBox(transform, glm::vec4(0, 1, 0, 1));
+					Renderer2D::DrawWireBox(transform, collider3DColor);
 				}
 			}
 			{
@@ -1157,7 +1164,7 @@ namespace Lunex {
 					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
 						* glm::scale(glm::mat4(1.0f), scale);
 
-					Renderer2D::DrawWireSphere(transform, glm::vec4(0, 1, 0, 1));
+					Renderer2D::DrawWireSphere(transform, collider3DColor);
 				}
 			}
 			{
@@ -1171,10 +1178,13 @@ namespace Lunex {
 						* glm::toMat4(glm::quat(tc.Rotation))
 						* glm::scale(glm::mat4(1.0f), tc.Scale);
 
-					Renderer2D::DrawWireCapsule(transform, cc3d.Radius, cc3d.Height, glm::vec4(0, 1, 0, 1));
+					Renderer2D::DrawWireCapsule(transform, cc3d.Radius, cc3d.Height, collider3DColor);
 				}
 			}
 		}
+
+		// Restore previous line width
+		Renderer2D::SetLineWidth(previousLineWidth);
 
 		// Draw selected entity outline (thin wireframe fallback if OutlineRenderer not available)
 		if (!outlineRenderer.IsInitialized()) {
