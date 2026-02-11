@@ -8,10 +8,11 @@
 #include "Resources/Mesh/Model.h"
 #include "Renderer/GridRenderer.h"
 #include "Renderer/SkyboxRenderer.h"
+#include "Renderer/Shadows/ShadowSystem.h"
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
-#include "Scene/Lighting/LightTypes.h"  // NEW: For LightData
-#include "Scene/Lighting/LightSystem.h"  // NEW: For sun light sync
+#include "Scene/Lighting/LightTypes.h"
+#include "Scene/Lighting/LightSystem.h"
 #include "Log/Log.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -104,7 +105,7 @@ namespace Lunex {
 		
 		// Create storage buffer for lights (header + MaxLights * LightData)
 		uint32_t lightsBufferSize = sizeof(Renderer3DData::LightsStorageData) + 
-									 (s_Data.MaxLights * sizeof(LightData));  // FIXED: Use LightData directly
+									 (s_Data.MaxLights * sizeof(LightData));
 		s_Data.LightsStorageBuffer = StorageBuffer::Create(lightsBufferSize, 3);
 		
 		s_Data.LightsBufferData.resize(lightsBufferSize);
@@ -121,10 +122,14 @@ namespace Lunex {
 		s_Data.IBLUniformBuffer->SetData(&s_Data.IBLBuffer, sizeof(Renderer3DData::IBLUniformData));
 		
 		GridRenderer::Init();
+		
+		// Initialize Shadow System
+		ShadowSystem::Get().Initialize();
 	}
 
 	void Renderer3D::Shutdown() {
 		LNX_PROFILE_FUNCTION();
+		ShadowSystem::Get().Shutdown();
 		GridRenderer::Shutdown();
 	}
 
@@ -154,6 +159,9 @@ namespace Lunex {
 		} else {
 			UnbindEnvironment();
 		}
+		
+		// Bind shadow atlas for reading during scene rendering
+		ShadowSystem::Get().BindForSceneRendering();
 	}
 
 	void Renderer3D::BeginScene(const EditorCamera& camera) {
@@ -168,6 +176,9 @@ namespace Lunex {
 		} else {
 			UnbindEnvironment();
 		}
+		
+		// Bind shadow atlas for reading during scene rendering
+		ShadowSystem::Get().BindForSceneRendering();
 	}
 
 	void Renderer3D::EndScene() {
@@ -254,6 +265,16 @@ namespace Lunex {
 		uint32_t dataSize = sizeof(Renderer3DData::LightsStorageData) + 
 							(lightCount * sizeof(LightData));
 		s_Data.LightsStorageBuffer->SetData(s_Data.LightsBufferData.data(), dataSize);
+	}
+
+	void Renderer3D::UpdateShadows(Scene* scene, const EditorCamera& camera) {
+		if (!scene) return;
+		ShadowSystem::Get().Update(scene, camera);
+	}
+
+	void Renderer3D::UpdateShadows(Scene* scene, const Camera& camera, const glm::mat4& cameraTransform) {
+		if (!scene) return;
+		ShadowSystem::Get().Update(scene, camera, cameraTransform);
 	}
 
 	// ============================================================================

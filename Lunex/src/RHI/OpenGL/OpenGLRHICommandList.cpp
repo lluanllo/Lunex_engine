@@ -114,6 +114,38 @@ namespace RHI {
 		glDrawBuffers(static_cast<GLsizei>(glAttachments.size()), glAttachments.data());
 	}
 	
+	void OpenGLRHICommandList::SetColorMask(bool r, bool g, bool b, bool a) {
+		glColorMask(r ? GL_TRUE : GL_FALSE, g ? GL_TRUE : GL_FALSE,
+		            b ? GL_TRUE : GL_FALSE, a ? GL_TRUE : GL_FALSE);
+	}
+	
+	void OpenGLRHICommandList::SetPolygonOffset(bool enabled, float factor, float units) {
+		if (enabled) {
+			glEnable(GL_POLYGON_OFFSET_FILL);
+			glPolygonOffset(factor, units);
+		} else {
+			glDisable(GL_POLYGON_OFFSET_FILL);
+		}
+	}
+	
+	void OpenGLRHICommandList::SetCullMode(CullMode mode) {
+		if (mode == CullMode::None) {
+			glDisable(GL_CULL_FACE);
+		} else {
+			glEnable(GL_CULL_FACE);
+			glCullFace(mode == CullMode::Front ? GL_FRONT : GL_BACK);
+		}
+	}
+	
+	void OpenGLRHICommandList::AttachDepthTextureLayer(uint64_t framebufferHandle, uint64_t textureHandle, uint32_t layer) {
+		glNamedFramebufferTextureLayer(
+			static_cast<GLuint>(framebufferHandle),
+			GL_DEPTH_ATTACHMENT,
+			static_cast<GLuint>(textureHandle),
+			0, layer
+		);
+	}
+	
 	void OpenGLRHICommandList::BeginRenderPass(const RenderPassBeginInfo& info) {
 		m_CurrentFramebuffer = info.Framebuffer;
 		if (m_CurrentFramebuffer) {

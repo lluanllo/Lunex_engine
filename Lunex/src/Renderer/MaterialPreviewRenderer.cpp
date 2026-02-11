@@ -1,6 +1,7 @@
 #include "stpch.h"
 #include "MaterialPreviewRenderer.h"
 #include "Renderer/Renderer3D.h"
+#include "Renderer/Shadows/ShadowSystem.h"
 #include "RHI/RHI.h"
 #include "Resources/Render/MaterialInstance.h"
 #include "Log/Log.h"
@@ -248,6 +249,16 @@ namespace Lunex {
 		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
 
 		// ============================================================
+		// TEMPORARILY DISABLE SHADOW SYSTEM
+		// The material preview doesn't need shadows, and BeginScene()
+		// calls BindForSceneRendering() which would corrupt the main
+		// scene's shadow atlas binding and light system state.
+		// ============================================================
+		auto& shadowSystem = ShadowSystem::Get();
+		bool previousShadowEnabled = shadowSystem.IsEnabled();
+		shadowSystem.SetEnabled(false);
+
+		// ============================================================
 		// RENDER PREVIEW TO ISOLATED FRAMEBUFFER
 		// ============================================================
 
@@ -266,6 +277,10 @@ namespace Lunex {
 
 		// Begin scene with our isolated preview camera
 		Renderer3D::BeginScene(m_Camera);
+
+		// Disable IBL to prevent main scene's environment map from contaminating the preview
+		// The preview uses its own directional lights for consistent material visualization
+		Renderer3D::UnbindEnvironment();
 
 		// Update lights from preview scene (isolated)
 		Renderer3D::UpdateLights(m_PreviewScene.get());
@@ -322,6 +337,13 @@ namespace Lunex {
 		
 		// Restore previous viewport
 		glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
+
+		// ============================================================
+		// RESTORE SHADOW SETTINGS
+		// Re-enable shadows if they were enabled before the preview
+		// ============================================================
+		
+		shadowSystem.SetEnabled(previousShadowEnabled);
 	}
 
 	// ========== THUMBNAIL DISK CACHING ==========

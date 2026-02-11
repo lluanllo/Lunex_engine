@@ -26,6 +26,7 @@ struct VertexOutput {
 
 layout (location = 0) out VertexOutput Output;
 layout (location = 7) out flat int v_EntityID;
+layout (location = 8) out float v_ViewDepth;
 
 void main() {
 	vec4 worldPos = u_Transform * vec4(a_Position, 1.0);
@@ -43,7 +44,10 @@ void main() {
 	Output.TBN = mat3(T, B, N);
 	
 	v_EntityID = a_EntityID;
-	gl_Position = u_ViewProjection * worldPos;
+	
+	vec4 clipPos = u_ViewProjection * worldPos;
+	v_ViewDepth = clipPos.w; // Linear view-space depth for CSM cascade selection
+	gl_Position = clipPos;
 }
 
 #elif defined(FRAGMENT)
@@ -60,6 +64,7 @@ struct VertexOutput {
 
 layout (location = 0) in VertexOutput Input;
 layout (location = 7) in flat int v_EntityID;
+layout (location = 8) in float v_ViewDepth;
 
 // ============ MATERIAL PROPERTIES ============
 layout(std140, binding = 2) uniform Material {
@@ -106,6 +111,43 @@ layout(std430, binding = 3) buffer Lights {
 	LightData u_Lights[];
 };
 
+// ============ SHADOW SYSTEM (UBO binding=7) ============
+#define MAX_SHADOW_CASCADES 4
+#define MAX_SHADOW_LIGHTS 16
+
+#define SHADOW_TYPE_NONE 0
+#define SHADOW_TYPE_DIRECTIONAL 1
+#define SHADOW_TYPE_SPOT 2
+#define SHADOW_TYPE_POINT 3
+
+struct ShadowCascadeData {
+	mat4 ViewProjection;   // 64
+	float SplitDepth;      // 4
+	float _pad1;           // 4
+	float _pad2;           // 4
+	float _pad3;           // 4   = 80
+};
+
+struct ShadowLightData {
+	mat4 ViewProjection[6];  // 384
+	vec4 ShadowParams;       // x=bias, y=normalBias, z=firstLayer, w=shadowType
+	vec4 ShadowParams2;      // x=range, y=pcfRadius, z=numFaces, w=resolution
+};
+
+layout(std140, binding = 7) uniform ShadowData {
+	int u_NumShadowLights;
+	int u_CSMCascadeCount;
+	float u_MaxShadowDistance;
+	float u_DistanceSofteningStart;
+
+	float u_DistanceSofteningMax;
+	float u_SkyTintStrength;
+	float _shadowPad1;
+	float _shadowPad2;
+	ShadowCascadeData u_Cascades[MAX_SHADOW_CASCADES];
+	ShadowLightData u_Shadows[MAX_SHADOW_LIGHTS];
+};
+
 // ============ TEXTURE SAMPLERS ============
 layout (binding = 0) uniform sampler2D u_AlbedoMap;
 layout (binding = 1) uniform sampler2D u_NormalMap;
@@ -119,6 +161,9 @@ layout (binding = 6) uniform sampler2D u_AOMap;
 layout (binding = 8) uniform samplerCube u_IrradianceMap;
 layout (binding = 9) uniform samplerCube u_PrefilteredMap;
 layout (binding = 10) uniform sampler2D u_BRDFLUT;
+
+// ============ SHADOW ATLAS SAMPLER ============
+layout (binding = 11) uniform sampler2DArrayShadow u_ShadowAtlas;
 
 // ============ IBL UNIFORM ============
 layout(std140, binding = 5) uniform IBLData {
@@ -138,6 +183,196 @@ const float MAX_REFLECTION_LOD = 4.0;
 // Light parameters for realistic falloff
 const float LIGHT_FALLOFF_BIAS = 0.0001;
 
+// ============ SHADOW SAMPLING FUNCTIONS ============
+
+// Poisson disk for PCF (16 samples)
+const vec2 poissonDisk[16] = vec2[](
+	vec2(-0.94201624, -0.39906216),
+	vec2( 0.94558609, -0.76890725),
+	vec2(-0.09418410, -0.92938870),
+	vec2( 0.34495938,  0.29387760),
+	vec2(-0.91588581,  0.45771432),
+	vec2(-0.81544232, -0.87912464),
+	vec2(-0.38277543,  0.27676845),
+	vec2( 0.97484398,  0.75648379),
+	vec2( 0.44323325, -0.97511554),
+	vec2( 0.53742981, -0.47373420),
+	vec2(-0.26496911, -0.41893023),
+	vec2( 0.79197514,  0.19090188),
+	vec2(-0.24188840,  0.99706507),
+	vec2(-0.81409955,  0.91437590),
+	vec2( 0.19984126,  0.78641367),
+	vec2( 0.14383161, -0.14100790)
+);
+
+// Single-sample shadow comparison
+float SampleShadow(float layer, vec2 uv, float compareDepth) {
+	return texture(u_ShadowAtlas, vec4(uv, layer, compareDepth));
+}
+
+// PCF shadow with Poisson disk sampling
+float SampleShadowPCF(float layer, vec2 uv, float compareDepth, float radius, float resolution) {
+	float texelSize = 1.0 / resolution;
+	float shadow = 0.0;
+	
+	for (int i = 0; i < 16; i++) {
+		vec2 offset = poissonDisk[i] * radius * texelSize;
+		shadow += texture(u_ShadowAtlas, vec4(uv + offset, layer, compareDepth));
+	}
+	
+	return shadow / 16.0;
+}
+
+// Calculate shadow for a directional light (CSM)
+float CalculateDirectionalShadow(int shadowIndex, vec3 fragPos, vec3 normal) {
+	if (shadowIndex < 0 || shadowIndex >= u_NumShadowLights) return 1.0;
+	
+	ShadowLightData sd = u_Shadows[shadowIndex];
+	float firstLayer = sd.ShadowParams.z;
+	float bias = sd.ShadowParams.x;
+	float normalBias = sd.ShadowParams.y;
+	float pcfRadius = sd.ShadowParams2.y;
+	float resolution = sd.ShadowParams2.w;
+	
+	// Select cascade based on view depth
+	int cascadeIndex = u_CSMCascadeCount - 1;
+	for (int c = 0; c < u_CSMCascadeCount; c++) {
+		if (v_ViewDepth < u_Cascades[c].SplitDepth) {
+			cascadeIndex = c;
+			break;
+		}
+	}
+	
+	// Transform to light space of selected cascade
+	vec3 biasedPos = fragPos + normal * normalBias;
+	vec4 lightSpacePos = u_Cascades[cascadeIndex].ViewProjection * vec4(biasedPos, 1.0);
+	vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+	projCoords = projCoords * 0.5 + 0.5;
+	
+	// Out of shadow map range ? fully lit
+	if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
+		projCoords.y < 0.0 || projCoords.y > 1.0 ||
+		projCoords.z > 1.0) {
+		return 1.0;
+	}
+	
+	float compareDepth = projCoords.z - bias;
+	float layer = firstLayer + float(cascadeIndex);
+	
+	// PCF sampling
+	float shadow = SampleShadowPCF(layer, projCoords.xy, compareDepth, pcfRadius, resolution);
+	
+	// Fade out at max shadow distance
+	float fadeStart = u_MaxShadowDistance * 0.8;
+	float fadeFactor = clamp((u_MaxShadowDistance - v_ViewDepth) / (u_MaxShadowDistance - fadeStart), 0.0, 1.0);
+	shadow = mix(1.0, shadow, fadeFactor);
+	
+	// Cascade transition blending (smooth transition between cascades)
+	if (cascadeIndex < u_CSMCascadeCount - 1) {
+		float cascadeFar = u_Cascades[cascadeIndex].SplitDepth;
+		float blendRange = cascadeFar * 0.1;
+		float blendFactor = clamp((cascadeFar - v_ViewDepth) / blendRange, 0.0, 1.0);
+		
+		if (blendFactor < 1.0) {
+			// Sample next cascade
+			int nextCascade = cascadeIndex + 1;
+			vec4 nextLightSpace = u_Cascades[nextCascade].ViewProjection * vec4(biasedPos, 1.0);
+			vec3 nextProj = nextLightSpace.xyz / nextLightSpace.w;
+			nextProj = nextProj * 0.5 + 0.5;
+			
+			float nextLayer = firstLayer + float(nextCascade);
+			float nextCompare = nextProj.z - bias;
+			float nextShadow = SampleShadowPCF(nextLayer, nextProj.xy, nextCompare, pcfRadius, resolution);
+			
+			shadow = mix(nextShadow, shadow, blendFactor);
+		}
+	}
+	
+	return shadow;
+}
+
+// Calculate shadow for a spot light
+float CalculateSpotShadow(int shadowIndex, vec3 fragPos, vec3 normal) {
+	if (shadowIndex < 0 || shadowIndex >= u_NumShadowLights) return 1.0;
+	
+	ShadowLightData sd = u_Shadows[shadowIndex];
+	float layer = sd.ShadowParams.z;
+	float bias = sd.ShadowParams.x;
+	float normalBias = sd.ShadowParams.y;
+	float pcfRadius = sd.ShadowParams2.y;
+	float resolution = sd.ShadowParams2.w;
+	
+	vec3 biasedPos = fragPos + normal * normalBias;
+	vec4 lightSpacePos = sd.ViewProjection[0] * vec4(biasedPos, 1.0);
+	vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+	projCoords = projCoords * 0.5 + 0.5;
+	
+	if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
+		projCoords.y < 0.0 || projCoords.y > 1.0 ||
+		projCoords.z > 1.0) {
+		return 1.0;
+	}
+	
+	float compareDepth = projCoords.z - bias;
+	return SampleShadowPCF(layer, projCoords.xy, compareDepth, pcfRadius, resolution);
+}
+
+// Calculate shadow for a point light (cubemap stored as 6 layers)
+float CalculatePointShadow(int shadowIndex, vec3 fragPos, vec3 normal, vec3 lightPos) {
+	if (shadowIndex < 0 || shadowIndex >= u_NumShadowLights) return 1.0;
+	
+	ShadowLightData sd = u_Shadows[shadowIndex];
+	float firstLayer = sd.ShadowParams.z;
+	float bias = sd.ShadowParams.x;
+	float normalBias = sd.ShadowParams.y;
+	float lightRange = sd.ShadowParams2.x;
+	float resolution = sd.ShadowParams2.w;
+	
+	vec3 fragToLight = fragPos - lightPos;
+	vec3 biasedFrag = fragPos + normal * normalBias;
+	float currentDist = length(biasedFrag - lightPos);
+	
+	// Determine which cubemap face to sample
+	vec3 absDir = abs(fragToLight);
+	int face;
+	if (absDir.x >= absDir.y && absDir.x >= absDir.z) {
+		face = fragToLight.x > 0.0 ? 0 : 1;  // +X or -X
+	} else if (absDir.y >= absDir.x && absDir.y >= absDir.z) {
+		face = fragToLight.y > 0.0 ? 2 : 3;  // +Y or -Y
+	} else {
+		face = fragToLight.z > 0.0 ? 4 : 5;  // +Z or -Z
+	}
+	
+	// Transform through the face's view-projection
+	vec4 lightSpacePos = sd.ViewProjection[face] * vec4(biasedFrag, 1.0);
+	vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+	projCoords = projCoords * 0.5 + 0.5;
+	
+	if (projCoords.z > 1.0) return 1.0;
+	
+	// For point lights, compare linear depth
+	float normalizedDist = currentDist / lightRange;
+	float compareDepth = normalizedDist - bias;
+	
+	float layer = firstLayer + float(face);
+	return SampleShadowPCF(layer, projCoords.xy, compareDepth, 1.0, resolution);
+}
+
+// Find shadow index for a given light index
+int FindShadowIndex(int lightType, vec3 lightPos, vec3 lightDir) {
+	for (int s = 0; s < u_NumShadowLights; s++) {
+		int sType = int(u_Shadows[s].ShadowParams.w);
+		if (sType == lightType) {
+			// For directional: match by type (usually only one)
+			if (lightType == SHADOW_TYPE_DIRECTIONAL) return s;
+			// For spot/point: we rely on order matching
+			// This works because both light list and shadow list are in same order
+			return s;
+		}
+	}
+	return -1;
+}
+
 // ============ ADVANCED PBR FUNCTIONS ============
 
 // Optimized GGX with numerical stability improvements
@@ -153,7 +388,6 @@ float D_GGX(float NdotH, float roughness) {
 	return nom / max(denom, EPSILON);
 }
 
-// Height-Correlated Smith G2 (most accurate for multiple lights)
 float V_SmithGGXCorrelated(float NdotV, float NdotL, float roughness) {
 	float a2 = roughness * roughness;
 	
@@ -163,25 +397,21 @@ float V_SmithGGXCorrelated(float NdotV, float NdotL, float roughness) {
 	return 0.5 / max(lambdaV + lambdaL, EPSILON);
 }
 
-// Fresnel-Schlick with improved edge case handling
 vec3 F_Schlick(float cosTheta, vec3 F0) {
 	float f = pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 	return F0 + (1.0 - F0) * f;
 }
 
-// Fresnel with roughness compensation for IBL
 vec3 F_SchlickRoughness(float cosTheta, vec3 F0, float roughness) {
 	return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
 // ============ ADVANCED DIFFUSE MODELS ============
 
-// Lambertian (fastest, good for rough surfaces)
 vec3 Diffuse_Lambert(vec3 albedo) {
 	return albedo / PI;
 }
 
-// Burley/Disney Diffuse (AAA standard, better subsurface)
 float Diffuse_Burley(float NdotV, float NdotL, float LdotH, float roughness) {
 	float f90 = 0.5 + 2.0 * LdotH * LdotH * roughness;
 	float lightScatter = 1.0 + (f90 - 1.0) * pow(1.0 - NdotL, 5.0);
@@ -189,7 +419,6 @@ float Diffuse_Burley(float NdotV, float NdotL, float LdotH, float roughness) {
 	return lightScatter * viewScatter / PI;
 }
 
-// Oren-Nayar (best for very rough/matte surfaces like clay, concrete)
 float Diffuse_OrenNayar(float NdotV, float NdotL, float LdotV, float roughness) {
 	float s = LdotV - NdotL * NdotV;
 	float t = mix(1.0, max(NdotL, NdotV), step(0.0, s));
@@ -203,21 +432,17 @@ float Diffuse_OrenNayar(float NdotV, float NdotL, float LdotV, float roughness) 
 
 // ============ PHYSICALLY-BASED LIGHT ATTENUATION ============
 
-// Inverse square law with realistic windowing
 float GetPhysicalAttenuation(float distance, float range) {
 	if (range <= 0.0) return 1.0;
 	
-	// Physically accurate inverse square
 	float attenuation = 1.0 / max(distance * distance + LIGHT_FALLOFF_BIAS, EPSILON);
 	
-	// Smooth window function (prevents harsh cutoff)
 	float distRatio = min(distance / range, 1.0);
 	float window = pow(max(1.0 - pow(distRatio, 4.0), 0.0), 2.0);
 	
 	return attenuation * window;
 }
 
-// Alternative: UE4-style attenuation (more artist-friendly)
 float GetUE4Attenuation(float distance, float radius) {
 	float d = distance / max(radius, EPSILON);
 	float d2 = d * d;
@@ -229,19 +454,16 @@ float GetUE4Attenuation(float distance, float radius) {
 	return falloff / (distance * distance + 1.0);
 }
 
-// Improved spotlight attenuation with penumbra
 float GetSpotAttenuation(vec3 L, vec3 spotDir, float innerCone, float outerCone) {
 	float cosAngle = dot(-L, spotDir);
 	float epsilon = max(innerCone - outerCone, EPSILON);
 	float intensity = clamp((cosAngle - outerCone) / epsilon, 0.0, 1.0);
 	
-	// Hermite smoothstep for natural falloff
 	return intensity * intensity * (3.0 - 2.0 * intensity);
 }
 
 // ============ REALISTIC AMBIENT OCCLUSION ============
 
-// Multi-bounce AO approximation (more realistic than single-bounce)
 float GetMultiBounceAO(float ao, vec3 albedo) {
 	vec3 a = 2.0 * albedo - 0.33;
 	vec3 b = -4.8 * albedo + 0.64;
@@ -253,7 +475,6 @@ float GetMultiBounceAO(float ao, vec3 albedo) {
 	return dot(aoMultiBounce, vec3(0.333));
 }
 
-// Bent normal approximation for directional AO
 float GetDirectionalAO(float ao, vec3 N, vec3 bentNormal) {
 	float bentFactor = max(dot(N, bentNormal), 0.0);
 	return mix(ao, 1.0, bentFactor * 0.5);
@@ -261,27 +482,49 @@ float GetDirectionalAO(float ao, vec3 N, vec3 bentNormal) {
 
 // ============ ADVANCED LIGHTING FEATURES ============
 
-// Soft shadows approximation (for area lights simulation)
 float GetSoftShadow(vec3 L, float NdotL, float lightRadius) {
-	// Simulate penumbra based on light size
 	float softness = lightRadius * (1.0 - NdotL);
 	return smoothstep(-softness, softness, NdotL);
 }
 
-// Distance-based light intensity scaling (energy conservation)
 vec3 GetLightIntensity(vec3 color, float intensity, float distance, float radius) {
-	// Energy conservation: larger lights are less intense per area
 	float energyScale = 1.0 / max(radius * radius, 1.0);
 	return color * intensity * energyScale;
 }
 
-// ============ MAIN LIGHTING CALCULATION ============
+// ============ MAIN LIGHTING CALCULATION (WITH SHADOWS) ============
 
 vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, float roughness, vec3 fragPos, float ao) {
 	vec3 Lo = vec3(0.0);
 	float NdotV = max(dot(N, V), EPSILON);
 	
 	int lightCount = min(u_NumLights, MAX_LIGHTS);
+	
+	// Track shadow index per type for matching
+	int nextDirShadow = 0;
+	int nextSpotShadow = 0;
+	int nextPointShadow = 0;
+
+	// Pre-scan shadow casters to build index mapping
+	// We match lights to shadows by type and order
+	int dirShadowIndices[MAX_SHADOW_LIGHTS];
+	int spotShadowIndices[MAX_SHADOW_LIGHTS];
+	int pointShadowIndices[MAX_SHADOW_LIGHTS];
+	int numDirShadows = 0;
+	int numSpotShadows = 0;
+	int numPointShadows = 0;
+
+	for (int s = 0; s < u_NumShadowLights && s < MAX_SHADOW_LIGHTS; s++) {
+		int sType = int(u_Shadows[s].ShadowParams.w);
+		if (sType == SHADOW_TYPE_DIRECTIONAL && numDirShadows < MAX_SHADOW_LIGHTS)
+			dirShadowIndices[numDirShadows++] = s;
+		else if (sType == SHADOW_TYPE_SPOT && numSpotShadows < MAX_SHADOW_LIGHTS)
+			spotShadowIndices[numSpotShadows++] = s;
+		else if (sType == SHADOW_TYPE_POINT && numPointShadows < MAX_SHADOW_LIGHTS)
+			pointShadowIndices[numPointShadows++] = s;
+	}
+
+	int dirCounter = 0, spotCounter = 0, pointCounter = 0;
 	
 	for (int i = 0; i < lightCount; i++) {
 		LightData light = u_Lights[i];
@@ -290,54 +533,78 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 		vec3 L;
 		vec3 radiance;
 		float attenuation = 1.0;
-		float lightRadius = 0.1; // Default light radius for soft shadows
+		float lightRadius = 0.1;
 		
-		// ========== LIGHT TYPE PROCESSING ==========
+		// Shadow factor — default 1.0 (fully lit, no shadow)
+		float shadowFactor = 1.0;
+		bool castsShadows = light.Params.z > 0.5;
+		
+		// ========== LIGHT TYPE PROCESSING =========
 		if (lightType == 0) {
-			// Directional Light (Sun/Moon)
+			// Directional Light
 			L = normalize(-light.Direction.xyz);
 			radiance = light.Color.rgb * light.Color.a;
-			lightRadius = 0.0; // Hard shadows for directional
+			lightRadius = 0.0;
+			
+			// Shadow
+			if (castsShadows && dirCounter < numDirShadows) {
+				shadowFactor = CalculateDirectionalShadow(dirShadowIndices[dirCounter], fragPos, N);
+				dirCounter++;
+			}
 			
 		} else if (lightType == 1) {
-			// Point Light (physically accurate)
+			// Point Light
 			vec3 lightVec = light.Position.xyz - fragPos;
 			float distance = length(lightVec);
 			L = lightVec / max(distance, EPSILON);
 			
-			// ? FIX: Range is in Direction.w, NOT Params.x
 			float range = light.Direction.w;
-			if (range > 0.0 && distance > range) continue;
+			if (range > 0.0 && distance > range) {
+				if (castsShadows) pointCounter++;
+				continue;
+			}
 			
-			// Use physical attenuation (more realistic)
 			attenuation = GetPhysicalAttenuation(distance, range);
-			
-			// Energy-conserved intensity
 			radiance = GetLightIntensity(light.Color.rgb, light.Color.a, distance, max(range * 0.1, 0.1));
-			lightRadius = max(range * 0.05, 0.05); // 5% of range for soft shadows
+			lightRadius = max(range * 0.05, 0.05);
+			
+			// Shadow
+			if (castsShadows && pointCounter < numPointShadows) {
+				shadowFactor = CalculatePointShadow(pointShadowIndices[pointCounter], fragPos, N, light.Position.xyz);
+				pointCounter++;
+			}
 			
 		} else if (lightType == 2) {
-			// Spot Light (flashlight, stage light)
+			// Spot Light
 			vec3 lightVec = light.Position.xyz - fragPos;
 			float distance = length(lightVec);
 			L = lightVec / max(distance, EPSILON);
 			
-			// ? FIX: Range is in Direction.w, NOT Params.x
 			float range = light.Direction.w;
-			if (range > 0.0 && distance > range) continue;
+			if (range > 0.0 && distance > range) {
+				if (castsShadows) spotCounter++;
+				continue;
+			}
 			
-			// Physical attenuation
 			attenuation = GetPhysicalAttenuation(distance, range);
 			
-			// Spotlight cone (Params.x = innerCone, Params.y = outerCone)
 			vec3 spotDir = normalize(light.Direction.xyz);
 			float spotAtten = GetSpotAttenuation(L, spotDir, light.Params.x, light.Params.y);
 			attenuation *= spotAtten;
 			
-			if (attenuation < EPSILON) continue;
+			if (attenuation < EPSILON) {
+				if (castsShadows) spotCounter++;
+				continue;
+			}
 			
 			radiance = GetLightIntensity(light.Color.rgb, light.Color.a, distance, max(range * 0.1, 0.1));
-			lightRadius = max(range * 0.08, 0.08); // Slightly larger for spots
+			lightRadius = max(range * 0.08, 0.08);
+			
+			// Shadow
+			if (castsShadows && spotCounter < numSpotShadows) {
+				shadowFactor = CalculateSpotShadow(spotShadowIndices[spotCounter], fragPos, N);
+				spotCounter++;
+			}
 		}
 		
 		if (attenuation < EPSILON) continue;
@@ -351,11 +618,11 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 		float LdotH = max(dot(L, H), 0.0);
 		float LdotV = max(dot(L, V), 0.0);
 		
-		// Early exit if light is behind surface
 		if (NdotL < EPSILON) continue;
 		
-		// Soft shadow approximation
-		float shadowFactor = GetSoftShadow(L, NdotL, lightRadius);
+		// Combine analytical soft shadow with real shadow map
+		float softFactor = GetSoftShadow(L, NdotL, lightRadius);
+		shadowFactor *= softFactor;
 		
 		// ========== SPECULAR TERM (Cook-Torrance) ==========
 		float D = D_GGX(NdotH, roughness);
@@ -368,15 +635,13 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 		vec3 kS = F;
 		vec3 kD = (1.0 - kS) * (1.0 - metallic);
 		
-		// Use Burley diffuse for AAA quality
 		float burley = Diffuse_Burley(NdotV, NdotL, LdotH, roughness);
 		vec3 diffuse = kD * albedo * burley;
 		
 		// ========== MICRO-OCCLUSION ==========
-		// Darken crevices where light can't reach (AO affects lighting)
-		float microOcclusion = mix(1.0, ao, 0.5); // 50% AO influence on direct lighting
+		float microOcclusion = mix(1.0, ao, 0.5);
 		
-		// ========== ACCUMULATE LIGHTING ==========
+		// ========== ACCUMULATE LIGHTING (shadow applied to radiance) ==========
 		radiance *= attenuation * shadowFactor;
 		Lo += (diffuse + specular) * radiance * NdotL * microOcclusion;
 	}
@@ -389,12 +654,10 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 vec3 CalculateIBLAmbient(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, float roughness, float ao) {
 	float NdotV = max(dot(N, V), EPSILON);
 	
-	// Fresnel for IBL
 	vec3 F = F_SchlickRoughness(NdotV, F0, roughness);
 	vec3 kS = F;
 	vec3 kD = (1.0 - kS) * (1.0 - metallic);
 	
-	// Apply IBL rotation
 	float cosR = cos(u_IBLRotation);
 	float sinR = sin(u_IBLRotation);
 	vec3 rotatedN = vec3(
@@ -403,11 +666,9 @@ vec3 CalculateIBLAmbient(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, f
 		sinR * N.x + cosR * N.z
 	);
 	
-	// Diffuse IBL from irradiance map
 	vec3 irradiance = texture(u_IrradianceMap, rotatedN).rgb;
 	vec3 diffuseIBL = irradiance * albedo * kD;
 	
-	// Specular IBL from prefiltered map + BRDF LUT
 	vec3 R = reflect(-V, N);
 	vec3 rotatedR = vec3(
 		cosR * R.x - sinR * R.z,
@@ -421,7 +682,6 @@ vec3 CalculateIBLAmbient(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, f
 	vec2 brdf = texture(u_BRDFLUT, vec2(NdotV, roughness)).rg;
 	vec3 specularIBL = prefilteredColor * (F * brdf.x + brdf.y);
 	
-	// Combine with intensity and AO
 	vec3 ambient = (diffuseIBL + specularIBL) * u_IBLIntensity * ao;
 	
 	return ambient;
@@ -436,7 +696,6 @@ vec3 CalculateFallbackAmbient(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metall
 	vec3 kS = F;
 	vec3 kD = (1.0 - kS) * (1.0 - metallic);
 	
-	// Hemisphere lighting approximation
 	float skyFactor = N.y * 0.5 + 0.5;
 	vec3 skyColor = vec3(0.4, 0.5, 0.6) * 0.6;
 	vec3 groundColor = vec3(0.3, 0.25, 0.2) * 0.2;
@@ -444,7 +703,6 @@ vec3 CalculateFallbackAmbient(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metall
 	
 	vec3 ambientDiffuse = albedo * kD * hemisphereLight * ao;
 	
-	// Fake specular ambient
 	vec3 R = reflect(-V, N);
 	float horizonFade = pow(max(R.y, 0.0), 0.5);
 	vec3 ambientSpecular = F * mix(groundColor, skyColor, horizonFade) * (1.0 - roughness) * ao * 0.1;
@@ -452,7 +710,7 @@ vec3 CalculateFallbackAmbient(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metall
 	return (ambientDiffuse + ambientSpecular) * 1.2;
 }
 
-// ============ TONE MAPPING (UNCHANGED) ============
+// ============ TONE MAPPING ============
 
 vec3 ACESFilm(vec3 x) {
 	float a = 2.51;
@@ -516,10 +774,8 @@ void main() {
 	F0 = mix(F0, albedo, metallic);
 	F0 = mix(F0 * specular, F0, metallic);
 	
-	// Direct lighting
 	vec3 directLighting = CalculateDirectLighting(N, V, F0, albedo, metallic, roughness, Input.FragPos, ao);
 	
-	// Ambient/IBL lighting
 	vec3 ambient;
 	if (u_UseIBL != 0) {
 		ambient = CalculateIBLAmbient(N, V, F0, albedo, metallic, roughness, ao);
@@ -556,6 +812,29 @@ void main() {
 	// ========== FINAL COMPOSITION ==========
 	
 	vec3 color = ambient + directLighting + emission + emissiveContribution;
+	
+	// Sky color tinting on shadowed areas
+	// In real life, shadows receive indirect light from the sky, giving them a blue/cool tint
+	if (u_SkyTintStrength > 0.0 && u_NumShadowLights > 0) {
+		// Estimate sky color: use IBL if available, otherwise use a default sky color
+		vec3 skyColor;
+		if (u_UseIBL != 0) {
+			// Sample the sky from above (upward hemisphere)
+			skyColor = texture(u_IrradianceMap, vec3(0.0, 1.0, 0.0)).rgb;
+		} else {
+			skyColor = vec3(0.4, 0.5, 0.7); // Default sky blue
+		}
+		
+		// Calculate how much this fragment is in shadow (average across all light contributions)
+		// Use the ratio: if directLighting is very low compared to what it could be, we're in shadow
+		float luminanceDirect = dot(directLighting, vec3(0.2126, 0.7152, 0.0722));
+		float luminanceAmbient = dot(ambient, vec3(0.2126, 0.7152, 0.0722));
+		float shadowAmount = 1.0 - clamp(luminanceDirect / max(luminanceAmbient + luminanceDirect, 0.001), 0.0, 1.0);
+		
+		// Apply sky color contamination to shadowed areas
+		vec3 skyTint = skyColor * u_SkyTintStrength * shadowAmount * albedo;
+		color += skyTint;
+	}
 	
 	// Tone mapping
 	color = ACESFilm(color);

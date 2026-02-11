@@ -132,16 +132,19 @@ namespace RHI {
 		m_Desc.Width = width;
 		m_Desc.Height = height;
 		
-		// Resize color attachments
-		for (auto& attachment : m_ColorAttachments) {
-			if (attachment) {
-				attachment->Resize(width, height);
+		// Resize color attachments and re-attach to FBO
+		// (Resize creates new GL texture IDs, so we must re-attach)
+		for (size_t i = 0; i < m_ColorAttachments.size(); i++) {
+			if (m_ColorAttachments[i]) {
+				m_ColorAttachments[i]->Resize(width, height);
+				AttachTexture(static_cast<uint32_t>(i), m_ColorAttachments[i]);
 			}
 		}
 		
-		// Resize depth attachment
+		// Resize depth attachment and re-attach to FBO
 		if (m_DepthAttachment) {
 			m_DepthAttachment->Resize(width, height);
+			AttachDepthTexture(m_DepthAttachment);
 		}
 	}
 	

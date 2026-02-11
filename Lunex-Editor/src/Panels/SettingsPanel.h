@@ -21,6 +21,7 @@ namespace Lunex {
 	private:
 		// Section drawing helpers
 		void DrawEnvironmentSection();
+		void DrawShadowsSection();
 		void DrawPhysics2DSection();
 		void DrawPhysics3DSection();
 		

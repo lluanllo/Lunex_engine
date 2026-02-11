@@ -5,6 +5,7 @@
 #include "Components.h"
 #include "Core/JobSystem/JobSystem.h"
 #include "Renderer/SkyboxRenderer.h"  // For global skybox serialization
+#include "Renderer/Shadows/ShadowSystem.h"  // For global shadow serialization
 
 #include <fstream>
 #include <sstream>
@@ -510,6 +511,42 @@ namespace Lunex {
 		
 		out << YAML::EndMap; // GlobalSkybox
 		
+		// ========================================
+		// SERIALIZE GLOBAL SHADOW SETTINGS
+		// ========================================
+		{
+			auto& shadowSystem = ShadowSystem::Get();
+			const auto& config = shadowSystem.GetConfig();
+			
+			out << YAML::Key << "GlobalShadows" << YAML::Value << YAML::BeginMap;
+			out << YAML::Key << "Enabled" << YAML::Value << shadowSystem.IsEnabled();
+			
+			// CSM / Directional
+			out << YAML::Key << "DirectionalResolution" << YAML::Value << config.DirectionalResolution;
+			out << YAML::Key << "CSMCascadeCount" << YAML::Value << config.CSMCascadeCount;
+			out << YAML::Key << "CSMSplitLambda" << YAML::Value << config.CSMSplitLambda;
+			out << YAML::Key << "MaxShadowDistance" << YAML::Value << config.MaxShadowDistance;
+			out << YAML::Key << "DirectionalBias" << YAML::Value << config.DirectionalBias;
+			
+			// Spot & Point
+			out << YAML::Key << "SpotResolution" << YAML::Value << config.SpotResolution;
+			out << YAML::Key << "PointResolution" << YAML::Value << config.PointResolution;
+			out << YAML::Key << "SpotBias" << YAML::Value << config.SpotBias;
+			out << YAML::Key << "PointBias" << YAML::Value << config.PointBias;
+			
+			// Filtering
+			out << YAML::Key << "EnablePCF" << YAML::Value << config.EnablePCF;
+			out << YAML::Key << "PCFRadius" << YAML::Value << config.PCFRadius;
+			out << YAML::Key << "DistanceSofteningStart" << YAML::Value << config.DistanceSofteningStart;
+			out << YAML::Key << "DistanceSofteningMax" << YAML::Value << config.DistanceSofteningMax;
+			
+			// Sky color tinting
+			out << YAML::Key << "EnableSkyColorTint" << YAML::Value << config.EnableSkyColorTint;
+			out << YAML::Key << "SkyTintStrength" << YAML::Value << config.SkyTintStrength;
+			
+			out << YAML::EndMap; // GlobalShadows
+		}
+		
 		out << YAML::Key << "Entities" << YAML::Value << YAML::BeginSeq;
 		
 		m_Scene->m_Registry.view<entt::entity>().each([&](auto entityID) {
@@ -531,6 +568,7 @@ namespace Lunex {
 		if (SkyboxRenderer::HasEnvironmentLoaded()) {
 			LNX_LOG_INFO("  - HDRI loaded: Yes");
 		}
+		LNX_LOG_INFO("  - Global Shadows: {0}", ShadowSystem::Get().IsEnabled() ? "Enabled" : "Disabled");
 	}
 	
 	void SceneSerializer::SerializeRuntime(const std::string& filepath) {
@@ -601,12 +639,72 @@ namespace Lunex {
 			LNX_LOG_INFO("No global skybox data found, using defaults");
 		}
 		
+		// ========================================
+		// DESERIALIZE GLOBAL SHADOW SETTINGS
+		// ========================================
+		auto globalShadows = data["GlobalShadows"];
+		if (globalShadows) {
+			auto& shadowSystem = ShadowSystem::Get();
+			ShadowConfig config = shadowSystem.GetConfig();
+			
+			if (globalShadows["Enabled"]) {
+				shadowSystem.SetEnabled(globalShadows["Enabled"].as<bool>());
+			}
+			
+			// CSM / Directional
+			if (globalShadows["DirectionalResolution"])
+				config.DirectionalResolution = globalShadows["DirectionalResolution"].as<uint32_t>();
+			if (globalShadows["CSMCascadeCount"])
+				config.CSMCascadeCount = globalShadows["CSMCascadeCount"].as<uint32_t>();
+			if (globalShadows["CSMSplitLambda"])
+				config.CSMSplitLambda = globalShadows["CSMSplitLambda"].as<float>();
+			if (globalShadows["MaxShadowDistance"])
+				config.MaxShadowDistance = globalShadows["MaxShadowDistance"].as<float>();
+			if (globalShadows["DirectionalBias"])
+				config.DirectionalBias = globalShadows["DirectionalBias"].as<float>();
+			
+			// Spot & Point
+			if (globalShadows["SpotResolution"])
+				config.SpotResolution = globalShadows["SpotResolution"].as<uint32_t>();
+			if (globalShadows["PointResolution"])
+				config.PointResolution = globalShadows["PointResolution"].as<uint32_t>();
+			if (globalShadows["SpotBias"])
+				config.SpotBias = globalShadows["SpotBias"].as<float>();
+			if (globalShadows["PointBias"])
+				config.PointBias = globalShadows["PointBias"].as<float>();
+			
+			// Filtering
+			if (globalShadows["EnablePCF"])
+				config.EnablePCF = globalShadows["EnablePCF"].as<bool>();
+			if (globalShadows["PCFRadius"])
+				config.PCFRadius = globalShadows["PCFRadius"].as<float>();
+			if (globalShadows["DistanceSofteningStart"])
+				config.DistanceSofteningStart = globalShadows["DistanceSofteningStart"].as<float>();
+			if (globalShadows["DistanceSofteningMax"])
+				config.DistanceSofteningMax = globalShadows["DistanceSofteningMax"].as<float>();
+			
+			// Sky color tinting
+			if (globalShadows["EnableSkyColorTint"])
+				config.EnableSkyColorTint = globalShadows["EnableSkyColorTint"].as<bool>();
+			if (globalShadows["SkyTintStrength"])
+				config.SkyTintStrength = globalShadows["SkyTintStrength"].as<float>();
+			
+			shadowSystem.SetConfig(config);
+			
+			LNX_LOG_INFO("Loaded global shadow settings (Enabled={0}, CSM={1}x{2}, MaxDist={3})",
+				shadowSystem.IsEnabled() ? "true" : "false",
+				config.CSMCascadeCount, config.DirectionalResolution,
+				config.MaxShadowDistance);
+		} else {
+			LNX_LOG_INFO("No global shadow data found, using defaults");
+		}
+		
 		std::unordered_set<uint64_t> seenIds;
 		
 		auto entities = data["Entities"];
 		if (entities) {
 			for (auto entity : entities) {
-				uint64_t uuid = entity["Entity"].as<uint64_t>();
+			 uint64_t uuid = entity["Entity"].as<uint64_t>();
 				
 				std::string name;
 				auto tagComponent = entity["TagComponent"];
@@ -715,7 +813,7 @@ namespace Lunex {
 					rb3d.Type = (Rigidbody3DComponent::BodyType)rigidbody3DComponent["BodyType"].as<int>();
 					rb3d.Mass = rigidbody3DComponent["Mass"].as<float>();
 					rb3d.Friction = rigidbody3DComponent["Friction"].as<float>();
-					rb3d.Restitution = rigidbody3DComponent["Restitution"].as<float>();
+				 rb3d.Restitution = rigidbody3DComponent["Restitution"].as<float>();
 					rb3d.LinearDamping = rigidbody3DComponent["LinearDamping"].as<float>();
 					rb3d.AngularDamping = rigidbody3DComponent["AngularDamping"].as<float>();
 					rb3d.LinearFactor = rigidbody3DComponent["LinearFactor"].as<glm::vec3>();

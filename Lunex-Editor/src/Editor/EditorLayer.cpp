@@ -730,6 +730,21 @@ namespace Lunex {
 		Renderer2D::ResetStats();
 		Renderer3D::ResetStats();
 
+		// ========================================
+		// SHADOW PASS (before main framebuffer bind)
+		// Renders shadow maps into the shadow atlas
+		// ========================================
+		if (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Simulate) {
+			Renderer3D::UpdateShadows(m_ActiveScene.get(), m_EditorCamera);
+		} else if (m_SceneState == SceneState::Play) {
+			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
+			if (camera) {
+				auto& cameraComp = camera.GetComponent<CameraComponent>();
+				auto& transformComp = camera.GetComponent<TransformComponent>();
+				Renderer3D::UpdateShadows(m_ActiveScene.get(), cameraComp.Camera, transformComp.GetTransform());
+			}
+		}
+
 		// ✅ CRITICAL FIX: Bind framebuffer BEFORE rendering
 		m_Framebuffer->Bind();
 
@@ -807,7 +822,19 @@ namespace Lunex {
 
 		if (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Simulate) {
 			Renderer3D::BeginScene(m_EditorCamera);
+			Renderer3D::UpdateLights(m_ActiveScene.get());
 			Renderer3D::EndScene();
+		}
+		else if (m_SceneState == SceneState::Play) {
+			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
+			if (camera) {
+				auto& cameraComp = camera.GetComponent<CameraComponent>();
+				auto& transformComp = camera.GetComponent<TransformComponent>();
+				glm::mat4 cameraTransform = transformComp.GetTransform();
+				Renderer3D::BeginScene(cameraComp.Camera, cameraTransform);
+				Renderer3D::UpdateLights(m_ActiveScene.get());
+				Renderer3D::EndScene();
+			}
 		}
 	}
 
