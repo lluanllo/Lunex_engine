@@ -8,6 +8,7 @@
 #include "ContentBrowserPanel.h"
 
 #include "Renderer/SkyboxRenderer.h"
+#include "Renderer/Shadows/ShadowSystem.h"
 #include "Scene/Lighting/LightSystem.h"
 #include "Log/Log.h"
 
@@ -25,6 +26,10 @@ namespace Lunex {
 		}
 		
 		DrawEnvironmentSection();
+		
+		Separator();
+		
+		DrawShadowsSection();
 		
 		Separator();
 		
@@ -198,11 +203,208 @@ namespace Lunex {
 		}
 	}
 	
+	void SettingsPanel::DrawShadowsSection() {
+		using namespace UI;
+		
+		if (BeginSection("Shadows", true)) {
+			auto& shadowSystem = ShadowSystem::Get();
+			ShadowConfig config = shadowSystem.GetConfig();
+			bool configChanged = false;
+			
+			// ========================================
+			// GLOBAL SHADOW SETTINGS
+			// ========================================
+			bool shadowsEnabled = shadowSystem.IsEnabled();
+			if (PropertyCheckbox("Enable Shadows", shadowsEnabled)) {
+				shadowSystem.SetEnabled(shadowsEnabled);
+			}
+			
+			if (!shadowsEnabled) {
+				TextWrapped("Shadows are disabled globally.", TextVariant::Muted);
+				EndSection();
+				return;
+			}
+			
+			Separator();
+			
+			// ========================================
+			// DIRECTIONAL / SUN LIGHT SHADOWS (CSM)
+			// ========================================
+			Text("Directional Light (CSM)");
+			AddSpacing(SpacingValues::XS);
+			
+			bool hasSunLight = LightSystem::Get().HasSunLight();
+			if (hasSunLight) {
+				TextColored(Colors::Success(), "Sun Light detected — CSM active");
+			} else {
+				uint32_t dirCount = LightSystem::Get().GetDirectionalLightCount();
+				if (dirCount > 0) {
+					TextColored(Colors::Info(), "%d Directional Light(s) — CSM active", dirCount);
+				} else {
+					TextColored(Colors::TextMuted(), "No directional lights in scene");
+				}
+			}
+			
+			AddSpacing(SpacingValues::XS);
+			
+			// CSM Resolution
+			int dirRes = static_cast<int>(config.DirectionalResolution);
+			const char* resOptions[] = { "512", "1024", "2048", "4096" };
+			int resValues[] = { 512, 1024, 2048, 4096 };
+			int resIdx = 2; // default 2048
+			for (int i = 0; i < 4; i++) {
+				if (resValues[i] == dirRes) { resIdx = i; break; }
+			}
+			if (PropertyDropdown("Resolution", resIdx, resOptions, 4, "Shadow map resolution per cascade")) {
+				config.DirectionalResolution = resValues[resIdx];
+				configChanged = true;
+			}
+			
+			// Cascade count
+			const char* cascadeOptions[] = { "1", "2", "3", "4" };
+			int cascadeIdx = static_cast<int>(config.CSMCascadeCount) - 1;
+			cascadeIdx = glm::clamp(cascadeIdx, 0, 3);
+			if (PropertyDropdown("Cascade Count", cascadeIdx, cascadeOptions, 4, "Number of shadow cascades (1-4)")) {
+				config.CSMCascadeCount = static_cast<uint32_t>(cascadeIdx + 1);
+				configChanged = true;
+			}
+			
+			// Max shadow distance
+			if (PropertyFloat("Max Distance", config.MaxShadowDistance, 1.0f, 10.0f, 1000.0f, "Maximum distance for directional shadows")) {
+				configChanged = true;
+			}
+			
+			// Split lambda
+			if (PropertySlider("Split Lambda", config.CSMSplitLambda, 0.0f, 1.0f, "%.2f", "0 = linear splits, 1 = logarithmic splits")) {
+				configChanged = true;
+			}
+			
+			// Directional bias
+			if (PropertyFloat("Bias", config.DirectionalBias, 0.0001f, 0.0f, 0.05f, "Depth bias for directional shadows")) {
+				configChanged = true;
+			}
+			
+			Separator();
+			
+			// ========================================
+			// SPOT & POINT LIGHT SHADOWS
+			// ========================================
+			Text("Spot & Point Light Shadows");
+			AddSpacing(SpacingValues::XS);
+			
+			uint32_t spotCount = LightSystem::Get().GetSpotLightCount();
+			uint32_t pointCount = LightSystem::Get().GetPointLightCount();
+			Text("  Spot Lights: %d  |  Point Lights: %d", spotCount, pointCount);
+			
+			AddSpacing(SpacingValues::XS);
+			
+			// Spot resolution
+			int spotRes = static_cast<int>(config.SpotResolution);
+			int spotResIdx = 1; // default 1024
+			for (int i = 0; i < 4; i++) {
+				if (resValues[i] == spotRes) { spotResIdx = i; break; }
+			}
+			if (PropertyDropdown("Spot Resolution", spotResIdx, resOptions, 4, "Shadow map resolution for spot lights")) {
+				config.SpotResolution = resValues[spotResIdx];
+				configChanged = true;
+			}
+			
+			// Point resolution
+			int pointRes = static_cast<int>(config.PointResolution);
+			int pointResIdx = 0; // default 512
+			for (int i = 0; i < 4; i++) {
+				if (resValues[i] == pointRes) { pointResIdx = i; break; }
+			}
+			if (PropertyDropdown("Point Resolution", pointResIdx, resOptions, 4, "Shadow map resolution per cubemap face")) {
+				config.PointResolution = resValues[pointResIdx];
+				configChanged = true;
+			}
+			
+			// Spot bias
+			if (PropertyFloat("Spot Bias", config.SpotBias, 0.0001f, 0.0f, 0.1f, "Depth bias for spot light shadows")) {
+				configChanged = true;
+			}
+			
+			// Point bias
+			if (PropertyFloat("Point Bias", config.PointBias, 0.001f, 0.0f, 0.5f, "Depth bias for point light shadows")) {
+				configChanged = true;
+			}
+			
+			Separator();
+			
+			// ========================================
+			// FILTERING & SOFTENING
+			// ========================================
+			Text("Filtering & Softening");
+			AddSpacing(SpacingValues::XS);
+			
+			// PCF Radius
+			if (PropertyFloat("PCF Radius", config.PCFRadius, 0.1f, 0.0f, 8.0f, "Base radius for Poisson disk PCF sampling")) {
+				configChanged = true;
+			}
+			
+			// Distance-based softening
+			if (PropertyFloat("Soften Start Dist", config.DistanceSofteningStart, 1.0f, 0.0f, 500.0f,
+				"Distance from camera where shadows begin to soften")) {
+				configChanged = true;
+			}
+			
+			if (PropertyFloat("Soften Max", config.DistanceSofteningMax, 0.1f, 1.0f, 10.0f,
+				"Maximum PCF radius multiplier at far distance")) {
+				configChanged = true;
+			}
+			
+			Separator();
+			
+			// ========================================
+			// SKY COLOR TINTING
+			// ========================================
+			Text("Shadow Color Tinting");
+			AddSpacing(SpacingValues::XS);
+			
+			TextWrapped("Shadows in the real world receive indirect light from the sky, giving them a subtle color tint.", TextVariant::Muted);
+			AddSpacing(SpacingValues::XS);
+			
+			if (PropertyCheckbox("Enable Sky Tint", config.EnableSkyColorTint, "Tint shadows with sky/environment color")) {
+				configChanged = true;
+			}
+			
+			if (config.EnableSkyColorTint) {
+				if (PropertySlider("Tint Strength", config.SkyTintStrength, 0.0f, 0.5f, "%.2f",
+					"How much sky color bleeds into shadowed areas")) {
+					configChanged = true;
+				}
+			}
+			
+			Separator();
+			
+			// ========================================
+			// SHADOW STATISTICS
+			// ========================================
+			Text("Shadow Statistics");
+			AddSpacing(SpacingValues::XS);
+			
+			auto stats = shadowSystem.GetStatistics();
+			TextColored(Colors::TextSecondary(), "  Maps Rendered: %d", stats.ShadowMapsRendered);
+			TextColored(Colors::TextSecondary(), "  Cascades: %d", stats.CascadesRendered);
+			TextColored(Colors::TextSecondary(), "  Spot Maps: %d", stats.SpotMapsRendered);
+			TextColored(Colors::TextSecondary(), "  Point Faces: %d", stats.PointFacesRendered);
+			TextColored(Colors::TextSecondary(), "  Draw Calls: %d", stats.ShadowDrawCalls);
+			
+			// Apply config changes
+			if (configChanged) {
+				shadowSystem.SetConfig(config);
+			}
+			
+			EndSection();
+		}
+	}
+	
 	void SettingsPanel::DrawPhysics2DSection() {
 		using namespace UI;
 		
 		if (BeginSection("Physics 2D", false)) {
-			if (PropertyCheckbox("Show 2D colliders", m_ShowPhysicsColliders, "Display Box2D colliders in red")) {
+			if (PropertyCheckbox("Show 2D colliders", m_ShowPhysicsColliders, "Display Box2D colliders")) {
 				// Value updated by reference
 			}
 			
@@ -214,7 +416,7 @@ namespace Lunex {
 		using namespace UI;
 		
 		if (BeginSection("Physics 3D", false)) {
-			if (PropertyCheckbox("Show 3D colliders", m_ShowPhysics3DColliders, "Display Bullet3D colliders in green")) {
+			if (PropertyCheckbox("Show 3D colliders", m_ShowPhysics3DColliders, "Display Bullet3D colliders")) {
 				// Value updated by reference
 			}
 			

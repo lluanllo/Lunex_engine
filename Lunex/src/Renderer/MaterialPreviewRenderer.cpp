@@ -1,6 +1,7 @@
 #include "stpch.h"
 #include "MaterialPreviewRenderer.h"
 #include "Renderer/Renderer3D.h"
+#include "Renderer/Shadows/ShadowSystem.h"
 #include "RHI/RHI.h"
 #include "Resources/Render/MaterialInstance.h"
 #include "Log/Log.h"
@@ -235,17 +236,23 @@ namespace Lunex {
 		}
 
 		// ============================================================
-		// SAVE CURRENT OpenGL STATE before modifying anything
+		// SAVE CURRENT STATE before modifying anything
 		// This prevents the preview from corrupting the main scene rendering
 		// ============================================================
 		
 		// Save current viewport
-		GLint previousViewport[4];
-		glGetIntegerv(GL_VIEWPORT, previousViewport);
+		int previousViewport[4];
+		cmdList->GetViewport(previousViewport);
 		
 		// Save current framebuffer binding
-		GLint previousFramebuffer = 0;
-		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
+		uint64_t previousFramebuffer = cmdList->GetBoundFramebuffer();
+
+		// ============================================================
+		// TEMPORARILY DISABLE SHADOW SYSTEM
+		// ============================================================
+		auto& shadowSystem = ShadowSystem::Get();
+		bool previousShadowEnabled = shadowSystem.IsEnabled();
+		shadowSystem.SetEnabled(false);
 
 		// ============================================================
 		// RENDER PREVIEW TO ISOLATED FRAMEBUFFER
@@ -255,7 +262,7 @@ namespace Lunex {
 		m_Framebuffer->Bind();
 
 		// Set viewport to match our framebuffer size
-		glViewport(0, 0, m_Width, m_Height);
+		cmdList->SetViewport(0.0f, 0.0f, static_cast<float>(m_Width), static_cast<float>(m_Height));
 
 		// Clear with background color
 		cmdList->SetClearColor(m_BackgroundColor);
@@ -266,6 +273,9 @@ namespace Lunex {
 
 		// Begin scene with our isolated preview camera
 		Renderer3D::BeginScene(m_Camera);
+
+		// Disable IBL to prevent main scene's environment map from contaminating the preview
+		Renderer3D::UnbindEnvironment();
 
 		// Update lights from preview scene (isolated)
 		Renderer3D::UpdateLights(m_PreviewScene.get());
@@ -285,8 +295,9 @@ namespace Lunex {
 			
 			// Restore state even on error
 			m_Framebuffer->Unbind();
-			glBindFramebuffer(GL_FRAMEBUFFER, previousFramebuffer);
-			glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
+			cmdList->BindFramebufferByHandle(previousFramebuffer);
+			cmdList->SetViewport(static_cast<float>(previousViewport[0]), static_cast<float>(previousViewport[1]),
+								 static_cast<float>(previousViewport[2]), static_cast<float>(previousViewport[3]));
 			return;
 		}
 
@@ -313,15 +324,21 @@ namespace Lunex {
 		m_Framebuffer->Unbind();
 
 		// ============================================================
-		// RESTORE PREVIOUS OpenGL STATE
-		// This is CRITICAL to prevent corrupting main scene gizmos/frustums
+		// RESTORE PREVIOUS STATE
 		// ============================================================
 		
-		// Restore previous framebuffer (usually the main scene framebuffer or default)
-		glBindFramebuffer(GL_FRAMEBUFFER, previousFramebuffer);
+		// Restore previous framebuffer
+		cmdList->BindFramebufferByHandle(previousFramebuffer);
 		
 		// Restore previous viewport
-		glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
+		cmdList->SetViewport(static_cast<float>(previousViewport[0]), static_cast<float>(previousViewport[1]),
+							 static_cast<float>(previousViewport[2]), static_cast<float>(previousViewport[3]));
+
+		// ============================================================
+		// RESTORE SHADOW SETTINGS
+		// ============================================================
+		
+		shadowSystem.SetEnabled(previousShadowEnabled);
 	}
 
 	// ========== THUMBNAIL DISK CACHING ==========

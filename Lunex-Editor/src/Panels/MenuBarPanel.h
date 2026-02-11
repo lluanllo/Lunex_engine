@@ -1,6 +1,6 @@
 /**
  * @file MenuBarPanel.h
- * @brief Menu Bar Panel - Main application menu bar
+ * @brief Menu Bar Panel - Main application menu
  * 
  * Features:
  * - File menu (Project & Scene operations)
@@ -44,6 +44,7 @@ namespace Lunex {
 		void SetOnExitCallback(const std::function<void()>& callback) { m_OnExit = callback; }
 		void SetOnOpenInputSettingsCallback(const std::function<void()>& callback) { m_OnOpenInputSettings = callback; }
 		void SetOnOpenJobSystemPanelCallback(const std::function<void()>& callback) { m_OnOpenJobSystemPanel = callback; }
+		void SetOnOpenOutlinePreferencesCallback(const std::function<void()>& callback) { m_OnOpenOutlinePreferences = callback; }
 		
 		// Display info
 		void SetProjectName(const std::string& name) { m_ProjectName = name; }
@@ -76,6 +77,7 @@ namespace Lunex {
 		std::function<void()> m_OnExit;
 		std::function<void()> m_OnOpenInputSettings;
 		std::function<void()> m_OnOpenJobSystemPanel;
+		std::function<void()> m_OnOpenOutlinePreferences;
 		
 		// Display info
 		std::string m_ProjectName = "No Project";

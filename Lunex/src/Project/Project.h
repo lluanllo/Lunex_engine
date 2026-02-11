@@ -4,6 +4,7 @@
 #include <string>
 #include <filesystem>
 #include <vector>
+#include <glm/glm.hpp>
 
 namespace Lunex {
 	
@@ -14,6 +15,23 @@ namespace Lunex {
 		int KeyCode = 0;
 		int Modifiers = 0;
 		std::string ActionName;
+	};
+	
+	/**
+	 * OutlinePreferencesConfig - Stores outline & collider visual settings
+	 */
+	struct OutlinePreferencesConfig {
+		// Selection Outline
+		glm::vec4 OutlineColor       = glm::vec4(1.0f, 0.5f, 0.0f, 1.0f);
+		int       OutlineKernelSize  = 3;
+		float     OutlineHardness    = 0.75f;
+		float     OutlineInsideAlpha = 0.0f;
+		bool      ShowBehindObjects  = true;
+		
+		// Collider Appearance
+		glm::vec4 Collider2DColor    = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+		glm::vec4 Collider3DColor    = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+		float     ColliderLineWidth  = 4.0f;
 	};
 	
 	struct ProjectConfig {
@@ -28,8 +46,11 @@ namespace Lunex {
 		uint32_t Height = 720;
 		bool VSync = true;
 		
-		// ? NEW: Input Bindings
+		// ? Input Bindings
 		std::vector<InputBindingEntry> InputBindings;
+		
+		// ? Outline & Collider Preferences
+		OutlinePreferencesConfig OutlinePreferences;
 		
 		// Serialization version
 		uint32_t Version = 1;

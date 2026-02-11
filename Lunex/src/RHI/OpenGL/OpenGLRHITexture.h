@@ -326,5 +326,40 @@ namespace RHI {
 		GLuint m_SamplerID = 0;
 	};
 
+	// ============================================================================
+	// OPENGL RHI TEXTURE 2D ARRAY
+	// ============================================================================
+	
+	class OpenGLRHITexture2DArray : public RHITexture2DArray {
+	public:
+		OpenGLRHITexture2DArray(const TextureDesc& desc);
+		virtual ~OpenGLRHITexture2DArray();
+		
+		// RHIResource
+		RHIHandle GetNativeHandle() const override { return static_cast<RHIHandle>(m_TextureID); }
+		bool IsValid() const override { return m_TextureID != 0; }
+		
+		// Data operations
+		void SetData(const void* data, uint64_t size, const TextureRegion& region) override;
+		void GetData(void* data, uint64_t size, const TextureRegion& region) const override;
+		void GenerateMipmaps() override;
+		void SetLayerData(uint32_t layer, const void* data, uint64_t size, uint32_t mipLevel = 0) override;
+		
+		// Binding
+		void Bind(uint32_t slot = 0) const override;
+		void Unbind(uint32_t slot = 0) const override;
+		void BindAsImage(uint32_t slot, BufferAccess access, uint32_t mipLevel = 0) const override;
+		
+		// OpenGL specific
+		GLuint GetTextureID() const { return m_TextureID; }
+		
+	protected:
+		void OnDebugNameChanged() override;
+		
+	private:
+		GLuint m_TextureID = 0;
+		GLenum m_InternalFormat = GL_RGBA8;
+	};
+
 } // namespace RHI
 } // namespace Lunex

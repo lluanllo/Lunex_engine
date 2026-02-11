@@ -98,6 +98,12 @@ namespace RHI {
 		glGetIntegerv(GL_VIEWPORT, viewport);
 	}
 	
+	uint64_t OpenGLRHICommandList::GetBoundFramebuffer() const {
+		GLint fbo = 0;
+		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
+		return static_cast<uint64_t>(fbo);
+	}
+	
 	void OpenGLRHICommandList::SetDrawBuffers(const std::vector<uint32_t>& attachments) {
 		if (attachments.empty()) {
 			glDrawBuffer(GL_NONE);
@@ -112,6 +118,60 @@ namespace RHI {
 		}
 		
 		glDrawBuffers(static_cast<GLsizei>(glAttachments.size()), glAttachments.data());
+	}
+	
+	void OpenGLRHICommandList::SetColorMask(bool r, bool g, bool b, bool a) {
+		glColorMask(r ? GL_TRUE : GL_FALSE, g ? GL_TRUE : GL_FALSE,
+		            b ? GL_TRUE : GL_FALSE, a ? GL_TRUE : GL_FALSE);
+	}
+	
+	void OpenGLRHICommandList::SetDepthTestEnabled(bool enabled) {
+		if (enabled) {
+			glEnable(GL_DEPTH_TEST);
+		} else {
+			glDisable(GL_DEPTH_TEST);
+		}
+	}
+	
+	void OpenGLRHICommandList::SetPolygonOffset(bool enabled, float factor, float units) {
+		if (enabled) {
+			glEnable(GL_POLYGON_OFFSET_FILL);
+			glPolygonOffset(factor, units);
+		} else {
+			glDisable(GL_POLYGON_OFFSET_FILL);
+		}
+	}
+	
+	void OpenGLRHICommandList::SetCullMode(CullMode mode) {
+		if (mode == CullMode::None) {
+			glDisable(GL_CULL_FACE);
+		} else {
+			glEnable(GL_CULL_FACE);
+			glCullFace(mode == CullMode::Front ? GL_FRONT : GL_BACK);
+		}
+	}
+	
+	void OpenGLRHICommandList::ClearDepthOnly(float depth) {
+		glClearDepthf(depth);
+		glClear(GL_DEPTH_BUFFER_BIT);
+	}
+	
+	void OpenGLRHICommandList::BindFramebufferByHandle(uint64_t handle) {
+		glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(handle));
+	}
+	
+	void OpenGLRHICommandList::SetNoColorOutput() {
+		glDrawBuffer(GL_NONE);
+		glReadBuffer(GL_NONE);
+	}
+	
+	void OpenGLRHICommandList::AttachDepthTextureLayer(uint64_t framebufferHandle, uint64_t textureHandle, uint32_t layer) {
+		glNamedFramebufferTextureLayer(
+			static_cast<GLuint>(framebufferHandle),
+			GL_DEPTH_ATTACHMENT,
+			static_cast<GLuint>(textureHandle),
+			0, layer
+		);
 	}
 	
 	void OpenGLRHICommandList::BeginRenderPass(const RenderPassBeginInfo& info) {
