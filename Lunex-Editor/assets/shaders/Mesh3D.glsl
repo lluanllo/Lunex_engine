@@ -494,11 +494,17 @@ vec3 GetLightIntensity(vec3 color, float intensity, float distance, float radius
 
 // ============ MAIN LIGHTING CALCULATION (WITH SHADOWS) ============
 
+// Output: directional shadow factor for IBL modulation
+float g_DirectionalShadowFactor = 1.0;
+
 vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, float roughness, vec3 fragPos, float ao) {
 	vec3 Lo = vec3(0.0);
 	float NdotV = max(dot(N, V), EPSILON);
 	
 	int lightCount = min(u_NumLights, MAX_LIGHTS);
+	
+	// Reset directional shadow factor
+	g_DirectionalShadowFactor = 1.0;
 	
 	// Track shadow index per type for matching
 	int nextDirShadow = 0;
@@ -535,7 +541,7 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 		float attenuation = 1.0;
 		float lightRadius = 0.1;
 		
-		// Shadow factor — default 1.0 (fully lit, no shadow)
+		// Shadow factor - default 1.0 (fully lit, no shadow)
 		float shadowFactor = 1.0;
 		bool castsShadows = light.Params.z > 0.5;
 		
@@ -550,6 +556,8 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 			if (castsShadows && dirCounter < numDirShadows) {
 				shadowFactor = CalculateDirectionalShadow(dirShadowIndices[dirCounter], fragPos, N);
 				dirCounter++;
+				// Store for IBL ambient modulation (first directional shadow wins)
+				g_DirectionalShadowFactor = min(g_DirectionalShadowFactor, shadowFactor);
 			}
 			
 		} else if (lightType == 1) {
@@ -810,6 +818,17 @@ void main() {
 	}
 	
 	// ========== FINAL COMPOSITION ==========
+	
+	// Apply directional shadow to IBL ambient when a directional light is present.
+	// This simulates the dominant sun light in the HDRI casting shadows:
+	// - In shadow: only receive diffuse sky light (reduced ambient)
+	// - In light: full IBL ambient
+	// We blend between full ambient and reduced ambient based on directional shadow.
+	if (u_NumShadowLights > 0 && g_DirectionalShadowFactor < 1.0) {
+		// Keep some ambient even in full shadow (indirect sky light remains)
+		float ambientShadow = mix(0.3, 1.0, g_DirectionalShadowFactor);
+		ambient *= ambientShadow;
+	}
 	
 	vec3 color = ambient + directLighting + emission + emissiveContribution;
 	
