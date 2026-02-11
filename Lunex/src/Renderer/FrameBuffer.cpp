@@ -107,6 +107,13 @@ namespace Lunex {
 		return 0;
 	}
 	
+	uint32_t Framebuffer::GetRendererID() const {
+		if (m_RHIFramebuffer) {
+			return static_cast<uint32_t>(m_RHIFramebuffer->GetNativeHandle());
+		}
+		return 0;
+	}
+	
 	Ref<Framebuffer> Framebuffer::Create(const FramebufferSpecification& spec) {
 		return CreateRef<Framebuffer>(spec);
 	}

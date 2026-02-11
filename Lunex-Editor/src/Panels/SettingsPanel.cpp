@@ -404,7 +404,7 @@ namespace Lunex {
 		using namespace UI;
 		
 		if (BeginSection("Physics 2D", false)) {
-			if (PropertyCheckbox("Show 2D colliders", m_ShowPhysicsColliders, "Display Box2D colliders in red")) {
+			if (PropertyCheckbox("Show 2D colliders", m_ShowPhysicsColliders, "Display Box2D colliders")) {
 				// Value updated by reference
 			}
 			
@@ -416,7 +416,7 @@ namespace Lunex {
 		using namespace UI;
 		
 		if (BeginSection("Physics 3D", false)) {
-			if (PropertyCheckbox("Show 3D colliders", m_ShowPhysics3DColliders, "Display Bullet3D colliders in green")) {
+			if (PropertyCheckbox("Show 3D colliders", m_ShowPhysics3DColliders, "Display Bullet3D colliders")) {
 				// Value updated by reference
 			}
 			

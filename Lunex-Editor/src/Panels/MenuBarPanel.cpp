@@ -209,6 +209,10 @@ namespace Lunex {
 				if (m_OnOpenInputSettings) m_OnOpenInputSettings();
 			}
 			
+			if (MenuItem("Outline & Colliders")) {
+				if (m_OnOpenOutlinePreferences) m_OnOpenOutlinePreferences();
+			}
+			
 			if (MenuItem("JobSystem Monitor")) {
 				if (m_OnOpenJobSystemPanel) m_OnOpenJobSystemPanel();
 			}

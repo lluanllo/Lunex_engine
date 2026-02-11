@@ -65,6 +65,11 @@ namespace Lunex {
 		
 		uint32_t GetColorAttachmentRendererID(uint32_t index = 0) const;
 		
+		/**
+		 * @brief Get the native framebuffer handle (e.g., OpenGL FBO ID)
+		 */
+		uint32_t GetRendererID() const;
+		
 		const FramebufferSpecification& GetSpecification() const { return m_Specification; }
 		
 		RHI::RHIFramebuffer* GetRHIFramebuffer() const { return m_RHIFramebuffer.get(); }

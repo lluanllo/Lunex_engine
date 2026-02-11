@@ -725,6 +725,147 @@ namespace Lunex {
 		}
 	}
 	
+	// ========================================
+	// 3D WIREFRAME SHAPES (Collider Visualization)
+	// ========================================
+
+	void Renderer2D::DrawWireBox(const glm::mat4& transform, const glm::vec4& color, int entityID) {
+		LNX_PROFILE_FUNCTION();
+
+		// 8 corners of a unit cube [-0.5, 0.5]
+		glm::vec3 corners[8];
+		int idx = 0;
+		for (int z = 0; z <= 1; z++) {
+			for (int y = 0; y <= 1; y++) {
+				for (int x = 0; x <= 1; x++) {
+					glm::vec4 local(x - 0.5f, y - 0.5f, z - 0.5f, 1.0f);
+					corners[idx++] = glm::vec3(transform * local);
+				}
+			}
+		}
+
+		// 12 edges of the cube
+		// Bottom face (z=0): 0-1, 1-3, 3-2, 2-0
+		DrawLine(corners[0], corners[1], color, entityID);
+		DrawLine(corners[1], corners[3], color, entityID);
+		DrawLine(corners[3], corners[2], color, entityID);
+		DrawLine(corners[2], corners[0], color, entityID);
+
+		// Top face (z=1): 4-5, 5-7, 7-6, 6-4
+		DrawLine(corners[4], corners[5], color, entityID);
+		DrawLine(corners[5], corners[7], color, entityID);
+		DrawLine(corners[7], corners[6], color, entityID);
+		DrawLine(corners[6], corners[4], color, entityID);
+
+		// Vertical edges: 0-4, 1-5, 2-6, 3-7
+		DrawLine(corners[0], corners[4], color, entityID);
+		DrawLine(corners[1], corners[5], color, entityID);
+		DrawLine(corners[2], corners[6], color, entityID);
+		DrawLine(corners[3], corners[7], color, entityID);
+	}
+
+	void Renderer2D::DrawWireSphere(const glm::mat4& transform, const glm::vec4& color, int segments, int entityID) {
+		LNX_PROFILE_FUNCTION();
+
+		const float angleStep = glm::two_pi<float>() / static_cast<float>(segments);
+
+		// XY plane circle
+		for (int i = 0; i < segments; i++) {
+			float a1 = i * angleStep;
+			float a2 = (i + 1) * angleStep;
+			glm::vec3 p1 = glm::vec3(transform * glm::vec4(glm::cos(a1) * 0.5f, glm::sin(a1) * 0.5f, 0.0f, 1.0f));
+			glm::vec3 p2 = glm::vec3(transform * glm::vec4(glm::cos(a2) * 0.5f, glm::sin(a2) * 0.5f, 0.0f, 1.0f));
+			DrawLine(p1, p2, color, entityID);
+		}
+
+		// XZ plane circle
+		for (int i = 0; i < segments; i++) {
+			float a1 = i * angleStep;
+			float a2 = (i + 1) * angleStep;
+			glm::vec3 p1 = glm::vec3(transform * glm::vec4(glm::cos(a1) * 0.5f, 0.0f, glm::sin(a1) * 0.5f, 1.0f));
+			glm::vec3 p2 = glm::vec3(transform * glm::vec4(glm::cos(a2) * 0.5f, 0.0f, glm::sin(a2) * 0.5f, 1.0f));
+			DrawLine(p1, p2, color, entityID);
+		}
+
+		// YZ plane circle
+		for (int i = 0; i < segments; i++) {
+			float a1 = i * angleStep;
+			float a2 = (i + 1) * angleStep;
+			glm::vec3 p1 = glm::vec3(transform * glm::vec4(0.0f, glm::cos(a1) * 0.5f, glm::sin(a1) * 0.5f, 1.0f));
+			glm::vec3 p2 = glm::vec3(transform * glm::vec4(0.0f, glm::cos(a2) * 0.5f, glm::sin(a2) * 0.5f, 1.0f));
+			DrawLine(p1, p2, color, entityID);
+		}
+	}
+
+	void Renderer2D::DrawWireCapsule(const glm::mat4& transform, float radius, float height, const glm::vec4& color, int segments, int entityID) {
+		LNX_PROFILE_FUNCTION();
+
+		// Capsule = cylinder body + two hemisphere caps
+		// Height is total height (including caps), body half-height:
+		float halfBody = (height * 0.5f) - radius;
+		if (halfBody < 0.0f) halfBody = 0.0f;
+
+		const float angleStep = glm::two_pi<float>() / static_cast<float>(segments);
+
+		// Top and bottom ring of the cylinder body
+		for (int i = 0; i < segments; i++) {
+			float a1 = i * angleStep;
+			float a2 = (i + 1) * angleStep;
+
+			// Top ring
+			glm::vec3 t1 = glm::vec3(transform * glm::vec4(glm::cos(a1) * radius, halfBody, glm::sin(a1) * radius, 1.0f));
+			glm::vec3 t2 = glm::vec3(transform * glm::vec4(glm::cos(a2) * radius, halfBody, glm::sin(a2) * radius, 1.0f));
+			DrawLine(t1, t2, color, entityID);
+
+			// Bottom ring
+			glm::vec3 b1 = glm::vec3(transform * glm::vec4(glm::cos(a1) * radius, -halfBody, glm::sin(a1) * radius, 1.0f));
+			glm::vec3 b2 = glm::vec3(transform * glm::vec4(glm::cos(a2) * radius, -halfBody, glm::sin(a2) * radius, 1.0f));
+			DrawLine(b1, b2, color, entityID);
+		}
+
+		// 4 vertical lines connecting rings
+		for (int i = 0; i < 4; i++) {
+			float a = i * glm::half_pi<float>();
+			glm::vec3 top = glm::vec3(transform * glm::vec4(glm::cos(a) * radius, halfBody, glm::sin(a) * radius, 1.0f));
+			glm::vec3 bot = glm::vec3(transform * glm::vec4(glm::cos(a) * radius, -halfBody, glm::sin(a) * radius, 1.0f));
+			DrawLine(top, bot, color, entityID);
+		}
+
+		// Top hemisphere (2 half-circles: XY and ZY)
+		int halfSegments = segments / 2;
+		float halfAngleStep = glm::pi<float>() / static_cast<float>(halfSegments);
+		for (int i = 0; i < halfSegments; i++) {
+			float a1 = i * halfAngleStep;
+			float a2 = (i + 1) * halfAngleStep;
+
+			// XY arc (top half)
+			glm::vec3 p1 = glm::vec3(transform * glm::vec4(glm::sin(a1) * radius, halfBody + glm::cos(a1) * radius, 0.0f, 1.0f));
+			glm::vec3 p2 = glm::vec3(transform * glm::vec4(glm::sin(a2) * radius, halfBody + glm::cos(a2) * radius, 0.0f, 1.0f));
+			DrawLine(p1, p2, color, entityID);
+
+			// ZY arc (top half)
+			p1 = glm::vec3(transform * glm::vec4(0.0f, halfBody + glm::cos(a1) * radius, glm::sin(a1) * radius, 1.0f));
+			p2 = glm::vec3(transform * glm::vec4(0.0f, halfBody + glm::cos(a2) * radius, glm::sin(a2) * radius, 1.0f));
+			DrawLine(p1, p2, color, entityID);
+		}
+
+		// Bottom hemisphere (2 half-circles: XY and ZY)
+		for (int i = 0; i < halfSegments; i++) {
+			float a1 = glm::pi<float>() + i * halfAngleStep;
+			float a2 = glm::pi<float>() + (i + 1) * halfAngleStep;
+
+			// XY arc (bottom half)
+			glm::vec3 p1 = glm::vec3(transform * glm::vec4(glm::sin(a1) * radius, -halfBody + glm::cos(a1) * radius, 0.0f, 1.0f));
+			glm::vec3 p2 = glm::vec3(transform * glm::vec4(glm::sin(a2) * radius, -halfBody + glm::cos(a2) * radius, 0.0f, 1.0f));
+			DrawLine(p1, p2, color, entityID);
+
+			// ZY arc (bottom half)
+			p1 = glm::vec3(transform * glm::vec4(0.0f, -halfBody + glm::cos(a1) * radius, glm::sin(a1) * radius, 1.0f));
+			p2 = glm::vec3(transform * glm::vec4(0.0f, -halfBody + glm::cos(a2) * radius, glm::sin(a2) * radius, 1.0f));
+			DrawLine(p1, p2, color, entityID);
+		}
+	}
+
 	float Renderer2D::GetLineWidth() {
 		return s_Data.LineWidth;
 	}
