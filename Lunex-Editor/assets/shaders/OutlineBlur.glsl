@@ -38,7 +38,7 @@ void main() {
 
 	for (int i = 0; i < samples; i++) {
 		float offset = float(i - u_KernelSize);
-		vec2 uv = v_TexCoord + u_Direction * offset * u_TexelSize;
+		vec2 uv = clamp(v_TexCoord + u_Direction * offset * u_TexelSize, vec2(0.0), vec2(1.0));
 		sum += texture(u_InputTexture, uv).r;
 	}
 

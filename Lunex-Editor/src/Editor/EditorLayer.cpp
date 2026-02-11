@@ -1087,31 +1087,17 @@ namespace Lunex {
 				);
 			}
 
-			// Collider outlines
-			bool show2D = m_SettingsPanel.GetShowPhysicsColliders();
-			bool show3D = m_SettingsPanel.GetShowPhysics3DColliders();
-			if (show2D || show3D) {
-				outlineRenderer.RenderColliderOutlines(
-					m_ActiveScene.get(),
-					viewProjection,
-					sceneFBOHandle,
-					show3D, show2D,
-					glm::vec4(0.0f, 1.0f, 0.0f, 1.0f),  // Green for 3D
-					glm::vec4(1.0f, 0.0f, 0.0f, 1.0f)    // Red for 2D
-				);
-			}
-
 			// Re-bind the main scene FBO after outline passes
 			m_Framebuffer->Bind();
 		}
 
 		// ========================================
-		// LEGACY 2D OVERLAY (Camera frustum, light gizmos, etc.)
-		// These still use Renderer2D line drawing for non-outlined gizmos.
+		// COLLIDER VISUALIZATION (Renderer2D wireframe lines)
+		// Uses line drawing for clean independent outlines per entity.
 		// ========================================
 
-		// Draw 2D Physics Colliders (Red wireframe lines — fallback if OutlineRenderer not available)
-		if (!outlineRenderer.IsInitialized() && m_SettingsPanel.GetShowPhysicsColliders()) {
+		// Draw 2D Physics Colliders (Red wireframe lines)
+		if (m_SettingsPanel.GetShowPhysicsColliders()) {
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, BoxCollider2DComponent>();
 				for (auto entityID : view) {
@@ -1143,7 +1129,8 @@ namespace Lunex {
 			}
 		}
 
-		if (!outlineRenderer.IsInitialized() && m_SettingsPanel.GetShowPhysics3DColliders()) {
+		// Draw 3D Physics Colliders (Green wireframe lines)
+		if (m_SettingsPanel.GetShowPhysics3DColliders()) {
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, BoxCollider3DComponent>();
 				for (auto entityID : view) {

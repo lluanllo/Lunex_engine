@@ -53,20 +53,6 @@ namespace Lunex {
 		);
 
 		/**
-		 * Render collider debug shapes as outlined silhouettes.
-		 * Performs a complete silhouette?blur?composite cycle onto targetFBOHandle.
-		 */
-		void RenderColliderOutlines(
-			Scene* scene,
-			const glm::mat4& viewProjection,
-			uint64_t targetFBOHandle,
-			bool show3D,
-			bool show2D,
-			const glm::vec4& collider3DColor = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f),
-			const glm::vec4& collider2DColor = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f)
-		);
-
-		/**
 		 * Execute the blur + composite passes and blend onto targetFBOHandle.
 		 * @deprecated Each render pass now composites internally. Kept for compatibility.
 		 */
@@ -98,7 +84,6 @@ namespace Lunex {
 		void BeginSilhouettePass();
 		void EndSilhouettePass();
 		void DrawEntitySilhouette(Scene* scene, Entity entity, const glm::mat4& viewProjection, const glm::vec4& color);
-		void DrawColliderSilhouette(const glm::mat4& viewProjection, const glm::mat4& model, const glm::vec4& color);
 
 		void BlurPass();
 		void CompositePass(uint64_t targetFBOHandle, const glm::vec4& outlineColor);
@@ -106,6 +91,7 @@ namespace Lunex {
 
 		void CreateResources();
 		void CreateDebugMeshes();
+		void SetFBOTextureClampToEdge(Ref<RHI::RHIFramebuffer>& fbo);
 
 	private:
 		Config m_Config;
