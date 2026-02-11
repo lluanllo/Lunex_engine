@@ -29,6 +29,9 @@
 // ✅ Skybox Renderer for camera preview
 #include "Renderer/SkyboxRenderer.h"
 
+// ✅ Outline Renderer for selection outlines and collider visualization
+#include "Renderer/Outline/OutlineRenderer.h"
+
 #include "RHI/RHI.h"
 
 namespace Lunex {
@@ -263,6 +266,12 @@ namespace Lunex {
 
 		Renderer2D::SetLineWidth(4.0f);
 
+		// ========================================
+		// INITIALIZE OUTLINE RENDERER
+		// ========================================
+		OutlineRenderer::Get().Initialize(1280, 720);
+		LNX_LOG_INFO("✅ OutlineRenderer initialized");
+
 		// Register custom console commands
 		m_ConsolePanel.RegisterCommand("load_scene", "Load a scene file", "load_scene <path>",
 			[this](const std::vector<std::string>& args) {
@@ -406,6 +415,11 @@ namespace Lunex {
 
 	void EditorLayer::OnDetach() {
 		LNX_PROFILE_FUNCTION();
+		
+		// ========================================
+		// SHUTDOWN OUTLINE RENDERER
+		// ========================================
+		OutlineRenderer::Get().Shutdown();
 		
 		// ========================================
 		// SHUTDOWN JOB SYSTEM
@@ -722,6 +736,7 @@ namespace Lunex {
 
 			m_EditorCamera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
 			m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
+			OutlineRenderer::Get().OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 		}
 
 		// ========================================
@@ -1035,19 +1050,68 @@ namespace Lunex {
 	}
 
 	void EditorLayer::OnOverlayRender() {
+		// ========================================
+		// DETERMINE CAMERA VIEW-PROJECTION
+		// ========================================
+		glm::mat4 viewProjection;
 		if (m_SceneState == SceneState::Play) {
 			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
 			if (!camera)
 				return;
-			Renderer2D::BeginScene(camera.GetComponent<CameraComponent>().Camera, camera.GetComponent<TransformComponent>().GetTransform());
+			auto& cameraComp = camera.GetComponent<CameraComponent>();
+			auto& transformComp = camera.GetComponent<TransformComponent>();
+			viewProjection = cameraComp.Camera.GetProjection() * glm::inverse(transformComp.GetTransform());
+			Renderer2D::BeginScene(cameraComp.Camera, transformComp.GetTransform());
 		}
 		else {
+			viewProjection = m_EditorCamera.GetViewProjection();
 			Renderer2D::BeginScene(m_EditorCamera);
 		}
 
-		// Draw 2D Physics Colliders (Red)
-		if (m_SettingsPanel.GetShowPhysicsColliders()) {
-			// Box Colliders 2D
+		auto& outlineRenderer = OutlineRenderer::Get();
+
+		// ========================================
+		// SELECTION OUTLINE (OutlineRenderer - blurred post-process)
+		// ========================================
+		if (outlineRenderer.IsInitialized()) {
+			const auto& selectedEntities = m_SceneHierarchyPanel.GetSelectedEntities();
+			if (!selectedEntities.empty()) {
+				outlineRenderer.RenderSelectionOutline(
+					m_ActiveScene.get(),
+					selectedEntities,
+					viewProjection,
+					glm::vec4(1.0f, 0.5f, 0.0f, 1.0f)  // Orange outline
+				);
+			}
+
+			// Collider outlines
+			bool show2D = m_SettingsPanel.GetShowPhysicsColliders();
+			bool show3D = m_SettingsPanel.GetShowPhysics3DColliders();
+			if (show2D || show3D) {
+				outlineRenderer.RenderColliderOutlines(
+					m_ActiveScene.get(),
+					viewProjection,
+					show3D, show2D,
+					glm::vec4(0.0f, 1.0f, 0.0f, 1.0f),  // Green for 3D
+					glm::vec4(1.0f, 0.0f, 0.0f, 1.0f)    // Red for 2D
+				);
+			}
+
+			// Composite onto the main scene FBO
+			uint64_t sceneFBOHandle = static_cast<uint64_t>(m_Framebuffer->GetRendererID());
+			outlineRenderer.Composite(sceneFBOHandle);
+
+			// Re-bind the main scene FBO after composite
+			m_Framebuffer->Bind();
+		}
+
+		// ========================================
+		// LEGACY 2D OVERLAY (Camera frustum, light gizmos, etc.)
+		// These still use Renderer2D line drawing for non-outlined gizmos.
+		// ========================================
+
+		// Draw 2D Physics Colliders (Red wireframe lines — fallback if OutlineRenderer not available)
+		if (!outlineRenderer.IsInitialized() && m_SettingsPanel.GetShowPhysicsColliders()) {
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, BoxCollider2DComponent>();
 				for (auto entityID : view) {
@@ -1060,11 +1124,9 @@ namespace Lunex {
 						* glm::rotate(glm::mat4(1.0f), tc.Rotation.z, glm::vec3(0.0f, 0.0f, 1.0f))
 						* glm::scale(glm::mat4(1.0f), scale);
 
-					Renderer2D::DrawRect(transform, glm::vec4(1, 0, 0, 1)); // Red for 2D
+					Renderer2D::DrawRect(transform, glm::vec4(1, 0, 0, 1));
 				}
 			}
-
-			// Circle Colliders 2D
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, CircleCollider2DComponent>();
 				for (auto entityID : view) {
@@ -1076,31 +1138,27 @@ namespace Lunex {
 					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
 						* glm::scale(glm::mat4(1.0f), scale);
 
-					Renderer2D::DrawCircle(transform, glm::vec4(1, 0, 0, 1), 0.01f); // Red for 2D
+					Renderer2D::DrawCircle(transform, glm::vec4(1, 0, 0, 1), 0.01f);
 				}
 			}
 		}
 
-		// Draw 3D Physics Colliders (Green)
-		if (m_SettingsPanel.GetShowPhysics3DColliders()) {
-			// Box Colliders 3D
+		if (!outlineRenderer.IsInitialized() && m_SettingsPanel.GetShowPhysics3DColliders()) {
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, BoxCollider3DComponent>();
 				for (auto entityID : view) {
 					auto [tc, bc3d] = view.get<TransformComponent, BoxCollider3DComponent>(entityID);
 
 					glm::vec3 translation = tc.Translation + bc3d.Offset;
-					glm::vec3 scale = tc.Scale * (bc3d.HalfExtents * 2.0f); // HalfExtents → Full size
+					glm::vec3 scale = tc.Scale * (bc3d.HalfExtents * 2.0f);
 
 					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
 						* glm::toMat4(glm::quat(tc.Rotation))
 						* glm::scale(glm::mat4(1.0f), scale);
 
-					Renderer2D::DrawRect(transform, glm::vec4(0, 1, 0, 1)); // Green for 3D
+					Renderer2D::DrawRect(transform, glm::vec4(0, 1, 0, 1));
 				}
 			}
-
-			// Sphere Colliders 3D
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, SphereCollider3DComponent>();
 				for (auto entityID : view) {
@@ -1112,11 +1170,9 @@ namespace Lunex {
 					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
 						* glm::scale(glm::mat4(1.0f), scale);
 
-					Renderer2D::DrawCircle(transform, glm::vec4(0, 1, 0, 1), 0.01f); // Green for 3D
+					Renderer2D::DrawCircle(transform, glm::vec4(0, 1, 0, 1), 0.01f);
 				}
 			}
-
-			// Capsule Colliders 3D (approximated as circle + rects)
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, CapsuleCollider3DComponent>();
 				for (auto entityID : view) {
@@ -1129,16 +1185,17 @@ namespace Lunex {
 						* glm::toMat4(glm::quat(tc.Rotation))
 						* glm::scale(glm::mat4(1.0f), scale);
 
-					// Draw capsule as elongated circle (approximation)
-					Renderer2D::DrawRect(transform, glm::vec4(0, 1, 0, 1)); // Green for 3D
+					Renderer2D::DrawRect(transform, glm::vec4(0, 1, 0, 1));
 				}
 			}
 		}
 
-		// Draw selected entity outline
-		if (Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity()) {
-			const TransformComponent& transform = selectedEntity.GetComponent<TransformComponent>();
-			Renderer2D::DrawRect(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+		// Draw selected entity outline (thin wireframe fallback if OutlineRenderer not available)
+		if (!outlineRenderer.IsInitialized()) {
+			if (Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity()) {
+				const TransformComponent& transform = selectedEntity.GetComponent<TransformComponent>();
+				Renderer2D::DrawRect(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
+			}
 		}
 
 		Renderer2D::EndScene();
