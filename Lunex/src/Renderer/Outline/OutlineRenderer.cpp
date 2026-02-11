@@ -351,18 +351,17 @@ namespace Lunex {
 	}
 
 	// ========================================================================
-	// RENDER SELECTION OUTLINE
+	// RENDER SELECTION OUTLINE (complete cycle: silhouette ? blur ? composite)
 	// ========================================================================
 
 	void OutlineRenderer::RenderSelectionOutline(
 		Scene* scene,
 		const std::set<Entity>& selectedEntities,
 		const glm::mat4& viewProjection,
+		uint64_t targetFBOHandle,
 		const glm::vec4& outlineColor)
 	{
 		if (!m_Initialized || !scene || selectedEntities.empty()) return;
-
-		m_CurrentOutlineColor = outlineColor;
 
 		// Save state
 		auto* cmd = RHI::GetImmediateCommandList();
@@ -370,30 +369,39 @@ namespace Lunex {
 		cmd->GetViewport(prevViewport);
 		uint64_t prevFBO = cmd->GetBoundFramebuffer();
 
+		// 1. Silhouette pass
 		BeginSilhouettePass();
 
 		glm::vec4 white(1.0f);
 		for (const auto& entity : selectedEntities) {
-			// Need to cast away const for Entity methods (they're not const-qualified)
 			Entity e = entity;
 			DrawEntitySilhouette(scene, e, viewProjection, white);
 		}
 
 		EndSilhouettePass();
 
-		// Restore previous FBO
+		// 2. Blur + Composite (only if something was drawn)
+		if (m_SilhouetteHasContent) {
+			BlurPass();
+			CompositePass(targetFBOHandle, outlineColor);
+		}
+
+		m_SilhouetteHasContent = false;
+
+		// Restore previous FBO and viewport
 		cmd->BindFramebufferByHandle(prevFBO);
 		cmd->SetViewport(static_cast<float>(prevViewport[0]), static_cast<float>(prevViewport[1]),
 			static_cast<float>(prevViewport[2]), static_cast<float>(prevViewport[3]));
 	}
 
 	// ========================================================================
-	// RENDER COLLIDER OUTLINES
+	// RENDER COLLIDER OUTLINES (complete cycle: silhouette ? blur ? composite)
 	// ========================================================================
 
 	void OutlineRenderer::RenderColliderOutlines(
 		Scene* scene,
 		const glm::mat4& viewProjection,
+		uint64_t targetFBOHandle,
 		bool show3D,
 		bool show2D,
 		const glm::vec4& collider3DColor,
@@ -407,95 +415,108 @@ namespace Lunex {
 		cmd->GetViewport(prevViewport);
 		uint64_t prevFBO = cmd->GetBoundFramebuffer();
 
-		// If the silhouette pass hasn't been started yet this frame, start it
-		// Otherwise we accumulate into the same silhouette buffer
-		bool needFreshPass = !m_SilhouetteHasContent;
-		if (needFreshPass)
+		// We use one common color for all colliders in a single pass.
+		// If both 3D and 2D are shown, we merge them into one outline pass with a blended color.
+		// For distinct colors per type, we do separate passes.
+
+		auto renderColliderPass = [&](const glm::vec4& outlineColor, auto renderFunc) {
 			BeginSilhouettePass();
-		else {
-			m_SilhouetteFBO->Bind();
-			cmd->SetViewport(0.0f, 0.0f, static_cast<float>(m_Width), static_cast<float>(m_Height));
-			m_SilhouetteShader->Bind();
-		}
+			renderFunc();
+			EndSilhouettePass();
 
-		// 3D Box Colliders
+			if (m_SilhouetteHasContent) {
+				BlurPass();
+				CompositePass(targetFBOHandle, outlineColor);
+			}
+			m_SilhouetteHasContent = false;
+		};
+
+		// 3D colliders pass (green)
 		if (show3D) {
-			auto boxView = scene->GetAllEntitiesWith<TransformComponent, BoxCollider3DComponent>();
-			for (auto entityID : boxView) {
-				auto [tc, bc3d] = boxView.get<TransformComponent, BoxCollider3DComponent>(entityID);
-				glm::vec3 translation = tc.Translation + bc3d.Offset;
-				glm::vec3 scale = tc.Scale * (bc3d.HalfExtents * 2.0f);
-				glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
-					* glm::toMat4(glm::quat(tc.Rotation))
-					* glm::scale(glm::mat4(1.0f), scale);
+			renderColliderPass(collider3DColor, [&]() {
+				glm::vec4 white(1.0f);
 
-				DrawColliderSilhouette(viewProjection, transform, collider3DColor);
-				m_BoxVA->Bind();
-				cmd->DrawIndexed(m_BoxIndexCount);
-			}
+				// Box Colliders
+				auto boxView = scene->GetAllEntitiesWith<TransformComponent, BoxCollider3DComponent>();
+				for (auto entityID : boxView) {
+					auto [tc, bc3d] = boxView.get<TransformComponent, BoxCollider3DComponent>(entityID);
+					glm::vec3 translation = tc.Translation + bc3d.Offset;
+					glm::vec3 scale = tc.Scale * (bc3d.HalfExtents * 2.0f);
+					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
+						* glm::toMat4(glm::quat(tc.Rotation))
+						* glm::scale(glm::mat4(1.0f), scale);
 
-			// 3D Sphere Colliders
-			auto sphereView = scene->GetAllEntitiesWith<TransformComponent, SphereCollider3DComponent>();
-			for (auto entityID : sphereView) {
-				auto [tc, sc3d] = sphereView.get<TransformComponent, SphereCollider3DComponent>(entityID);
-				glm::vec3 translation = tc.Translation + sc3d.Offset;
-				glm::vec3 scale = tc.Scale * glm::vec3(sc3d.Radius * 2.0f);
-				glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
-					* glm::scale(glm::mat4(1.0f), scale);
+					DrawColliderSilhouette(viewProjection, transform, white);
+					m_BoxVA->Bind();
+					cmd->DrawIndexed(m_BoxIndexCount);
+				}
 
-				DrawColliderSilhouette(viewProjection, transform, collider3DColor);
-				m_SphereVA->Bind();
-				cmd->DrawIndexed(m_SphereIndexCount);
-			}
+				// Sphere Colliders
+				auto sphereView = scene->GetAllEntitiesWith<TransformComponent, SphereCollider3DComponent>();
+				for (auto entityID : sphereView) {
+					auto [tc, sc3d] = sphereView.get<TransformComponent, SphereCollider3DComponent>(entityID);
+					glm::vec3 translation = tc.Translation + sc3d.Offset;
+					glm::vec3 scale = tc.Scale * glm::vec3(sc3d.Radius * 2.0f);
+					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
+						* glm::scale(glm::mat4(1.0f), scale);
 
-			// 3D Capsule Colliders (approximate as scaled sphere)
-			auto capsuleView = scene->GetAllEntitiesWith<TransformComponent, CapsuleCollider3DComponent>();
-			for (auto entityID : capsuleView) {
-				auto [tc, cc3d] = capsuleView.get<TransformComponent, CapsuleCollider3DComponent>(entityID);
-				glm::vec3 translation = tc.Translation + cc3d.Offset;
-				glm::vec3 scale = tc.Scale * glm::vec3(cc3d.Radius * 2.0f, cc3d.Height, cc3d.Radius * 2.0f);
-				glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
-					* glm::toMat4(glm::quat(tc.Rotation))
-					* glm::scale(glm::mat4(1.0f), scale);
+					DrawColliderSilhouette(viewProjection, transform, white);
+					m_SphereVA->Bind();
+					cmd->DrawIndexed(m_SphereIndexCount);
+				}
 
-				DrawColliderSilhouette(viewProjection, transform, collider3DColor);
-				m_SphereVA->Bind();
-				cmd->DrawIndexed(m_SphereIndexCount);
-			}
+				// Capsule Colliders (approximate as scaled sphere)
+				auto capsuleView = scene->GetAllEntitiesWith<TransformComponent, CapsuleCollider3DComponent>();
+				for (auto entityID : capsuleView) {
+					auto [tc, cc3d] = capsuleView.get<TransformComponent, CapsuleCollider3DComponent>(entityID);
+					glm::vec3 translation = tc.Translation + cc3d.Offset;
+					glm::vec3 scale = tc.Scale * glm::vec3(cc3d.Radius * 2.0f, cc3d.Height, cc3d.Radius * 2.0f);
+					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
+						* glm::toMat4(glm::quat(tc.Rotation))
+						* glm::scale(glm::mat4(1.0f), scale);
+
+					DrawColliderSilhouette(viewProjection, transform, white);
+					m_SphereVA->Bind();
+					cmd->DrawIndexed(m_SphereIndexCount);
+				}
+			});
 		}
 
-		// 2D Box Colliders
+		// 2D colliders pass (red)
 		if (show2D) {
-			auto box2DView = scene->GetAllEntitiesWith<TransformComponent, BoxCollider2DComponent>();
-			for (auto entityID : box2DView) {
-				auto [tc, bc2d] = box2DView.get<TransformComponent, BoxCollider2DComponent>(entityID);
-				glm::vec3 translation = tc.Translation + glm::vec3(bc2d.Offset, 0.001f);
-				glm::vec3 scale = tc.Scale * glm::vec3(bc2d.Size * 2.0f, 1.0f);
-				glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
-					* glm::rotate(glm::mat4(1.0f), tc.Rotation.z, glm::vec3(0, 0, 1))
-					* glm::scale(glm::mat4(1.0f), scale);
+			renderColliderPass(collider2DColor, [&]() {
+				glm::vec4 white(1.0f);
 
-				DrawColliderSilhouette(viewProjection, transform, collider2DColor);
-				m_BoxVA->Bind();
-				cmd->DrawIndexed(m_BoxIndexCount);
-			}
+				// Box 2D Colliders
+				auto box2DView = scene->GetAllEntitiesWith<TransformComponent, BoxCollider2DComponent>();
+				for (auto entityID : box2DView) {
+					auto [tc, bc2d] = box2DView.get<TransformComponent, BoxCollider2DComponent>(entityID);
+					glm::vec3 translation = tc.Translation + glm::vec3(bc2d.Offset, 0.001f);
+					glm::vec3 scale = tc.Scale * glm::vec3(bc2d.Size * 2.0f, 1.0f);
+					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
+						* glm::rotate(glm::mat4(1.0f), tc.Rotation.z, glm::vec3(0, 0, 1))
+						* glm::scale(glm::mat4(1.0f), scale);
 
-			// 2D Circle Colliders
-			auto circle2DView = scene->GetAllEntitiesWith<TransformComponent, CircleCollider2DComponent>();
-			for (auto entityID : circle2DView) {
-				auto [tc, cc2d] = circle2DView.get<TransformComponent, CircleCollider2DComponent>(entityID);
-				glm::vec3 translation = tc.Translation + glm::vec3(cc2d.Offset, 0.001f);
-				glm::vec3 scale = tc.Scale * glm::vec3(cc2d.Radius * 2.0f);
-				glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
-					* glm::scale(glm::mat4(1.0f), scale);
+					DrawColliderSilhouette(viewProjection, transform, white);
+					m_BoxVA->Bind();
+					cmd->DrawIndexed(m_BoxIndexCount);
+				}
 
-				DrawColliderSilhouette(viewProjection, transform, collider2DColor);
-				m_SphereVA->Bind();
-				cmd->DrawIndexed(m_SphereIndexCount);
-			}
+				// Circle 2D Colliders
+				auto circle2DView = scene->GetAllEntitiesWith<TransformComponent, CircleCollider2DComponent>();
+				for (auto entityID : circle2DView) {
+					auto [tc, cc2d] = circle2DView.get<TransformComponent, CircleCollider2DComponent>(entityID);
+					glm::vec3 translation = tc.Translation + glm::vec3(cc2d.Offset, 0.001f);
+					glm::vec3 scale = tc.Scale * glm::vec3(cc2d.Radius * 2.0f);
+					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
+						* glm::scale(glm::mat4(1.0f), scale);
+
+					DrawColliderSilhouette(viewProjection, transform, white);
+					m_SphereVA->Bind();
+					cmd->DrawIndexed(m_SphereIndexCount);
+				}
+			});
 		}
-
-		EndSilhouettePass();
 
 		// Restore
 		cmd->BindFramebufferByHandle(prevFBO);
@@ -608,24 +629,12 @@ namespace Lunex {
 	}
 
 	// ========================================================================
-	// COMPOSITE (PUBLIC)
+	// COMPOSITE (PUBLIC) - No-op, each pass now composites internally
 	// ========================================================================
 
 	void OutlineRenderer::Composite(uint64_t targetFBOHandle) {
-		if (!m_Initialized || !m_SilhouetteHasContent) return;
-
-		auto* cmd = RHI::GetImmediateCommandList();
-		int prevViewport[4];
-		cmd->GetViewport(prevViewport);
-
-		BlurPass();
-		CompositePass(targetFBOHandle, m_CurrentOutlineColor);
-
-		// Reset for next frame
-		m_SilhouetteHasContent = false;
-
-		cmd->SetViewport(static_cast<float>(prevViewport[0]), static_cast<float>(prevViewport[1]),
-			static_cast<float>(prevViewport[2]), static_cast<float>(prevViewport[3]));
+		// Each RenderXxxOutline call now performs its own complete cycle.
+		// This method is kept for API compatibility but does nothing.
 	}
 
 } // namespace Lunex

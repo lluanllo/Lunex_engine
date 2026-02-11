@@ -1074,12 +1074,15 @@ namespace Lunex {
 		// SELECTION OUTLINE (OutlineRenderer - blurred post-process)
 		// ========================================
 		if (outlineRenderer.IsInitialized()) {
+			uint64_t sceneFBOHandle = static_cast<uint64_t>(m_Framebuffer->GetRendererID());
+
 			const auto& selectedEntities = m_SceneHierarchyPanel.GetSelectedEntities();
 			if (!selectedEntities.empty()) {
 				outlineRenderer.RenderSelectionOutline(
 					m_ActiveScene.get(),
 					selectedEntities,
 					viewProjection,
+					sceneFBOHandle,
 					glm::vec4(1.0f, 0.5f, 0.0f, 1.0f)  // Orange outline
 				);
 			}
@@ -1091,17 +1094,14 @@ namespace Lunex {
 				outlineRenderer.RenderColliderOutlines(
 					m_ActiveScene.get(),
 					viewProjection,
+					sceneFBOHandle,
 					show3D, show2D,
 					glm::vec4(0.0f, 1.0f, 0.0f, 1.0f),  // Green for 3D
 					glm::vec4(1.0f, 0.0f, 0.0f, 1.0f)    // Red for 2D
 				);
 			}
 
-			// Composite onto the main scene FBO
-			uint64_t sceneFBOHandle = static_cast<uint64_t>(m_Framebuffer->GetRendererID());
-			outlineRenderer.Composite(sceneFBOHandle);
-
-			// Re-bind the main scene FBO after composite
+			// Re-bind the main scene FBO after outline passes
 			m_Framebuffer->Bind();
 		}
 

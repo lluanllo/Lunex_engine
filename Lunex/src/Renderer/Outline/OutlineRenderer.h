@@ -42,21 +42,24 @@ namespace Lunex {
 
 		/**
 		 * Render outline for a set of selected entities (meshes + sprites).
-		 * Must be called while the main scene FBO is still bound.
+		 * Performs a complete silhouette?blur?composite cycle onto targetFBOHandle.
 		 */
 		void RenderSelectionOutline(
 			Scene* scene,
 			const std::set<Entity>& selectedEntities,
 			const glm::mat4& viewProjection,
+			uint64_t targetFBOHandle,
 			const glm::vec4& outlineColor = glm::vec4(1.0f, 0.5f, 0.0f, 1.0f)
 		);
 
 		/**
 		 * Render collider debug shapes as outlined silhouettes.
+		 * Performs a complete silhouette?blur?composite cycle onto targetFBOHandle.
 		 */
 		void RenderColliderOutlines(
 			Scene* scene,
 			const glm::mat4& viewProjection,
+			uint64_t targetFBOHandle,
 			bool show3D,
 			bool show2D,
 			const glm::vec4& collider3DColor = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f),
@@ -65,7 +68,7 @@ namespace Lunex {
 
 		/**
 		 * Execute the blur + composite passes and blend onto targetFBOHandle.
-		 * Call this after all RenderXxxOutline() calls.
+		 * @deprecated Each render pass now composites internally. Kept for compatibility.
 		 */
 		void Composite(uint64_t targetFBOHandle);
 
