@@ -201,6 +201,17 @@ namespace Lunex {
 		m_MenuBarPanel.SetOnOpenJobSystemPanelCallback([this]() { m_JobSystemPanel.Toggle(); });
 		m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferencesPanel.Toggle(); });
 
+		// ✅ Outline Preferences autosave: save to project on every change
+		m_OutlinePreferencesPanel.SetOnChangedCallback([this]() {
+			auto project = ProjectManager::GetActiveProject();
+			if (!project) return;
+			auto projectPath = project->GetProjectPath();
+			if (projectPath.empty()) return;
+			
+			m_OutlinePreferencesPanel.SaveToConfig(project->GetConfig().OutlinePreferences);
+			ProjectManager::SaveActive(projectPath);
+		});
+		
 		// ========================================
 		// MATERIAL EDITOR PANEL CALLBACKS
 		// ========================================
@@ -1376,6 +1387,9 @@ namespace Lunex {
 		
 		// Update Console Panel with project directory for terminal
 		m_ConsolePanel.SetProjectDirectory(project->GetProjectDirectory());
+
+		// ✅ Load outline preferences from project
+		m_OutlinePreferencesPanel.LoadFromConfig(project->GetConfig().OutlinePreferences);
 
 		// Load start scene if specified
 		auto& config = project->GetConfig();

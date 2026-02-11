@@ -44,6 +44,22 @@ namespace Lunex {
 		}
 		out << YAML::EndSeq;
 		
+		// ? Serialize Outline Preferences
+		{
+			const auto& op = config.OutlinePreferences;
+			out << YAML::Key << "OutlinePreferences" << YAML::Value;
+			out << YAML::BeginMap;
+			out << YAML::Key << "OutlineColor" << YAML::Value << YAML::Flow << YAML::BeginSeq << op.OutlineColor.r << op.OutlineColor.g << op.OutlineColor.b << op.OutlineColor.a << YAML::EndSeq;
+			out << YAML::Key << "KernelSize" << YAML::Value << op.OutlineKernelSize;
+			out << YAML::Key << "Hardness" << YAML::Value << op.OutlineHardness;
+			out << YAML::Key << "InsideAlpha" << YAML::Value << op.OutlineInsideAlpha;
+			out << YAML::Key << "ShowBehindObjects" << YAML::Value << op.ShowBehindObjects;
+			out << YAML::Key << "Collider2DColor" << YAML::Value << YAML::Flow << YAML::BeginSeq << op.Collider2DColor.r << op.Collider2DColor.g << op.Collider2DColor.b << op.Collider2DColor.a << YAML::EndSeq;
+			out << YAML::Key << "Collider3DColor" << YAML::Value << YAML::Flow << YAML::BeginSeq << op.Collider3DColor.r << op.Collider3DColor.g << op.Collider3DColor.b << op.Collider3DColor.a << YAML::EndSeq;
+			out << YAML::Key << "ColliderLineWidth" << YAML::Value << op.ColliderLineWidth;
+			out << YAML::EndMap;
+		}
+		
 		out << YAML::EndMap;
 		out << YAML::EndMap;
 		
@@ -95,6 +111,37 @@ namespace Lunex {
 				m_Project->m_Config.InputBindings.push_back(entry);
 			}
 			LNX_LOG_INFO("Loaded {0} input bindings from project", m_Project->m_Config.InputBindings.size());
+		}
+		
+		// ? NEW: Deserialize Outline Preferences
+		auto outlineNode = projectNode["OutlinePreferences"];
+		if (outlineNode) {
+			auto& op = m_Project->m_Config.OutlinePreferences;
+			
+			if (outlineNode["OutlineColor"]) {
+				auto c = outlineNode["OutlineColor"];
+				op.OutlineColor = glm::vec4(c[0].as<float>(), c[1].as<float>(), c[2].as<float>(), c[3].as<float>());
+			}
+			if (outlineNode["KernelSize"])
+				op.OutlineKernelSize = outlineNode["KernelSize"].as<int>();
+			if (outlineNode["Hardness"])
+				op.OutlineHardness = outlineNode["Hardness"].as<float>();
+			if (outlineNode["InsideAlpha"])
+				op.OutlineInsideAlpha = outlineNode["InsideAlpha"].as<float>();
+			if (outlineNode["ShowBehindObjects"])
+				op.ShowBehindObjects = outlineNode["ShowBehindObjects"].as<bool>();
+			if (outlineNode["Collider2DColor"]) {
+				auto c = outlineNode["Collider2DColor"];
+				op.Collider2DColor = glm::vec4(c[0].as<float>(), c[1].as<float>(), c[2].as<float>(), c[3].as<float>());
+			}
+			if (outlineNode["Collider3DColor"]) {
+				auto c = outlineNode["Collider3DColor"];
+				op.Collider3DColor = glm::vec4(c[0].as<float>(), c[1].as<float>(), c[2].as<float>(), c[3].as<float>());
+			}
+			if (outlineNode["ColliderLineWidth"])
+				op.ColliderLineWidth = outlineNode["ColliderLineWidth"].as<float>();
+			
+			LNX_LOG_INFO("Loaded outline preferences from project");
 		}
 		
 		LNX_LOG_INFO("Project loaded: {0}", m_Project->m_Config.Name);
