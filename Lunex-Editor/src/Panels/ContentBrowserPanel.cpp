@@ -283,6 +283,20 @@ namespace Lunex {
 			}
 			
 			if (!m_ContextMenuTargetItem.empty()) {
+				ScopedColor popupColors({
+					{ImGuiCol_PopupBg, Color(0.16f, 0.16f, 0.18f, 1.0f)},
+					{ImGuiCol_Border, PanelColors::Border},
+					{ImGuiCol_Header, Color(0.20f, 0.22f, 0.26f, 1.0f)},
+					{ImGuiCol_HeaderHovered, Color(0.26f, 0.50f, 0.85f, 0.55f)},
+					{ImGuiCol_HeaderActive, Color(0.26f, 0.50f, 0.85f, 0.75f)},
+					{ImGuiCol_Text, Color(0.92f, 0.92f, 0.94f, 1.0f)},
+					{ImGuiCol_Separator, PanelColors::Border}
+				});
+				ScopedStyle popupPadding(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+				ScopedStyle popupRounding(ImGuiStyleVar_PopupRounding, 6.0f);
+				ScopedStyle popupItemSpacing(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 6.0f));
+				ScopedStyle popupFramePadding(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
+				
 				if (BeginPopup("ItemContextMenu")) {
 					RenderItemContextMenu(m_ContextMenuTargetItem);
 					EndPopup();
@@ -395,6 +409,20 @@ namespace Lunex {
 
 	void ContentBrowserPanel::RenderContextMenu() {
 		using namespace UI;
+		
+		ScopedColor popupColors({
+			{ImGuiCol_PopupBg, Color(0.16f, 0.16f, 0.18f, 1.0f)},
+			{ImGuiCol_Border, PanelColors::Border},
+			{ImGuiCol_Header, Color(0.20f, 0.22f, 0.26f, 1.0f)},
+			{ImGuiCol_HeaderHovered, Color(0.26f, 0.50f, 0.85f, 0.55f)},
+			{ImGuiCol_HeaderActive, Color(0.26f, 0.50f, 0.85f, 0.75f)},
+			{ImGuiCol_Text, Color(0.92f, 0.92f, 0.94f, 1.0f)},
+			{ImGuiCol_Separator, PanelColors::Border}
+		});
+		ScopedStyle popupPadding(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+		ScopedStyle popupRounding(ImGuiStyleVar_PopupRounding, 6.0f);
+		ScopedStyle popupItemSpacing(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 6.0f));
+		ScopedStyle popupFramePadding(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
 		
 		if (BeginPopup("FileGridContextMenu")) {
 			SeparatorText("Create");
