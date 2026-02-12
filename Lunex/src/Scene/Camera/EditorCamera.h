@@ -65,6 +65,7 @@ namespace Lunex {
 		
 		// ========== FLY CAMERA STATE ==========
 		bool IsFlyCameraActive() const { return m_IsFlyCameraActive; }
+		void SetAllowFlyCamera(bool allow) { m_AllowFlyCamera = allow; }
 		
 		// ========== VIEW DATA (AAA Architecture) ==========
 		/**
@@ -109,6 +110,7 @@ namespace Lunex {
 		float m_ViewportHeight = 720;
 		
 		bool m_IsFlyCameraActive = false;
+		bool m_AllowFlyCamera = false;
 	};
 	
 } // namespace Lunex

@@ -103,6 +103,13 @@ namespace Lunex {
 			return;
 		}
 		
+		// Track focus for auto-deselect when clicking another panel
+		bool isFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+		if (m_WasFocused && !isFocused && !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId)) {
+			ClearSelection();
+		}
+		m_WasFocused = isFocused;
+		
 		// Top navigation bar
 		RenderTopBar();
 		
@@ -254,7 +261,7 @@ namespace Lunex {
 				ClearSelection();
 			};
 			callbacks.onEmptySpaceRightClicked = [this]() {
-				OpenPopup("FileGridContextMenu");
+				m_OpenEmptySpaceContextMenu = true;
 			};
 			
 			// Render grid
@@ -262,12 +269,21 @@ namespace Lunex {
 			m_HoveredFolder = result.hoveredFolder;
 			
 			// Context menus
+			if (m_OpenEmptySpaceContextMenu) {
+				OpenPopup("FileGridContextMenu");
+				m_OpenEmptySpaceContextMenu = false;
+			}
+			
 			RenderContextMenu();
 			
 			// Item context menu
+			if (m_OpenItemContextMenu) {
+				OpenPopup("ItemContextMenu");
+				m_OpenItemContextMenu = false;
+			}
+			
 			if (!m_ContextMenuTargetItem.empty()) {
-				std::string menuId = "ItemContextMenu##" + m_ContextMenuTargetItem.filename().string();
-				if (BeginPopup(menuId)) {
+				if (BeginPopup("ItemContextMenu")) {
 					RenderItemContextMenu(m_ContextMenuTargetItem);
 					EndPopup();
 				}
@@ -525,6 +541,7 @@ namespace Lunex {
 				DeleteItem(std::filesystem::path(selectedPath));
 			}
 			ClearSelection();
+			m_ContextMenuTargetItem.clear();
 		}
 		
 		if (m_SelectedItems.size() == 1) {
@@ -607,7 +624,7 @@ namespace Lunex {
 			AddToSelection(path);
 		}
 		m_ContextMenuTargetItem = path;
-		UI::OpenPopup("ItemContextMenu##" + path.filename().string());
+		m_OpenItemContextMenu = true;
 	}
 
 	void ContentBrowserPanel::OnFileGridItemDropped(const std::filesystem::path& target, const void* data, size_t size) {
