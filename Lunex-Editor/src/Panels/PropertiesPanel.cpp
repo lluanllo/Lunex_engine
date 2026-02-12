@@ -514,7 +514,7 @@ namespace Lunex {
 				if (component.HasMeshAsset()) {
 					auto meshAsset = component.GetMeshAsset();
 					
-					if (ComponentDrawer::BeginInfoCard("##MeshAssetInfo", 300.0f)) {
+					if (ComponentDrawer::BeginInfoCard("##MeshAssetInfo", 240.0f)) {
 						TextStyled("MeshAsset", TextVariant::Success);
 						
 						SameLine(ImGui::GetContentRegionAvail().x - 50);
