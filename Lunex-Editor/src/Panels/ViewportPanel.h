@@ -5,6 +5,7 @@
  * Features:
  * - Main scene framebuffer display
  * - ImGuizmo transform manipulation
+ * - Multi-selection gizmo with pivot point modes
  * - Drag & drop for scenes, models, prefabs
  * - Camera preview overlay for selected cameras
  * - Toolbar integration
@@ -18,11 +19,14 @@
 #include "Scene/Entity.h"
 #include "Scene/Scene.h"
 #include "SceneHierarchyPanel.h"
+#include "GizmoSettingsPanel.h"
 #include "ToolbarPanel.h"
 
 #include <glm/glm.hpp>
 #include <functional>
 #include <filesystem>
+#include <set>
+#include <unordered_map>
 
 namespace Lunex {
 
@@ -40,7 +44,8 @@ namespace Lunex {
 			int gizmoType,
 			ToolbarPanel& toolbarPanel, 
 			SceneState sceneState, 
-			bool toolbarEnabled
+			bool toolbarEnabled,
+			GizmoSettingsPanel& gizmoSettings
 		);
 
 		// State queries
@@ -70,7 +75,12 @@ namespace Lunex {
 		// Render helpers
 		void RenderFramebufferImage(Ref<Framebuffer> framebuffer);
 		void HandleDragDrop();
-		void RenderGizmos(const EditorCamera& editorCamera, Entity selectedEntity, int gizmoType);
+		void RenderGizmos(
+			SceneHierarchyPanel& hierarchyPanel,
+			const EditorCamera& editorCamera,
+			int gizmoType,
+			GizmoSettingsPanel& gizmoSettings
+		);
 		void RenderCameraPreview(Ref<Framebuffer> previewFramebuffer, Entity selectedEntity);
 		
 	private:
@@ -79,6 +89,16 @@ namespace Lunex {
 		bool m_ViewportHovered = false;
 		glm::vec2 m_ViewportSize = { 0.0f, 0.0f };
 		glm::vec2 m_ViewportBounds[2];
+
+		// Gizmo state (for multi-selection delta tracking)
+		bool m_GizmoWasUsing = false;
+		glm::mat4 m_GizmoPreviousTransform = glm::mat4(1.0f);
+		glm::vec3 m_GizmoCachedPivot = glm::vec3(0.0f);
+		
+		// Per-entity initial state cached at drag start (for rotation stability)
+		glm::mat4 m_GizmoInitialPivotTransform = glm::mat4(1.0f);
+		std::unordered_map<entt::entity, glm::vec3> m_GizmoInitialEntityTranslations;
+		std::unordered_map<entt::entity, glm::vec3> m_GizmoInitialEntityRotations;
 
 		// Callbacks
 		std::function<void(const std::filesystem::path&)> m_OnSceneDropCallback;
