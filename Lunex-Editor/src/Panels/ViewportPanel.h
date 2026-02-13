@@ -26,6 +26,7 @@
 #include <functional>
 #include <filesystem>
 #include <set>
+#include <unordered_map>
 
 namespace Lunex {
 
@@ -92,6 +93,12 @@ namespace Lunex {
 		// Gizmo state (for multi-selection delta tracking)
 		bool m_GizmoWasUsing = false;
 		glm::mat4 m_GizmoPreviousTransform = glm::mat4(1.0f);
+		glm::vec3 m_GizmoCachedPivot = glm::vec3(0.0f);
+		
+		// Per-entity initial state cached at drag start (for rotation stability)
+		glm::mat4 m_GizmoInitialPivotTransform = glm::mat4(1.0f);
+		std::unordered_map<entt::entity, glm::vec3> m_GizmoInitialEntityTranslations;
+		std::unordered_map<entt::entity, glm::vec3> m_GizmoInitialEntityRotations;
 
 		// Callbacks
 		std::function<void(const std::filesystem::path&)> m_OnSceneDropCallback;

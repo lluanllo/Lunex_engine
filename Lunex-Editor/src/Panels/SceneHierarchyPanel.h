@@ -103,6 +103,7 @@ namespace Lunex {
 		// ========================================
 		void AddEntityToSelection(Entity entity);
 		void ToggleEntitySelection(Entity entity);
+		void SetActiveEntityInSelection(Entity entity);
 		
 		// Style access
 		HierarchyPanelStyle& GetStyle() { return m_Style; }

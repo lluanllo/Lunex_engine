@@ -1047,8 +1047,17 @@ namespace Lunex {
 						LNX_LOG_INFO("Toggled entity selection");
 					}
 					else {
-						// Normal click: Select only this entity (clear previous)
-						m_SceneHierarchyPanel.SetSelectedEntity(m_HoveredEntity);
+						// Normal click (no modifiers)
+						if (m_SceneHierarchyPanel.IsEntitySelected(m_HoveredEntity) && 
+							m_SceneHierarchyPanel.GetSelectedEntities().size() > 1) {
+							// Clicked on an already-selected entity in a multi-selection:
+							// Make it the active entity without clearing others (Blender-style)
+							m_SceneHierarchyPanel.SetActiveEntityInSelection(m_HoveredEntity);
+						}
+						else {
+							// Select only this entity (clear previous)
+							m_SceneHierarchyPanel.SetSelectedEntity(m_HoveredEntity);
+						}
 					}
 				}
 				else {

@@ -429,8 +429,22 @@ namespace Lunex {
 			ImGuiIO& io = ImGui::GetIO();
 			if (io.KeyCtrl) {
 				ToggleEntitySelection(entity);
-			} else {
-				SelectEntity(entity, true);
+			}
+			else if (io.KeyShift) {
+				// Shift+Click: Add to selection
+				if (!IsEntitySelected(entity)) {
+					AddEntityToSelection(entity);
+				}
+			}
+			else {
+				// Normal click
+				if (IsEntitySelected(entity) && m_SelectedEntities.size() > 1) {
+					// Already selected in multi-selection: make active
+					SetActiveEntityInSelection(entity);
+				}
+				else {
+					SelectEntity(entity, true);
+				}
 			}
 		}
 
@@ -636,6 +650,14 @@ namespace Lunex {
 	void SceneHierarchyPanel::AddEntityToSelection(Entity entity) {
 		if (entity) {
 			m_SelectedEntities.insert(entity);
+			m_SelectionContext = entity;
+			m_LastSelectedEntity = entity;
+		}
+	}
+	
+	void SceneHierarchyPanel::SetActiveEntityInSelection(Entity entity) {
+		if (entity && m_SelectedEntities.find(entity) != m_SelectedEntities.end()) {
+			// Entity is already in selection - just make it active
 			m_SelectionContext = entity;
 			m_LastSelectedEntity = entity;
 		}

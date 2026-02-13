@@ -222,7 +222,6 @@ namespace Lunex {
 		// INDIVIDUAL ORIGINS MODE: Each object gets its own gizmo
 		// ========================================================================
 		if (pivotMode == PivotPoint::IndividualOrigins && selectedEntities.size() > 1) {
-			// We draw gizmo for the active entity and apply delta to all
 			Entity activeEntity = hierarchyPanel.GetActiveEntity();
 			if (!activeEntity || !activeEntity.HasComponent<TransformComponent>()) {
 				activeEntity = *selectedEntities.begin();
@@ -234,11 +233,9 @@ namespace Lunex {
 				auto& tc = entity.GetComponent<TransformComponent>();
 				glm::mat4 transform = tc.GetTransform();
 
-				// Determine ImGuizmo mode
 				ImGuizmo::MODE mode = (orientMode == TransformOrientation::Local) 
 					? ImGuizmo::LOCAL : ImGuizmo::WORLD;
 
-				// Only the active entity gets an interactive gizmo
 				if (entity == activeEntity) {
 					ImGuizmo::Manipulate(
 						glm::value_ptr(cameraView),
@@ -254,17 +251,14 @@ namespace Lunex {
 						glm::vec3 newTranslation, newRotation, newScale;
 						Math::DecomposeTransform(transform, newTranslation, newRotation, newScale);
 
-						// Calculate deltas from the active entity
 						glm::vec3 deltaTranslation = newTranslation - tc.Translation;
 						glm::vec3 deltaRotation = newRotation - tc.Rotation;
 						glm::vec3 deltaScale = newScale - tc.Scale;
 
-						// Apply to active entity
 						tc.Translation = newTranslation;
 						tc.Rotation += deltaRotation;
 						tc.Scale = newScale;
 
-						// Apply same delta to all other selected entities
 						for (auto otherEntity : selectedEntities) {
 							if (otherEntity == entity) continue;
 							if (!otherEntity.HasComponent<TransformComponent>()) continue;
@@ -288,25 +282,8 @@ namespace Lunex {
 		}
 
 		// ========================================================================
-		// SHARED PIVOT MODE: Median Point / Active Element / Bounding Box
-		// ========================================================================
-
-		// Calculate pivot position based on mode
-		glm::vec3 pivotPosition;
-		switch (pivotMode) {
-			case PivotPoint::ActiveElement:
-				pivotPosition = hierarchyPanel.CalculateActiveElementPosition();
-				break;
-			case PivotPoint::BoundingBox:
-				pivotPosition = hierarchyPanel.CalculateBoundingBoxCenter();
-				break;
-			case PivotPoint::MedianPoint:
-			default:
-				pivotPosition = hierarchyPanel.CalculateMedianPoint();
-				break;
-		}
-
 		// For single selection, just use the entity's own transform
+		// ========================================================================
 		if (selectedEntities.size() == 1) {
 			Entity entity = *selectedEntities.begin();
 			if (!entity.HasComponent<TransformComponent>()) return;
@@ -345,15 +322,41 @@ namespace Lunex {
 
 		// Get orientation from active entity for Local mode
 		Entity activeEntity = hierarchyPanel.GetActiveEntity();
-		glm::mat4 pivotTransform;
 
-		if (orientMode == TransformOrientation::Local && activeEntity && activeEntity.HasComponent<TransformComponent>()) {
-			auto& activeTc = activeEntity.GetComponent<TransformComponent>();
-			glm::mat4 rotation = glm::toMat4(glm::quat(activeTc.Rotation));
-			pivotTransform = glm::translate(glm::mat4(1.0f), pivotPosition) * rotation;
+		// Build the pivot transform that ImGuizmo will display and manipulate.
+		// CRITICAL: When already dragging, we must give ImGuizmo the SAME base
+		// transform that it returned last frame (m_GizmoPreviousTransform),
+		// otherwise the gizmo "resets" every frame causing trembling.
+		glm::mat4 pivotTransform;
+		if (m_GizmoWasUsing) {
+			// While dragging: feed back the previous output so ImGuizmo 
+			// sees continuity
+			pivotTransform = m_GizmoPreviousTransform;
 		}
 		else {
-			pivotTransform = glm::translate(glm::mat4(1.0f), pivotPosition);
+			// Not dragging: compute fresh from live entity positions
+			glm::vec3 livePivotPosition;
+			switch (pivotMode) {
+				case PivotPoint::ActiveElement:
+					livePivotPosition = hierarchyPanel.CalculateActiveElementPosition();
+					break;
+				case PivotPoint::BoundingBox:
+					livePivotPosition = hierarchyPanel.CalculateBoundingBoxCenter();
+					break;
+				case PivotPoint::MedianPoint:
+				default:
+					livePivotPosition = hierarchyPanel.CalculateMedianPoint();
+					break;
+			}
+
+			if (orientMode == TransformOrientation::Local && activeEntity && activeEntity.HasComponent<TransformComponent>()) {
+				auto& activeTc = activeEntity.GetComponent<TransformComponent>();
+				glm::mat4 rotation = glm::toMat4(glm::quat(activeTc.Rotation));
+				pivotTransform = glm::translate(glm::mat4(1.0f), livePivotPosition) * rotation;
+			}
+			else {
+				pivotTransform = glm::translate(glm::mat4(1.0f), livePivotPosition);
+			}
 		}
 
 		ImGuizmo::MODE imguizmoMode = (orientMode == TransformOrientation::Local) 
@@ -375,19 +378,48 @@ namespace Lunex {
 
 		if (isUsing) {
 			if (!m_GizmoWasUsing) {
-				// Gizmo just started being used - store initial state
+				// Gizmo just started being used - cache everything
+
+				// Compute the live pivot position at drag start
+				glm::vec3 livePivotPosition;
+				switch (pivotMode) {
+					case PivotPoint::ActiveElement:
+						livePivotPosition = hierarchyPanel.CalculateActiveElementPosition();
+						break;
+					case PivotPoint::BoundingBox:
+						livePivotPosition = hierarchyPanel.CalculateBoundingBoxCenter();
+						break;
+					case PivotPoint::MedianPoint:
+					default:
+						livePivotPosition = hierarchyPanel.CalculateMedianPoint();
+						break;
+				}
+				m_GizmoCachedPivot = livePivotPosition;
+
+				// Cache initial per-entity transforms
+				m_GizmoInitialEntityTranslations.clear();
+				m_GizmoInitialEntityRotations.clear();
+				for (auto entity : selectedEntities) {
+					if (!entity.HasComponent<TransformComponent>()) continue;
+					auto& tc = entity.GetComponent<TransformComponent>();
+					entt::entity handle = (entt::entity)entity;
+					m_GizmoInitialEntityTranslations[handle] = tc.Translation;
+					m_GizmoInitialEntityRotations[handle] = tc.Rotation;
+				}
+
+				// The pivotTransform was already set correctly above (not-dragging branch)
+				m_GizmoInitialPivotTransform = pivotTransform;
 				m_GizmoPreviousTransform = pivotTransform;
 				m_GizmoWasUsing = true;
 			}
 
-			// Calculate delta between previous and current gizmo transform
-			glm::vec3 prevTranslation, prevRotation, prevScale;
-			Math::DecomposeTransform(m_GizmoPreviousTransform, prevTranslation, prevRotation, prevScale);
-
-			glm::vec3 newTranslation, newRotation, newScale;
-			Math::DecomposeTransform(manipulatedTransform, newTranslation, newRotation, newScale);
-
 			if (gizmoType == ImGuizmo::OPERATION::TRANSLATE) {
+				glm::vec3 prevTranslation, prevRotation, prevScale;
+				Math::DecomposeTransform(m_GizmoPreviousTransform, prevTranslation, prevRotation, prevScale);
+
+				glm::vec3 newTranslation, newRotation, newScale;
+				Math::DecomposeTransform(manipulatedTransform, newTranslation, newRotation, newScale);
+
 				glm::vec3 deltaTranslation = newTranslation - prevTranslation;
 
 				for (auto entity : selectedEntities) {
@@ -395,32 +427,72 @@ namespace Lunex {
 					auto& tc = entity.GetComponent<TransformComponent>();
 					tc.Translation += deltaTranslation;
 				}
+
+				// Update cached pivot to follow the translation
+				m_GizmoCachedPivot += deltaTranslation;
+				
+				// Also update initial translations so rotation doesn't drift after translate
+				for (auto& [handle, pos] : m_GizmoInitialEntityTranslations) {
+					pos += deltaTranslation;
+				}
 			}
 			else if (gizmoType == ImGuizmo::OPERATION::ROTATE) {
-				// Calculate rotation delta
-				glm::quat prevQuat = glm::quat(prevRotation);
-				glm::quat newQuat = glm::quat(newRotation);
-				glm::quat deltaQuat = newQuat * glm::inverse(prevQuat);
+				// Compute the TOTAL rotation delta from drag start to current frame.
+				// This avoids accumulating per-frame Euler angle errors.
+				glm::mat3 initialRot3 = glm::mat3(m_GizmoInitialPivotTransform);
+				glm::mat3 currentRot3 = glm::mat3(manipulatedTransform);
+
+				// Normalize columns to remove any scale
+				for (int i = 0; i < 3; i++) {
+					initialRot3[i] = glm::normalize(initialRot3[i]);
+					currentRot3[i] = glm::normalize(currentRot3[i]);
+				}
+
+				glm::quat initialQuat = glm::quat_cast(initialRot3);
+				glm::quat currentQuat = glm::quat_cast(currentRot3);
+				glm::quat totalDeltaQuat = glm::normalize(currentQuat * glm::inverse(initialQuat));
 
 				for (auto entity : selectedEntities) {
 					if (!entity.HasComponent<TransformComponent>()) continue;
 					auto& tc = entity.GetComponent<TransformComponent>();
+					entt::entity handle = (entt::entity)entity;
 
-					// Rotate position around pivot
-					glm::vec3 relativePos = tc.Translation - pivotPosition;
-					glm::vec3 rotatedPos = deltaQuat * relativePos;
-					tc.Translation = pivotPosition + rotatedPos;
+					// Get initial state from cache
+					glm::vec3 initialPos = m_GizmoInitialEntityTranslations[handle];
+					glm::vec3 initialRot = m_GizmoInitialEntityRotations[handle];
 
-					// Apply rotation to entity's own rotation
-					glm::quat entityQuat = glm::quat(tc.Rotation);
-					glm::quat newEntityQuat = deltaQuat * entityQuat;
-					tc.Rotation = glm::eulerAngles(newEntityQuat);
+					// Rotate position around the cached pivot from initial position
+					glm::vec3 relativePos = initialPos - m_GizmoCachedPivot;
+					glm::vec3 rotatedPos = totalDeltaQuat * relativePos;
+					tc.Translation = m_GizmoCachedPivot + rotatedPos;
+
+					// Apply total rotation delta to the initial entity rotation
+					glm::quat initialEntityQuat = glm::quat(initialRot);
+					glm::quat newEntityQuat = totalDeltaQuat * initialEntityQuat;
+					
+					// Convert back to euler angles - safe because we compute from
+					// initial state each frame rather than accumulating
+					glm::vec3 newEuler = glm::eulerAngles(newEntityQuat);
+					
+					// Keep the euler angles continuous with the initial rotation
+					for (int i = 0; i < 3; i++) {
+						float diff = newEuler[i] - initialRot[i];
+						if (diff > glm::pi<float>()) newEuler[i] -= glm::two_pi<float>();
+						else if (diff < -glm::pi<float>()) newEuler[i] += glm::two_pi<float>();
+					}
+					
+					tc.Rotation = newEuler;
 				}
 			}
 			else if (gizmoType == ImGuizmo::OPERATION::SCALE) {
+				glm::vec3 prevTranslation, prevRotation, prevScale;
+				Math::DecomposeTransform(m_GizmoPreviousTransform, prevTranslation, prevRotation, prevScale);
+
+				glm::vec3 newTranslation, newRotation, newScale;
+				Math::DecomposeTransform(manipulatedTransform, newTranslation, newRotation, newScale);
+
 				glm::vec3 deltaScale = newScale / prevScale;
 
-				// Clamp delta scale to avoid division by zero / extreme values
 				for (int i = 0; i < 3; i++) {
 					if (std::abs(prevScale[i]) < 0.0001f) deltaScale[i] = 1.0f;
 					deltaScale[i] = glm::clamp(deltaScale[i], 0.01f, 100.0f);
@@ -430,19 +502,22 @@ namespace Lunex {
 					if (!entity.HasComponent<TransformComponent>()) continue;
 					auto& tc = entity.GetComponent<TransformComponent>();
 
-					// Scale position relative to pivot
-					glm::vec3 relativePos = tc.Translation - pivotPosition;
-					tc.Translation = pivotPosition + relativePos * deltaScale;
+					glm::vec3 relativePos = tc.Translation - m_GizmoCachedPivot;
+					tc.Translation = m_GizmoCachedPivot + relativePos * deltaScale;
 
-					// Scale the entity
 					tc.Scale *= deltaScale;
 				}
 			}
 
-			// Update previous transform for next frame delta
+			// Update previous transform for next frame
 			m_GizmoPreviousTransform = manipulatedTransform;
 		}
 		else {
+			if (m_GizmoWasUsing) {
+				// Clean up cached state
+				m_GizmoInitialEntityTranslations.clear();
+				m_GizmoInitialEntityRotations.clear();
+			}
 			m_GizmoWasUsing = false;
 		}
 	}
