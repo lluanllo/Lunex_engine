@@ -797,12 +797,14 @@ namespace Lunex {
 			if (m_ViewportPanel.IsViewportFocused())
 				m_CameraController.OnUpdate(ts);
 
+			m_EditorCamera.SetAllowFlyCamera(m_ViewportPanel.IsViewportHovered());
 			m_EditorCamera.OnUpdate(ts);
 
 			m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
 			break;
 		}
 		case SceneState::Simulate: {
+			m_EditorCamera.SetAllowFlyCamera(m_ViewportPanel.IsViewportHovered());
 			m_EditorCamera.OnUpdate(ts);
 
 			m_ActiveScene->OnUpdateSimulation(ts, m_EditorCamera);
@@ -1342,6 +1344,9 @@ namespace Lunex {
 		// Update Content Browser to show project assets
 		m_ContentBrowserPanel.SetRootDirectory(project->GetAssetDirectory());
 		
+		// Update hierarchy panel prefabs directory
+		m_SceneHierarchyPanel.SetPrefabsDirectory(project->GetAssetDirectory() / "Prefabs");
+		
 		// Update Console Panel with project directory for terminal
 		m_ConsolePanel.SetProjectDirectory(project->GetProjectDirectory());
 
@@ -1384,6 +1389,9 @@ namespace Lunex {
 
 		// Update Content Browser to show project assets
 		m_ContentBrowserPanel.SetRootDirectory(project->GetAssetDirectory());
+		
+		// Update hierarchy panel prefabs directory
+		m_SceneHierarchyPanel.SetPrefabsDirectory(project->GetAssetDirectory() / "Prefabs");
 		
 		// Update Console Panel with project directory for terminal
 		m_ConsolePanel.SetProjectDirectory(project->GetProjectDirectory());

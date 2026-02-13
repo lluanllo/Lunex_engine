@@ -514,7 +514,7 @@ namespace Lunex {
 				if (component.HasMeshAsset()) {
 					auto meshAsset = component.GetMeshAsset();
 					
-					if (ComponentDrawer::BeginInfoCard("##MeshAssetInfo", 230.0f)) {
+					if (ComponentDrawer::BeginInfoCard("##MeshAssetInfo", 240.0f)) {
 						TextStyled("MeshAsset", TextVariant::Success);
 						
 						SameLine(ImGui::GetContentRegionAvail().x - 50);
@@ -559,7 +559,7 @@ namespace Lunex {
 					ComponentDrawer::EndInfoCard();
 				}
 				else if (component.MeshModel) {
-					if (ComponentDrawer::BeginInfoCard("##ModelInfo", 140.0f)) {
+					if (ComponentDrawer::BeginInfoCard("##ModelInfo", 220.0f)) {
 						TextStyled("Legacy Model (not a MeshAsset)", TextVariant::Warning);
 						
 						std::filesystem::path modelPath(component.FilePath);
@@ -603,7 +603,7 @@ namespace Lunex {
 					ComponentDrawer::EndInfoCard();
 				}
 				else {
-					ComponentDrawer::DrawDropZone("Drop Mesh Asset Here\n(.lumesh, .obj, .fbx, .gltf, .glb, .dae)", Size(-1, 60));
+					ComponentDrawer::DrawDropZone("Drop Mesh Asset Here\n(.lumesh, .obj, .fbx, .gltf, .glb, .dae)", Size(-1, 70));
 
 					void* payloadData = nullptr;
 					if (ComponentDrawer::AcceptDropPayload("CONTENT_BROWSER_ITEM", &payloadData)) {

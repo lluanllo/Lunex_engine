@@ -103,6 +103,13 @@ namespace Lunex {
 			return;
 		}
 		
+		// Track focus for auto-deselect when clicking another panel
+		bool isFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+		if (m_WasFocused && !isFocused && !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId)) {
+			ClearSelection();
+		}
+		m_WasFocused = isFocused;
+		
 		// Top navigation bar
 		RenderTopBar();
 		
@@ -254,7 +261,7 @@ namespace Lunex {
 				ClearSelection();
 			};
 			callbacks.onEmptySpaceRightClicked = [this]() {
-				OpenPopup("FileGridContextMenu");
+				m_OpenEmptySpaceContextMenu = true;
 			};
 			
 			// Render grid
@@ -262,12 +269,35 @@ namespace Lunex {
 			m_HoveredFolder = result.hoveredFolder;
 			
 			// Context menus
+			if (m_OpenEmptySpaceContextMenu) {
+				OpenPopup("FileGridContextMenu");
+				m_OpenEmptySpaceContextMenu = false;
+			}
+			
 			RenderContextMenu();
 			
 			// Item context menu
+			if (m_OpenItemContextMenu) {
+				OpenPopup("ItemContextMenu");
+				m_OpenItemContextMenu = false;
+			}
+			
 			if (!m_ContextMenuTargetItem.empty()) {
-				std::string menuId = "ItemContextMenu##" + m_ContextMenuTargetItem.filename().string();
-				if (BeginPopup(menuId)) {
+				ScopedColor popupColors({
+					{ImGuiCol_PopupBg, Color(0.16f, 0.16f, 0.18f, 1.0f)},
+					{ImGuiCol_Border, PanelColors::Border},
+					{ImGuiCol_Header, Color(0.20f, 0.22f, 0.26f, 1.0f)},
+					{ImGuiCol_HeaderHovered, Color(0.26f, 0.50f, 0.85f, 0.55f)},
+					{ImGuiCol_HeaderActive, Color(0.26f, 0.50f, 0.85f, 0.75f)},
+					{ImGuiCol_Text, Color(0.92f, 0.92f, 0.94f, 1.0f)},
+					{ImGuiCol_Separator, PanelColors::Border}
+				});
+				ScopedStyle popupPadding(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+				ScopedStyle popupRounding(ImGuiStyleVar_PopupRounding, 6.0f);
+				ScopedStyle popupItemSpacing(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 6.0f));
+				ScopedStyle popupFramePadding(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
+				
+				if (BeginPopup("ItemContextMenu")) {
 					RenderItemContextMenu(m_ContextMenuTargetItem);
 					EndPopup();
 				}
@@ -379,6 +409,20 @@ namespace Lunex {
 
 	void ContentBrowserPanel::RenderContextMenu() {
 		using namespace UI;
+		
+		ScopedColor popupColors({
+			{ImGuiCol_PopupBg, Color(0.16f, 0.16f, 0.18f, 1.0f)},
+			{ImGuiCol_Border, PanelColors::Border},
+			{ImGuiCol_Header, Color(0.20f, 0.22f, 0.26f, 1.0f)},
+			{ImGuiCol_HeaderHovered, Color(0.26f, 0.50f, 0.85f, 0.55f)},
+			{ImGuiCol_HeaderActive, Color(0.26f, 0.50f, 0.85f, 0.75f)},
+			{ImGuiCol_Text, Color(0.92f, 0.92f, 0.94f, 1.0f)},
+			{ImGuiCol_Separator, PanelColors::Border}
+		});
+		ScopedStyle popupPadding(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+		ScopedStyle popupRounding(ImGuiStyleVar_PopupRounding, 6.0f);
+		ScopedStyle popupItemSpacing(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 6.0f));
+		ScopedStyle popupFramePadding(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
 		
 		if (BeginPopup("FileGridContextMenu")) {
 			SeparatorText("Create");
@@ -525,6 +569,7 @@ namespace Lunex {
 				DeleteItem(std::filesystem::path(selectedPath));
 			}
 			ClearSelection();
+			m_ContextMenuTargetItem.clear();
 		}
 		
 		if (m_SelectedItems.size() == 1) {
@@ -607,7 +652,7 @@ namespace Lunex {
 			AddToSelection(path);
 		}
 		m_ContextMenuTargetItem = path;
-		UI::OpenPopup("ItemContextMenu##" + path.filename().string());
+		m_OpenItemContextMenu = true;
 	}
 
 	void ContentBrowserPanel::OnFileGridItemDropped(const std::filesystem::path& target, const void* data, size_t size) {

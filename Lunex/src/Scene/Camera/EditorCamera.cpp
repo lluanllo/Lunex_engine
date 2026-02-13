@@ -60,7 +60,7 @@ namespace Lunex {
 		GLFWwindow* window = static_cast<GLFWwindow*>(Application::Get().GetWindow().GetNativeWindow());
 		
 		bool wasFlyCameraActive = m_IsFlyCameraActive;
-		m_IsFlyCameraActive = Input::IsMouseButtonPressed(Mouse::ButtonRight);
+		m_IsFlyCameraActive = m_AllowFlyCamera && Input::IsMouseButtonPressed(Mouse::ButtonRight);
 		
 		if (m_IsFlyCameraActive && !wasFlyCameraActive) {
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);

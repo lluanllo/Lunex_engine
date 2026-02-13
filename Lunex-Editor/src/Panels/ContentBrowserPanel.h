@@ -151,12 +151,15 @@ namespace Lunex {
 		// Context menu
 		bool m_ShowCreateFolderDialog = false;
 		bool m_ShowRenameDialog = false;
+		bool m_OpenItemContextMenu = false;
+		bool m_OpenEmptySpaceContextMenu = false;
 		char m_NewItemName[256] = "NewFolder";
 		std::filesystem::path m_ItemToRename;
 		std::filesystem::path m_ContextMenuTargetItem;
 
 		// File drop
 		bool m_IsHovered = false;
+		bool m_WasFocused = false;
 		std::filesystem::path m_HoveredFolder;
 
 		// Selection
