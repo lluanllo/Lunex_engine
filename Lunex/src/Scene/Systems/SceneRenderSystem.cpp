@@ -102,8 +102,30 @@ namespace Lunex {
 	void SceneRenderSystem::RenderScene(EditorCamera& camera) {
 		if (!m_Context || !m_Context->Registry) return;
 
+		bool isPathTracer = (m_ActiveBackendType == RenderBackendType::PathTracer);
+
+		// ========== 3D RENDERING — delegated to active backend ==========
+		// Run FIRST so the path tracer compute shader finishes before we
+		// need its output, and the rasterizer draws into the framebuffer
+		// before 2D overlays go on top.
+		m_ActiveBackend->BeginFrame(camera);
+		m_ActiveBackend->RenderScene(m_Context->OwningScene);
+		m_ActiveBackend->EndFrame();
+
+		// ========== PATH TRACER COMPOSITING ==========
+		// When the path tracer is active its output lives in a standalone
+		// texture.  Blit it into the currently-bound editor framebuffer so
+		// that all subsequent raster passes (skybox, grid, billboards,
+		// gizmos, selection outline) are drawn ON TOP.
+		if (isPathTracer) {
+			auto* rtBackend = static_cast<RayTracingBackend*>(m_ActiveBackend);
+			rtBackend->BlitToFramebuffer();
+		}
+
 		// ========== SKYBOX (always raster) ==========
-		if (m_Settings.RenderSkybox) {
+		// When using the path tracer the skybox is already baked into the
+		// traced image, so skip the raster skybox to avoid double-draws.
+		if (m_Settings.RenderSkybox && !isPathTracer) {
 			SkyboxRenderer::RenderGlobalSkybox(camera);
 		}
 
@@ -142,18 +164,26 @@ namespace Lunex {
 
 			Renderer2D::EndScene();
 		}
-
-		// ========== 3D RENDERING — delegated to active backend ==========
-		m_ActiveBackend->BeginFrame(camera);
-		m_ActiveBackend->RenderScene(m_Context->OwningScene);
-		m_ActiveBackend->EndFrame();
 	}
 
 	void SceneRenderSystem::RenderSceneRuntime(Camera& camera, const glm::mat4& cameraTransform) {
 		if (!m_Context || !m_Context->Registry) return;
 
+		bool isPathTracer = (m_ActiveBackendType == RenderBackendType::PathTracer);
+
+		// ========== 3D RENDERING — delegated to active backend ==========
+		m_ActiveBackend->BeginFrameRuntime(camera, cameraTransform);
+		m_ActiveBackend->RenderScene(m_Context->OwningScene);
+		m_ActiveBackend->EndFrame();
+
+		// ========== PATH TRACER COMPOSITING ==========
+		if (isPathTracer) {
+			auto* rtBackend = static_cast<RayTracingBackend*>(m_ActiveBackend);
+			rtBackend->BlitToFramebuffer();
+		}
+
 		// ========== SKYBOX (always raster) ==========
-		if (m_Settings.RenderSkybox) {
+		if (m_Settings.RenderSkybox && !isPathTracer) {
 			SkyboxRenderer::RenderGlobalSkybox(camera, cameraTransform);
 		}
 
@@ -164,11 +194,6 @@ namespace Lunex {
 		RenderCircles(camera, cameraTransform);
 
 		Renderer2D::EndScene();
-
-		// ========== 3D RENDERING — delegated to active backend ==========
-		m_ActiveBackend->BeginFrameRuntime(camera, cameraTransform);
-		m_ActiveBackend->RenderScene(m_Context->OwningScene);
-		m_ActiveBackend->EndFrame();
 	}
 
 	// ========================================================================

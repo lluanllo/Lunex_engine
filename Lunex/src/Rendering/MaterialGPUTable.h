@@ -6,7 +6,7 @@
  *
  * Converts MaterialInstance properties into a flat SSBO-friendly
  * array so the compute shader can index materials by ID.
- * For now: PBR scalars only (no textures). Bindless textures later.
+ * Phase 2: texture indices for bindless sampling in the path tracer.
  */
 
 #include "Core/Core.h"
@@ -19,12 +19,17 @@
 
 namespace Lunex {
 
+	class TextureAtlas;
+
 	// GPU-ready, 64 bytes, std430-aligned
+	// TexIndices: x=albedo, y=normal, z=metallic, w=roughness  (int, -1 = none)
+	// TexIndices2: x=specular, y=emission, z=ao, w=packed use-flags (float-encoded bitmask)
 	struct RTMaterialGPU {
 		glm::vec4 Albedo;              // rgba
 		glm::vec4 EmissionAndMeta;     // rgb=emission, a=metallic
 		glm::vec4 RoughSpecAO;         // x=roughness, y=specular, z=ao, w=emissionIntensity
-		glm::vec4 _reserved;           // future: texture IDs for bindless
+		glm::ivec4 TexIndices;         // x=albedo, y=normal, z=metallic, w=roughness  (-1 = none)
+		glm::ivec4 TexIndices2;        // x=specular, y=emission, z=ao, w=normalIntensity (as floatBitsToInt)
 	};
 
 	class MaterialGPUTable {
@@ -37,9 +42,12 @@ namespace Lunex {
 
 		/**
 		 * @brief  Register a material and return its GPU index.
+		 * @param  instance  The material instance.
+		 * @param  atlas     Texture atlas to register textures into (may be nullptr).
 		 * @return Index into the SSBO array.
 		 */
-		uint32_t GetOrAddMaterial(const Ref<MaterialInstance>& instance);
+		uint32_t GetOrAddMaterial(const Ref<MaterialInstance>& instance,
+		                          TextureAtlas* atlas = nullptr);
 
 		/** Upload any dirty data to the GPU SSBO. */
 		void UploadToGPU();

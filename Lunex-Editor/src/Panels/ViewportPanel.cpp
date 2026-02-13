@@ -119,6 +119,9 @@ namespace Lunex {
 			RenderCameraPreview(cameraPreviewFramebuffer, selectedEntity);
 		}
 
+		// Path tracer HUD overlay (sample counter, progress, reset)
+		RenderPathTracerOverlay();
+
 		ImGui::End();
 
 		// Render floating toolbar AFTER viewport (on top)
@@ -186,6 +189,68 @@ namespace Lunex {
 			}
 			ImGui::EndDragDropTarget();
 		}
+	}
+
+	// ============================================================================
+	// PATH TRACER OVERLAY — sample counter, progress bar, reset button
+	// ============================================================================
+
+	void ViewportPanel::RenderPathTracerOverlay() {
+		if (!m_ActiveBackend) return;
+		if (m_ActiveBackend->GetType() != RenderBackendType::PathTracer) return;
+		if (!m_ActiveBackend->IsProgressiveRender()) return;
+
+		auto stats = m_ActiveBackend->GetStats();
+		uint32_t samples = stats.AccumulatedSamples;
+		uint32_t maxSamples = m_ActiveBackend->GetSettings().MaxAccumulatedSamples;
+
+		// Position: top-left of the viewport content area with a small margin
+		constexpr float kPadding = 10.0f;
+		constexpr float kOverlayWidth = 220.0f;
+
+		ImVec2 overlayPos(m_ViewportBounds[0].x + kPadding,
+		                  m_ViewportBounds[0].y + kPadding + 40.0f); // below toolbar
+
+		ImGui::SetNextWindowPos(overlayPos, ImGuiCond_Always);
+		ImGui::SetNextWindowBgAlpha(0.70f);
+
+		ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration
+		                       | ImGuiWindowFlags_AlwaysAutoResize
+		                       | ImGuiWindowFlags_NoSavedSettings
+		                       | ImGuiWindowFlags_NoFocusOnAppearing
+		                       | ImGuiWindowFlags_NoNav
+		                       | ImGuiWindowFlags_NoMove;
+
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+
+		if (ImGui::Begin("##PathTracerOverlay", nullptr, flags)) {
+			ImGui::TextUnformatted("Path Tracer");
+			ImGui::Separator();
+
+			// Sample counter
+			if (maxSamples > 0)
+				ImGui::Text("Samples: %u / %u", samples, maxSamples);
+			else
+				ImGui::Text("Samples: %u", samples);
+
+			// Progress bar (only when a cap is set)
+			if (maxSamples > 0) {
+				float progress = static_cast<float>(samples) / static_cast<float>(maxSamples);
+				ImGui::ProgressBar(progress, ImVec2(kOverlayWidth - 16.0f, 0.0f));
+			}
+
+			// Tri / BVH info
+			ImGui::Text("Tris: %u  BVH: %u", stats.TotalTriangles, stats.BVHNodeCount);
+
+			// Reset button
+			if (ImGui::SmallButton("Reset")) {
+				m_ActiveBackend->ResetAccumulation();
+			}
+		}
+		ImGui::End();
+
+		ImGui::PopStyleVar(2);
 	}
 
 	// ============================================================================

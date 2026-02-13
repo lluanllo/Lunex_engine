@@ -11,10 +11,13 @@
 //   - Russian Roulette: terminación probabilística de rayos
 //   - IBL: mismos cubemaps que el rasterizer
 //   - Tone mapping + gamma: ACESFilm idéntico a Mesh3D.glsl
+//   - Bindless textures: PBR texture maps via GL_ARB_bindless_texture
 //
 // Pipeline SPIR-V:
 //   GLSL 450 ? shaderc (Vulkan SPIR-V) ? spirv-cross (GLSL 450) ? GL
 // ============================================================================
+
+#extension GL_ARB_bindless_texture : enable
 
 #ifdef COMPUTE
 
@@ -80,13 +83,14 @@ layout(std430, binding = 21) readonly buffer BVHBuffer {
 
 // ============================================================================
 // MATERIALS SSBO (binding = 22, std430)
-// RTMaterialGPU: 4 × vec4 = 64 bytes
+// RTMaterialGPU: 5 × vec4 = 80 bytes
 // ============================================================================
 struct RTMaterial {
     vec4 Albedo;           // rgba
     vec4 EmissionAndMeta;  // rgb=emission, a=metallic
     vec4 RoughSpecAO;      // x=roughness, y=specular, z=ao, w=emissionIntensity
-    vec4 Reserved;         // futuro: bindless texture IDs
+    ivec4 TexIndices;      // x=albedo, y=normal, z=metallic, w=roughness  (-1 = none)
+    ivec4 TexIndices2;     // x=specular, y=emission, z=ao, w=normalIntensity (floatBitsToInt)
 };
 
 layout(std430, binding = 22) readonly buffer MaterialBuffer {
@@ -108,6 +112,27 @@ struct LightData {
 layout(std430, binding = 23) readonly buffer LightBuffer {
     LightData u_Lights[];
 };
+
+// ============================================================================
+// BINDLESS TEXTURE HANDLES SSBO (binding = 24, std430)
+// Each entry is a uint64 handle obtained via glGetTextureHandleARB.
+// Materials reference textures by index into this array.
+// ============================================================================
+layout(std430, binding = 24) readonly buffer TextureHandleBuffer {
+    uvec2 u_TextureHandles[];   // uvec2 = 64-bit handle split into low/high
+};
+
+// Sample a bindless 2D texture by atlas index.
+// Returns vec4(0) if the index is invalid (-1).
+vec4 SampleBindlessTexture(int texIndex, vec2 uv) {
+#ifdef GL_ARB_bindless_texture
+    if (texIndex < 0) return vec4(0.0);
+    sampler2D s = sampler2D(u_TextureHandles[texIndex]);
+    return texture(s, uv);
+#else
+    return vec4(0.0);
+#endif
+}
 
 // ============================================================================
 // IBL SAMPLERS (mismos slots que el rasterizer)
@@ -553,11 +578,66 @@ vec3 TracePath(Ray ray) {
         float specular   = mat.RoughSpecAO.y;
         float ao         = mat.RoughSpecAO.z;
 
+        // === Texture sampling (bindless) ===
+        vec2 uv = hit.uv;
+
+        // Albedo map
+        if (mat.TexIndices.x >= 0) {
+            vec4 texAlbedo = SampleBindlessTexture(mat.TexIndices.x, uv);
+            albedo *= texAlbedo.rgb;
+            alpha  *= texAlbedo.a;
+        }
+
+        // Metallic map
+        if (mat.TexIndices.z >= 0) {
+            float texMetal = SampleBindlessTexture(mat.TexIndices.z, uv).r;
+            metallic *= texMetal;
+        }
+
+        // Roughness map
+        if (mat.TexIndices.w >= 0) {
+            float texRough = SampleBindlessTexture(mat.TexIndices.w, uv).r;
+            roughness = max(roughness * texRough, MIN_ROUGHNESS);
+        }
+
+        // Specular map
+        if (mat.TexIndices2.x >= 0) {
+            float texSpec = SampleBindlessTexture(mat.TexIndices2.x, uv).r;
+            specular *= texSpec;
+        }
+
+        // Emission map
+        if (mat.TexIndices2.y >= 0) {
+            vec3 texEmission = SampleBindlessTexture(mat.TexIndices2.y, uv).rgb;
+            emission *= texEmission;
+        }
+
+        // AO map
+        if (mat.TexIndices2.z >= 0) {
+            float texAO = SampleBindlessTexture(mat.TexIndices2.z, uv).r;
+            ao *= texAO;
+        }
+
+        // Normal map (tangent-space perturbation)
+        vec3 N = hit.normal;
+        if (mat.TexIndices.y >= 0) {
+            float normalIntensity = intBitsToFloat(mat.TexIndices2.w);
+            vec3 texN = SampleBindlessTexture(mat.TexIndices.y, uv).rgb;
+            texN = texN * 2.0 - 1.0;
+            texN.xy *= normalIntensity;
+            texN = normalize(texN);
+
+            // Build TBN from geometric normal — approximate tangent frame
+            vec3 up = abs(N.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+            vec3 T = normalize(cross(up, N));
+            vec3 B = cross(N, T);
+            N = normalize(T * texN.x + B * texN.y + N * texN.z);
+        }
+
         // F0 base
         vec3 F0 = mix(vec3(MIN_DIELECTRIC_F0 * specular), albedo, metallic);
 
         // Asegurar que la normal apunta hacia el rayo
-        vec3 N = hit.normal;
         if (dot(N, ray.direction) > 0.0) N = -N;
 
         vec3 V = -ray.direction;
@@ -567,7 +647,9 @@ vec3 TracePath(Ray ray) {
 
         // === NEE: iluminación directa en el primer bounce ===
         // En bounces posteriores también hacemos NEE para convergencia rápida
-        vec3 directLight = SampleDirectLighting(hit, V, albedo, metallic, roughness, F0);
+        HitInfo neeHit = hit;
+        neeHit.normal = N;  // use normal-mapped normal for BRDF evaluation
+        vec3 directLight = SampleDirectLighting(neeHit, V, albedo, metallic, roughness, F0);
         radiance += throughput * directLight;
 
         // === IBL ambient en el primer bounce ===

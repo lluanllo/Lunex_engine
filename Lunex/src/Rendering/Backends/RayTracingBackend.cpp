@@ -3,6 +3,8 @@
 
 #include "Renderer/SkyboxRenderer.h"
 #include "Scene/Lighting/LightSystem.h"
+#include "Scene/Components.h"
+#include "Scene/Entity.h"
 #include "Log/Log.h"
 
 #include <glad/glad.h>
@@ -15,6 +17,7 @@ namespace Lunex {
 	static constexpr uint32_t BIND_BVH        = 21;
 	static constexpr uint32_t BIND_MATERIALS   = 22;
 	static constexpr uint32_t BIND_LIGHTS      = 23;
+	static constexpr uint32_t BIND_TEXTURES    = 24;
 	static constexpr uint32_t BIND_CAMERA_UBO  = 15;
 
 	// Image unit bindings
@@ -37,17 +40,31 @@ namespace Lunex {
 		m_LightsSSBOCapacity = MIN_LIGHTS_SSBO_BYTES;
 		m_LightsSSBO = StorageBuffer::Create(m_LightsSSBOCapacity, BIND_LIGHTS);
 
+		// Fullscreen blit shader + dummy VAO (attribute-less rendering)
+		m_BlitShader = Shader::Create("assets/shaders/FullscreenBlit.glsl");
+		glGenVertexArrays(1, &m_BlitDummyVAO);
+
+		// Entity ID pass shader + UBOs (for mouse picking in PT mode)
+		m_EntityIDShader = Shader::Create("assets/shaders/EntityID.glsl");
+		m_EntityIDCameraUBO    = UniformBuffer::Create(sizeof(glm::mat4), 0);   // binding 0: ViewProjection
+		m_EntityIDTransformUBO = UniformBuffer::Create(sizeof(glm::mat4), 1);   // binding 1: Transform
+
 		LNX_LOG_INFO("RayTracingBackend: Initialized");
 	}
 
 	void RayTracingBackend::Shutdown() {
 		if (m_AccumulationTexID) { glDeleteTextures(1, &m_AccumulationTexID); m_AccumulationTexID = 0; }
 		if (m_OutputTexID)       { glDeleteTextures(1, &m_OutputTexID);       m_OutputTexID = 0; }
+		if (m_BlitDummyVAO)      { glDeleteVertexArrays(1, &m_BlitDummyVAO); m_BlitDummyVAO = 0; }
 		m_RTScene.Shutdown();
 		m_CameraUBO.reset();
 		m_LightsSSBO.reset();
 		m_LightsSSBOCapacity = 0;
 		m_PathTracerShader.reset();
+		m_BlitShader.reset();
+		m_EntityIDShader.reset();
+		m_EntityIDCameraUBO.reset();
+		m_EntityIDTransformUBO.reset();
 		LNX_LOG_INFO("RayTracingBackend: Shutdown");
 	}
 
@@ -162,12 +179,27 @@ namespace Lunex {
 			}
 			hash ^= std::hash<void*>{}(item.MeshModel.get()) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
 			hash ^= std::hash<void*>{}(item.Material.get())   + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+
+			// Hash material texture renderer IDs so texture changes trigger rebuild
+			if (item.Material) {
+				auto hashTexID = [&](const Ref<Texture2D>& tex) {
+					uint32_t id = (tex && tex->IsLoaded()) ? tex->GetRendererID() : 0;
+					hash ^= std::hash<uint32_t>{}(id) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+				};
+				hashTexID(item.Material->GetAlbedoMap());
+				hashTexID(item.Material->GetNormalMap());
+				hashTexID(item.Material->GetMetallicMap());
+				hashTexID(item.Material->GetRoughnessMap());
+				hashTexID(item.Material->GetSpecularMap());
+				hashTexID(item.Material->GetEmissionMap());
+				hashTexID(item.Material->GetAOMap());
+			}
 		}
 
 		// Hash lights
 		for (const auto& light : m_SceneData.Lights) {
 			const float* v = &light.Position.x;
-			for (int i = 0; i < 20; ++i) {  // 5 vec4 = 20 floats
+			for (int i = 0; i < 20; ++i) {
 				hash ^= std::hash<float>{}(v[i]) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
 			}
 		}
@@ -231,7 +263,7 @@ namespace Lunex {
 
 		// Bind resources that stay constant across all samples this frame
 		m_PathTracerShader->Bind();
-		m_RTScene.Bind(BIND_TRIANGLES, BIND_BVH, BIND_MATERIALS);
+		m_RTScene.Bind(BIND_TRIANGLES, BIND_BVH, BIND_MATERIALS, BIND_TEXTURES);
 		m_LightsSSBO->BindForCompute(BIND_LIGHTS);
 
 		// Bind output images
@@ -330,7 +362,110 @@ namespace Lunex {
 		s.AccumulatedSamples = m_SampleCount;
 		s.TotalTriangles     = m_RTScene.GetTriangleCount();
 		s.BVHNodeCount       = m_RTScene.GetBVHNodeCount();
+		s.TextureCount       = m_RTScene.GetTextureCount();
 		return s;
+	}
+
+	// ====================================================================
+	// BLIT TO FRAMEBUFFER
+	// ====================================================================
+
+	void RayTracingBackend::BlitToFramebuffer() {
+		if (!m_BlitShader || m_OutputTexID == 0 || m_BlitDummyVAO == 0)
+			return;
+
+		// Save GL state we are going to change
+		GLboolean prevDepthTest, prevDepthMask, prevBlend;
+		glGetBooleanv(GL_DEPTH_TEST, &prevDepthTest);
+		glGetBooleanv(GL_DEPTH_WRITEMASK, &prevDepthMask);
+		glGetBooleanv(GL_BLEND, &prevBlend);
+
+		// Disable depth test/write — we are painting a background layer
+		glDisable(GL_DEPTH_TEST);
+		glDepthMask(GL_FALSE);
+		glDisable(GL_BLEND);
+
+		m_BlitShader->Bind();
+		glBindTextureUnit(0, m_OutputTexID);
+
+		glBindVertexArray(m_BlitDummyVAO);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+		glBindVertexArray(0);
+
+		m_BlitShader->Unbind();
+
+		// Restore previous state
+		if (prevDepthTest) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+		glDepthMask(prevDepthMask);
+		if (prevBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+
+		// After the color blit, perform a fast raster pass to write entity IDs
+		// so that mouse picking works in path tracer mode.
+		RenderEntityIDPass();
+	}
+
+	// ====================================================================
+	// ENTITY ID PASS (for mouse picking in PT mode)
+	// ====================================================================
+
+	void RayTracingBackend::RenderEntityIDPass() {
+		if (!m_EntityIDShader || !m_CurrentScene || m_SceneData.DrawItems.empty())
+			return;
+
+		// Save GL state
+		GLboolean prevDepthTest, prevDepthMask, prevBlend;
+		GLboolean prevColorMask[4];
+		glGetBooleanv(GL_DEPTH_TEST, &prevDepthTest);
+		glGetBooleanv(GL_DEPTH_WRITEMASK, &prevDepthMask);
+		glGetBooleanv(GL_BLEND, &prevBlend);
+		glGetBooleanv(GL_COLOR_WRITEMASK, prevColorMask);
+
+		// Enable depth test + write so only closest fragments produce entity IDs
+		glEnable(GL_DEPTH_TEST);
+		glDepthMask(GL_TRUE);
+		glDisable(GL_BLEND);
+
+		// Disable color writes on attachment 0 (RGBA8) to preserve the PT image.
+		// The entity-ID integer attachment (location 1) is not affected by
+		// glColorMask — it is always written by the fragment shader.
+		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+
+		m_EntityIDShader->Bind();
+
+		// Upload camera ViewProjection (binding 0)
+		glm::mat4 vp = m_SceneData.ViewProjection;
+		m_EntityIDCameraUBO->SetData(&vp, sizeof(glm::mat4));
+
+		// Iterate draw items and render each mesh
+		for (const auto& item : m_SceneData.DrawItems) {
+			if (!item.MeshModel) continue;
+
+			// Stamp entity ID into vertex data
+			item.MeshModel->SetEntityID(item.EntityID);
+
+			// Upload per-object transform (binding 1)
+			glm::mat4 transform = item.Transform;
+			m_EntityIDTransformUBO->SetData(&transform, sizeof(glm::mat4));
+
+			// Draw all submeshes
+			for (const auto& submesh : item.MeshModel->GetMeshes()) {
+				auto va = submesh->GetVertexArray();
+				if (va) {
+					va->Bind();
+					glDrawElements(GL_TRIANGLES,
+						static_cast<GLsizei>(submesh->GetIndices().size()),
+						GL_UNSIGNED_INT, nullptr);
+				}
+			}
+		}
+
+		m_EntityIDShader->Unbind();
+
+		// Restore GL state
+		glColorMask(prevColorMask[0], prevColorMask[1], prevColorMask[2], prevColorMask[3]);
+		if (prevDepthTest) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+		glDepthMask(prevDepthMask);
+		if (prevBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
 	}
 
 } // namespace Lunex

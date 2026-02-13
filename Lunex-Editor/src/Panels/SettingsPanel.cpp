@@ -57,6 +57,11 @@ namespace Lunex {
 
 		AddSpacing(SpacingValues::SM);
 
+		// ?? Safety: if the render system was destroyed (scene change), bail out
+		if (m_RenderSystem && !m_RenderSystem->IsReady()) {
+			m_RenderSystem = nullptr;
+		}
+
 		// ?? Backend selector ????????????????????????????????????????????
 		Text("Render Engine");
 		AddSpacing(SpacingValues::XS);
@@ -78,10 +83,12 @@ namespace Lunex {
 
 		// ?? Per-backend settings ????????????????????????????????????????
 		if (m_RenderSystem && m_RenderSystem->GetActiveBackendType() == RenderBackendType::PathTracer) {
+			auto* backend = m_RenderSystem->GetActiveBackend();
+			if (!backend) return;
+
 			Text("Path Tracer Settings");
 			AddSpacing(SpacingValues::XS);
 
-			auto* backend = m_RenderSystem->GetActiveBackend();
 			RenderBackendSettings settings = backend->GetSettings();
 			bool changed = false;
 
@@ -124,7 +131,11 @@ namespace Lunex {
 				changed = true;
 			}
 
-			if (changed) backend->SetSettings(settings);
+			if (changed) {
+				backend->SetSettings(settings);
+				// Quality-affecting settings changed ? restart accumulation
+				backend->ResetAccumulation();
+			}
 
 			Separator();
 
@@ -133,9 +144,27 @@ namespace Lunex {
 			AddSpacing(SpacingValues::XS);
 
 			auto stats = backend->GetStats();
-			TextColored(Colors::TextSecondary(), "  Accumulated Samples: %d", stats.AccumulatedSamples);
-			TextColored(Colors::TextSecondary(), "  Triangles (BVH):     %d", stats.TotalTriangles);
-			TextColored(Colors::TextSecondary(), "  BVH Nodes:           %d", stats.BVHNodeCount);
+			uint32_t accumulated = stats.AccumulatedSamples;
+			uint32_t maxAccum    = settings.MaxAccumulatedSamples;
+
+			TextColored(Colors::TextSecondary(), "  Accumulated Samples: %u", accumulated);
+
+			// Progress bar when a sample cap is set
+			if (maxAccum > 0) {
+				float progress = static_cast<float>(accumulated) / static_cast<float>(maxAccum);
+				ImGui::ProgressBar(progress, ImVec2(-1, 0),
+					(std::to_string(accumulated) + " / " + std::to_string(maxAccum)).c_str());
+
+				if (accumulated >= maxAccum) {
+					AddSpacing(SpacingValues::XS);
+					TextColored(Colors::Success(), "  Converged!");
+				}
+			}
+
+			AddSpacing(SpacingValues::XS);
+			TextColored(Colors::TextSecondary(), "  Triangles (BVH):     %u", stats.TotalTriangles);
+			TextColored(Colors::TextSecondary(), "  BVH Nodes:           %u", stats.BVHNodeCount);
+			TextColored(Colors::TextSecondary(), "  Bindless Textures:   %u", stats.TextureCount);
 
 			AddSpacing(SpacingValues::SM);
 			if (Button("Reset Accumulation", ButtonVariant::Outline)) {
@@ -148,7 +177,7 @@ namespace Lunex {
 			TextColored(Colors::TextMuted(), "Using the standard forward PBR pipeline.");
 			TextColored(Colors::TextMuted(), "Shadow and lighting settings are in their respective tabs.");
 
-			if (m_RenderSystem) {
+			if (m_RenderSystem && m_RenderSystem->GetActiveBackend()) {
 				auto stats = m_RenderSystem->GetActiveBackend()->GetStats();
 				AddSpacing(SpacingValues::SM);
 				TextColored(Colors::TextSecondary(), "  Draw Calls: %d", stats.DrawCalls);

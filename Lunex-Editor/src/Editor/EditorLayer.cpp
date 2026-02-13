@@ -762,13 +762,13 @@ namespace Lunex {
 		if (auto* renderSys = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
 			m_SettingsPanel.SetSceneRenderSystem(renderSys);
 
-			// When the path tracer backend is active, show its output texture
-			// instead of the rasterizer framebuffer
-			uint32_t overrideTex = 0;
-			if (renderSys->GetActiveBackendType() == RenderBackendType::PathTracer) {
-				overrideTex = renderSys->GetActiveBackend()->GetOutputTextureID();
-			}
-			m_ViewportPanel.SetOverrideTextureID(overrideTex);
+			// Path tracer output is now composited directly into the editor
+			// framebuffer via BlitToFramebuffer(), so we no longer need to
+			// override the viewport texture.  Always show the framebuffer.
+			m_ViewportPanel.SetOverrideTextureID(0);
+
+			// Pass active backend so ViewportPanel can show the HUD overlay
+			m_ViewportPanel.SetActiveBackend(renderSys->GetActiveBackend());
 		}
 
 		// ========================================
@@ -780,15 +780,23 @@ namespace Lunex {
 		// ========================================
 		// SHADOW PASS (before main framebuffer bind)
 		// Renders shadow maps into the shadow atlas
+		// Only needed for the rasterizer — the path tracer does not use shadow maps.
 		// ========================================
-		if (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Simulate) {
-			Renderer3D::UpdateShadows(m_ActiveScene.get(), m_EditorCamera);
-		} else if (m_SceneState == SceneState::Play) {
-			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
-			if (camera) {
-				auto& cameraComp = camera.GetComponent<CameraComponent>();
-				auto& transformComp = camera.GetComponent<TransformComponent>();
-				Renderer3D::UpdateShadows(m_ActiveScene.get(), cameraComp.Camera, transformComp.GetTransform());
+		bool isPathTracerActive = false;
+		if (auto* renderSys = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+			isPathTracerActive = (renderSys->GetActiveBackendType() == RenderBackendType::PathTracer);
+		}
+
+		if (!isPathTracerActive) {
+			if (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Simulate) {
+				Renderer3D::UpdateShadows(m_ActiveScene.get(), m_EditorCamera);
+			} else if (m_SceneState == SceneState::Play) {
+				Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
+				if (camera) {
+					auto& cameraComp = camera.GetComponent<CameraComponent>();
+					auto& transformComp = camera.GetComponent<TransformComponent>();
+					Renderer3D::UpdateShadows(m_ActiveScene.get(), cameraComp.Camera, transformComp.GetTransform());
+				}
 			}
 		}
 
@@ -1280,6 +1288,11 @@ namespace Lunex {
 	}
 
 	void EditorLayer::NewScene() {
+		// Clear stale backend pointers before destroying the old scene
+		m_SettingsPanel.SetSceneRenderSystem(nullptr);
+		m_ViewportPanel.SetOverrideTextureID(0);
+		m_ViewportPanel.SetActiveBackend(nullptr);
+
 		m_EditorScene = CreateRef<Scene>();
 		m_ActiveScene = m_EditorScene;
 		m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
@@ -1306,6 +1319,11 @@ namespace Lunex {
 		Ref<Scene> newScene = CreateRef<Scene>();
 		SceneSerializer serializer(newScene);
 		if (serializer.Deserialize(path.string())) {
+			// Clear stale backend pointers before destroying the old scene
+			m_SettingsPanel.SetSceneRenderSystem(nullptr);
+			m_ViewportPanel.SetOverrideTextureID(0);
+			m_ViewportPanel.SetActiveBackend(nullptr);
+
 			m_EditorScene = newScene;
 			m_EditorScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 			m_SceneHierarchyPanel.SetContext(m_EditorScene);
@@ -1339,6 +1357,11 @@ namespace Lunex {
 		if (m_SceneState == SceneState::Simulate)
 			OnSceneStop();
 
+		// Clear stale backend pointers before scene swap
+		m_SettingsPanel.SetSceneRenderSystem(nullptr);
+		m_ViewportPanel.SetOverrideTextureID(0);
+		m_ViewportPanel.SetActiveBackend(nullptr);
+
 		m_SceneState = SceneState::Play;
 		m_ActiveScene = Scene::Copy(m_EditorScene);
 		m_ActiveScene->OnRuntimeStart();
@@ -1350,6 +1373,11 @@ namespace Lunex {
 		if (m_SceneState == SceneState::Play)
 			OnSceneStop();
 
+		// Clear stale backend pointers before scene swap
+		m_SettingsPanel.SetSceneRenderSystem(nullptr);
+		m_ViewportPanel.SetOverrideTextureID(0);
+		m_ViewportPanel.SetActiveBackend(nullptr);
+
 		m_SceneState = SceneState::Simulate;
 		m_ActiveScene = Scene::Copy(m_EditorScene);
 		m_ActiveScene->OnSimulationStart();
@@ -1359,6 +1387,11 @@ namespace Lunex {
 
 	void EditorLayer::OnSceneStop() {
 		LNX_CORE_ASSERT(m_SceneState == SceneState::Play || m_SceneState == SceneState::Simulate);
+
+		// Clear stale backend pointers before destroying copied scene
+		m_SettingsPanel.SetSceneRenderSystem(nullptr);
+		m_ViewportPanel.SetOverrideTextureID(0);
+		m_ViewportPanel.SetActiveBackend(nullptr);
 
 		if (m_SceneState == SceneState::Play)
 			m_ActiveScene->OnRuntimeStop();

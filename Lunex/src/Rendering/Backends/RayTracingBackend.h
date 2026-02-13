@@ -53,12 +53,31 @@ namespace Lunex {
 
 		RenderBackendStats GetStats() const override;
 
+		/**
+		 * @brief Blit the path tracer output onto the currently-bound framebuffer.
+		 *
+		 * Draws a fullscreen triangle using the tone-mapped RGBA8 output texture.
+		 * Then performs a fast raster Entity-ID pass so mouse picking works.
+		 * Must be called while the editor framebuffer is bound.
+		 */
+		void BlitToFramebuffer();
+
 	private:
 		void CreateOutputTextures(uint32_t w, uint32_t h);
 		void UpdateCameraUBO();
 		void UploadLights();
 		bool DetectSceneChanges();
 		size_t ComputeSceneHash() const;
+
+		/**
+		 * @brief Fast raster pass that writes entity IDs to the RED_INTEGER attachment.
+		 *
+		 * The path tracer compute shader cannot write entity IDs, so this pass
+		 * re-renders all scene meshes with a minimal shader that only outputs
+		 * o_EntityID.  Depth testing is enabled so only visible fragments win.
+		 * Color writes are disabled to preserve the path-traced image.
+		 */
+		void RenderEntityIDPass();
 
 	private:
 		// Scene
@@ -107,6 +126,15 @@ namespace Lunex {
 		uint32_t m_Height      = 0;
 		glm::mat4 m_LastVP     = glm::mat4(1.0f);
 		size_t    m_LastSceneHash = 0;
+
+		// Fullscreen blit resources (for compositing PT output onto the editor FBO)
+		Ref<Shader> m_BlitShader;
+		uint32_t    m_BlitDummyVAO = 0;  // empty VAO for attribute-less rendering
+
+		// Entity ID pass resources (for mouse picking in PT mode)
+		Ref<Shader>        m_EntityIDShader;
+		Ref<UniformBuffer> m_EntityIDCameraUBO;   // binding 0: ViewProjection
+		Ref<UniformBuffer> m_EntityIDTransformUBO; // binding 1: Transform
 	};
 
 } // namespace Lunex

@@ -8,6 +8,7 @@
  * - Multi-selection gizmo with pivot point modes
  * - Drag & drop for scenes, models, prefabs
  * - Camera preview overlay for selected cameras
+ * - Path tracer HUD overlay (sample count, progress, reset)
  * - Toolbar integration
  */
 
@@ -15,6 +16,7 @@
 
 #include "Core/Core.h"
 #include "Renderer/Framebuffer.h"
+#include "Rendering/RenderBackend.h"
 #include "Scene/Camera/EditorCamera.h"
 #include "Scene/Entity.h"
 #include "Scene/Scene.h"
@@ -58,6 +60,10 @@ namespace Lunex {
 		 *  Pass 0 to revert to the default framebuffer. */
 		void SetOverrideTextureID(uint32_t texID) { m_OverrideTextureID = texID; }
 
+		/** Set the active render backend so the viewport can show a HUD overlay
+		 *  with sample count / progress / reset button.  Pass nullptr to hide. */
+		void SetActiveBackend(RenderBackend* backend) { m_ActiveBackend = backend; }
+
 		// Drag & drop callbacks
 		void SetOnSceneDropCallback(std::function<void(const std::filesystem::path&)> callback) {
 			m_OnSceneDropCallback = callback;
@@ -78,6 +84,7 @@ namespace Lunex {
 	private:
 		// Render helpers
 		void RenderFramebufferImage(Ref<Framebuffer> framebuffer);
+		void RenderPathTracerOverlay();
 		void HandleDragDrop();
 		void RenderGizmos(
 			SceneHierarchyPanel& hierarchyPanel,
@@ -96,6 +103,9 @@ namespace Lunex {
 
 		// Override texture for path tracer output (0 = use framebuffer)
 		uint32_t m_OverrideTextureID = 0;
+
+		// Active backend for HUD overlay (nullptr = hidden)
+		RenderBackend* m_ActiveBackend = nullptr;
 
 		// Gizmo state (for multi-selection delta tracking)
 		bool m_GizmoWasUsing = false;

@@ -68,6 +68,7 @@ namespace Lunex {
 		uint32_t AccumulatedSamples = 0;
 		uint32_t BVHNodeCount       = 0;
 		uint32_t TotalTriangles     = 0;
+		uint32_t TextureCount       = 0;
 		float    LastFrameTimeMs    = 0.0f;
 	};
 

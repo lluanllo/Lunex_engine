@@ -57,6 +57,9 @@ namespace Lunex {
 		RenderBackend*    GetActiveBackend()           { return m_ActiveBackend; }
 		const RenderBackend* GetActiveBackend() const  { return m_ActiveBackend; }
 
+		/** Returns true when the system has a valid context and active backend. */
+		bool IsReady() const { return m_Context != nullptr && m_ActiveBackend != nullptr; }
+
 		/** Call when entities / materials change so RT backend rebuilds BVH. */
 		void NotifySceneChanged();
 
