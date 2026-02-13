@@ -5,6 +5,8 @@
  * Features:
  * - Main scene framebuffer display
  * - ImGuizmo transform manipulation
+ * - Multi-selection gizmo with pivot point modes (Blender-style)
+ * - Transform orientation: Global / Local
  * - Drag & drop for scenes, models, prefabs
  * - Camera preview overlay for selected cameras
  * - Toolbar integration
@@ -28,6 +30,10 @@
 #include <imgui.h>
 #include <ImGuizmo.h>
 #include <glm/gtc/type_ptr.hpp>
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
@@ -59,7 +65,8 @@ namespace Lunex {
 		int gizmoType,
 		ToolbarPanel& toolbarPanel, 
 		SceneState sceneState, 
-		bool toolbarEnabled) 
+		bool toolbarEnabled,
+		GizmoSettingsPanel& gizmoSettings) 
 	{
 		using namespace UI;
 
@@ -97,9 +104,14 @@ namespace Lunex {
 		// Handle drag & drop
 		HandleDragDrop();
 
-		// Render gizmos
-		if (selectedEntity && gizmoType != -1) {
-			RenderGizmos(editorCamera, selectedEntity, gizmoType);
+		// Render gizmos (multi-selection aware)
+		const auto& selectedEntities = hierarchyPanel.GetSelectedEntities();
+		if (!selectedEntities.empty() && gizmoType != -1) {
+			RenderGizmos(hierarchyPanel, editorCamera, gizmoType, gizmoSettings);
+		}
+		else {
+			// Reset gizmo tracking state when nothing is selected
+			m_GizmoWasUsing = false;
 		}
 
 		// Camera preview overlay
@@ -172,10 +184,18 @@ namespace Lunex {
 	}
 
 	// ============================================================================
-	// GIZMOS
+	// GIZMOS - Multi-selection with Pivot Point & Orientation support
 	// ============================================================================
 
-	void ViewportPanel::RenderGizmos(const EditorCamera& editorCamera, Entity selectedEntity, int gizmoType) {
+	void ViewportPanel::RenderGizmos(
+		SceneHierarchyPanel& hierarchyPanel,
+		const EditorCamera& editorCamera,
+		int gizmoType,
+		GizmoSettingsPanel& gizmoSettings)
+	{
+		const auto& selectedEntities = hierarchyPanel.GetSelectedEntities();
+		if (selectedEntities.empty()) return;
+
 		ImGuizmo::SetOrthographic(false);
 		ImGuizmo::SetDrawlist();
 
@@ -190,35 +210,240 @@ namespace Lunex {
 		const glm::mat4& cameraProjection = editorCamera.GetProjection();
 		glm::mat4 cameraView = editorCamera.GetViewMatrix();
 
-		// Entity transform
-		auto& tc = selectedEntity.GetComponent<TransformComponent>();
-		glm::mat4 transform = tc.GetTransform();
-
 		// Snapping
 		bool snap = Input::IsKeyPressed(Key::LeftControl);
 		float snapValue = (gizmoType == ImGuizmo::OPERATION::ROTATE) ? 45.0f : 0.5f;
 		float snapValues[3] = { snapValue, snapValue, snapValue };
 
-		// Manipulate
+		PivotPoint pivotMode = gizmoSettings.GetPivotPoint();
+		TransformOrientation orientMode = gizmoSettings.GetOrientation();
+
+		// ========================================================================
+		// INDIVIDUAL ORIGINS MODE: Each object gets its own gizmo
+		// ========================================================================
+		if (pivotMode == PivotPoint::IndividualOrigins && selectedEntities.size() > 1) {
+			// We draw gizmo for the active entity and apply delta to all
+			Entity activeEntity = hierarchyPanel.GetActiveEntity();
+			if (!activeEntity || !activeEntity.HasComponent<TransformComponent>()) {
+				activeEntity = *selectedEntities.begin();
+			}
+
+			for (auto entity : selectedEntities) {
+				if (!entity.HasComponent<TransformComponent>()) continue;
+
+				auto& tc = entity.GetComponent<TransformComponent>();
+				glm::mat4 transform = tc.GetTransform();
+
+				// Determine ImGuizmo mode
+				ImGuizmo::MODE mode = (orientMode == TransformOrientation::Local) 
+					? ImGuizmo::LOCAL : ImGuizmo::WORLD;
+
+				// Only the active entity gets an interactive gizmo
+				if (entity == activeEntity) {
+					ImGuizmo::Manipulate(
+						glm::value_ptr(cameraView),
+						glm::value_ptr(cameraProjection),
+						(ImGuizmo::OPERATION)gizmoType,
+						mode,
+						glm::value_ptr(transform),
+						nullptr,
+						snap ? snapValues : nullptr
+					);
+
+					if (ImGuizmo::IsUsing()) {
+						glm::vec3 newTranslation, newRotation, newScale;
+						Math::DecomposeTransform(transform, newTranslation, newRotation, newScale);
+
+						// Calculate deltas from the active entity
+						glm::vec3 deltaTranslation = newTranslation - tc.Translation;
+						glm::vec3 deltaRotation = newRotation - tc.Rotation;
+						glm::vec3 deltaScale = newScale - tc.Scale;
+
+						// Apply to active entity
+						tc.Translation = newTranslation;
+						tc.Rotation += deltaRotation;
+						tc.Scale = newScale;
+
+						// Apply same delta to all other selected entities
+						for (auto otherEntity : selectedEntities) {
+							if (otherEntity == entity) continue;
+							if (!otherEntity.HasComponent<TransformComponent>()) continue;
+
+							auto& otherTc = otherEntity.GetComponent<TransformComponent>();
+
+							if (gizmoType == ImGuizmo::OPERATION::TRANSLATE) {
+								otherTc.Translation += deltaTranslation;
+							}
+							else if (gizmoType == ImGuizmo::OPERATION::ROTATE) {
+								otherTc.Rotation += deltaRotation;
+							}
+							else if (gizmoType == ImGuizmo::OPERATION::SCALE) {
+								otherTc.Scale += deltaScale;
+							}
+						}
+					}
+				}
+			}
+			return;
+		}
+
+		// ========================================================================
+		// SHARED PIVOT MODE: Median Point / Active Element / Bounding Box
+		// ========================================================================
+
+		// Calculate pivot position based on mode
+		glm::vec3 pivotPosition;
+		switch (pivotMode) {
+			case PivotPoint::ActiveElement:
+				pivotPosition = hierarchyPanel.CalculateActiveElementPosition();
+				break;
+			case PivotPoint::BoundingBox:
+				pivotPosition = hierarchyPanel.CalculateBoundingBoxCenter();
+				break;
+			case PivotPoint::MedianPoint:
+			default:
+				pivotPosition = hierarchyPanel.CalculateMedianPoint();
+				break;
+		}
+
+		// For single selection, just use the entity's own transform
+		if (selectedEntities.size() == 1) {
+			Entity entity = *selectedEntities.begin();
+			if (!entity.HasComponent<TransformComponent>()) return;
+
+			auto& tc = entity.GetComponent<TransformComponent>();
+			glm::mat4 transform = tc.GetTransform();
+
+			ImGuizmo::MODE mode = (orientMode == TransformOrientation::Local) 
+				? ImGuizmo::LOCAL : ImGuizmo::WORLD;
+
+			ImGuizmo::Manipulate(
+				glm::value_ptr(cameraView),
+				glm::value_ptr(cameraProjection),
+				(ImGuizmo::OPERATION)gizmoType,
+				mode,
+				glm::value_ptr(transform),
+				nullptr,
+				snap ? snapValues : nullptr
+			);
+
+			if (ImGuizmo::IsUsing()) {
+				glm::vec3 translation, rotation, scale;
+				Math::DecomposeTransform(transform, translation, rotation, scale);
+
+				glm::vec3 deltaRotation = rotation - tc.Rotation;
+				tc.Translation = translation;
+				tc.Rotation += deltaRotation;
+				tc.Scale = scale;
+			}
+			return;
+		}
+
+		// ========================================================================
+		// MULTI-SELECTION: Shared pivot gizmo
+		// ========================================================================
+
+		// Get orientation from active entity for Local mode
+		Entity activeEntity = hierarchyPanel.GetActiveEntity();
+		glm::mat4 pivotTransform;
+
+		if (orientMode == TransformOrientation::Local && activeEntity && activeEntity.HasComponent<TransformComponent>()) {
+			auto& activeTc = activeEntity.GetComponent<TransformComponent>();
+			glm::mat4 rotation = glm::toMat4(glm::quat(activeTc.Rotation));
+			pivotTransform = glm::translate(glm::mat4(1.0f), pivotPosition) * rotation;
+		}
+		else {
+			pivotTransform = glm::translate(glm::mat4(1.0f), pivotPosition);
+		}
+
+		ImGuizmo::MODE imguizmoMode = (orientMode == TransformOrientation::Local) 
+			? ImGuizmo::LOCAL : ImGuizmo::WORLD;
+
+		glm::mat4 manipulatedTransform = pivotTransform;
+
 		ImGuizmo::Manipulate(
-			glm::value_ptr(cameraView), 
+			glm::value_ptr(cameraView),
 			glm::value_ptr(cameraProjection),
-			(ImGuizmo::OPERATION)gizmoType, 
-			ImGuizmo::LOCAL, 
-			glm::value_ptr(transform),
-			nullptr, 
+			(ImGuizmo::OPERATION)gizmoType,
+			imguizmoMode,
+			glm::value_ptr(manipulatedTransform),
+			nullptr,
 			snap ? snapValues : nullptr
 		);
 
-		// Apply changes if using gizmo
-		if (ImGuizmo::IsUsing()) {
-			glm::vec3 translation, rotation, scale;
-			Math::DecomposeTransform(transform, translation, rotation, scale);
+		bool isUsing = ImGuizmo::IsUsing();
 
-			glm::vec3 deltaRotation = rotation - tc.Rotation;
-			tc.Translation = translation;
-			tc.Rotation += deltaRotation;
-			tc.Scale = scale;
+		if (isUsing) {
+			if (!m_GizmoWasUsing) {
+				// Gizmo just started being used - store initial state
+				m_GizmoPreviousTransform = pivotTransform;
+				m_GizmoWasUsing = true;
+			}
+
+			// Calculate delta between previous and current gizmo transform
+			glm::vec3 prevTranslation, prevRotation, prevScale;
+			Math::DecomposeTransform(m_GizmoPreviousTransform, prevTranslation, prevRotation, prevScale);
+
+			glm::vec3 newTranslation, newRotation, newScale;
+			Math::DecomposeTransform(manipulatedTransform, newTranslation, newRotation, newScale);
+
+			if (gizmoType == ImGuizmo::OPERATION::TRANSLATE) {
+				glm::vec3 deltaTranslation = newTranslation - prevTranslation;
+
+				for (auto entity : selectedEntities) {
+					if (!entity.HasComponent<TransformComponent>()) continue;
+					auto& tc = entity.GetComponent<TransformComponent>();
+					tc.Translation += deltaTranslation;
+				}
+			}
+			else if (gizmoType == ImGuizmo::OPERATION::ROTATE) {
+				// Calculate rotation delta
+				glm::quat prevQuat = glm::quat(prevRotation);
+				glm::quat newQuat = glm::quat(newRotation);
+				glm::quat deltaQuat = newQuat * glm::inverse(prevQuat);
+
+				for (auto entity : selectedEntities) {
+					if (!entity.HasComponent<TransformComponent>()) continue;
+					auto& tc = entity.GetComponent<TransformComponent>();
+
+					// Rotate position around pivot
+					glm::vec3 relativePos = tc.Translation - pivotPosition;
+					glm::vec3 rotatedPos = deltaQuat * relativePos;
+					tc.Translation = pivotPosition + rotatedPos;
+
+					// Apply rotation to entity's own rotation
+					glm::quat entityQuat = glm::quat(tc.Rotation);
+					glm::quat newEntityQuat = deltaQuat * entityQuat;
+					tc.Rotation = glm::eulerAngles(newEntityQuat);
+				}
+			}
+			else if (gizmoType == ImGuizmo::OPERATION::SCALE) {
+				glm::vec3 deltaScale = newScale / prevScale;
+
+				// Clamp delta scale to avoid division by zero / extreme values
+				for (int i = 0; i < 3; i++) {
+					if (std::abs(prevScale[i]) < 0.0001f) deltaScale[i] = 1.0f;
+					deltaScale[i] = glm::clamp(deltaScale[i], 0.01f, 100.0f);
+				}
+
+				for (auto entity : selectedEntities) {
+					if (!entity.HasComponent<TransformComponent>()) continue;
+					auto& tc = entity.GetComponent<TransformComponent>();
+
+					// Scale position relative to pivot
+					glm::vec3 relativePos = tc.Translation - pivotPosition;
+					tc.Translation = pivotPosition + relativePos * deltaScale;
+
+					// Scale the entity
+					tc.Scale *= deltaScale;
+				}
+			}
+
+			// Update previous transform for next frame delta
+			m_GizmoPreviousTransform = manipulatedTransform;
+		}
+		else {
+			m_GizmoWasUsing = false;
 		}
 	}
 

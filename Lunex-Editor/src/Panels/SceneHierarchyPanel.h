@@ -28,6 +28,12 @@ namespace Lunex {
 		UI::Color ItemHover = UI::Color(0.20f, 0.20f, 0.22f, 1.0f);
 		UI::Color ItemSelected = UI::Color(0.18f, 0.40f, 0.68f, 0.35f);
 		UI::Color ItemSelectedBorder = UI::Color(0.26f, 0.59f, 0.98f, 0.80f);
+		// Active element (last selected) - Light orange (Blender-style)
+		UI::Color ItemActive = UI::Color(0.90f, 0.60f, 0.20f, 0.40f);
+		UI::Color ItemActiveBorder = UI::Color(1.0f, 0.70f, 0.25f, 0.90f);
+		// Non-active selected elements - Dark orange (Blender-style)
+		UI::Color ItemSelectedMulti = UI::Color(0.70f, 0.40f, 0.10f, 0.30f);
+		UI::Color ItemSelectedMultiBorder = UI::Color(0.80f, 0.50f, 0.15f, 0.70f);
 		UI::Color TextPrimary = UI::Color(0.92f, 0.92f, 0.94f, 1.0f);
 		UI::Color TextMuted = UI::Color(0.60f, 0.60f, 0.62f, 1.0f);
 		UI::Color Border = UI::Color(0.08f, 0.08f, 0.09f, 1.0f);

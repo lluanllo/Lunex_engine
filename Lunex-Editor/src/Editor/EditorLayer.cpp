@@ -943,7 +943,7 @@ namespace Lunex {
 		
 		m_ViewportPanel.OnImGuiRender(m_Framebuffer, cameraPreview, m_SceneHierarchyPanel, m_EditorCamera,
 			selectedEntity, m_GizmoType, m_ToolbarPanel,
-			m_SceneState, (bool)m_ActiveScene);
+			m_SceneState, (bool)m_ActiveScene, m_GizmoSettingsPanel);
 		
 		// ========================================
 		// RENDER GIZMO SETTINGS PANEL (overlay on viewport)
@@ -1092,14 +1092,54 @@ namespace Lunex {
 			uint64_t sceneFBOHandle = static_cast<uint64_t>(m_Framebuffer->GetRendererID());
 
 			const auto& selectedEntities = m_SceneHierarchyPanel.GetSelectedEntities();
+			Entity activeEntity = m_SceneHierarchyPanel.GetActiveEntity();
+			
 			if (!selectedEntities.empty()) {
-				outlineRenderer.RenderSelectionOutline(
-					m_ActiveScene.get(),
-					selectedEntities,
-					viewProjection,
-					sceneFBOHandle,
-					m_OutlinePreferencesPanel.GetOutlineColor()
-				);
+				// Multi-selection: different outline colors for active vs non-active
+				if (selectedEntities.size() > 1) {
+					std::set<Entity> nonActiveEntities;
+					for (const auto& e : selectedEntities) {
+						if (e != activeEntity) {
+							nonActiveEntities.insert(e);
+						}
+					}
+					
+					if (!nonActiveEntities.empty()) {
+						// Dark orange for non-active selected
+						glm::vec4 darkOrangeOutline(0.80f, 0.45f, 0.10f, 1.0f);
+						outlineRenderer.RenderSelectionOutline(
+							m_ActiveScene.get(),
+							nonActiveEntities,
+							viewProjection,
+							sceneFBOHandle,
+							darkOrangeOutline
+						);
+					}
+					
+					// Render active entity with light orange outline
+					if (activeEntity) {
+						std::set<Entity> activeSet;
+						activeSet.insert(activeEntity);
+						glm::vec4 lightOrangeOutline(1.0f, 0.70f, 0.25f, 1.0f);
+						outlineRenderer.RenderSelectionOutline(
+							m_ActiveScene.get(),
+							activeSet,
+							viewProjection,
+							sceneFBOHandle,
+							lightOrangeOutline
+						);
+					}
+				}
+				else {
+					// Single selection: use the configured outline color
+					outlineRenderer.RenderSelectionOutline(
+						m_ActiveScene.get(),
+						selectedEntities,
+						viewProjection,
+						sceneFBOHandle,
+						m_OutlinePreferencesPanel.GetOutlineColor()
+					);
+				}
 			}
 
 			// Re-bind the main scene FBO after outline passes
