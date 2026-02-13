@@ -6,6 +6,7 @@
 #include "Log/Log.h"
 
 #include <glad/glad.h>
+#include <functional>
 
 namespace Lunex {
 
@@ -20,6 +21,9 @@ namespace Lunex {
 	static constexpr uint32_t IMG_ACCUMULATION = 0;
 	static constexpr uint32_t IMG_OUTPUT       = 1;
 
+	// Minimum SSBO allocation to avoid tiny buffers
+	static constexpr uint32_t MIN_LIGHTS_SSBO_BYTES = 1024;
+
 	// ====================================================================
 	// LIFECYCLE
 	// ====================================================================
@@ -28,10 +32,11 @@ namespace Lunex {
 		m_RTScene.Initialize();
 
 		m_CameraUBO  = UniformBuffer::Create(sizeof(CameraUBOData), BIND_CAMERA_UBO);
-		m_LightsSSBO = StorageBuffer::Create(sizeof(LightData) * 128, BIND_LIGHTS);
 
-		// Compute shader will be loaded when the viewport size is known
-		// (we need it for the output textures anyway)
+		// Initial lights SSBO — will grow on demand
+		m_LightsSSBOCapacity = MIN_LIGHTS_SSBO_BYTES;
+		m_LightsSSBO = StorageBuffer::Create(m_LightsSSBOCapacity, BIND_LIGHTS);
+
 		LNX_LOG_INFO("RayTracingBackend: Initialized");
 	}
 
@@ -41,6 +46,7 @@ namespace Lunex {
 		m_RTScene.Shutdown();
 		m_CameraUBO.reset();
 		m_LightsSSBO.reset();
+		m_LightsSSBOCapacity = 0;
 		m_PathTracerShader.reset();
 		LNX_LOG_INFO("RayTracingBackend: Shutdown");
 	}
@@ -108,11 +114,17 @@ namespace Lunex {
 		m_SceneData.ViewportWidth  = m_Width;
 		m_SceneData.ViewportHeight = m_Height;
 
-		// Detect camera movement -> reset accumulation
+		// Detect camera movement ? reset accumulation
 		glm::mat4 curVP = m_SceneData.ViewProjection;
 		if (curVP != m_LastVP) {
 			ResetAccumulation();
 			m_LastVP = curVP;
+		}
+
+		// Detect scene geometry/material/light changes ? rebuild BVH + reset
+		if (DetectSceneChanges()) {
+			m_RTScene.MarkDirty();
+			ResetAccumulation();
 		}
 	}
 
@@ -127,6 +139,73 @@ namespace Lunex {
 			ResetAccumulation();
 			m_LastVP = curVP;
 		}
+
+		if (DetectSceneChanges()) {
+			m_RTScene.MarkDirty();
+			ResetAccumulation();
+		}
+	}
+
+	// ====================================================================
+	// SCENE CHANGE DETECTION
+	// ====================================================================
+
+	size_t RayTracingBackend::ComputeSceneHash() const {
+		size_t hash = 0;
+
+		// Hash draw items: transform + mesh pointer + material pointer + entity ID
+		for (const auto& item : m_SceneData.DrawItems) {
+			// Hash transform matrix (first row is enough for change detection)
+			const float* m = &item.Transform[0][0];
+			for (int i = 0; i < 16; ++i) {
+				hash ^= std::hash<float>{}(m[i]) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+			}
+			hash ^= std::hash<void*>{}(item.MeshModel.get()) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+			hash ^= std::hash<void*>{}(item.Material.get())   + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+		}
+
+		// Hash lights
+		for (const auto& light : m_SceneData.Lights) {
+			const float* v = &light.Position.x;
+			for (int i = 0; i < 20; ++i) {  // 5 vec4 = 20 floats
+				hash ^= std::hash<float>{}(v[i]) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+			}
+		}
+
+		// Hash counts
+		hash ^= std::hash<size_t>{}(m_SceneData.DrawItems.size()) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+		hash ^= std::hash<size_t>{}(m_SceneData.Lights.size())    + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+
+		return hash;
+	}
+
+	bool RayTracingBackend::DetectSceneChanges() {
+		size_t currentHash = ComputeSceneHash();
+		if (currentHash != m_LastSceneHash) {
+			m_LastSceneHash = currentHash;
+			return true;
+		}
+		return false;
+	}
+
+	// ====================================================================
+	// LIGHTS UPLOAD (grow-on-demand)
+	// ====================================================================
+
+	void RayTracingBackend::UploadLights() {
+		uint32_t lightCount = static_cast<uint32_t>(m_SceneData.Lights.size());
+		uint32_t requiredBytes = lightCount * static_cast<uint32_t>(sizeof(LightData));
+
+		if (requiredBytes == 0) return;
+
+		// Grow SSBO if needed (2x strategy)
+		if (requiredBytes > m_LightsSSBOCapacity) {
+			uint32_t newCap = std::max(requiredBytes * 2, MIN_LIGHTS_SSBO_BYTES);
+			m_LightsSSBO = StorageBuffer::Create(newCap, BIND_LIGHTS);
+			m_LightsSSBOCapacity = newCap;
+		}
+
+		m_LightsSSBO->SetData(m_SceneData.Lights.data(), requiredBytes);
 	}
 
 	// ====================================================================
@@ -147,35 +226,11 @@ namespace Lunex {
 			m_RTScene.Rebuild(m_SceneData);
 		}
 
-		// Upload lights
-		if (!m_SceneData.Lights.empty()) {
-			uint32_t lightsSize = static_cast<uint32_t>(
-				m_SceneData.Lights.size() * sizeof(LightData));
-			if (lightsSize > 0) {
-				// Grow if needed
-				m_LightsSSBO = StorageBuffer::Create(
-					std::max(lightsSize, 1024u), BIND_LIGHTS);
-				m_LightsSSBO->SetData(m_SceneData.Lights.data(), lightsSize);
-			}
-		}
+		// Upload lights (grow-on-demand, no per-frame allocation)
+		UploadLights();
 
-		// Fill camera UBO
-		m_CameraData.InverseProjection = m_SceneData.InverseProjection;
-		m_CameraData.InverseView       = m_SceneData.InverseView;
-		m_CameraData.CameraPosition    = glm::vec4(m_SceneData.CameraPosition, 1.0f);
-		m_CameraData.FrameIndex        = m_FrameIndex;
-		m_CameraData.SampleCount       = m_SampleCount;
-		m_CameraData.MaxBounces        = m_Settings.MaxBounces;
-		m_CameraData.TriangleCount     = m_RTScene.GetTriangleCount();
-		m_CameraData.BVHNodeCount      = m_RTScene.GetBVHNodeCount();
-		m_CameraData.LightCount        = static_cast<uint32_t>(m_SceneData.Lights.size());
-		m_CameraData.MaterialCount     = m_RTScene.GetMaterialCount();
-		m_CameraData.RussianRoulette   = m_Settings.RussianRouletteThresh;
-		m_CameraUBO->SetData(&m_CameraData, sizeof(CameraUBOData));
-
-		// Bind resources
+		// Bind resources that stay constant across all samples this frame
 		m_PathTracerShader->Bind();
-
 		m_RTScene.Bind(BIND_TRIANGLES, BIND_BVH, BIND_MATERIALS);
 		m_LightsSSBO->BindForCompute(BIND_LIGHTS);
 
@@ -193,16 +248,43 @@ namespace Lunex {
 			if (globalEnv->GetBRDFLUT())        globalEnv->GetBRDFLUT()->Bind(10);
 		}
 
-		// Dispatch
 		uint32_t groupsX = (m_Width  + 7) / 8;
 		uint32_t groupsY = (m_Height + 7) / 8;
-		m_PathTracerShader->Dispatch(groupsX, groupsY, 1);
 
-		// Memory barrier so the output texture is ready
+		// Dispatch N samples per frame (SamplesPerFrame setting)
+		uint32_t samplesThisFrame = std::max(1u, m_Settings.SamplesPerFrame);
+		for (uint32_t s = 0; s < samplesThisFrame; ++s) {
+			// Clamp to max if set
+			if (m_Settings.MaxAccumulatedSamples > 0 &&
+			    m_SampleCount >= m_Settings.MaxAccumulatedSamples)
+				break;
+
+			// Fill camera UBO with current sample state
+			m_CameraData.InverseProjection = m_SceneData.InverseProjection;
+			m_CameraData.InverseView       = m_SceneData.InverseView;
+			m_CameraData.CameraPosition    = glm::vec4(m_SceneData.CameraPosition, 1.0f);
+			m_CameraData.FrameIndex        = m_FrameIndex;
+			m_CameraData.SampleCount       = m_SampleCount;
+			m_CameraData.MaxBounces        = m_Settings.MaxBounces;
+			m_CameraData.SamplesPerFrame   = samplesThisFrame;
+			m_CameraData.TriangleCount     = m_RTScene.GetTriangleCount();
+			m_CameraData.BVHNodeCount      = m_RTScene.GetBVHNodeCount();
+			m_CameraData.LightCount        = static_cast<uint32_t>(m_SceneData.Lights.size());
+			m_CameraData.MaterialCount     = m_RTScene.GetMaterialCount();
+			m_CameraData.RussianRoulette   = m_Settings.RussianRouletteThresh;
+			m_CameraData._pad0 = 0.0f;
+			m_CameraData._pad1 = 0.0f;
+			m_CameraData._pad2 = 0.0f;
+			m_CameraUBO->SetData(&m_CameraData, sizeof(CameraUBOData));
+
+			m_PathTracerShader->Dispatch(groupsX, groupsY, 1);
+
+			m_SampleCount++;
+			m_FrameIndex++;
+		}
+
+		// Final barrier so the output texture is ready for display
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
-
-		m_SampleCount++;
-		m_FrameIndex++;
 	}
 
 	void RayTracingBackend::EndFrame() {
@@ -216,6 +298,7 @@ namespace Lunex {
 	void RayTracingBackend::OnSceneChanged(Scene* scene) {
 		m_CurrentScene = scene;
 		m_RTScene.MarkDirty();
+		m_LastSceneHash = 0;
 		ResetAccumulation();
 	}
 

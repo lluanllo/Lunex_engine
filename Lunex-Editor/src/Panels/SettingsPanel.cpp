@@ -86,24 +86,36 @@ namespace Lunex {
 			bool changed = false;
 
 			int bounces = static_cast<int>(settings.MaxBounces);
-			if (PropertyInt("Max Bounces", bounces, 1, 1, 16,
-			                "Maximum light bounces per ray")) {
-				settings.MaxBounces = static_cast<uint32_t>(bounces);
-				changed = true;
+			{
+				BeginPropertyRow("Max Bounces", "Maximum light bounces per ray");
+				ImGui::SetNextItemWidth(-1);
+				if (ImGui::DragInt("##Max Bounces", &bounces, 1, 1, 16)) {
+					settings.MaxBounces = static_cast<uint32_t>(bounces);
+					changed = true;
+				}
+				EndPropertyRow();
 			}
 
 			int spp = static_cast<int>(settings.SamplesPerFrame);
-			if (PropertyInt("Samples / Frame", spp, 1, 1, 16,
-			                "Samples accumulated per frame")) {
-				settings.SamplesPerFrame = static_cast<uint32_t>(spp);
-				changed = true;
+			{
+				BeginPropertyRow("Samples / Frame", "Samples accumulated per frame");
+				ImGui::SetNextItemWidth(-1);
+				if (ImGui::DragInt("##Samples / Frame", &spp, 1, 1, 16)) {
+					settings.SamplesPerFrame = static_cast<uint32_t>(spp);
+					changed = true;
+				}
+				EndPropertyRow();
 			}
 
 			int maxSamples = static_cast<int>(settings.MaxAccumulatedSamples);
-			if (PropertyInt("Max Samples", maxSamples, 0, 0, 100000,
-			                "0 = infinite accumulation")) {
-				settings.MaxAccumulatedSamples = static_cast<uint32_t>(maxSamples);
-				changed = true;
+			{
+				BeginPropertyRow("Max Samples", "0 = infinite accumulation");
+				ImGui::SetNextItemWidth(-1);
+				if (ImGui::DragInt("##Max Samples", &maxSamples, 1, 0, 100000)) {
+					settings.MaxAccumulatedSamples = static_cast<uint32_t>(maxSamples);
+					changed = true;
+				}
+				EndPropertyRow();
 			}
 
 			if (PropertyFloat("Russian Roulette", settings.RussianRouletteThresh,
@@ -126,7 +138,7 @@ namespace Lunex {
 			TextColored(Colors::TextSecondary(), "  BVH Nodes:           %d", stats.BVHNodeCount);
 
 			AddSpacing(SpacingValues::SM);
-			if (Button("Reset Accumulation", ButtonVariant::Secondary)) {
+			if (Button("Reset Accumulation", ButtonVariant::Outline)) {
 				backend->ResetAccumulation();
 			}
 		}

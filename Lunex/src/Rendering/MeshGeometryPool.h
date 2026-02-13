@@ -6,6 +6,8 @@
  *
  * Walks every SceneDrawItem, transforms vertices to world space,
  * builds a BVH (SAH) and uploads triangles + BVH nodes as SSBOs.
+ *
+ * Phase 2: AABB computation is parallelized via JobSystem::ParallelFor.
  */
 
 #include "Core/Core.h"
@@ -61,6 +63,7 @@ namespace Lunex {
 			glm::vec3 e = Extent();
 			return 2.0f * (e.x * e.y + e.y * e.z + e.z * e.x);
 		}
+		bool IsValid() const { return Min.x <= Max.x; }
 	};
 
 	// ====================================================================
@@ -70,6 +73,7 @@ namespace Lunex {
 	struct MeshPoolBuildResult {
 		uint32_t TriangleCount = 0;
 		uint32_t BVHNodeCount  = 0;
+		float    BuildTimeMs   = 0.0f;
 	};
 
 	// ====================================================================
@@ -101,10 +105,19 @@ namespace Lunex {
 		uint32_t GetBVHNodeCount()  const { return m_BVHNodeCount; }
 
 	private:
-		// -- BVH build (SAH) ---------------------------------------------
+		// -- Flatten geometry (step 1) -----------------------------------
+		void FlattenMeshes(const std::vector<SceneDrawItem>& items,
+		                   std::function<uint32_t(const Ref<MaterialInstance>&)> getMaterialIndex);
+
+		// -- Compute AABBs in parallel (step 2) --------------------------
+		void ComputeAABBsParallel();
+
+		// -- BVH build (SAH) (step 3) ------------------------------------
 		void BuildBVH();
 		void BuildBVHRecursive(uint32_t nodeIdx, uint32_t start, uint32_t end, int depth);
-		float EvaluateSAH(uint32_t start, uint32_t end, int axis, float splitPos) const;
+
+		// -- Upload to GPU (step 4) --------------------------------------
+		void UploadToGPU();
 
 	private:
 		std::vector<RTTriangleGPU>  m_Triangles;
@@ -115,8 +128,10 @@ namespace Lunex {
 		Ref<StorageBuffer>          m_TriangleSSBO;
 		Ref<StorageBuffer>          m_BVHSSBO;
 
-		uint32_t m_TriangleCount = 0;
-		uint32_t m_BVHNodeCount  = 0;
+		uint32_t m_TriangleCount    = 0;
+		uint32_t m_BVHNodeCount     = 0;
+		uint32_t m_TriSSBOCapacity  = 0;  // current SSBO capacity in bytes
+		uint32_t m_BVHSSBOCapacity  = 0;
 	};
 
 } // namespace Lunex

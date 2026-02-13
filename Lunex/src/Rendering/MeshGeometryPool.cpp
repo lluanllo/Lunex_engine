@@ -2,10 +2,12 @@
 #include "MeshGeometryPool.h"
 
 #include "Resources/Mesh/Mesh.h"
+#include "Core/JobSystem/JobSystem.h"
 #include "Log/Log.h"
 
 #include <algorithm>
 #include <numeric>
+#include <chrono>
 
 namespace Lunex {
 
@@ -18,6 +20,9 @@ namespace Lunex {
 	static constexpr int   SAH_BUCKETS         = 12;
 	static constexpr float SAH_TRAVERSAL_COST  = 1.0f;
 	static constexpr float SAH_INTERSECT_COST  = 1.5f;
+
+	// Threshold for parallelization — below this count, single-threaded is faster
+	static constexpr uint32_t PARALLEL_AABB_THRESHOLD = 1024;
 
 	// ====================================================================
 	// LIFECYCLE
@@ -34,22 +39,76 @@ namespace Lunex {
 		m_BVHNodes.clear();
 		m_TriAABBs.clear();
 		m_TriCentroids.clear();
+		m_TriSSBOCapacity  = 0;
+		m_BVHSSBOCapacity  = 0;
 	}
 
 	// ====================================================================
-	// BUILD
+	// BUILD — orchestrates the 4 steps
 	// ====================================================================
 
 	MeshPoolBuildResult MeshGeometryPool::Build(
 		const std::vector<SceneDrawItem>& items,
 		std::function<uint32_t(const Ref<MaterialInstance>&)> getMaterialIndex)
 	{
+		auto t0 = std::chrono::high_resolution_clock::now();
+
 		m_Triangles.clear();
 		m_BVHNodes.clear();
 		m_TriAABBs.clear();
 		m_TriCentroids.clear();
 
-		// -- 1. Flatten all meshes into world-space triangles ---------------
+		// Step 1: Flatten all meshes into world-space triangles
+		FlattenMeshes(items, std::move(getMaterialIndex));
+
+		m_TriangleCount = static_cast<uint32_t>(m_Triangles.size());
+
+		if (m_TriangleCount == 0) {
+			m_BVHNodeCount = 0;
+			return { 0, 0, 0.0f };
+		}
+
+		// Step 2: Compute per-triangle AABBs (parallel via JobSystem)
+		ComputeAABBsParallel();
+
+		// Step 3: Build BVH with SAH
+		BuildBVH();
+
+		// Step 4: Upload to GPU
+		UploadToGPU();
+
+		auto t1 = std::chrono::high_resolution_clock::now();
+		float buildMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
+
+		MeshPoolBuildResult result;
+		result.TriangleCount = m_TriangleCount;
+		result.BVHNodeCount  = m_BVHNodeCount;
+		result.BuildTimeMs   = buildMs;
+		return result;
+	}
+
+	void MeshGeometryPool::BindForRayTracing(uint32_t triangleBinding, uint32_t bvhBinding) const {
+		if (m_TriangleSSBO) m_TriangleSSBO->BindForCompute(triangleBinding);
+		if (m_BVHSSBO)     m_BVHSSBO->BindForCompute(bvhBinding);
+	}
+
+	// ====================================================================
+	// STEP 1: FLATTEN MESHES
+	// ====================================================================
+
+	void MeshGeometryPool::FlattenMeshes(
+		const std::vector<SceneDrawItem>& items,
+		std::function<uint32_t(const Ref<MaterialInstance>&)> getMaterialIndex)
+	{
+		// Pre-estimate capacity to avoid reallocation
+		size_t estimatedTris = 0;
+		for (const auto& item : items) {
+			if (!item.MeshModel) continue;
+			for (const auto& mesh : item.MeshModel->GetMeshes())
+				estimatedTris += mesh->GetIndices().size() / 3;
+		}
+		m_Triangles.reserve(estimatedTris);
+
 		for (const auto& item : items) {
 			if (!item.MeshModel) continue;
 
@@ -82,57 +141,65 @@ namespace Lunex {
 					tri.TexCoords2AndMat = glm::vec4(v2.TexCoords, static_cast<float>(matIdx), entityF);
 
 					m_Triangles.push_back(tri);
-
-					// Per-triangle AABB + centroid
-					RTAABB aabb;
-					aabb.Expand(p0);
-					aabb.Expand(p1);
-					aabb.Expand(p2);
-					m_TriAABBs.push_back(aabb);
-					m_TriCentroids.push_back(aabb.Center());
 				}
 			}
 		}
-
-		m_TriangleCount = static_cast<uint32_t>(m_Triangles.size());
-
-		if (m_TriangleCount == 0) {
-			m_BVHNodeCount = 0;
-			return { 0, 0 };
-		}
-
-		// -- 2. Build BVH ---------------------------------------------------
-		BuildBVH();
-
-		// -- 3. Upload to GPU ------------------------------------------------
-		{
-			uint32_t triBytes = m_TriangleCount * sizeof(RTTriangleGPU);
-			if (!m_TriangleSSBO || triBytes > m_TriangleCount * sizeof(RTTriangleGPU)) {
-				m_TriangleSSBO = StorageBuffer::Create(std::max(triBytes, 1024u), 0);
-			}
-			m_TriangleSSBO->SetData(m_Triangles.data(), triBytes);
-		}
-		{
-			uint32_t bvhBytes = m_BVHNodeCount * sizeof(RTBVHNodeGPU);
-			if (!m_BVHSSBO || bvhBytes > m_BVHNodeCount * sizeof(RTBVHNodeGPU)) {
-				m_BVHSSBO = StorageBuffer::Create(std::max(bvhBytes, 1024u), 0);
-			}
-			m_BVHSSBO->SetData(m_BVHNodes.data(), bvhBytes);
-		}
-
-		MeshPoolBuildResult result;
-		result.TriangleCount = m_TriangleCount;
-		result.BVHNodeCount  = m_BVHNodeCount;
-		return result;
-	}
-
-	void MeshGeometryPool::BindForRayTracing(uint32_t triangleBinding, uint32_t bvhBinding) const {
-		if (m_TriangleSSBO) m_TriangleSSBO->BindForCompute(triangleBinding);
-		if (m_BVHSSBO)     m_BVHSSBO->BindForCompute(bvhBinding);
 	}
 
 	// ====================================================================
-	// BVH CONSTRUCTION (SAH)
+	// STEP 2: COMPUTE AABBS IN PARALLEL (JobSystem)
+	// ====================================================================
+
+	void MeshGeometryPool::ComputeAABBsParallel() {
+		const uint32_t count = m_TriangleCount;
+		m_TriAABBs.resize(count);
+		m_TriCentroids.resize(count);
+
+		if (count < PARALLEL_AABB_THRESHOLD) {
+			// Single-threaded path for small counts
+			for (uint32_t i = 0; i < count; ++i) {
+				const auto& tri = m_Triangles[i];
+				glm::vec3 p0 = glm::vec3(tri.V0);
+				glm::vec3 p1 = glm::vec3(tri.V1);
+				glm::vec3 p2 = glm::vec3(tri.V2);
+
+				RTAABB aabb;
+				aabb.Expand(p0);
+				aabb.Expand(p1);
+				aabb.Expand(p2);
+				m_TriAABBs[i]    = aabb;
+				m_TriCentroids[i] = aabb.Center();
+			}
+			return;
+		}
+
+		// Parallel path: use JobSystem::ParallelFor
+		// Each iteration is independent (write to own index), no synchronization needed.
+		auto counter = JobSystem::Get().ParallelFor(
+			0u, count,
+			[this](uint32_t i) {
+				const auto& tri = m_Triangles[i];
+				glm::vec3 p0 = glm::vec3(tri.V0);
+				glm::vec3 p1 = glm::vec3(tri.V1);
+				glm::vec3 p2 = glm::vec3(tri.V2);
+
+				RTAABB aabb;
+				aabb.Expand(p0);
+				aabb.Expand(p1);
+				aabb.Expand(p2);
+				m_TriAABBs[i]    = aabb;
+				m_TriCentroids[i] = aabb.Center();
+			},
+			0,  // auto grain size
+			JobPriority::High
+		);
+
+		// Wait for all AABB jobs to complete before building BVH
+		JobSystem::Get().Wait(counter);
+	}
+
+	// ====================================================================
+	// STEP 3: BVH CONSTRUCTION (SAH)
 	// ====================================================================
 
 	void MeshGeometryPool::BuildBVH() {
@@ -152,7 +219,7 @@ namespace Lunex {
 		m_BVHNodeCount = 1;
 		BuildBVHRecursive(0, 0, m_TriangleCount, 0);
 
-		// Shrink
+		// Shrink to actual size
 		m_BVHNodes.resize(m_BVHNodeCount);
 	}
 
@@ -175,12 +242,6 @@ namespace Lunex {
 		glm::vec3 ext = centroidBounds.Extent();
 		int axis = (ext.x >= ext.y && ext.x >= ext.z) ? 0 : (ext.y >= ext.z ? 1 : 2);
 
-		// SAH bucketed evaluation
-		float bestCost    = std::numeric_limits<float>::max();
-		float bestSplit   = 0.0f;
-		float parentArea  = RTAABB{glm::vec3(m_BVHNodes[nodeIdx].BoundsMin),
-		                           glm::vec3(m_BVHNodes[nodeIdx].BoundsMax)}.SurfaceArea();
-
 		float axisMin = centroidBounds.Min[axis];
 		float axisMax = centroidBounds.Max[axis];
 
@@ -191,6 +252,12 @@ namespace Lunex {
 			node.BoundsMax.w = static_cast<float>(count);
 			return;
 		}
+
+		// SAH bucketed evaluation
+		float bestCost    = std::numeric_limits<float>::max();
+		int   bestBucket  = -1;
+		float parentArea  = RTAABB{glm::vec3(m_BVHNodes[nodeIdx].BoundsMin),
+		                           glm::vec3(m_BVHNodes[nodeIdx].BoundsMax)}.SurfaceArea();
 
 		// Bucket counts and bounds
 		struct Bucket { uint32_t count = 0; RTAABB bounds; };
@@ -204,7 +271,7 @@ namespace Lunex {
 			buckets[b].bounds.Expand(m_TriAABBs[i]);
 		}
 
-		// Sweep from left
+		// Sweep from left — accumulate left bounds & counts
 		RTAABB leftAccum;
 		uint32_t leftCount = 0;
 		float leftAreas[SAH_BUCKETS - 1];
@@ -212,63 +279,57 @@ namespace Lunex {
 		for (int i = 0; i < SAH_BUCKETS - 1; ++i) {
 			leftAccum.Expand(buckets[i].bounds);
 			leftCount += buckets[i].count;
-			leftAreas[i]  = leftAccum.SurfaceArea();
+			leftAreas[i]  = leftAccum.IsValid() ? leftAccum.SurfaceArea() : 0.0f;
 			leftCounts[i] = leftCount;
 		}
 
-		// Sweep from right and evaluate cost
+		// Sweep from right and evaluate cost at each split
 		RTAABB rightAccum;
 		uint32_t rightCount = 0;
 		for (int i = SAH_BUCKETS - 1; i > 0; --i) {
 			rightAccum.Expand(buckets[i].bounds);
 			rightCount += buckets[i].count;
+
+			float rightArea = rightAccum.IsValid() ? rightAccum.SurfaceArea() : 0.0f;
 			float cost = SAH_TRAVERSAL_COST
 			           + SAH_INTERSECT_COST * (leftCounts[i - 1] * leftAreas[i - 1]
-			                                 + rightCount * rightAccum.SurfaceArea()) / parentArea;
+			                                 + rightCount * rightArea) / parentArea;
 			if (cost < bestCost) {
-				bestCost  = cost;
-				bestSplit = axisMin + static_cast<float>(i) / scale;
+				bestCost   = cost;
+				bestBucket = i;
 			}
 		}
 
-		// If no split improves, make leaf
+		// If no split improves over leaf cost, make leaf
 		float leafCost = SAH_INTERSECT_COST * static_cast<float>(count);
-		if (bestCost >= leafCost) {
+		if (bestBucket < 0 || bestCost >= leafCost) {
 			auto& node = m_BVHNodes[nodeIdx];
 			node.BoundsMin.w = static_cast<float>(start);
 			node.BoundsMax.w = static_cast<float>(count);
 			return;
 		}
 
-		// Partition triangles
-		auto mid = std::partition(
-			m_Triangles.begin() + start,
-			m_Triangles.begin() + end,
-			[&](const RTTriangleGPU& /*unused*/) {
-				// We need to partition by centroid, using index-based approach
-				return true; // placeholder, real partition below
-			}
-		);
+		// Partition triangles around the best bucket split.
+		// All arrays (Triangles, TriAABBs, TriCentroids) must be swapped together.
+		float splitPos = axisMin + static_cast<float>(bestBucket) / scale;
 
-		// Actually partition by centroid using index-aware swap
-		// We need to swap TriAABBs and TriCentroids too
 		uint32_t midIdx = start;
 		{
 			uint32_t left = start, right = end - 1;
 			while (left <= right && right < end) {
-				if (m_TriCentroids[left][axis] < bestSplit) {
+				if (m_TriCentroids[left][axis] < splitPos) {
 					left++;
 				} else {
-					std::swap(m_Triangles[left],     m_Triangles[right]);
-					std::swap(m_TriAABBs[left],      m_TriAABBs[right]);
-					std::swap(m_TriCentroids[left],   m_TriCentroids[right]);
+					std::swap(m_Triangles[left],    m_Triangles[right]);
+					std::swap(m_TriAABBs[left],     m_TriAABBs[right]);
+					std::swap(m_TriCentroids[left],  m_TriCentroids[right]);
 					right--;
 				}
 			}
 			midIdx = left;
 		}
 
-		// Avoid empty partitions
+		// Avoid empty partitions (fallback to midpoint split)
 		if (midIdx == start || midIdx == end) {
 			midIdx = start + count / 2;
 		}
@@ -297,25 +358,31 @@ namespace Lunex {
 		BuildBVHRecursive(rightChildIdx, midIdx, end,    depth + 1);
 	}
 
-	float MeshGeometryPool::EvaluateSAH(uint32_t start, uint32_t end, int axis, float splitPos) const {
-		RTAABB leftBounds, rightBounds;
-		uint32_t leftCount = 0, rightCount = 0;
+	// ====================================================================
+	// STEP 4: UPLOAD TO GPU
+	// ====================================================================
 
-		for (uint32_t i = start; i < end; ++i) {
-			if (m_TriCentroids[i][axis] < splitPos) {
-				leftBounds.Expand(m_TriAABBs[i]);
-				leftCount++;
-			} else {
-				rightBounds.Expand(m_TriAABBs[i]);
-				rightCount++;
+	void MeshGeometryPool::UploadToGPU() {
+		// Triangles
+		{
+			uint32_t triBytes = m_TriangleCount * sizeof(RTTriangleGPU);
+			if (!m_TriangleSSBO || triBytes > m_TriSSBOCapacity) {
+				uint32_t newCap = std::max(triBytes * 2, 1024u);
+				m_TriangleSSBO = StorageBuffer::Create(newCap, 0);
+				m_TriSSBOCapacity = newCap;
 			}
+			m_TriangleSSBO->SetData(m_Triangles.data(), triBytes);
 		}
-
-		if (leftCount == 0 || rightCount == 0) return std::numeric_limits<float>::max();
-
-		return SAH_TRAVERSAL_COST
-		     + SAH_INTERSECT_COST * (leftCount * leftBounds.SurfaceArea()
-		                           + rightCount * rightBounds.SurfaceArea());
+		// BVH Nodes
+		{
+			uint32_t bvhBytes = m_BVHNodeCount * sizeof(RTBVHNodeGPU);
+			if (!m_BVHSSBO || bvhBytes > m_BVHSSBOCapacity) {
+				uint32_t newCap = std::max(bvhBytes * 2, 1024u);
+				m_BVHSSBO = StorageBuffer::Create(newCap, 0);
+				m_BVHSSBOCapacity = newCap;
+			}
+			m_BVHSSBO->SetData(m_BVHNodes.data(), bvhBytes);
+		}
 	}
 
 } // namespace Lunex

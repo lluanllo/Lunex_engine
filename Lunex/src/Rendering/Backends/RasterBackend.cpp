@@ -67,8 +67,7 @@ namespace Lunex {
 	void RasterBackend::RenderScene(Scene* scene) {
 		if (!scene) return;
 
-		auto& registry = *scene->GetRegistry();
-		auto view = registry.view<TransformComponent, MeshComponent>();
+		auto view = scene->GetAllEntitiesWith<TransformComponent, MeshComponent>();
 
 		for (auto entity : view) {
 			Entity e = { entity, scene };
@@ -80,8 +79,8 @@ namespace Lunex {
 				Renderer3D::DrawMesh(worldTransform, mesh, material,
 				                     static_cast<int>(entity));
 			} else {
-				Renderer3D::DrawModel(worldTransform, mesh.MeshModel,
-				                      mesh.Color, static_cast<int>(entity));
+				Renderer3D::DrawMesh(worldTransform, mesh,
+				                     static_cast<int>(entity));
 			}
 		}
 	}

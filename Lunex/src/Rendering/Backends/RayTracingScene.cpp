@@ -27,8 +27,9 @@ namespace Lunex {
 		m_MatTable.UploadToGPU();
 		m_Dirty = false;
 
-		LNX_LOG_TRACE("RayTracingScene rebuilt: {0} tris, {1} BVH nodes, {2} materials",
-		              result.TriangleCount, result.BVHNodeCount, m_MatTable.GetMaterialCount());
+		LNX_LOG_TRACE("RayTracingScene rebuilt: {0} tris, {1} BVH nodes, {2} materials ({3:.2f}ms)",
+		              result.TriangleCount, result.BVHNodeCount, m_MatTable.GetMaterialCount(),
+		              result.BuildTimeMs);
 	}
 
 	void RayTracingScene::Bind(uint32_t triBinding, uint32_t bvhBinding, uint32_t matBinding) const {

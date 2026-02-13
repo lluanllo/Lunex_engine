@@ -47,8 +47,8 @@ namespace Lunex {
 		outData.InverseView       = cameraTransform;
 		outData.InverseProjection = glm::inverse(outData.Projection);
 		outData.CameraPosition    = glm::vec3(cameraTransform[3]);
-		outData.CameraNear        = camera.GetNearClip();
-		outData.CameraFar         = camera.GetFarClip();
+		outData.CameraNear        = 0.1f;
+		outData.CameraFar         = 1000.0f;
 
 		CollectMeshes(scene, outData);
 		CollectLights(scene, outData);
