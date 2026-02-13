@@ -20,24 +20,79 @@ namespace Lunex {
 
 	void SceneRenderSystem::OnAttach(SceneContext& context) {
 		m_Context = &context;
-		LNX_LOG_INFO("SceneRenderSystem attached");
+
+		// Create both backends
+		m_RasterBackend  = CreateScope<RasterBackend>();
+		m_RTBackend      = CreateScope<RayTracingBackend>();
+		m_RasterBackend->Initialize();
+		m_RTBackend->Initialize();
+
+		// Default to raster
+		m_ActiveBackendType = RenderBackendType::Rasterizer;
+		m_ActiveBackend     = m_RasterBackend.get();
+
+		if (m_Context->OwningScene) {
+			m_RasterBackend->OnSceneChanged(m_Context->OwningScene);
+			m_RTBackend->OnSceneChanged(m_Context->OwningScene);
+		}
+
+		LNX_LOG_INFO("SceneRenderSystem attached (dual backend)");
 	}
 
 	void SceneRenderSystem::OnDetach() {
+		m_RTBackend->Shutdown();
+		m_RasterBackend->Shutdown();
+		m_ActiveBackend = nullptr;
 		m_Context = nullptr;
 		LNX_LOG_INFO("SceneRenderSystem detached");
 	}
 
 	void SceneRenderSystem::OnUpdate(Timestep ts, SceneMode mode) {
 		// Actual rendering is done via RenderScene/RenderSceneRuntime
-		// This update is for any per-frame state updates
 	}
 
 	void SceneRenderSystem::OnSceneEvent(const SceneSystemEvent& event) {
-		// Handle viewport resize
 		if (event.Type == SceneEventType::ViewportResized) {
 			// Could update render targets here if needed
 		}
+	}
+
+	// ========================================================================
+	// Backend Switching
+	// ========================================================================
+
+	void SceneRenderSystem::SetActiveBackend(RenderBackendType type) {
+		if (type == m_ActiveBackendType) return;
+
+		m_ActiveBackendType = type;
+		switch (type) {
+			case RenderBackendType::Rasterizer:
+				m_ActiveBackend = m_RasterBackend.get();
+				break;
+			case RenderBackendType::PathTracer:
+				m_ActiveBackend = m_RTBackend.get();
+				break;
+		}
+
+		// Notify new backend about the current scene
+		if (m_Context && m_Context->OwningScene) {
+			m_ActiveBackend->OnSceneChanged(m_Context->OwningScene);
+		}
+
+		LNX_LOG_INFO("Render backend switched to: {0}",
+		             RenderBackendTypeToString(type));
+	}
+
+	void SceneRenderSystem::NotifySceneChanged() {
+		if (m_Context && m_Context->OwningScene) {
+			m_RasterBackend->OnSceneChanged(m_Context->OwningScene);
+			m_RTBackend->OnSceneChanged(m_Context->OwningScene);
+		}
+	}
+
+	void SceneRenderSystem::OnViewportResize(uint32_t w, uint32_t h) {
+		m_RTBackend->OnViewportResize(w, h);
+		// Raster doesn't own textures, no-op
 	}
 
 	// ========================================================================
@@ -46,94 +101,78 @@ namespace Lunex {
 
 	void SceneRenderSystem::RenderScene(EditorCamera& camera) {
 		if (!m_Context || !m_Context->Registry) return;
-		
-		// ========== SKYBOX ==========
+
+		// ========== SKYBOX (always raster) ==========
 		if (m_Settings.RenderSkybox) {
 			SkyboxRenderer::RenderGlobalSkybox(camera);
 		}
-		
-		// ========== 2D RENDERING ==========
+
+		// ========== 2D RENDERING (always raster) ==========
 		Renderer2D::BeginScene(camera);
-		
+
 		if (m_Settings.RenderGrid) {
 			GridRenderer::DrawGrid(camera);
 		}
-		
+
 		RenderSprites(camera, camera.GetViewMatrix());
 		RenderCircles(camera, camera.GetViewMatrix());
-		
+
 		Renderer2D::EndScene();
-		
-		// ========== BILLBOARDS & GIZMOS ==========
+
+		// ========== BILLBOARDS & GIZMOS (always raster) ==========
 		if (m_Settings.RenderBillboards || m_Settings.RenderGizmos) {
 			Renderer2D::BeginScene(camera);
-			
+
 			if (m_Settings.RenderBillboards) {
 				RenderBillboards(camera, camera.GetPosition());
 			}
-			
+
 			if (m_Settings.RenderGizmos) {
 				float previousLineWidth = Renderer2D::GetLineWidth();
 				Renderer2D::SetLineWidth(m_Settings.BillboardLineWidth);
-				
+
 				if (m_Settings.RenderFrustums) {
 					RenderCameraFrustums(camera);
 				}
-				
+
 				RenderLightGizmos(camera);
-				
+
 				Renderer2D::SetLineWidth(previousLineWidth);
 			}
-			
+
 			Renderer2D::EndScene();
 		}
-		
-		// ========== 3D RENDERING ==========
-		// Update lights first (syncs LightSystem, uploads SSBO)
-		Renderer3D::UpdateLights(m_Context->OwningScene);
-		
-		// Update shadow maps BEFORE BeginScene (BeginScene binds atlas for reading)
-		Renderer3D::UpdateShadows(m_Context->OwningScene, camera);
-		
-		Renderer3D::BeginScene(camera);
-		
-		RenderMeshes(camera, camera.GetViewMatrix());
-		
-		Renderer3D::EndScene();
+
+		// ========== 3D RENDERING — delegated to active backend ==========
+		m_ActiveBackend->BeginFrame(camera);
+		m_ActiveBackend->RenderScene(m_Context->OwningScene);
+		m_ActiveBackend->EndFrame();
 	}
 
 	void SceneRenderSystem::RenderSceneRuntime(Camera& camera, const glm::mat4& cameraTransform) {
 		if (!m_Context || !m_Context->Registry) return;
-		
-		// ========== SKYBOX ==========
+
+		// ========== SKYBOX (always raster) ==========
 		if (m_Settings.RenderSkybox) {
 			SkyboxRenderer::RenderGlobalSkybox(camera, cameraTransform);
 		}
-		
-		// ========== 2D RENDERING ==========
+
+		// ========== 2D RENDERING (always raster) ==========
 		Renderer2D::BeginScene(camera, cameraTransform);
-		
+
 		RenderSprites(camera, cameraTransform);
 		RenderCircles(camera, cameraTransform);
-		
+
 		Renderer2D::EndScene();
-		
-		// ========== 3D RENDERING ==========
-		// Update lights first (syncs LightSystem, uploads SSBO)
-		Renderer3D::UpdateLights(m_Context->OwningScene);
-		
-		// Update shadow maps BEFORE BeginScene (BeginScene binds atlas for reading)
-		Renderer3D::UpdateShadows(m_Context->OwningScene, camera, cameraTransform);
-		
-		Renderer3D::BeginScene(camera, cameraTransform);
-		
-		RenderMeshes(camera, cameraTransform);
-		
-		Renderer3D::EndScene();
+
+		// ========== 3D RENDERING — delegated to active backend ==========
+		m_ActiveBackend->BeginFrameRuntime(camera, cameraTransform);
+		m_ActiveBackend->RenderScene(m_Context->OwningScene);
+		m_ActiveBackend->EndFrame();
 	}
 
 	// ========================================================================
-	// Render Passes
+	// Render Passes (unchanged)
 	// ========================================================================
 
 	void SceneRenderSystem::RenderSkybox(const Camera& camera, const glm::mat4& cameraTransform) {
