@@ -10,6 +10,9 @@
 #include "Renderer/SkyboxRenderer.h"
 #include "Renderer/Shadows/ShadowSystem.h"
 #include "Scene/Lighting/LightSystem.h"
+#include "Rendering/RenderSystem.h"
+#include "Rendering/RenderBackend.h"
+#include "Rendering/Backends/RayTracingBackend.h"
 #include "Log/Log.h"
 
 #include <filesystem>
@@ -24,6 +27,10 @@ namespace Lunex {
 			EndPanel();
 			return;
 		}
+		
+		DrawRenderingSection();
+		
+		Separator();
 		
 		DrawEnvironmentSection();
 		
@@ -418,6 +425,83 @@ namespace Lunex {
 		if (BeginSection("Physics 3D", false)) {
 			if (PropertyCheckbox("Show 3D colliders", m_ShowPhysics3DColliders, "Display Bullet3D colliders")) {
 				// Value updated by reference
+			}
+			
+			EndSection();
+		}
+	}
+
+	void SettingsPanel::DrawRenderingSection() {
+		using namespace UI;
+		
+		if (BeginSection("Rendering", true)) {
+			// ========================================
+			// RENDER BACKEND SELECTION
+			// ========================================
+			Text("Render Backend");
+			AddSpacing(SpacingValues::XS);
+			
+			RenderMode currentMode = RenderSystem::GetRenderMode();
+			const char* modeOptions[] = { "Rasterization", "Ray Tracing", "Hybrid (WIP)" };
+			int currentIdx = static_cast<int>(currentMode);
+			
+			if (PropertyDropdown("Mode", currentIdx, modeOptions, 3, "Select the active rendering pipeline")) {
+				RenderMode newMode = static_cast<RenderMode>(currentIdx);
+				if (newMode != currentMode) {
+					RenderSystem::SetRenderMode(newMode);
+				}
+			}
+			
+			auto* backend = RenderSystem::GetActiveBackend();
+			if (backend) {
+				TextColored(Colors::Success(), "Active: %s", backend->GetName());
+			}
+			
+			Separator();
+			
+			// ========================================
+			// RAY TRACING SETTINGS
+			// ========================================
+			if (currentMode == RenderMode::RayTracing) {
+				Text("Path Tracing Settings");
+				AddSpacing(SpacingValues::XS);
+				
+				auto* rtBackend = dynamic_cast<RayTracingBackend*>(backend);
+				
+				if (rtBackend) {
+					auto& rtConfig = rtBackend->GetConfig();
+					
+					// Max bounces
+					int maxBounces = rtConfig.MaxBounces;
+					if (PropertySlider("Max Bounces", maxBounces, 1, 16, "%d", "Maximum ray bounce depth")) {
+						rtConfig.MaxBounces = maxBounces;
+						rtBackend->ResetAccumulation();
+					}
+					
+					// Accumulation toggle
+					bool accumulate = rtConfig.AccumulateFrames;
+					if (PropertyCheckbox("Accumulate Frames", accumulate, "Progressive refinement across frames")) {
+						rtConfig.AccumulateFrames = accumulate;
+						if (!accumulate) rtBackend->ResetAccumulation();
+					}
+					
+					// Exposure
+					float exposure = rtConfig.Exposure;
+					if (PropertyFloat("Exposure", exposure, 0.1f, 0.01f, 20.0f, "Tone mapping exposure")) {
+						rtConfig.Exposure = exposure;
+					}
+					
+					AddSpacing(SpacingValues::XS);
+					
+					// Statistics
+					Text("Accumulated Frames: %d", rtBackend->GetAccumulatedFrames());
+					
+					if (Button("Reset Accumulation", ButtonVariant::Warning, ButtonSize::Medium, Size(-1, 0))) {
+						rtBackend->ResetAccumulation();
+					}
+				} else {
+					TextColored(Colors::Warning(), "RT backend not available");
+				}
 			}
 			
 			EndSection();

@@ -24,6 +24,7 @@ namespace Lunex {
 		void DrawShadowsSection();
 		void DrawPhysics2DSection();
 		void DrawPhysics3DSection();
+		void DrawRenderingSection();
 		
 	private:
 		bool m_ShowPhysicsColliders = false;

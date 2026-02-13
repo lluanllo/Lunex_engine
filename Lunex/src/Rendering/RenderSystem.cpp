@@ -2,6 +2,9 @@
 #include "RenderSystem.h"
 #include "RenderPassJob.h"
 #include "RenderPassDescriptor.h"
+#include "SceneDataCollector.h"
+#include "Backends/RasterBackend.h"
+#include "Backends/RayTracingBackend.h"
 #include "Log/Log.h"
 #include "Scene/Entity.h"
 #include "Scene/Components.h"
@@ -20,6 +23,28 @@
 namespace Lunex {
 
 	RenderSystem::State* RenderSystem::s_State = nullptr;
+
+	// ============================================================================
+	// BACKEND FACTORY
+	// ============================================================================
+
+	Scope<IRenderBackend> RenderSystem::CreateBackend(RenderMode mode) {
+		switch (mode) {
+			case RenderMode::Rasterization:
+				return CreateScope<RasterBackend>();
+
+			case RenderMode::RayTracing:
+				return CreateScope<RayTracingBackend>();
+
+			case RenderMode::Hybrid:
+				LNX_LOG_WARN("Hybrid backend not yet implemented — falling back to Rasterization");
+				return CreateScope<RasterBackend>();
+
+			default:
+				LNX_LOG_ERROR("Unknown RenderMode {0} — falling back to Rasterization", static_cast<int>(mode));
+				return CreateScope<RasterBackend>();
+		}
+	}
 
 	// ============================================================================
 	// INITIALIZATION
@@ -44,19 +69,14 @@ namespace Lunex {
 		// Create job scheduler for parallel pass execution
 		s_State->JobScheduler = CreateScope<RenderJobScheduler>();
 		
-		// Create render passes (from GeometryPass.h)
-		s_State->GeometryPassPtr = CreateScope<GeometryPass>();
-		s_State->TransparentPassPtr = CreateScope<TransparentPass>();
-		
-		// Create render passes (from EnvironmentPass.h)
-		s_State->SkyboxPassPtr = CreateScope<SkyboxPass>();
-		s_State->IBLPassPtr = CreateScope<IBLPass>();
-		
-		// Create render passes (from EditorPass.h)
-		s_State->GridPassPtr = CreateScope<GridPass>();
-		s_State->GizmoPassPtr = CreateScope<GizmoPass>();
-		s_State->SelectionOutlinePassPtr = CreateScope<SelectionOutlinePass>();
-		s_State->DebugVisualizationPassPtr = CreateScope<DebugVisualizationPass>();
+		// ============================================
+		// CREATE RENDER BACKEND (Phase 1)
+		// ============================================
+		s_State->CurrentRenderMode = config.InitialRenderMode;
+		s_State->ActiveBackend = CreateBackend(config.InitialRenderMode);
+		if (s_State->ActiveBackend) {
+			s_State->ActiveBackend->Initialize(config);
+		}
 		
 		// Initialize AAA systems if enabled
 		if (config.UseCameraSystem) {
@@ -71,7 +91,8 @@ namespace Lunex {
 		
 		s_State->Initialized = true;
 		
-		LNX_LOG_INFO("RenderSystem initialized successfully with 8 passes (parallel={0}, CameraSystem={1}, LightSystem={2})", 
+		LNX_LOG_INFO("RenderSystem initialized (backend={0}, parallel={1}, CameraSystem={2}, LightSystem={3})", 
+			s_State->ActiveBackend ? s_State->ActiveBackend->GetName() : "none",
 			config.EnableParallelPasses ? "enabled" : "disabled",
 			config.UseCameraSystem ? "enabled" : "disabled",
 			config.UseLightSystem ? "enabled" : "disabled");
@@ -87,6 +108,12 @@ namespace Lunex {
 			s_State->JobScheduler->WaitForCompletion();
 		}
 		
+		// Shutdown active backend
+		if (s_State->ActiveBackend) {
+			s_State->ActiveBackend->Shutdown();
+			s_State->ActiveBackend.reset();
+		}
+		
 		// Shutdown AAA systems
 		if (s_State->Config.UseCameraSystem) {
 			CameraSystem::Get().Shutdown();
@@ -98,6 +125,58 @@ namespace Lunex {
 		
 		delete s_State;
 		s_State = nullptr;
+	}
+
+	// ============================================================================
+	// RENDER BACKEND API (Phase 1)
+	// ============================================================================
+
+	void RenderSystem::SetRenderMode(RenderMode mode) {
+		if (!s_State || !s_State->Initialized) {
+			LNX_LOG_ERROR("RenderSystem not initialized — cannot set render mode");
+			return;
+		}
+
+		if (s_State->CurrentRenderMode == mode && s_State->ActiveBackend) {
+			LNX_LOG_INFO("Already using {0} backend", RenderModeToString(mode));
+			return;
+		}
+
+		LNX_LOG_INFO("Switching render backend: {0} -> {1}",
+			RenderModeToString(s_State->CurrentRenderMode),
+			RenderModeToString(mode));
+
+		// Wait for any in-flight work
+		if (s_State->JobScheduler)
+			s_State->JobScheduler->WaitForCompletion();
+
+		// Shutdown old backend
+		if (s_State->ActiveBackend) {
+			s_State->ActiveBackend->Shutdown();
+			s_State->ActiveBackend.reset();
+		}
+
+		// Create and initialize new backend
+		s_State->ActiveBackend = CreateBackend(mode);
+		if (s_State->ActiveBackend)
+			s_State->ActiveBackend->Initialize(s_State->Config);
+
+		s_State->CurrentRenderMode = mode;
+
+		// Force graph rebuild on next frame
+		if (s_State->Graph)
+			s_State->Graph->Reset();
+
+		LNX_LOG_INFO("Render backend switched to: {0}",
+			s_State->ActiveBackend ? s_State->ActiveBackend->GetName() : "none");
+	}
+
+	RenderMode RenderSystem::GetRenderMode() {
+		return s_State ? s_State->CurrentRenderMode : RenderMode::Rasterization;
+	}
+
+	IRenderBackend* RenderSystem::GetActiveBackend() {
+		return s_State ? s_State->ActiveBackend.get() : nullptr;
 	}
 
 	// ============================================================================
@@ -156,6 +235,15 @@ namespace Lunex {
 			LightSystem::Get().CullLights(frustum);
 		}
 		
+		// Collect scene data for backend
+		s_State->CurrentSceneData = SceneDataCollector::Collect(
+			scene, GetActiveCameraData(), GetLightingData(), true);
+		s_State->CurrentSceneData.SelectedEntityID = s_State->SelectedEntityID;
+		
+		// Let backend prepare GPU data
+		if (s_State->ActiveBackend)
+			s_State->ActiveBackend->PrepareSceneData(s_State->CurrentSceneData);
+		
 		// Build and execute render graph
 		BuildRenderGraph();
 		s_State->Graph->Compile();
@@ -203,6 +291,14 @@ namespace Lunex {
 			LightSystem::Get().CullLights(frustum);
 		}
 		
+		// Collect scene data for backend
+		s_State->CurrentSceneData = SceneDataCollector::Collect(
+			scene, GetActiveCameraData(), GetLightingData(), false);
+		
+		// Let backend prepare GPU data
+		if (s_State->ActiveBackend)
+			s_State->ActiveBackend->PrepareSceneData(s_State->CurrentSceneData);
+		
 		BuildRenderGraph();
 		s_State->Graph->Compile();
 		
@@ -214,7 +310,7 @@ namespace Lunex {
 	}
 
 	// ============================================================================
-	// AAA SYSTEMS INTEGRATION (NEW)
+	// AAA SYSTEMS INTEGRATION
 	// ============================================================================
 	
 	void RenderSystem::SyncSystemsWithScene(Scene* scene) {
@@ -303,112 +399,22 @@ namespace Lunex {
 		auto& graph = *s_State->Graph;
 		auto& sceneInfo = s_State->CurrentSceneInfo;
 		
-		// ============================================
-		// GEOMETRY PASS (opaque meshes)
-		// ============================================
-		
-		graph.AddPass(
-			"Geometry",
-			[&](RenderPassBuilder& builder) {
-				s_State->GeometryPassPtr->Setup(graph, builder, sceneInfo);
-			},
-			[&](const RenderPassResources& resources) {
-				s_State->GeometryPassPtr->Execute(resources, sceneInfo);
+		// Delegate to the active backend
+		if (s_State->ActiveBackend) {
+			// Forward editor state to backend
+			if (auto* raster = dynamic_cast<RasterBackend*>(s_State->ActiveBackend.get())) {
+				raster->SetDrawGrid(s_State->DrawGrid);
+				raster->SetDrawGizmos(s_State->DrawGizmos);
+				raster->SetSelectedEntity(s_State->SelectedEntityID);
 			}
-		);
-		
-		// ============================================
-		// SKYBOX PASS
-		// ============================================
-		
-		if (s_State->SkyboxPassPtr->ShouldExecute(sceneInfo)) {
-			s_State->SkyboxPassPtr->SetColorTarget(s_State->GeometryPassPtr->GetColorOutput());
-			s_State->SkyboxPassPtr->SetDepthTarget(s_State->GeometryPassPtr->GetDepthOutput());
 			
-			graph.AddPass(
-				"Skybox",
-				[&](RenderPassBuilder& builder) {
-					s_State->SkyboxPassPtr->Setup(graph, builder, sceneInfo);
-				},
-				[&](const RenderPassResources& resources) {
-					s_State->SkyboxPassPtr->Execute(resources, sceneInfo);
-				}
-			);
+			s_State->ActiveBackend->BuildRenderGraph(graph, sceneInfo);
+			s_State->FinalColorTarget = s_State->ActiveBackend->GetFinalColorOutput();
+			return;
 		}
 		
-		// ============================================
-		// TRANSPARENT PASS
-		// ============================================
-		
-		s_State->TransparentPassPtr->SetColorTarget(s_State->GeometryPassPtr->GetColorOutput());
-		s_State->TransparentPassPtr->SetDepthTarget(s_State->GeometryPassPtr->GetDepthOutput());
-		
-		graph.AddPass(
-			"Transparent",
-			[&](RenderPassBuilder& builder) {
-				s_State->TransparentPassPtr->Setup(graph, builder, sceneInfo);
-			},
-			[&](const RenderPassResources& resources) {
-				s_State->TransparentPassPtr->Execute(resources, sceneInfo);
-			}
-		);
-		
-		// ============================================
-		// EDITOR PASSES
-		// ============================================
-		
-		if (s_State->GridPassPtr->ShouldExecute(sceneInfo)) {
-			s_State->GridPassPtr->SetColorTarget(s_State->GeometryPassPtr->GetColorOutput());
-			s_State->GridPassPtr->SetDepthTarget(s_State->GeometryPassPtr->GetDepthOutput());
-			
-			graph.AddPass(
-				"Grid",
-				[&](RenderPassBuilder& builder) {
-					s_State->GridPassPtr->Setup(graph, builder, sceneInfo);
-				},
-				[&](const RenderPassResources& resources) {
-					s_State->GridPassPtr->Execute(resources, sceneInfo);
-				}
-			);
-		}
-		
-		if (s_State->GizmoPassPtr->ShouldExecute(sceneInfo)) {
-			s_State->GizmoPassPtr->SetColorTarget(s_State->GeometryPassPtr->GetColorOutput());
-			s_State->GizmoPassPtr->SetSelectedEntity(s_State->SelectedEntityID);
-			
-			graph.AddPass(
-				"Gizmos",
-				[&](RenderPassBuilder& builder) {
-					s_State->GizmoPassPtr->Setup(graph, builder, sceneInfo);
-				},
-				[&](const RenderPassResources& resources) {
-					s_State->GizmoPassPtr->Execute(resources, sceneInfo);
-				}
-			);
-		}
-		
-		if (s_State->SelectionOutlinePassPtr->ShouldExecute(sceneInfo)) {
-			s_State->SelectionOutlinePassPtr->SetColorTarget(s_State->GeometryPassPtr->GetColorOutput());
-			s_State->SelectionOutlinePassPtr->SetDepthTarget(s_State->GeometryPassPtr->GetDepthOutput());
-		 s_State->SelectionOutlinePassPtr->SetSelectedEntity(s_State->SelectedEntityID);
-			
-			graph.AddPass(
-				"SelectionOutline",
-				[&](RenderPassBuilder& builder) {
-					s_State->SelectionOutlinePassPtr->Setup(graph, builder, sceneInfo);
-				},
-				[&](const RenderPassResources& resources) {
-					s_State->SelectionOutlinePassPtr->Execute(resources, sceneInfo);
-				}
-			);
-		}
-		
-		// ============================================
-		// FINAL OUTPUT
-		// ============================================
-		
-		s_State->FinalColorTarget = s_State->GeometryPassPtr->GetColorOutput();
-		graph.SetBackbufferSource(s_State->FinalColorTarget);
+		// If no backend is active, this is an error state — should not happen
+		LNX_LOG_ERROR("RenderSystem::BuildRenderGraph called with no active backend!");
 	}
 	
 	// ============================================================================
@@ -419,41 +425,42 @@ namespace Lunex {
 		auto& sceneInfo = s_State->CurrentSceneInfo;
 		auto& scheduler = *s_State->JobScheduler;
 		
-		// Create jobs for each render pass
-		// Note: OpenGL requires most operations on main thread, so for now
-		// we schedule sequentially but with JobSystem infrastructure ready
+		// Get passes from backend for job scheduling
+		auto* raster = dynamic_cast<RasterBackend*>(s_State->ActiveBackend.get());
+		if (!raster) {
+			// Non-raster backends: just execute the graph sequentially for now
+			s_State->Graph->Execute();
+			return;
+		}
 		
-		// GeometryPass Job (depends on nothing)
-		auto geometryJob = CreateRef<RenderPassJob>(s_State->GeometryPassPtr.get(), s_State->Graph.get());
+		// Create jobs for each render pass (same logic as before, now via backend)
+		auto geometryJob = CreateRef<RenderPassJob>(raster->GetGeometryPass(), s_State->Graph.get());
 		scheduler.AddJob(geometryJob);
 		
-		// SkyboxPass Job (depends on GeometryPass)
-		if (s_State->SkyboxPassPtr->ShouldExecute(sceneInfo)) {
-			auto skyboxJob = CreateRef<RenderPassJob>(s_State->SkyboxPassPtr.get(), s_State->Graph.get());
+		if (raster->GetSkyboxPass()->ShouldExecute(sceneInfo)) {
+			auto skyboxJob = CreateRef<RenderPassJob>(raster->GetSkyboxPass(), s_State->Graph.get());
 			skyboxJob->AddDependency(geometryJob.get());
 			scheduler.AddJob(skyboxJob);
 		}
 		
-		// TransparentPass Job (depends on GeometryPass)
-		auto transparentJob = CreateRef<RenderPassJob>(s_State->TransparentPassPtr.get(), s_State->Graph.get());
+		auto transparentJob = CreateRef<RenderPassJob>(raster->GetTransparentPass(), s_State->Graph.get());
 		transparentJob->AddDependency(geometryJob.get());
 		scheduler.AddJob(transparentJob);
 		
-		// Editor passes (depend on previous passes)
-		if (s_State->GridPassPtr->ShouldExecute(sceneInfo)) {
-			auto gridJob = CreateRef<RenderPassJob>(s_State->GridPassPtr.get(), s_State->Graph.get());
+		if (raster->GetGridPass()->ShouldExecute(sceneInfo)) {
+			auto gridJob = CreateRef<RenderPassJob>(raster->GetGridPass(), s_State->Graph.get());
 			gridJob->AddDependency(transparentJob.get());
 			scheduler.AddJob(gridJob);
 		}
 		
-		if (s_State->GizmoPassPtr->ShouldExecute(sceneInfo)) {
-			auto gizmoJob = CreateRef<RenderPassJob>(s_State->GizmoPassPtr.get(), s_State->Graph.get());
+		if (raster->GetGizmoPass()->ShouldExecute(sceneInfo)) {
+			auto gizmoJob = CreateRef<RenderPassJob>(raster->GetGizmoPass(), s_State->Graph.get());
 			gizmoJob->AddDependency(transparentJob.get());
 			scheduler.AddJob(gizmoJob);
 		}
 		
-		if (s_State->SelectionOutlinePassPtr->ShouldExecute(sceneInfo)) {
-			auto outlineJob = CreateRef<RenderPassJob>(s_State->SelectionOutlinePassPtr.get(), s_State->Graph.get());
+		if (raster->GetSelectionOutlinePass()->ShouldExecute(sceneInfo)) {
+			auto outlineJob = CreateRef<RenderPassJob>(raster->GetSelectionOutlinePass(), s_State->Graph.get());
 			outlineJob->AddDependency(transparentJob.get());
 			scheduler.AddJob(outlineJob);
 		}
@@ -670,6 +677,10 @@ namespace Lunex {
 		if (s_State->Graph) {
 			s_State->Graph->SetSwapchainSize(width, height);
 		}
+		
+		if (s_State->ActiveBackend) {
+			s_State->ActiveBackend->OnViewportResize(width, height);
+		}
 	}
 	
 	RenderSystemConfig& RenderSystem::GetConfig() {
@@ -715,6 +726,25 @@ namespace Lunex {
 	
 	bool RenderSystem::IsParallelPassesEnabled() {
 		return s_State ? s_State->Config.EnableParallelPasses : false;
+	}
+
+	// ============================================================================
+	// RAY TRACING API (Phase 2)
+	// ============================================================================
+
+	void RenderSystem::ResetRTAccumulation() {
+		if (!s_State || !s_State->ActiveBackend) return;
+		if (auto* rt = dynamic_cast<RayTracingBackend*>(s_State->ActiveBackend.get())) {
+			rt->ResetAccumulation();
+		}
+	}
+
+	uint32_t RenderSystem::GetRTAccumulatedFrames() {
+		if (!s_State || !s_State->ActiveBackend) return 0;
+		if (auto* rt = dynamic_cast<RayTracingBackend*>(s_State->ActiveBackend.get())) {
+			return rt->GetAccumulatedFrames();
+		}
+		return 0;
 	}
 
 } // namespace Lunex

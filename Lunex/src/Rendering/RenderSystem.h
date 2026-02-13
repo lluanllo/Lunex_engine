@@ -10,6 +10,7 @@
  * - Parallel execution support
  * - Resource lifetime management
  * - CameraSystem/LightSystem integration
+ * - Multi-backend support (Raster / Ray Tracing / Hybrid)
  */
 
 #include "Core/Core.h"
@@ -17,6 +18,8 @@
 #include "RenderPass.h"
 #include "RenderPassDescriptor.h"
 #include "RenderPassJob.h"
+#include "RenderBackend.h"
+#include "SceneRenderData.h"
 #include "Passes/GeometryPass.h"
 #include "Passes/EnvironmentPass.h"
 #include "Passes/EditorPass.h"
@@ -89,7 +92,7 @@ namespace Lunex {
 		uint32_t ParallelCollectionThreshold = 100;
 		
 		// ============================================
-		// AAA SYSTEMS INTEGRATION (NEW)
+		// AAA SYSTEMS INTEGRATION
 		// ============================================
 		
 		/**
@@ -108,6 +111,35 @@ namespace Lunex {
 		 * @brief Enable frustum culling via LightSystem
 		 */
 		bool EnableLightCulling = true;
+		
+		// ============================================
+		// RENDER BACKEND (Phase 1 — Multi-pipeline)
+		// ============================================
+		
+		/**
+		 * @brief Initial render mode (can be changed at runtime).
+		 * Default is Rasterization for backwards compatibility.
+		 */
+		RenderMode InitialRenderMode = RenderMode::Rasterization;
+		
+		// ============================================
+		// RAY TRACING SETTINGS (Phase 2)
+		// ============================================
+		
+		/**
+		 * @brief Maximum ray bounces for path tracing
+		 */
+		int RTMaxBounces = 4;
+		
+		/**
+		 * @brief Enable progressive accumulation across frames
+		 */
+		bool RTAccumulateFrames = true;
+		
+		/**
+		 * @brief Exposure for tone mapping in RT mode
+		 */
+		float RTExposure = 1.0f;
 	};
 
 	// ============================================================================
@@ -195,7 +227,30 @@ namespace Lunex {
 		static std::string ExportRenderGraphViz();
 		
 		// ============================================
-		// DATA-DRIVEN PASS REGISTRATION (NEW AAA API)
+		// RENDER BACKEND API (Phase 1)
+		// ============================================
+		
+		/**
+		 * @brief Switch the active render backend at runtime.
+		 * Destroys old backend, creates new one. Next frame renders
+		 * with the new pipeline.
+		 */
+		static void SetRenderMode(RenderMode mode);
+		static RenderMode GetRenderMode();
+		static IRenderBackend* GetActiveBackend();
+		
+		/**
+		 * @brief Reset accumulation in RT mode (e.g. on camera move)
+		 */
+		static void ResetRTAccumulation();
+		
+		/**
+		 * @brief Get number of accumulated frames in RT mode
+		 */
+		static uint32_t GetRTAccumulatedFrames();
+		
+		// ============================================
+		// DATA-DRIVEN PASS REGISTRATION
 		// ============================================
 		
 		/**
@@ -262,7 +317,7 @@ namespace Lunex {
 		static bool IsParallelPassesEnabled();
 		
 		// ============================================
-		// AAA SYSTEMS API (NEW)
+		// AAA SYSTEMS API
 		// ============================================
 		
 		/**
@@ -294,6 +349,9 @@ namespace Lunex {
 		static void SyncCameraSystem(Scene* scene);
 		static void SyncLightSystem(Scene* scene);
 		
+		/** Create a backend instance for the given mode */
+		static Scope<IRenderBackend> CreateBackend(RenderMode mode);
+		
 		// Internal state
 		struct State {
 			RenderSystemConfig Config;
@@ -304,24 +362,23 @@ namespace Lunex {
 			// Job Scheduler for parallel pass execution
 			Scope<RenderJobScheduler> JobScheduler;
 			
-			// Legacy render passes (kept for compatibility)
-			Scope<GeometryPass> GeometryPassPtr;
-			Scope<TransparentPass> TransparentPassPtr;
-			Scope<SkyboxPass> SkyboxPassPtr;
-			Scope<IBLPass> IBLPassPtr;
-			Scope<GridPass> GridPassPtr;
-			Scope<GizmoPass> GizmoPassPtr;
-			Scope<SelectionOutlinePass> SelectionOutlinePassPtr;
-			Scope<DebugVisualizationPass> DebugVisualizationPassPtr;
+			// ============================================
+			// RENDER BACKEND (Phase 1)
+			// ============================================
+			Scope<IRenderBackend> ActiveBackend;
+			RenderMode CurrentRenderMode = RenderMode::Rasterization;
 			
-			// Data-driven pass descriptors (NEW)
+			// Collected scene data for current frame (consumed by backend)
+			SceneRenderData CurrentSceneData;
+			
+			// Data-driven pass descriptors
 			std::unordered_map<std::string, RenderPassDescriptor> RegisteredPasses;
-			bool UseDataDrivenPasses = false;  // Toggle between legacy and new system
+			bool UseDataDrivenPasses = false;
 			
 			// Scene info for current frame
 			SceneRenderInfo CurrentSceneInfo;
 			
-			// AAA Systems cached data (NEW)
+			// AAA Systems cached data
 			CameraRenderData CachedCameraData;
 			LightingData CachedLightingData;
 			bool CameraDataValid = false;
