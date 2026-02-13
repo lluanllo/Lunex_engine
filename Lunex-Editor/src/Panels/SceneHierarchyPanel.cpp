@@ -300,6 +300,7 @@ namespace Lunex {
 		m_EntityIndexCounter++;
 		
 		bool isSelected = IsEntitySelected(entity);
+		bool isActive = (entity == m_LastSelectedEntity);
 		bool isRenaming = (m_IsRenaming && m_EntityBeingRenamed == entity);
 
 		// Draw background
@@ -307,13 +308,33 @@ namespace Lunex {
 		ImVec2 itemMax = ImVec2(cursorScreenPos.x + itemWidth, cursorScreenPos.y + itemHeight);
 		
 		if (isSelected) {
-			drawList->AddRectFilled(itemMin, itemMax, m_Style.ItemSelected.ToImU32());
-			// Selected border indicator on left
-			drawList->AddRectFilled(
-				itemMin, 
-				ImVec2(itemMin.x + m_Style.TypeIndicatorWidth, itemMax.y),
-				m_Style.ItemSelectedBorder.ToImU32()
-			);
+			if (isActive && m_SelectedEntities.size() > 1) {
+				// Active element in multi-selection: light orange (Blender-style)
+				drawList->AddRectFilled(itemMin, itemMax, m_Style.ItemActive.ToImU32());
+				drawList->AddRectFilled(
+					itemMin, 
+					ImVec2(itemMin.x + m_Style.TypeIndicatorWidth, itemMax.y),
+					m_Style.ItemActiveBorder.ToImU32()
+				);
+			}
+			else if (isSelected && m_SelectedEntities.size() > 1) {
+				// Non-active selected in multi-selection: dark orange
+				drawList->AddRectFilled(itemMin, itemMax, m_Style.ItemSelectedMulti.ToImU32());
+				drawList->AddRectFilled(
+					itemMin, 
+					ImVec2(itemMin.x + m_Style.TypeIndicatorWidth, itemMax.y),
+					m_Style.ItemSelectedMultiBorder.ToImU32()
+				);
+			}
+			else {
+				// Single selection: blue highlight
+				drawList->AddRectFilled(itemMin, itemMax, m_Style.ItemSelected.ToImU32());
+				drawList->AddRectFilled(
+					itemMin, 
+					ImVec2(itemMin.x + m_Style.TypeIndicatorWidth, itemMax.y),
+					m_Style.ItemSelectedBorder.ToImU32()
+				);
+			}
 		} else {
 			drawList->AddRectFilled(itemMin, itemMax, bgColor.ToImU32());
 		}
@@ -408,8 +429,22 @@ namespace Lunex {
 			ImGuiIO& io = ImGui::GetIO();
 			if (io.KeyCtrl) {
 				ToggleEntitySelection(entity);
-			} else {
-				SelectEntity(entity, true);
+			}
+			else if (io.KeyShift) {
+				// Shift+Click: Add to selection
+				if (!IsEntitySelected(entity)) {
+					AddEntityToSelection(entity);
+				}
+			}
+			else {
+				// Normal click
+				if (IsEntitySelected(entity) && m_SelectedEntities.size() > 1) {
+					// Already selected in multi-selection: make active
+					SetActiveEntityInSelection(entity);
+				}
+				else {
+					SelectEntity(entity, true);
+				}
 			}
 		}
 
@@ -615,6 +650,14 @@ namespace Lunex {
 	void SceneHierarchyPanel::AddEntityToSelection(Entity entity) {
 		if (entity) {
 			m_SelectedEntities.insert(entity);
+			m_SelectionContext = entity;
+			m_LastSelectedEntity = entity;
+		}
+	}
+	
+	void SceneHierarchyPanel::SetActiveEntityInSelection(Entity entity) {
+		if (entity && m_SelectedEntities.find(entity) != m_SelectedEntities.end()) {
+			// Entity is already in selection - just make it active
 			m_SelectionContext = entity;
 			m_LastSelectedEntity = entity;
 		}

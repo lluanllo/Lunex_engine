@@ -169,7 +169,9 @@ namespace Lunex {
 		else {
 			glfwSwapInterval(0);
 		}
+		
 		m_Data.VSync = enabled;
+		
 		
 		LNX_LOG_INFO("VSync is now {0}", enabled ? "enabled" : "enabled");
 	}
