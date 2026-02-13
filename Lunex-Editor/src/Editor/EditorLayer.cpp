@@ -34,6 +34,8 @@
 
 #include "RHI/RHI.h"
 
+#include "Scene/Systems/SceneRenderSystem.h"
+
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
 
@@ -749,6 +751,24 @@ namespace Lunex {
 			m_EditorCamera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
 			m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 			OutlineRenderer::Get().OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
+
+			// Notify ray-tracing backend so it can resize output textures
+			if (auto* renderSys = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+				renderSys->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
+			}
+		}
+
+		// Wire up SettingsPanel → SceneRenderSystem (once per frame, cheap pointer set)
+		if (auto* renderSys = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+			m_SettingsPanel.SetSceneRenderSystem(renderSys);
+
+			// When the path tracer backend is active, show its output texture
+			// instead of the rasterizer framebuffer
+			uint32_t overrideTex = 0;
+			if (renderSys->GetActiveBackendType() == RenderBackendType::PathTracer) {
+				overrideTex = renderSys->GetActiveBackend()->GetOutputTextureID();
+			}
+			m_ViewportPanel.SetOverrideTextureID(overrideTex);
 		}
 
 		// ========================================

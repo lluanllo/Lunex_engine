@@ -54,6 +54,10 @@ namespace Lunex {
 		glm::vec2 GetViewportSize() const { return m_ViewportSize; }
 		const glm::vec2* GetViewportBounds() const { return m_ViewportBounds; }
 
+		/** Set an override texture ID for the viewport (e.g. path tracer output).
+		 *  Pass 0 to revert to the default framebuffer. */
+		void SetOverrideTextureID(uint32_t texID) { m_OverrideTextureID = texID; }
+
 		// Drag & drop callbacks
 		void SetOnSceneDropCallback(std::function<void(const std::filesystem::path&)> callback) {
 			m_OnSceneDropCallback = callback;
@@ -89,6 +93,9 @@ namespace Lunex {
 		bool m_ViewportHovered = false;
 		glm::vec2 m_ViewportSize = { 0.0f, 0.0f };
 		glm::vec2 m_ViewportBounds[2];
+
+		// Override texture for path tracer output (0 = use framebuffer)
+		uint32_t m_OverrideTextureID = 0;
 
 		// Gizmo state (for multi-selection delta tracking)
 		bool m_GizmoWasUsing = false;

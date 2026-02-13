@@ -130,7 +130,12 @@ namespace Lunex {
 	// ============================================================================
 
 	void ViewportPanel::RenderFramebufferImage(Ref<Framebuffer> framebuffer) {
-		uint64_t textureID = framebuffer->GetColorAttachmentRendererID();
+		uint64_t textureID = 0;
+		if (m_OverrideTextureID != 0) {
+			textureID = static_cast<uint64_t>(m_OverrideTextureID);
+		} else {
+			textureID = framebuffer->GetColorAttachmentRendererID();
+		}
 		if (textureID == 0) return;
 		ImGui::Image(
 			reinterpret_cast<void*>(textureID), 
