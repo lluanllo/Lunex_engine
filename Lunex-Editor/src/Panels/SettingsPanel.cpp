@@ -131,6 +131,24 @@ namespace Lunex {
 				changed = true;
 			}
 
+			Separator();
+
+			Text("Denoiser");
+			AddSpacing(SpacingValues::XS);
+
+			if (PropertyCheckbox("Enable Denoiser", settings.EnableDenoiser,
+			                     "Edge-preserving bilateral filter to reduce noise")) {
+				changed = true;
+			}
+
+			if (settings.EnableDenoiser) {
+				if (PropertySlider("Denoise Strength", settings.DenoiserStrength,
+				                   0.1f, 3.0f, "%.1f",
+				                   "Filter strength (higher = smoother but less detail)")) {
+					changed = true;
+				}
+			}
+
 			if (changed) {
 				backend->SetSettings(settings);
 				// Quality-affecting settings changed ? restart accumulation

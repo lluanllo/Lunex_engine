@@ -1,16 +1,16 @@
-#version 450 core
+Ôªø#version 450 core
 
 // ============================================================================
-// PATH TRACER ó Compute Shader Progresivo
+// PATH TRACER ‚Äî Compute Shader Progresivo
 //
 // Fase 4: Software ray tracing via compute shader (OpenGL 4.5+)
-//   - Progressive accumulation: 1ñN samples per frame
+//   - Progressive accumulation: 1‚ÄìN samples per frame
 //   - BVH traversal: stack-based sobre SSBO
 //   - PBR BRDF: Cook-Torrance con importance sampling GGX
 //   - NEE (Next Event Estimation): sampleo directo de luces
-//   - Russian Roulette: terminaciÛn probabilÌstica de rayos
+//   - Russian Roulette: terminaci√≥n probabil√≠stica de rayos
 //   - IBL: mismos cubemaps que el rasterizer
-//   - Tone mapping + gamma: ACESFilm idÈntico a Mesh3D.glsl
+//   - Tone mapping + gamma: ACESFilm id√©ntico a Mesh3D.glsl
 //   - Bindless textures: PBR texture maps via GL_ARB_bindless_texture
 //
 // Pipeline SPIR-V:
@@ -47,20 +47,23 @@ layout(std140, binding = 15) uniform CameraData {
     float u_RussianRoulette;    // 4    offset 176
     float u_IBLRotation;        // 4    offset 180  (radians)
     float u_IBLIntensity;       // 4    offset 184
-    float _pad0;                // 4    offset 188
-    vec4  u_IBLTint;            // 16   offset 192  (xyz=tint, w=unused) ? 208 total
+    float u_DenoiserStrength;   // 4    offset 188
+    vec4  u_IBLTint;            // 16   offset 192  (xyz=tint, w=enableDenoiser) ‚Üí 208 total
 };
 
 // ============================================================================
 // TRIANGLES SSBO (binding = 20, std430)
-// RTTriangleGPU: 5 ◊ vec4 = 80 bytes
+// RTTriangleGPU: 8 √ó vec4 = 128 bytes
 // ============================================================================
 struct RTTriangle {
-    vec4 V0;               // xyz=position, w=normal.x
-    vec4 V1;               // xyz=position, w=normal.y
-    vec4 V2;               // xyz=position, w=normal.z
+    vec4 V0;               // xyz=position, w=materialIndex
+    vec4 V1;               // xyz=position, w=entityID
+    vec4 V2;               // xyz=position, w=unused
     vec4 TexCoords01;      // xy=uv0, zw=uv1
-    vec4 TexCoords2AndMat; // xy=uv2, z=materialIndex, w=entityID
+    vec4 TexCoords2AndMat; // xy=uv2, z=unused, w=unused
+    vec4 N0N1;             // xyz=normal0, w=normal1.x
+    vec4 N1N2;             // xy=normal1.yz, zw=normal2.xy
+    vec4 N2T0;             // x=normal2.z, yzw=tangent0.xyz
 };
 
 layout(std430, binding = 20) readonly buffer TriangleBuffer {
@@ -69,7 +72,7 @@ layout(std430, binding = 20) readonly buffer TriangleBuffer {
 
 // ============================================================================
 // BVH NODES SSBO (binding = 21, std430)
-// RTBVHNodeGPU: 2 ◊ vec4 = 32 bytes
+// RTBVHNodeGPU: 2 √ó vec4 = 32 bytes
 //   BoundsMin.w = leftChild (internal) o triStart (leaf)
 //   BoundsMax.w = triCount (0 = internal node)
 // ============================================================================
@@ -84,7 +87,7 @@ layout(std430, binding = 21) readonly buffer BVHBuffer {
 
 // ============================================================================
 // MATERIALS SSBO (binding = 22, std430)
-// RTMaterialGPU: 5 ◊ vec4 = 80 bytes
+// RTMaterialGPU: 5 √ó vec4 = 80 bytes
 // ============================================================================
 struct RTMaterial {
     vec4 Albedo;           // rgba
@@ -100,7 +103,7 @@ layout(std430, binding = 22) readonly buffer MaterialBuffer {
 
 // ============================================================================
 // LIGHTS SSBO (binding = 23, std430)
-// LightData: 5 ◊ vec4 = 80 bytes  (misma struct que Mesh3D.glsl)
+// LightData: 5 √ó vec4 = 80 bytes  (misma struct que Mesh3D.glsl)
 // ============================================================================
 struct LightData {
     vec4 Position;    // xyz=pos, w=type (0=dir, 1=point, 2=spot)
@@ -156,7 +159,7 @@ const float MAX_REFLECTION_LOD = 4.0;
 const int   BVH_STACK_SIZE = 64;
 
 // ============================================================================
-// RANDOM NUMBER GENERATOR ó PCG (Permuted Congruential Generator)
+// RANDOM NUMBER GENERATOR ‚Äî PCG (Permuted Congruential Generator)
 // ============================================================================
 uint g_RNGState;
 
@@ -184,7 +187,7 @@ vec3 RandomVec3() {
 // SAMPLING UTILITIES
 // ============================================================================
 
-// DistribuciÛn coseno-ponderada sobre hemisferio (diffuse)
+// Distribuci√≥n coseno-ponderada sobre hemisferio (diffuse)
 vec3 SampleCosineHemisphere(vec3 N) {
     vec2 xi = RandomVec2();
     float phi = TWO_PI * xi.x;
@@ -230,7 +233,7 @@ float GGX_PDF(float NdotH, float HdotV, float roughness) {
 }
 
 // ============================================================================
-// PBR BRDF ó Cook-Torrance (idÈntico a Mesh3D.glsl)
+// PBR BRDF ‚Äî Cook-Torrance (id√©ntico a Mesh3D.glsl)
 // ============================================================================
 
 float D_GGX(float NdotH, float roughness) {
@@ -300,6 +303,7 @@ struct HitInfo {
     float t;
     vec3  position;
     vec3  normal;
+    vec3  tangent;
     vec2  uv;
     uint  materialIndex;
     int   entityID;
@@ -307,7 +311,7 @@ struct HitInfo {
 };
 
 // ============================================================================
-// RAYñTRIANGLE INTERSECTION (MˆllerñTrumbore)
+// RAY‚ÄìTRIANGLE INTERSECTION (M√∂ller‚ÄìTrumbore)
 // ============================================================================
 bool IntersectTriangle(Ray ray, RTTriangle tri, out float t, out vec2 barycentrics) {
     vec3 v0 = tri.V0.xyz;
@@ -338,7 +342,7 @@ bool IntersectTriangle(Ray ray, RTTriangle tri, out float t, out vec2 barycentri
 }
 
 // ============================================================================
-// RAYñAABB INTERSECTION (slab method)
+// RAY‚ÄìAABB INTERSECTION (slab method)
 // ============================================================================
 bool IntersectAABB(Ray ray, vec3 bmin, vec3 bmax, float tMax) {
     vec3 t0 = (bmin - ray.origin) * ray.invDir;
@@ -351,7 +355,7 @@ bool IntersectAABB(Ray ray, vec3 bmin, vec3 bmax, float tMax) {
 }
 
 // ============================================================================
-// BVH TRAVERSAL ó Stack-based iterativo
+// BVH TRAVERSAL ‚Äî Stack-based iterativo
 // ============================================================================
 HitInfo TraverseBVH(Ray ray) {
     HitInfo bestHit;
@@ -375,12 +379,12 @@ HitInfo TraverseBVH(Ray ray) {
         if (!IntersectAABB(ray, bmin, bmax, bestHit.t))
             continue;
 
-        // C++ almacena uint como float vÌa static_cast<float>(value),
+        // C++ almacena uint como float v√≠a static_cast<float>(value),
         // por lo tanto leemos con uint(float_value), NO floatBitsToUint.
         uint triCount = uint(node.BoundsMax.w);
 
         if (triCount > 0u) {
-            // Nodo hoja: testear tri·ngulos
+            // Nodo hoja: testear tri√°ngulos
             uint triStart = uint(node.BoundsMin.w);
             for (uint i = 0u; i < triCount; i++) {
                 uint triIdx = triStart + i;
@@ -396,17 +400,27 @@ HitInfo TraverseBVH(Ray ray) {
                     float w = 1.0 - bary.x - bary.y;
 
                     bestHit.position = ray.origin + ray.direction * t;
-                    bestHit.normal   = normalize(vec3(tri.V0.w, tri.V1.w, tri.V2.w));
 
-                    // Interpolar UVs con baricÈntricas
+                    // Unpack per-vertex normals
+                    vec3 n0 = tri.N0N1.xyz;
+                    vec3 n1 = vec3(tri.N0N1.w, tri.N1N2.xy);
+                    vec3 n2 = vec3(tri.N1N2.zw, tri.N2T0.x);
+
+                    // Interpolate normal using barycentrics (smooth shading)
+                    bestHit.normal = normalize(n0 * w + n1 * bary.x + n2 * bary.y);
+
+                    // Tangent from first vertex (for TBN construction)
+                    bestHit.tangent = vec3(tri.N2T0.yzw);
+
+                    // Interpolar UVs con baric√©ntricas
                     vec2 uv0 = tri.TexCoords01.xy;
                     vec2 uv1 = tri.TexCoords01.zw;
                     vec2 uv2 = tri.TexCoords2AndMat.xy;
                     bestHit.uv = uv0 * w + uv1 * bary.x + uv2 * bary.y;
 
-                    // materialIndex y entityID almacenados como float vÌa static_cast<float>
-                    bestHit.materialIndex = uint(tri.TexCoords2AndMat.z);
-                    bestHit.entityID      = int(tri.TexCoords2AndMat.w);
+                    // materialIndex and entityID from new packing
+                    bestHit.materialIndex = uint(tri.V0.w);
+                    bestHit.entityID      = int(tri.V1.w);
                 }
             }
         } else {
@@ -425,7 +439,7 @@ HitInfo TraverseBVH(Ray ray) {
 }
 
 // ============================================================================
-// ATENUACI”N FÕSICA (igual que Mesh3D.glsl)
+// ATENUACI√ìN F√çSICA (igual que Mesh3D.glsl)
 // ============================================================================
 float GetPhysicalAttenuation(float distance, float range) {
     if (range <= 0.0) return 1.0;
@@ -443,7 +457,7 @@ float GetSpotAttenuation(vec3 L, vec3 spotDir, float innerCone, float outerCone)
 }
 
 // ============================================================================
-// NEXT EVENT ESTIMATION (NEE) ó Sampleo directo de luces
+// NEXT EVENT ESTIMATION (NEE) ‚Äî Sampleo directo de luces
 // ============================================================================
 vec3 SampleDirectLighting(HitInfo hit, vec3 V, vec3 albedo, float metallic, float roughness, vec3 F0) {
     if (u_LightCount == 0u) return vec3(0.0);
@@ -491,14 +505,14 @@ vec3 SampleDirectLighting(HitInfo hit, vec3 V, vec3 albedo, float metallic, floa
             continue;
         }
 
-        // Shadow ray: verificar oclusiÛn
+        // Shadow ray: verificar oclusi√≥n
         Ray shadowRay = MakeRay(hit.position + hit.normal * EPSILON * 10.0, L);
         HitInfo shadowHit = TraverseBVH(shadowRay);
 
         bool occluded = shadowHit.hit && shadowHit.t < lightDist - EPSILON;
         if (occluded) continue;
 
-        // Evaluar BRDF ◊ radiancia
+        // Evaluar BRDF √ó radiancia
         Lo += EvaluateBRDF(hit.normal, V, L, albedo, metallic, roughness, F0) * radiance;
     }
 
@@ -506,7 +520,7 @@ vec3 SampleDirectLighting(HitInfo hit, vec3 V, vec3 albedo, float metallic, floa
 }
 
 // ============================================================================
-// ENVIRONMENT SAMPLING ó IBL como fallback para rayos que no impactan
+// ENVIRONMENT SAMPLING ‚Äî IBL como fallback para rayos que no impactan
 // ============================================================================
 
 // Rotate a direction vector around the Y axis by the given angle (radians)
@@ -547,7 +561,7 @@ vec3 SampleEnvironment(vec3 direction) {
 }
 
 // ============================================================================
-// GENERAR RAYO PRIMARIO DESDE C¡MARA
+// GENERAR RAYO PRIMARIO DESDE C√ÅMARA
 // ============================================================================
 Ray GenerateCameraRay(uvec2 pixel, uvec2 screenSize) {
     // Jitter sub-pixel para antialiasing progresivo
@@ -555,7 +569,7 @@ Ray GenerateCameraRay(uvec2 pixel, uvec2 screenSize) {
     vec2 uv = (vec2(pixel) + 0.5 + jitter) / vec2(screenSize);
     uv = uv * 2.0 - 1.0; // [-1, 1]
 
-    // Reconstruir posiciÛn en clip space y transformar
+    // Reconstruir posici√≥n en clip space y transformar
     vec4 clipTarget = vec4(uv, 1.0, 1.0);
     vec4 viewTarget = u_InverseProjection * clipTarget;
     viewTarget /= viewTarget.w;
@@ -642,10 +656,12 @@ vec3 TracePath(Ray ray) {
             texN.xy *= normalIntensity;
             texN = normalize(texN);
 
-            // Build TBN from geometric normal ó approximate tangent frame
-            vec3 up = abs(N.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
-            vec3 T = normalize(cross(up, N));
+            // Build TBN from interpolated vertex tangent
+            vec3 T = hit.tangent;
+            // Re-orthogonalize tangent w.r.t. interpolated normal (Gram-Schmidt)
+            T = normalize(T - N * dot(N, T));
             vec3 B = cross(N, T);
+
             N = normalize(T * texN.x + B * texN.y + N * texN.z);
         }
 
@@ -657,31 +673,38 @@ vec3 TracePath(Ray ray) {
 
         vec3 V = -ray.direction;
 
-        // === EmisiÛn ===
+        // === Emisi√≥n ===
         radiance += throughput * emission;
 
-        // === NEE: iluminaciÛn directa en el primer bounce ===
-        // En bounces posteriores tambiÈn hacemos NEE para convergencia r·pida
+        // === NEE: iluminaci√≥n directa ===
+        // Apply on all bounces for faster convergence.
+        // Weight NEE contribution to avoid energy double-counting with
+        // the indirect path that may also hit the same light source.
         HitInfo neeHit = hit;
         neeHit.normal = N;  // use normal-mapped normal for BRDF evaluation
         vec3 directLight = SampleDirectLighting(neeHit, V, albedo, metallic, roughness, F0);
         radiance += throughput * directLight;
 
-        // === IBL ambient en el primer bounce ===
-        if (bounce == 0u) {
+        // === IBL ambient (all bounces, weighted) ===
+        // On the first bounce use a higher weight; subsequent bounces
+        // contribute less to avoid over-brightening.
+        {
+            float iblWeight = (bounce == 0u) ? 0.15 : 0.05;
             vec3 iblAmbient = SampleIBLAmbient(N, V, albedo, metallic, roughness, F0) * ao;
-            radiance += throughput * iblAmbient * 0.15; // Reduction since NEE contributes
+            radiance += throughput * iblAmbient * iblWeight;
         }
 
-        // === Russian Roulette (despuÈs del segundo bounce) ===
+        // === Russian Roulette (despu√©s del segundo bounce) ===
         if (bounce >= 2u) {
-            float p = max(throughput.r, max(throughput.g, throughput.b));
-            if (p < u_RussianRoulette || RandomFloat() > p) break;
+            // Use luminance-based probability for better convergence
+            float lum = dot(throughput, vec3(0.2126, 0.7152, 0.0722));
+            float p = clamp(lum, 0.05, 0.95);
+            if (RandomFloat() > p) break;
             throughput /= p;
         }
 
-        // === Samplear direcciÛn del siguiente bounce ===
-        // Decidir entre diffuse y specular seg˙n metallic/roughness
+        // === Samplear direcci√≥n del siguiente bounce ===
+        // Decidir entre diffuse y specular seg√∫n metallic/roughness
         float specProbability = mix(0.04, 1.0, metallic) * (1.0 - roughness * 0.5);
         specProbability = clamp(specProbability, 0.1, 0.9);
 
@@ -727,7 +750,7 @@ vec3 TracePath(Ray ray) {
             throughput *= brdfVal * NdotL / max(pdf, EPSILON);
         }
 
-        // Preparar siguiente rayo (offset para evitar auto-intersecciÛn)
+        // Preparar siguiente rayo (offset para evitar auto-intersecci√≥n)
         ray = MakeRay(hit.position + N * EPSILON * 10.0, newDir);
 
         // Safety: si el throughput se descontrola, cortar
@@ -739,7 +762,50 @@ vec3 TracePath(Ray ray) {
 }
 
 // ============================================================================
-// TONE MAPPING ó ACESFilm (idÈntico a Mesh3D.glsl)
+// BILATERAL FILTER DENOISER ‚Äî edge-preserving blur on accumulated image
+// Applied before tone mapping for better noise reduction.
+// ============================================================================
+vec3 BilateralDenoise(ivec2 pixel, ivec2 screenSize, vec3 centerColor, float strength) {
+    // Kernel radius scales with strength (1‚Äì3 pixels)
+    int radius = int(clamp(strength, 1.0, 3.0));
+    float sigmaSpace = max(strength, 0.5);
+    float sigmaColor = 0.15 / max(strength * 0.5, 0.1);
+
+    float weightSum = 0.0;
+    vec3 colorSum = vec3(0.0);
+
+    for (int dy = -radius; dy <= radius; dy++) {
+        for (int dx = -radius; dx <= radius; dx++) {
+            ivec2 samplePos = pixel + ivec2(dx, dy);
+
+            // Bounds check
+            if (samplePos.x < 0 || samplePos.y < 0 ||
+                samplePos.x >= screenSize.x || samplePos.y >= screenSize.y)
+                continue;
+
+            vec4 sampleAcc = imageLoad(u_AccumulationBuffer, samplePos);
+            vec3 sampleColor = sampleAcc.rgb / max(sampleAcc.a, 1.0);
+
+            // Spatial weight (Gaussian)
+            float dist2 = float(dx * dx + dy * dy);
+            float wSpace = exp(-dist2 / (2.0 * sigmaSpace * sigmaSpace));
+
+            // Color similarity weight (edge-preserving)
+            vec3 diff = centerColor - sampleColor;
+            float colorDist2 = dot(diff, diff);
+            float wColor = exp(-colorDist2 / (2.0 * sigmaColor * sigmaColor));
+
+            float w = wSpace * wColor;
+            colorSum += sampleColor * w;
+            weightSum += w;
+        }
+    }
+
+    return colorSum / max(weightSum, EPSILON);
+}
+
+// ============================================================================
+// TONE MAPPING ‚Äî ACESFilm (id√©ntico a Mesh3D.glsl)
 // ============================================================================
 vec3 ACESFilm(vec3 x) {
     float a = 2.51;
@@ -751,7 +817,7 @@ vec3 ACESFilm(vec3 x) {
 }
 
 // ============================================================================
-// MAIN ó Compute Shader Entry Point
+// MAIN ‚Äî Compute Shader Entry Point
 // ============================================================================
 void main() {
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
@@ -761,7 +827,7 @@ void main() {
     if (pixel.x >= screenSize.x || pixel.y >= screenSize.y)
         return;
 
-    // Inicializar RNG con posiciÛn de pixel + frame index
+    // Inicializar RNG con posici√≥n de pixel + frame index
     InitRNG(uvec2(pixel), u_FrameIndex);
 
     // Generar rayo primario
@@ -775,14 +841,20 @@ void main() {
     if (any(isnan(color)) || any(isinf(color)))
         color = vec3(0.0);
 
-    // === AcumulaciÛn progresiva ===
+    // === Acumulaci√≥n progresiva ===
     vec4 accumulated = imageLoad(u_AccumulationBuffer, pixel);
     accumulated.rgb += color;
     accumulated.a   += 1.0;
     imageStore(u_AccumulationBuffer, pixel, accumulated);
 
-    // === Promedio + tone mapping + gamma ? output final ===
+    // === Promedio ===
     vec3 averaged = accumulated.rgb / max(accumulated.a, 1.0);
+
+    // === Bilateral denoiser (optional) ===
+    bool denoiserEnabled = u_IBLTint.w > 0.5;
+    if (denoiserEnabled && u_DenoiserStrength > 0.0) {
+        averaged = BilateralDenoise(pixel, screenSize, averaged, u_DenoiserStrength);
+    }
 
     // Tone mapping ACESFilm
     vec3 mapped = ACESFilm(averaged);

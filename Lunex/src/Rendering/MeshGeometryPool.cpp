@@ -131,14 +131,21 @@ namespace Lunex {
 					glm::vec3 p1 = glm::vec3(model * glm::vec4(v1.Position, 1.0f));
 					glm::vec3 p2 = glm::vec3(model * glm::vec4(v2.Position, 1.0f));
 
-					glm::vec3 faceN = glm::normalize(normalM * v0.Normal);
+					glm::vec3 n0 = glm::normalize(normalM * v0.Normal);
+					glm::vec3 n1 = glm::normalize(normalM * v1.Normal);
+					glm::vec3 n2 = glm::normalize(normalM * v2.Normal);
+
+					glm::vec3 t0 = glm::normalize(normalM * v0.Tangent);
 
 					RTTriangleGPU tri;
-					tri.V0             = glm::vec4(p0, faceN.x);
-					tri.V1             = glm::vec4(p1, faceN.y);
-					tri.V2             = glm::vec4(p2, faceN.z);
+					tri.V0             = glm::vec4(p0, static_cast<float>(matIdx));
+					tri.V1             = glm::vec4(p1, entityF);
+					tri.V2             = glm::vec4(p2, 0.0f);
 					tri.TexCoords01    = glm::vec4(v0.TexCoords, v1.TexCoords);
-					tri.TexCoords2AndMat = glm::vec4(v2.TexCoords, static_cast<float>(matIdx), entityF);
+					tri.TexCoords2AndMat = glm::vec4(v2.TexCoords, 0.0f, 0.0f);
+					tri.N0N1           = glm::vec4(n0, n1.x);
+					tri.N1N2           = glm::vec4(n1.y, n1.z, n2.x, n2.y);
+					tri.N2T0           = glm::vec4(n2.z, t0);
 
 					m_Triangles.push_back(tri);
 				}

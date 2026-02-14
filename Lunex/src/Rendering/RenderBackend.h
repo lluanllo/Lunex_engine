@@ -54,6 +54,10 @@ namespace Lunex {
 		uint32_t SamplesPerFrame        = 1;
 		uint32_t MaxAccumulatedSamples  = 0;       // 0 = infinite
 		float    RussianRouletteThresh  = 0.01f;
+
+		// Denoiser (bilateral filter)
+		bool     EnableDenoiser         = false;
+		float    DenoiserStrength       = 1.0f;     // 0 = off, higher = more blur
 	};
 
 	// ====================================================================

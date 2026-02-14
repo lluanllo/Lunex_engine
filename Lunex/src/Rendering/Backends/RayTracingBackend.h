@@ -94,7 +94,7 @@ namespace Lunex {
 		uint32_t m_OutputTexID       = 0;  // GL texture handle, RGBA8
 
 		// Camera UBO (binding = 15, std140 layout)
-		// Total = 64+64+16 + 4*8 + 4 + 4+4+4 + 16 = 208 bytes (std140 aligned)
+		// Total = 64+64+16 + 4*8 + 4 + 4+4+4 + 16 + 4+4+8 = 224 bytes (std140 aligned)
 		struct CameraUBOData {
 			glm::mat4 InverseProjection;   // 64   offset 0
 			glm::mat4 InverseView;         // 64   offset 64
@@ -110,8 +110,8 @@ namespace Lunex {
 			float     RussianRoulette;     // 4    offset 176
 			float     IBLRotation;         // 4    offset 180  (radians)
 			float     IBLIntensity;        // 4    offset 184
-			float     _pad0;              // 4    offset 188
-			glm::vec4 IBLTint;            // 16   offset 192  (xyz=tint, w=unused) ? 208 total
+			float     DenoiserStrength;    // 4    offset 188
+			glm::vec4 IBLTint;            // 16   offset 192  (xyz=tint, w=enableDenoiser) ? 208 total
 		};
 
 		Ref<UniformBuffer> m_CameraUBO;

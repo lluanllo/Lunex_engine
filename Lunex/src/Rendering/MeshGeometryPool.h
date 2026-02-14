@@ -21,15 +21,18 @@
 namespace Lunex {
 
 	// ====================================================================
-	// GPU-READY TRIANGLE (80 bytes, std430-friendly)
+	// GPU-READY TRIANGLE (128 bytes, std430-friendly)
 	// ====================================================================
 
 	struct RTTriangleGPU {
-		glm::vec4 V0;                // xyz=pos, w=nx
-		glm::vec4 V1;                // xyz=pos, w=ny
-		glm::vec4 V2;                // xyz=pos, w=nz
+		glm::vec4 V0;                // xyz=pos, w=materialIndex
+		glm::vec4 V1;                // xyz=pos, w=entityID
+		glm::vec4 V2;                // xyz=pos, w=unused
 		glm::vec4 TexCoords01;       // xy=uv0, zw=uv1
-		glm::vec4 TexCoords2AndMat;  // xy=uv2, z=materialIndex, w=entityID
+		glm::vec4 TexCoords2AndMat;  // xy=uv2, z=unused, w=unused
+		glm::vec4 N0N1;             // xyz=normal0, w=normal1.x
+		glm::vec4 N1N2;             // xy=normal1.yz, zw=normal2.xy
+		glm::vec4 N2T0;             // x=normal2.z, yzw=tangent0.xyz
 	};
 
 	// ====================================================================

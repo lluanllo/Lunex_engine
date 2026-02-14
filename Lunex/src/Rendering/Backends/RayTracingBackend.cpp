@@ -348,8 +348,9 @@ namespace Lunex {
 			m_CameraData.RussianRoulette   = m_Settings.RussianRouletteThresh;
 			m_CameraData.IBLRotation       = glm::radians(SkyboxRenderer::GetRotation());
 			m_CameraData.IBLIntensity      = SkyboxRenderer::GetIntensity();
-			m_CameraData._pad0             = 0.0f;
-			m_CameraData.IBLTint           = glm::vec4(SkyboxRenderer::GetTint(), 0.0f);
+			m_CameraData.DenoiserStrength  = m_Settings.EnableDenoiser ? m_Settings.DenoiserStrength : 0.0f;
+			m_CameraData.IBLTint           = glm::vec4(SkyboxRenderer::GetTint(),
+			                                           m_Settings.EnableDenoiser ? 1.0f : 0.0f);
 			m_CameraUBO->SetData(&m_CameraData, sizeof(CameraUBOData));
 
 			m_PathTracerShader->Dispatch(groupsX, groupsY, 1);
@@ -416,6 +417,10 @@ namespace Lunex {
 	void RayTracingBackend::BlitToFramebuffer() {
 		if (!m_BlitShader || m_OutputTexID == 0 || m_BlitDummyVAO == 0)
 			return;
+
+		// Clear depth buffer so the subsequent entity ID pass writes clean
+		// depth values for selection outline, CSM, and mouse picking.
+		glClear(GL_DEPTH_BUFFER_BIT);
 
 		// Save GL state we are going to change
 		GLboolean prevDepthTest, prevDepthMask, prevBlend;
