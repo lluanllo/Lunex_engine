@@ -245,6 +245,13 @@ namespace Lunex {
 			
 			LNX_LOG_INFO("Hot reload: Material thumbnails invalidated for {0}", path.filename().string());
 		});
+
+		// 4. Material Editor -> SceneRenderSystem (reset PT accumulation on property change)
+		m_MaterialEditorPanel.SetOnMaterialChangedCallback([this]() {
+			if (auto* renderSys = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+				renderSys->NotifyMaterialChanged();
+			}
+		});
 		
 		LNX_LOG_INFO("✅ Material Editor Panel callbacks configured");
 

@@ -51,6 +51,9 @@ namespace Lunex {
 		using MaterialSavedCallback = std::function<void(const std::filesystem::path&)>;
 		void SetOnMaterialSavedCallback(MaterialSavedCallback callback) { m_OnMaterialSaved = callback; }
 
+		using MaterialChangedCallback = std::function<void()>;
+		void SetOnMaterialChangedCallback(MaterialChangedCallback callback) { m_OnMaterialChanged = callback; }
+
 		// ========== RENDERING ==========
 
 		void OnImGuiRender();
@@ -67,6 +70,7 @@ namespace Lunex {
 		Ref<MaterialAsset> m_EditingMaterial;
 		Ref<MaterialPreviewRenderer> m_PreviewRenderer;
 		MaterialSavedCallback m_OnMaterialSaved;
+		MaterialChangedCallback m_OnMaterialChanged;
 
 		// UI state
 		bool m_IsOpen = false;

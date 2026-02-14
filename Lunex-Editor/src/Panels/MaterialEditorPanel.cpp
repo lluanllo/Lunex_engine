@@ -679,6 +679,9 @@ namespace Lunex {
 		if (m_AutoSave) {
 			SaveMaterial();
 		}
+		if (m_OnMaterialChanged) {
+			m_OnMaterialChanged();
+		}
 	}
 
 	bool MaterialEditorPanel::ShowUnsavedChangesDialog() {

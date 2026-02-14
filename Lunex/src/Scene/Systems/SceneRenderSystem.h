@@ -63,6 +63,9 @@ namespace Lunex {
 		/** Call when entities / materials change so RT backend rebuilds BVH. */
 		void NotifySceneChanged();
 
+		/** Call when a material property changes so the PT backend resets accumulation. */
+		void NotifyMaterialChanged();
+
 		/** Call when viewport resizes (needed by path tracer textures). */
 		void OnViewportResize(uint32_t w, uint32_t h);
 

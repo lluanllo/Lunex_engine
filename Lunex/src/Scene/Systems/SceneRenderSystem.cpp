@@ -90,6 +90,15 @@ namespace Lunex {
 		}
 	}
 
+	void SceneRenderSystem::NotifyMaterialChanged() {
+		// Material property changes affect the path tracer image;
+		// the BVH is still valid so we only need to reset accumulation
+		// (the scene hash will pick up the texture/value change next frame).
+		if (m_RTBackend) {
+			m_RTBackend->ResetAccumulation();
+		}
+	}
+
 	void SceneRenderSystem::OnViewportResize(uint32_t w, uint32_t h) {
 		m_RTBackend->OnViewportResize(w, h);
 		// Raster doesn't own textures, no-op
