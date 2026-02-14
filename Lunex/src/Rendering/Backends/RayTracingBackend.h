@@ -143,6 +143,7 @@ namespace Lunex {
 		Ref<Shader>        m_EntityIDShader;
 		Ref<UniformBuffer> m_EntityIDCameraUBO;   // binding 0: ViewProjection
 		Ref<UniformBuffer> m_EntityIDTransformUBO; // binding 1: Transform
+		Ref<UniformBuffer> m_EntityIDEntityUBO;    // binding 2: EntityData (entity ID)
 	};
 
 } // namespace Lunex

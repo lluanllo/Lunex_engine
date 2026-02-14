@@ -10,6 +10,7 @@
 #include "Renderer/SkyboxRenderer.h"
 #include "RHI/RHI.h"
 
+#include <glad/glad.h>
 #include <algorithm>
 
 namespace Lunex {
@@ -83,6 +84,24 @@ namespace Lunex {
 		// When switching TO path tracer, reset accumulation for a fresh start
 		if (type == RenderBackendType::PathTracer) {
 			m_RTBackend->ResetAccumulation();
+		}
+
+		// When switching FROM path tracer TO rasterizer, clear the depth buffer
+		// of the currently-bound framebuffer so stale depth from the entity ID
+		// pass doesn't block raster geometry.  Also unbind any lingering compute
+		// shader image/SSBO bindings that might interfere.
+		if (oldType == RenderBackendType::PathTracer && type == RenderBackendType::Rasterizer) {
+			glMemoryBarrier(GL_ALL_BARRIER_BITS);
+			// Unbind image units used by the path tracer
+			glBindImageTexture(0, 0, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+			glBindImageTexture(1, 0, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8);
+			// Use program 0 to ensure no compute shader is active
+			glUseProgram(0);
+			// Restore per-draw-buffer color masks that the entity ID pass may
+			// have left in a non-default state
+			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+			glColorMaski(0, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+			glColorMaski(1, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 		}
 
 		LNX_LOG_INFO("Render backend switched to: {0}",

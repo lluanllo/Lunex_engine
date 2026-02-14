@@ -84,7 +84,15 @@ namespace Lunex {
 		m_Specification.Width = width;
 		m_Specification.Height = height;
 		
-		Invalidate();
+		// Use in-place resize if the RHI framebuffer already exists.
+		// This avoids destroying and recreating the FBO (which changes the
+		// GL handle), preventing stale references in subsystems that cache
+		// the FBO ID (e.g., OutlineRenderer's targetFBOHandle).
+		if (m_RHIFramebuffer) {
+			m_RHIFramebuffer->Resize(width, height);
+		} else {
+			Invalidate();
+		}
 	}
 	
 	int Framebuffer::ReadPixel(uint32_t attachmentIndex, int x, int y) {

@@ -9,6 +9,8 @@
 #include "Scene/Entity.h"
 #include "Log/Log.h"
 
+#include <glad/glad.h>
+
 namespace Lunex {
 
 	// ====================================================================
@@ -31,6 +33,26 @@ namespace Lunex {
 		m_EditorMode   = true;
 		m_EditorCamera = &camera;
 
+		// Ensure clean GL state for the raster pipeline.
+		// When switching from the path tracer backend, compute dispatch and
+		// the entity-ID raster pass may leave depth, blend, cull, or color-mask
+		// state in an unexpected configuration.
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LESS);
+		glDepthMask(GL_TRUE);
+		glEnable(GL_CULL_FACE);
+		glCullFace(GL_BACK);
+		glDisable(GL_BLEND);
+		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		// Ensure all draw buffer color masks are enabled (the PT entity ID
+		// pass disables color writes on attachment 0 via glColorMaski)
+		glColorMaski(0, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		glColorMaski(1, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+		// Unbind any active compute/program from the path tracer
+		glUseProgram(0);
+
 		// Lights must be synced BEFORE BeginScene.
 		// NOTE: Shadows are rendered by the EditorLayer BEFORE binding the main
 		// framebuffer, so we do NOT call UpdateShadows here (it would corrupt
@@ -52,6 +74,20 @@ namespace Lunex {
 		m_EditorMode               = false;
 		m_RuntimeCamera            = &camera;
 		m_RuntimeCameraTransform   = cameraTransform;
+
+		// Ensure clean GL state (same as BeginFrame)
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LESS);
+		glDepthMask(GL_TRUE);
+		glEnable(GL_CULL_FACE);
+		glCullFace(GL_BACK);
+		glDisable(GL_BLEND);
+		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		glColorMaski(0, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		glColorMaski(1, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+		glUseProgram(0);
 
 		if (m_CurrentScene) {
 			LightSystem::Get().SyncFromScene(m_CurrentScene);

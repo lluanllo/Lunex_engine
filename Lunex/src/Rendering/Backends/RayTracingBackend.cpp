@@ -48,6 +48,7 @@ namespace Lunex {
 		m_EntityIDShader = Shader::Create("assets/shaders/EntityID.glsl");
 		m_EntityIDCameraUBO    = UniformBuffer::Create(sizeof(glm::mat4), 0);   // binding 0: ViewProjection
 		m_EntityIDTransformUBO = UniformBuffer::Create(sizeof(glm::mat4), 1);   // binding 1: Transform
+		m_EntityIDEntityUBO    = UniformBuffer::Create(sizeof(int) * 4,   2);   // binding 2: EntityData (std140 pads int to 16 bytes)
 
 		LNX_LOG_INFO("RayTracingBackend: Initialized");
 	}
@@ -65,6 +66,7 @@ namespace Lunex {
 		m_EntityIDShader.reset();
 		m_EntityIDCameraUBO.reset();
 		m_EntityIDTransformUBO.reset();
+		m_EntityIDEntityUBO.reset();
 		LNX_LOG_INFO("RayTracingBackend: Shutdown");
 	}
 
@@ -200,7 +202,7 @@ namespace Lunex {
 				hashTexID(item.Material->GetNormalMap());
 				hashTexID(item.Material->GetMetallicMap());
 				hashTexID(item.Material->GetRoughnessMap());
-				hashTexID(item.Material->GetSpecularMap());
+			 hashTexID(item.Material->GetSpecularMap());
 				hashTexID(item.Material->GetEmissionMap());
 				hashTexID(item.Material->GetAOMap());
 			}
@@ -418,20 +420,23 @@ namespace Lunex {
 		if (!m_BlitShader || m_OutputTexID == 0 || m_BlitDummyVAO == 0)
 			return;
 
-		// Clear depth buffer so the subsequent entity ID pass writes clean
-		// depth values for selection outline, CSM, and mouse picking.
-		glClear(GL_DEPTH_BUFFER_BIT);
-
 		// Save GL state we are going to change
 		GLboolean prevDepthTest, prevDepthMask, prevBlend;
+		GLboolean prevColorMask0[4];
+		GLboolean prevColorMask1[4];
 		glGetBooleanv(GL_DEPTH_TEST, &prevDepthTest);
 		glGetBooleanv(GL_DEPTH_WRITEMASK, &prevDepthMask);
 		glGetBooleanv(GL_BLEND, &prevBlend);
+		glGetBooleani_v(GL_COLOR_WRITEMASK, 0, prevColorMask0);
+		glGetBooleani_v(GL_COLOR_WRITEMASK, 1, prevColorMask1);
 
 		// Disable depth test/write — we are painting a background layer
 		glDisable(GL_DEPTH_TEST);
 		glDepthMask(GL_FALSE);
 		glDisable(GL_BLEND);
+		// Ensure color writes are enabled on ALL draw buffers
+		glColorMaski(0, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		glColorMaski(1, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
 		m_BlitShader->Bind();
 		glBindTextureUnit(0, m_OutputTexID);
@@ -446,6 +451,13 @@ namespace Lunex {
 		if (prevDepthTest) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
 		glDepthMask(prevDepthMask);
 		if (prevBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+		glColorMaski(0, prevColorMask0[0], prevColorMask0[1], prevColorMask0[2], prevColorMask0[3]);
+		glColorMaski(1, prevColorMask1[0], prevColorMask1[1], prevColorMask1[2], prevColorMask1[3]);
+
+		// Clear depth buffer so the subsequent entity ID pass writes clean
+		// depth values for selection outline, CSM, and mouse picking.
+		// Do this AFTER the blit so the blitted image is preserved.
+		glClear(GL_DEPTH_BUFFER_BIT);
 
 		// After the color blit, perform a fast raster pass to write entity IDs
 		// so that mouse picking works in path tracer mode.
@@ -461,22 +473,28 @@ namespace Lunex {
 			return;
 
 		// Save GL state
-		GLboolean prevDepthTest, prevDepthMask, prevBlend;
+		GLboolean prevDepthTest, prevDepthMask, prevBlend, prevCullFace;
 		GLboolean prevColorMask0[4];
+		GLboolean prevColorMask1[4];
 		glGetBooleanv(GL_DEPTH_TEST, &prevDepthTest);
 		glGetBooleanv(GL_DEPTH_WRITEMASK, &prevDepthMask);
 		glGetBooleanv(GL_BLEND, &prevBlend);
+		glGetBooleanv(GL_CULL_FACE, &prevCullFace);
 		glGetBooleani_v(GL_COLOR_WRITEMASK, 0, prevColorMask0);
+		glGetBooleani_v(GL_COLOR_WRITEMASK, 1, prevColorMask1);
 
 		// Enable depth test + write so only closest fragments produce entity IDs
 		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LESS);
 		glDepthMask(GL_TRUE);
 		glDisable(GL_BLEND);
+		glEnable(GL_CULL_FACE);
+		glCullFace(GL_BACK);
 
 		// Disable color writes ONLY on attachment 0 (RGBA8) to preserve the PT image.
 		// Attachment 1 (R32I entity ID) must remain writable.
-		// Using glColorMaski instead of glColorMask so it only affects draw buffer 0.
 		glColorMaski(0, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+		glColorMaski(1, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
 		m_EntityIDShader->Bind();
 
@@ -484,16 +502,22 @@ namespace Lunex {
 		glm::mat4 vp = m_SceneData.ViewProjection;
 		m_EntityIDCameraUBO->SetData(&vp, sizeof(glm::mat4));
 
-		// Iterate draw items and render each mesh
+		// Iterate draw items and render each mesh.
+		// IMPORTANT: We pass the entity ID via a uniform (binding 2) instead of
+		// modifying vertex buffer data with SetEntityID().  This avoids costly
+		// per-frame vertex buffer re-uploads that were causing the scene hash to
+		// change, resetting path tracer accumulation and making the viewport black.
 		for (const auto& item : m_SceneData.DrawItems) {
 			if (!item.MeshModel) continue;
-
-			// Stamp entity ID into vertex data (only when changed)
-			item.MeshModel->SetEntityID(item.EntityID);
 
 			// Upload per-object transform (binding 1)
 			glm::mat4 transform = item.Transform;
 			m_EntityIDTransformUBO->SetData(&transform, sizeof(glm::mat4));
+
+			// Upload entity ID via uniform (binding 2) — NOT via vertex buffer
+			// std140 layout pads a single int to 16 bytes
+			struct { int id; int _pad[3]; } entityData = { item.EntityID, {0,0,0} };
+			m_EntityIDEntityUBO->SetData(&entityData, sizeof(entityData));
 
 			// Draw all submeshes
 			for (const auto& submesh : item.MeshModel->GetMeshes()) {
@@ -509,11 +533,16 @@ namespace Lunex {
 
 		m_EntityIDShader->Unbind();
 
-		// Restore GL state
+		// Restore GL state — CRITICAL: re-enable color writes on ALL attachments
+		// so that subsequent raster passes (grid, billboards, gizmos, outline)
+		// can write to the color buffer.
 		glColorMaski(0, prevColorMask0[0], prevColorMask0[1], prevColorMask0[2], prevColorMask0[3]);
+		glColorMaski(1, prevColorMask1[0], prevColorMask1[1], prevColorMask1[2], prevColorMask1[3]);
+
 		if (prevDepthTest) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
 		glDepthMask(prevDepthMask);
 		if (prevBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+		if (prevCullFace) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
 	}
 
 } // namespace Lunex

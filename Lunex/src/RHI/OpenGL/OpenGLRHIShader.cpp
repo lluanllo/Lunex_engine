@@ -303,18 +303,28 @@ namespace RHI {
 			// Preprocess: remap GL-only built-ins for Vulkan SPIR-V
 			std::string processedSource = PreprocessForSPIRV(source);
 
-			// Try loading from cache
+			// Compute a simple hash of the source to detect changes
+			std::size_t sourceHash = std::hash<std::string>{}(processedSource);
+			std::filesystem::path hashPath = cachePath;
+			hashPath += ".hash";
+
+			// Try loading from cache (only if hash matches)
 			bool cacheLoaded = false;
-			if (std::filesystem::exists(cachePath)) {
-				std::ifstream in(cachePath, std::ios::binary);
-				if (in) {
-					in.seekg(0, std::ios::end);
-					size_t size = in.tellg();
-					if (size > 0 && size % sizeof(uint32_t) == 0) {
-						in.seekg(0, std::ios::beg);
-						m_VulkanSPIRV[stage].resize(size / sizeof(uint32_t));
-						in.read(reinterpret_cast<char*>(m_VulkanSPIRV[stage].data()), size);
-						cacheLoaded = in.good() && !m_VulkanSPIRV[stage].empty();
+			if (std::filesystem::exists(cachePath) && std::filesystem::exists(hashPath)) {
+				// Verify hash
+				std::ifstream hashIn(hashPath);
+				std::size_t cachedHash = 0;
+				if (hashIn >> cachedHash && cachedHash == sourceHash) {
+					std::ifstream in(cachePath, std::ios::binary);
+					if (in) {
+						in.seekg(0, std::ios::end);
+						size_t size = in.tellg();
+						if (size > 0 && size % sizeof(uint32_t) == 0) {
+							in.seekg(0, std::ios::beg);
+							m_VulkanSPIRV[stage].resize(size / sizeof(uint32_t));
+							in.read(reinterpret_cast<char*>(m_VulkanSPIRV[stage].data()), size);
+							cacheLoaded = in.good() && !m_VulkanSPIRV[stage].empty();
+						}
 					}
 				}
 			}
@@ -345,6 +355,12 @@ namespace RHI {
 					out.write(reinterpret_cast<const char*>(m_VulkanSPIRV[stage].data()),
 							  m_VulkanSPIRV[stage].size() * sizeof(uint32_t));
 				}
+
+				// Save hash
+				std::ofstream hashOut(hashPath, std::ios::trunc);
+				if (hashOut) {
+					hashOut << sourceHash;
+				}
 			}
 			
 			// Reflect
@@ -369,7 +385,37 @@ namespace RHI {
 				glslOptions.version = 450;
 				glslOptions.es = false;
 				glslOptions.vulkan_semantics = false;
+				glslOptions.enable_420pack_extension = true; // Preserve layout(binding=X) qualifiers
 				glslCompiler.set_common_options(glslOptions);
+
+				// Preserve all explicit resource bindings from the original shader.
+				// Without this, spirv-cross may remap UBO/SSBO/sampler bindings
+				// causing Renderer3D's hardcoded binding points to mismatch.
+				auto resources = glslCompiler.get_shader_resources();
+
+				for (auto& ubo : resources.uniform_buffers) {
+					uint32_t binding = glslCompiler.get_decoration(ubo.id, spv::DecorationBinding);
+					glslCompiler.unset_decoration(ubo.id, spv::DecorationDescriptorSet);
+					glslCompiler.set_decoration(ubo.id, spv::DecorationBinding, binding);
+				}
+
+				for (auto& ssbo : resources.storage_buffers) {
+					uint32_t binding = glslCompiler.get_decoration(ssbo.id, spv::DecorationBinding);
+					glslCompiler.unset_decoration(ssbo.id, spv::DecorationDescriptorSet);
+					glslCompiler.set_decoration(ssbo.id, spv::DecorationBinding, binding);
+				}
+
+				for (auto& sampler : resources.sampled_images) {
+					uint32_t binding = glslCompiler.get_decoration(sampler.id, spv::DecorationBinding);
+					glslCompiler.unset_decoration(sampler.id, spv::DecorationDescriptorSet);
+					glslCompiler.set_decoration(sampler.id, spv::DecorationBinding, binding);
+				}
+
+				for (auto& image : resources.storage_images) {
+					uint32_t binding = glslCompiler.get_decoration(image.id, spv::DecorationBinding);
+					glslCompiler.unset_decoration(image.id, spv::DecorationDescriptorSet);
+					glslCompiler.set_decoration(image.id, spv::DecorationBinding, binding);
+				}
 				
 				m_OpenGLSourceCode[stage] = glslCompiler.compile();
 			}
@@ -562,9 +608,12 @@ namespace RHI {
 		for (GLenum stage : {GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_COMPUTE_SHADER}) {
 			std::filesystem::path vulkanCache = cacheDir / (shaderPath.filename().string() + GetVulkanCacheExtension(stage));
 			std::filesystem::path openglCache = cacheDir / (shaderPath.filename().string() + GetOpenGLCacheExtension(stage));
+			std::filesystem::path hashFile = vulkanCache;
+			hashFile += ".hash";
 			
 			if (std::filesystem::exists(vulkanCache)) std::filesystem::remove(vulkanCache);
 			if (std::filesystem::exists(openglCache)) std::filesystem::remove(openglCache);
+			if (std::filesystem::exists(hashFile)) std::filesystem::remove(hashFile);
 		}
 		
 		// Store old program

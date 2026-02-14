@@ -147,6 +147,18 @@ namespace RHI {
 			AttachDepthTexture(m_DepthAttachment);
 		}
 
+		// Re-set draw buffers after texture re-attachment (safety measure:
+		// some drivers may reset draw buffer state when attachments change)
+		if (!m_ColorAttachments.empty()) {
+			std::vector<GLenum> attachments;
+			for (size_t i = 0; i < m_ColorAttachments.size(); i++) {
+				attachments.push_back(GL_COLOR_ATTACHMENT0 + static_cast<GLenum>(i));
+			}
+			glNamedFramebufferDrawBuffers(m_FramebufferID,
+										  static_cast<GLsizei>(attachments.size()),
+										  attachments.data());
+		}
+
 		// Re-check framebuffer completeness after resize
 		GLenum status = glCheckNamedFramebufferStatus(m_FramebufferID, GL_FRAMEBUFFER);
 		if (status != GL_FRAMEBUFFER_COMPLETE) {
@@ -156,11 +168,29 @@ namespace RHI {
 	}
 	
 	void OpenGLRHIFramebuffer::Clear(const ClearValue& colorValue, float depth, uint8_t stencil) {
-		Bind();
-		
-		// Clear color attachments
+		// Clear color attachments — must use the correct clear function
+		// based on the attachment's internal format.
+		// Using glClearNamedFramebufferfv on integer attachments is undefined behavior.
 		for (size_t i = 0; i < m_ColorAttachments.size(); i++) {
-			glClearNamedFramebufferfv(m_FramebufferID, GL_COLOR, static_cast<GLint>(i), colorValue.Color);
+			TextureFormat format = m_Desc.ColorAttachments[i].Format;
+			if (format == TextureFormat::R32I || format == TextureFormat::RG32I || 
+			    format == TextureFormat::RGBA32I) {
+				// Signed integer attachments must use glClearNamedFramebufferiv
+				int clearInt[4] = { static_cast<int>(colorValue.Color[0]),
+				                    static_cast<int>(colorValue.Color[1]),
+				                    static_cast<int>(colorValue.Color[2]),
+				                    static_cast<int>(colorValue.Color[3]) };
+				glClearNamedFramebufferiv(m_FramebufferID, GL_COLOR, static_cast<GLint>(i), clearInt);
+			} else if (format == TextureFormat::R32UI) {
+				// Unsigned integer attachments must use glClearNamedFramebufferuiv
+				GLuint clearUInt[4] = { static_cast<GLuint>(colorValue.Color[0]),
+				                        static_cast<GLuint>(colorValue.Color[1]),
+				                        static_cast<GLuint>(colorValue.Color[2]),
+				                        static_cast<GLuint>(colorValue.Color[3]) };
+				glClearNamedFramebufferuiv(m_FramebufferID, GL_COLOR, static_cast<GLint>(i), clearUInt);
+			} else {
+				glClearNamedFramebufferfv(m_FramebufferID, GL_COLOR, static_cast<GLint>(i), colorValue.Color);
+			}
 		}
 		
 		// Clear depth/stencil

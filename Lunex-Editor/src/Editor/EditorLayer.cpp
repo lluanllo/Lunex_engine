@@ -262,7 +262,7 @@ namespace Lunex {
 
 		Lunex::FramebufferSpecification fbSpec;
 		fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
-		fbSpec.Width = 1280;
+	 fbSpec.Width = 1280;
 		fbSpec.Height = 720;
 		m_Framebuffer = Framebuffer::Create(fbSpec);
 
@@ -861,8 +861,13 @@ namespace Lunex {
 		int mouseY = (int)my;
 
 		if (mouseX >= 0 && mouseY >= 0 && mouseX < (int)viewportSize.x && mouseY < (int)viewportSize.y) {
+			// ReadPixel binds the FBO internally and changes GL read buffer state.
+			// We do this BEFORE OnOverlayRender to keep the FBO in a known state.
 			int pixelData = m_Framebuffer->ReadPixel(1, mouseX, mouseY);
 			m_HoveredEntity = pixelData == -1 ? Entity() : Entity((entt::entity)pixelData, m_ActiveScene.get());
+
+			// Re-bind the framebuffer after ReadPixel changed the read buffer
+			m_Framebuffer->Bind();
 		}
 
 		m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
@@ -881,7 +886,13 @@ namespace Lunex {
 		
 		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
 		if (selectedEntity && selectedEntity.HasComponent<CameraComponent>() && m_SceneState == SceneState::Edit) {
-			RenderCameraPreview(selectedEntity);
+			// Skip camera preview when path tracer is active — it calls
+			// Renderer3D::DrawMesh which invokes SetEntityID on shared meshes,
+			// causing vertex buffer re-uploads that change the scene hash
+			// and reset path tracer accumulation every frame.
+			if (!isPathTracerActive) {
+				RenderCameraPreview(selectedEntity);
+			}
 		}
 	}
 
@@ -1056,7 +1067,7 @@ namespace Lunex {
 						else {
 							// Add clicked entity to selection
 							m_SceneHierarchyPanel.AddEntityToSelection(m_HoveredEntity);
-							LNX_LOG_INFO("Added entity to multi-selection ({0} selected)", selectedEntities.size() + 1);
+						 LNX_LOG_INFO("Added entity to multi-selection ({0} selected)", selectedEntities.size() + 1);
 						}
 					}
 					else if (ctrlPressed) {
@@ -1083,7 +1094,7 @@ namespace Lunex {
 					if (!shiftPressed && !ctrlPressed) {
 						// Clear selection if no modifiers
 						m_SceneHierarchyPanel.ClearSelection();
-						LNX_LOG_INFO("Cleared selection");
+					 LNX_LOG_INFO("Cleared selection");
 					}
 				}
 			}
@@ -1171,6 +1182,16 @@ namespace Lunex {
 
 			// Re-bind the main scene FBO after outline passes
 			m_Framebuffer->Bind();
+
+			// Restore GL state that the outline renderer may have changed
+			// (depth test, depth mask, color mask) so that subsequent 2D overlay
+			// rendering (colliders, wireframes) works correctly.
+			auto* cmd = RHI::GetImmediateCommandList();
+			if (cmd) {
+				cmd->SetDepthTestEnabled(true);
+				cmd->SetDepthMask(true);
+				cmd->SetColorMask(true, true, true, true);
+			}
 		}
 
 		// ========================================
@@ -1571,7 +1592,7 @@ namespace Lunex {
 
 	void EditorLayer::UI_UpdateWindowTitle() {
 		auto project = ProjectManager::GetActiveProject();
-		std::string title = "Lunex Editor";
+	 std::string title = "Lunex Editor";
 
 		if (project) {
 			title += " - " + project->GetName();
@@ -1697,7 +1718,7 @@ namespace Lunex {
 			Renderer2D::EndScene();
 
 			Renderer3D::BeginScene(m_EditorCamera);
-			Renderer3D::EndScene();
+					Renderer3D::EndScene();
 		}
 		else if (m_SceneState == SceneState::Play) {
 			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
