@@ -196,10 +196,20 @@ namespace Lunex {
 		
 		AddSpacing(SpacingValues::SM);
 
+		// Helper: reset path tracer accumulation when IBL settings change
+		auto ResetPTAccumulation = [this]() {
+			if (m_RenderSystem &&
+				m_RenderSystem->GetActiveBackendType() == RenderBackendType::PathTracer) {
+				if (auto* backend = m_RenderSystem->GetActiveBackend())
+					backend->ResetAccumulation();
+			}
+		};
+
 		// Enable/Disable skybox
 		bool skyboxEnabled = SkyboxRenderer::IsEnabled();
 		if (PropertyCheckbox("Enable Skybox", skyboxEnabled)) {
 			SkyboxRenderer::SetEnabled(skyboxEnabled);
+			ResetPTAccumulation();
 		}
 		
 		Separator();
@@ -238,6 +248,7 @@ namespace Lunex {
 						m_HDRIPath = hdriPath.string();
 						if (SkyboxRenderer::LoadHDRI(m_HDRIPath)) {
 							LNX_LOG_INFO("Loaded HDRI: {0}", m_HDRIPath);
+							ResetPTAccumulation();
 						} else {
 							LNX_LOG_ERROR("Failed to load HDRI: {0}", m_HDRIPath);
 						}
@@ -255,6 +266,7 @@ namespace Lunex {
 				SkyboxRenderer::LoadHDRI("");
 				m_HDRIPath.clear();
 				SkyboxRenderer::ApplyBackgroundClearColor();
+				ResetPTAccumulation();
 			}
 		}
 		
@@ -295,6 +307,7 @@ namespace Lunex {
 			float intensity = SkyboxRenderer::GetIntensity();
 			if (PropertyFloat("Intensity", intensity, 0.01f, 0.0f, 10.0f)) {
 				SkyboxRenderer::SetIntensity(intensity);
+				ResetPTAccumulation();
 			}
 			
 			if (syncWithSun) {
@@ -309,17 +322,20 @@ namespace Lunex {
 				float rotation = SkyboxRenderer::GetRotation();
 				if (PropertyFloat("Rotation", rotation, 1.0f, -180.0f, 180.0f)) {
 					SkyboxRenderer::SetRotation(rotation);
+					ResetPTAccumulation();
 				}
 			}
 			
 			float blur = SkyboxRenderer::GetBlur();
 			if (PropertySlider("Blur", blur, 0.0f, 1.0f)) {
 				SkyboxRenderer::SetBlur(blur);
+				ResetPTAccumulation();
 			}
 			
 			glm::vec3 tint = SkyboxRenderer::GetTint();
 			if (PropertyColor("Tint", tint)) {
 				SkyboxRenderer::SetTint(tint);
+				ResetPTAccumulation();
 			}
 		} else {
 			glm::vec3 bgColor = SkyboxRenderer::GetBackgroundColor();

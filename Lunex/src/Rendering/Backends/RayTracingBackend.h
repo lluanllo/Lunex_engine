@@ -67,6 +67,7 @@ namespace Lunex {
 		void UpdateCameraUBO();
 		void UploadLights();
 		bool DetectSceneChanges();
+		bool DetectIBLChanges();
 		size_t ComputeSceneHash() const;
 
 		/**
@@ -93,7 +94,7 @@ namespace Lunex {
 		uint32_t m_OutputTexID       = 0;  // GL texture handle, RGBA8
 
 		// Camera UBO (binding = 15, std140 layout)
-		// Total = 64+64+16 + 4*8 + 4 = 180 ? padded to 192 for std140
+		// Total = 64+64+16 + 4*8 + 4 + 4+4+4 + 16 = 208 bytes (std140 aligned)
 		struct CameraUBOData {
 			glm::mat4 InverseProjection;   // 64   offset 0
 			glm::mat4 InverseView;         // 64   offset 64
@@ -107,9 +108,10 @@ namespace Lunex {
 			uint32_t  LightCount;          // 4    offset 168
 			uint32_t  MaterialCount;       // 4    offset 172
 			float     RussianRoulette;     // 4    offset 176
-			float     _pad0;              // 4    offset 180
-			float     _pad1;              // 4    offset 184
-			float     _pad2;              // 4    offset 188  ? 192 total
+			float     IBLRotation;         // 4    offset 180  (radians)
+			float     IBLIntensity;        // 4    offset 184
+			float     _pad0;              // 4    offset 188
+			glm::vec4 IBLTint;            // 16   offset 192  (xyz=tint, w=unused) ? 208 total
 		};
 
 		Ref<UniformBuffer> m_CameraUBO;
@@ -126,6 +128,12 @@ namespace Lunex {
 		uint32_t m_Height      = 0;
 		glm::mat4 m_LastVP     = glm::mat4(1.0f);
 		size_t    m_LastSceneHash = 0;
+
+		// IBL state tracking (detect changes ? reset accumulation)
+		float     m_LastIBLRotation  = 0.0f;
+		float     m_LastIBLIntensity = 1.0f;
+		glm::vec3 m_LastIBLTint      = glm::vec3(1.0f);
+		bool      m_LastHasHDRI      = false;
 
 		// Fullscreen blit resources (for compositing PT output onto the editor FBO)
 		Ref<Shader> m_BlitShader;

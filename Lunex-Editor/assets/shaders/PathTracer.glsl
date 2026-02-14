@@ -30,7 +30,7 @@ layout(rgba32f, binding = 0) uniform image2D u_AccumulationBuffer;
 layout(rgba8,   binding = 1) uniform writeonly image2D u_OutputImage;
 
 // ============================================================================
-// CAMERA UBO (binding = 15, std140, 192 bytes)
+// CAMERA UBO (binding = 15, std140, 208 bytes)
 // ============================================================================
 layout(std140, binding = 15) uniform CameraData {
     mat4  u_InverseProjection;  // 64   offset 0
@@ -45,9 +45,10 @@ layout(std140, binding = 15) uniform CameraData {
     uint  u_LightCount;         // 4    offset 168
     uint  u_MaterialCount;      // 4    offset 172
     float u_RussianRoulette;    // 4    offset 176
-    float _pad0;                // 4    offset 180
-    float _pad1;                // 4    offset 184
-    float _pad2;                // 4    offset 188
+    float u_IBLRotation;        // 4    offset 180  (radians)
+    float u_IBLIntensity;       // 4    offset 184
+    float _pad0;                // 4    offset 188
+    vec4  u_IBLTint;            // 16   offset 192  (xyz=tint, w=unused) ? 208 total
 };
 
 // ============================================================================
@@ -507,9 +508,12 @@ vec3 SampleDirectLighting(HitInfo hit, vec3 V, vec3 albedo, float metallic, floa
 // ============================================================================
 // ENVIRONMENT SAMPLING — IBL como fallback para rayos que no impactan
 // ============================================================================
-vec3 SampleEnvironment(vec3 direction) {
-    // Usar el prefiltered map con LOD 0 como environment map
-    return textureLod(u_PrefilteredMap, direction, 0.0).rgb;
+
+// Rotate a direction vector around the Y axis by the given angle (radians)
+vec3 RotateDirectionY(vec3 dir, float angle) {
+    float c = cos(angle);
+    float s = sin(angle);
+    return vec3(c * dir.x + s * dir.z, dir.y, -s * dir.x + c * dir.z);
 }
 
 // IBL ambient para un punto de impacto (diffuse + specular indirecto)
@@ -519,16 +523,27 @@ vec3 SampleIBLAmbient(vec3 N, vec3 V, vec3 albedo, float metallic, float roughne
     vec3 F = F_SchlickRoughness(NdotV, F0, roughness);
     vec3 kD = (1.0 - F) * (1.0 - metallic);
 
-    vec3 irradiance = texture(u_IrradianceMap, N).rgb;
+    // Rotate sampling directions by IBL rotation
+    vec3 rotatedN = RotateDirectionY(N, u_IBLRotation);
+    vec3 irradiance = texture(u_IrradianceMap, rotatedN).rgb;
     vec3 diffuseIBL = irradiance * albedo * kD;
 
     vec3 R = reflect(-V, N);
+    vec3 rotatedR = RotateDirectionY(R, u_IBLRotation);
     float lod = roughness * MAX_REFLECTION_LOD;
-    vec3 prefilteredColor = textureLod(u_PrefilteredMap, R, lod).rgb;
+    vec3 prefilteredColor = textureLod(u_PrefilteredMap, rotatedR, lod).rgb;
     vec2 brdf = texture(u_BRDFLUT, vec2(NdotV, roughness)).rg;
     vec3 specularIBL = prefilteredColor * (F * brdf.x + brdf.y);
 
-    return diffuseIBL + specularIBL;
+    return (diffuseIBL + specularIBL) * u_IBLIntensity * u_IBLTint.rgb;
+}
+
+vec3 SampleEnvironment(vec3 direction) {
+    // Apply IBL rotation around Y axis
+    vec3 rotatedDir = RotateDirectionY(direction, u_IBLRotation);
+    vec3 env = textureLod(u_PrefilteredMap, rotatedDir, 0.0).rgb;
+    // Apply intensity and tint
+    return env * u_IBLIntensity * u_IBLTint.rgb;
 }
 
 // ============================================================================

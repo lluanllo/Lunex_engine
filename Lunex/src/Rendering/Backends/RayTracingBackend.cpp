@@ -143,6 +143,11 @@ namespace Lunex {
 			m_RTScene.MarkDirty();
 			ResetAccumulation();
 		}
+
+		// Detect IBL / environment changes ? reset accumulation
+		if (DetectIBLChanges()) {
+			ResetAccumulation();
+		}
 	}
 
 	void RayTracingBackend::BeginFrameRuntime(const Camera& camera,
@@ -159,6 +164,11 @@ namespace Lunex {
 
 		if (DetectSceneChanges()) {
 			m_RTScene.MarkDirty();
+			ResetAccumulation();
+		}
+
+		// Detect IBL / environment changes ? reset accumulation
+		if (DetectIBLChanges()) {
 			ResetAccumulation();
 		}
 	}
@@ -179,7 +189,7 @@ namespace Lunex {
 			}
 			hash ^= std::hash<void*>{}(item.MeshModel.get()) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
 			hash ^= std::hash<void*>{}(item.Material.get())   + 0x9e3779b9 + (hash << 6) + (hash >> 2);
-
+			
 			// Hash material texture renderer IDs so texture changes trigger rebuild
 			if (item.Material) {
 				auto hashTexID = [&](const Ref<Texture2D>& tex) {
@@ -218,6 +228,38 @@ namespace Lunex {
 			return true;
 		}
 		return false;
+	}
+
+	// ====================================================================
+	// IBL CHANGE DETECTION
+	// ====================================================================
+
+	bool RayTracingBackend::DetectIBLChanges() {
+		bool hasHDRI = SkyboxRenderer::HasEnvironmentLoaded();
+		float rotation = SkyboxRenderer::GetRotation();
+		float intensity = SkyboxRenderer::GetIntensity();
+		glm::vec3 tint = SkyboxRenderer::GetTint();
+
+		bool changed = false;
+
+		if (hasHDRI != m_LastHasHDRI) {
+			changed = true;
+			m_LastHasHDRI = hasHDRI;
+		}
+		if (rotation != m_LastIBLRotation) {
+			changed = true;
+			m_LastIBLRotation = rotation;
+		}
+		if (intensity != m_LastIBLIntensity) {
+			changed = true;
+			m_LastIBLIntensity = intensity;
+		}
+		if (tint != m_LastIBLTint) {
+			changed = true;
+			m_LastIBLTint = tint;
+		}
+
+		return changed;
 	}
 
 	// ====================================================================
@@ -304,9 +346,10 @@ namespace Lunex {
 			m_CameraData.LightCount        = static_cast<uint32_t>(m_SceneData.Lights.size());
 			m_CameraData.MaterialCount     = m_RTScene.GetMaterialCount();
 			m_CameraData.RussianRoulette   = m_Settings.RussianRouletteThresh;
-			m_CameraData._pad0 = 0.0f;
-			m_CameraData._pad1 = 0.0f;
-			m_CameraData._pad2 = 0.0f;
+			m_CameraData.IBLRotation       = glm::radians(SkyboxRenderer::GetRotation());
+			m_CameraData.IBLIntensity      = SkyboxRenderer::GetIntensity();
+			m_CameraData._pad0             = 0.0f;
+			m_CameraData.IBLTint           = glm::vec4(SkyboxRenderer::GetTint(), 0.0f);
 			m_CameraUBO->SetData(&m_CameraData, sizeof(CameraUBOData));
 
 			m_PathTracerShader->Dispatch(groupsX, groupsY, 1);
