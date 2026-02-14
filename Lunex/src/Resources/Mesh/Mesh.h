@@ -73,6 +73,8 @@ namespace Lunex {
 		Ref<VertexArray> m_VertexArray;
 		Ref<VertexBuffer> m_VertexBuffer;
 		Ref<IndexBuffer> m_IndexBuffer;
+
+		int m_LastEntityID = -1;
 	};
 
 } // namespace Lunex

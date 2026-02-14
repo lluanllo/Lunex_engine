@@ -33,6 +33,9 @@ namespace Lunex {
 	}
 	
 	void Mesh::SetEntityID(int entityID) {
+		if (entityID == m_LastEntityID) return;
+		m_LastEntityID = entityID;
+
 		for (auto& vertex : m_Vertices) {
 			vertex.EntityID = entityID;
 		}

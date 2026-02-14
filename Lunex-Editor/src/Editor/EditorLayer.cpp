@@ -883,23 +883,6 @@ namespace Lunex {
 		if (selectedEntity && selectedEntity.HasComponent<CameraComponent>() && m_SceneState == SceneState::Edit) {
 			RenderCameraPreview(selectedEntity);
 		}
-
-		if (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Simulate) {
-			Renderer3D::BeginScene(m_EditorCamera);
-			Renderer3D::UpdateLights(m_ActiveScene.get());
-			Renderer3D::EndScene();
-		}
-		else if (m_SceneState == SceneState::Play) {
-			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
-			if (camera) {
-				auto& cameraComp = camera.GetComponent<CameraComponent>();
-				auto& transformComp = camera.GetComponent<TransformComponent>();
-				glm::mat4 cameraTransform = transformComp.GetTransform();
-				Renderer3D::BeginScene(cameraComp.Camera, cameraTransform);
-				Renderer3D::UpdateLights(m_ActiveScene.get());
-				Renderer3D::EndScene();
-			}
-		}
 	}
 
 	void EditorLayer::OnImGuiRender() {
@@ -1753,7 +1736,7 @@ namespace Lunex {
 	}
 
 	void EditorLayer::OnMeshAssetDropped(const std::filesystem::path& meshAssetPath) {
-		if (m_SceneState != SceneState::Edit) {
+			if (m_SceneState != SceneState::Edit) {
 			LNX_LOG_WARN("Cannot create entities while playing");
 			return;
 		}

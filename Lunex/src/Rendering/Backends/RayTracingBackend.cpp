@@ -462,21 +462,21 @@ namespace Lunex {
 
 		// Save GL state
 		GLboolean prevDepthTest, prevDepthMask, prevBlend;
-		GLboolean prevColorMask[4];
+		GLboolean prevColorMask0[4];
 		glGetBooleanv(GL_DEPTH_TEST, &prevDepthTest);
 		glGetBooleanv(GL_DEPTH_WRITEMASK, &prevDepthMask);
 		glGetBooleanv(GL_BLEND, &prevBlend);
-		glGetBooleanv(GL_COLOR_WRITEMASK, prevColorMask);
+		glGetBooleani_v(GL_COLOR_WRITEMASK, 0, prevColorMask0);
 
 		// Enable depth test + write so only closest fragments produce entity IDs
 		glEnable(GL_DEPTH_TEST);
 		glDepthMask(GL_TRUE);
 		glDisable(GL_BLEND);
 
-		// Disable color writes on attachment 0 (RGBA8) to preserve the PT image.
-		// The entity-ID integer attachment (location 1) is not affected by
-		// glColorMask — it is always written by the fragment shader.
-		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+		// Disable color writes ONLY on attachment 0 (RGBA8) to preserve the PT image.
+		// Attachment 1 (R32I entity ID) must remain writable.
+		// Using glColorMaski instead of glColorMask so it only affects draw buffer 0.
+		glColorMaski(0, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 
 		m_EntityIDShader->Bind();
 
@@ -488,7 +488,7 @@ namespace Lunex {
 		for (const auto& item : m_SceneData.DrawItems) {
 			if (!item.MeshModel) continue;
 
-			// Stamp entity ID into vertex data
+			// Stamp entity ID into vertex data (only when changed)
 			item.MeshModel->SetEntityID(item.EntityID);
 
 			// Upload per-object transform (binding 1)
@@ -510,7 +510,7 @@ namespace Lunex {
 		m_EntityIDShader->Unbind();
 
 		// Restore GL state
-		glColorMask(prevColorMask[0], prevColorMask[1], prevColorMask[2], prevColorMask[3]);
+		glColorMaski(0, prevColorMask0[0], prevColorMask0[1], prevColorMask0[2], prevColorMask0[3]);
 		if (prevDepthTest) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
 		glDepthMask(prevDepthMask);
 		if (prevBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);

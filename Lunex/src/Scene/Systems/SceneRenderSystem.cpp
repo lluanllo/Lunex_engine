@@ -64,6 +64,7 @@ namespace Lunex {
 	void SceneRenderSystem::SetActiveBackend(RenderBackendType type) {
 		if (type == m_ActiveBackendType) return;
 
+		RenderBackendType oldType = m_ActiveBackendType;
 		m_ActiveBackendType = type;
 		switch (type) {
 			case RenderBackendType::Rasterizer:
@@ -77,6 +78,11 @@ namespace Lunex {
 		// Notify new backend about the current scene
 		if (m_Context && m_Context->OwningScene) {
 			m_ActiveBackend->OnSceneChanged(m_Context->OwningScene);
+		}
+
+		// When switching TO path tracer, reset accumulation for a fresh start
+		if (type == RenderBackendType::PathTracer) {
+			m_RTBackend->ResetAccumulation();
 		}
 
 		LNX_LOG_INFO("Render backend switched to: {0}",

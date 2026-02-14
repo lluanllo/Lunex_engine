@@ -146,6 +146,13 @@ namespace RHI {
 			m_DepthAttachment->Resize(width, height);
 			AttachDepthTexture(m_DepthAttachment);
 		}
+
+		// Re-check framebuffer completeness after resize
+		GLenum status = glCheckNamedFramebufferStatus(m_FramebufferID, GL_FRAMEBUFFER);
+		if (status != GL_FRAMEBUFFER_COMPLETE) {
+			LNX_LOG_ERROR("Framebuffer incomplete after resize ({0}x{1})! Status: 0x{2:X}",
+				width, height, status);
+		}
 	}
 	
 	void OpenGLRHIFramebuffer::Clear(const ClearValue& colorValue, float depth, uint8_t stencil) {

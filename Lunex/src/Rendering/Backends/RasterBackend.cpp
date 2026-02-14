@@ -31,11 +31,13 @@ namespace Lunex {
 		m_EditorMode   = true;
 		m_EditorCamera = &camera;
 
-		// Lights + shadows must run BEFORE BeginScene (unchanged flow)
+		// Lights must be synced BEFORE BeginScene.
+		// NOTE: Shadows are rendered by the EditorLayer BEFORE binding the main
+		// framebuffer, so we do NOT call UpdateShadows here (it would corrupt
+		// the currently-bound FBO).
 		if (m_CurrentScene) {
 			LightSystem::Get().SyncFromScene(m_CurrentScene);
 			Renderer3D::UpdateLights(m_CurrentScene);
-			Renderer3D::UpdateShadows(m_CurrentScene, camera);
 		}
 
 		Renderer3D::BeginScene(camera);
@@ -54,7 +56,6 @@ namespace Lunex {
 		if (m_CurrentScene) {
 			LightSystem::Get().SyncFromScene(m_CurrentScene);
 			Renderer3D::UpdateLights(m_CurrentScene);
-			Renderer3D::UpdateShadows(m_CurrentScene, camera, cameraTransform);
 		}
 
 		Renderer3D::BeginScene(camera, cameraTransform);

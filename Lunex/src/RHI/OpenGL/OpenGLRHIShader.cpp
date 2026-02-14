@@ -33,6 +33,47 @@ namespace RHI {
 		return shaderc_glsl_vertex_shader;
 	}
 
+	// ============================================================================
+	// OPENGL ? SPIR-V COMPATIBILITY HELPERS
+	//
+	// Some OpenGL-only constructs are invalid in the Vulkan SPIR-V
+	// compilation stage (shaderc).  We strip them before compilation
+	// and re-inject them after spirv-cross produces the final GLSL.
+	//
+	// For shaders that use features fundamentally incompatible with
+	// SPIR-V (e.g. GL_ARB_bindless_texture sampler construction),
+	// we bypass the SPIR-V pipeline and compile directly with OpenGL.
+	// ============================================================================
+
+	// Replace all occurrences of a substring within a string.
+	static void ReplaceAll(std::string& str, const std::string& from, const std::string& to) {
+		if (from.empty()) return;
+		size_t pos = 0;
+		while ((pos = str.find(from, pos)) != std::string::npos) {
+			str.replace(pos, from.length(), to);
+			pos += to.length();
+		}
+	}
+
+	// Check if the shader source contains features that cannot pass through
+	// the SPIR-V pipeline (shaderc?spirv-cross), requiring a direct OpenGL
+	// compilation path instead.
+	static bool RequiresDirectGLCompilation(const std::string& source) {
+		// GL_ARB_bindless_texture uses sampler construction from uint64 handles
+		// which has no SPIR-V equivalent
+		if (source.find("GL_ARB_bindless_texture") != std::string::npos)
+			return true;
+		return false;
+	}
+
+	// Preprocess source for the SPIR-V path: remap GL-only built-ins.
+	static std::string PreprocessForSPIRV(const std::string& source) {
+		std::string result = source;
+		// Remap gl_VertexID ? gl_VertexIndex (Vulkan built-in name)
+		ReplaceAll(result, "gl_VertexID", "gl_VertexIndex");
+		return result;
+	}
+
 	std::filesystem::path OpenGLRHIShader::GetCacheDirectory() {
 		return "assets/cache/shader/rhi";
 	}
@@ -97,11 +138,16 @@ namespace RHI {
 		std::unordered_map<GLenum, std::string> shaderSources;
 		shaderSources[GL_VERTEX_SHADER] = InsertDefineAfterVersion(source, "#define VERTEX");
 		shaderSources[GL_FRAGMENT_SHADER] = InsertDefineAfterVersion(source, "#define FRAGMENT");
-		
-		// Compile through SPIR-V pipeline
-		CompileOrGetVulkanBinaries(shaderSources);
-		CompileOrGetOpenGLBinaries();
-		CreateProgram();
+
+		// Check if the shader uses GL-only features that can't go through SPIR-V
+		if (RequiresDirectGLCompilation(source)) {
+			m_OpenGLSourceCode = std::move(shaderSources);
+			CreateProgram();
+		} else {
+			CompileOrGetVulkanBinaries(shaderSources);
+			CompileOrGetOpenGLBinaries();
+			CreateProgram();
+		}
 		
 		if (m_ProgramID) {
 			m_Stages = ShaderStage::VertexFragment;
@@ -121,10 +167,16 @@ namespace RHI {
 		std::unordered_map<GLenum, std::string> shaderSources;
 		shaderSources[GL_VERTEX_SHADER] = vertexSrc;
 		shaderSources[GL_FRAGMENT_SHADER] = fragmentSrc;
-		
-		CompileOrGetVulkanBinaries(shaderSources);
-		CompileOrGetOpenGLBinaries();
-		CreateProgram();
+
+		bool directGL = RequiresDirectGLCompilation(vertexSrc) || RequiresDirectGLCompilation(fragmentSrc);
+		if (directGL) {
+			m_OpenGLSourceCode = std::move(shaderSources);
+			CreateProgram();
+		} else {
+			CompileOrGetVulkanBinaries(shaderSources);
+			CompileOrGetOpenGLBinaries();
+			CreateProgram();
+		}
 		
 		if (m_ProgramID) {
 			m_Stages = ShaderStage::VertexFragment;
@@ -155,10 +207,16 @@ namespace RHI {
 		
 		std::unordered_map<GLenum, std::string> shaderSources;
 		shaderSources[GL_COMPUTE_SHADER] = InsertDefineAfterVersion(source, "#define COMPUTE");
-		
-		CompileOrGetVulkanBinaries(shaderSources);
-		CompileOrGetOpenGLBinaries();
-		CreateProgram();
+
+		// Check if the shader uses GL-only features that can't go through SPIR-V
+		if (RequiresDirectGLCompilation(source)) {
+			m_OpenGLSourceCode = std::move(shaderSources);
+			CreateProgram();
+		} else {
+			CompileOrGetVulkanBinaries(shaderSources);
+			CompileOrGetOpenGLBinaries();
+			CreateProgram();
+		}
 		
 		if (m_ProgramID) {
 			m_Stages = ShaderStage::Compute;
@@ -242,6 +300,9 @@ namespace RHI {
 			std::filesystem::path shaderPath = m_FilePath.empty() ? m_Name : m_FilePath;
 			std::filesystem::path cachePath = cacheDir / (shaderPath.filename().string() + GetVulkanCacheExtension(stage));
 			
+			// Preprocess: remap GL-only built-ins for Vulkan SPIR-V
+			std::string processedSource = PreprocessForSPIRV(source);
+
 			// Try loading from cache
 			bool cacheLoaded = false;
 			if (std::filesystem::exists(cachePath)) {
@@ -260,14 +321,14 @@ namespace RHI {
 			
 			if (!cacheLoaded) {
 				// Compile to Vulkan SPIR-V
-				if (source.empty()) {
+				if (processedSource.empty()) {
 					LNX_LOG_ERROR("RHIShader: Empty source for stage {0}", StageToString(stage));
 					continue;
 				}
 				
 				std::string sourceName = m_FilePath.empty() ? m_Name : m_FilePath;
 				shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
-					source, GLStageToShaderC(stage), sourceName.c_str(), options
+					processedSource, GLStageToShaderC(stage), sourceName.c_str(), options
 				);
 				
 				if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
@@ -525,10 +586,15 @@ namespace RHI {
 				shaderSources[GL_VERTEX_SHADER] = InsertDefineAfterVersion(source, "#define VERTEX");
 				shaderSources[GL_FRAGMENT_SHADER] = InsertDefineAfterVersion(source, "#define FRAGMENT");
 			}
-			
-			CompileOrGetVulkanBinaries(shaderSources);
-			CompileOrGetOpenGLBinaries();
-			CreateProgram();
+
+			if (RequiresDirectGLCompilation(source)) {
+				m_OpenGLSourceCode = std::move(shaderSources);
+				CreateProgram();
+			} else {
+				CompileOrGetVulkanBinaries(shaderSources);
+				CompileOrGetOpenGLBinaries();
+				CreateProgram();
+			}
 		}
 		
 		if (m_ProgramID) {
