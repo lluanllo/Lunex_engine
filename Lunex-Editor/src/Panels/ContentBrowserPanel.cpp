@@ -11,6 +11,8 @@
 #include "Assets/Mesh/MeshAsset.h"
 #include "Asset/Prefab.h"
 #include "Assets/Core/AssetRegistry.h"
+#include "Assets/Core/AssetDatabase.h"
+#include "Project/ProjectManager.h"
 #include <sstream>
 
 namespace Lunex {
@@ -839,7 +841,15 @@ namespace Lunex {
 					auto originalCameraPos = m_MaterialPreviewRenderer->GetCameraPosition();
 					auto originalBgColor = m_MaterialPreviewRenderer->GetBackgroundColor();
 
-					m_MaterialPreviewRenderer->SetCameraPosition(glm::vec3(2.0f, 1.2f, 2.5f));
+					// Compute camera position from model bounds for proper centering
+					glm::vec3 boundsMin = meshAsset->GetBoundsMin();
+					glm::vec3 boundsMax = meshAsset->GetBoundsMax();
+					// If metadata bounds are zero (not computed), compute from model directly
+					if (glm::length(boundsMax - boundsMin) < 0.001f) {
+						MaterialPreviewRenderer::ComputeModelBounds(meshAsset->GetModel(), boundsMin, boundsMax);
+					}
+					glm::vec3 cameraPos = MaterialPreviewRenderer::ComputeCameraForBounds(boundsMin, boundsMax);
+					m_MaterialPreviewRenderer->SetCameraPosition(cameraPos);
 					m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.447f, 0.592f, 0.761f, 1.0f));
 
 					auto defaultMaterial = CreateRef<MaterialAsset>("MeshPreview");
@@ -899,7 +909,14 @@ namespace Lunex {
 											auto originalCameraPos = m_MaterialPreviewRenderer->GetCameraPosition();
 											auto originalBgColor = m_MaterialPreviewRenderer->GetBackgroundColor();
 
-											m_MaterialPreviewRenderer->SetCameraPosition(glm::vec3(2.2f, 1.5f, 2.8f));
+											// Compute camera position from model bounds for proper centering
+											glm::vec3 boundsMin = meshAsset->GetBoundsMin();
+											glm::vec3 boundsMax = meshAsset->GetBoundsMax();
+											if (glm::length(boundsMax - boundsMin) < 0.001f) {
+												MaterialPreviewRenderer::ComputeModelBounds(meshAsset->GetModel(), boundsMin, boundsMax);
+											}
+											glm::vec3 cameraPos = MaterialPreviewRenderer::ComputeCameraForBounds(boundsMin, boundsMax);
+											m_MaterialPreviewRenderer->SetCameraPosition(cameraPos);
 											m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.447f, 0.592f, 0.761f, 1.0f));
 
 											auto defaultMaterial = CreateRef<MaterialAsset>("PrefabPreview");
@@ -1240,6 +1257,8 @@ extern "C"
 			if (it != m_TextureCache.end()) {
 				m_TextureCache.erase(it);
 			}
+			
+			ProjectManager::RefreshAssetDatabase();
 		}
 		catch (const std::exception& e) {
 			LNX_LOG_ERROR("Failed to delete {0}: {1}", path.string(), e.what());
@@ -1293,6 +1312,8 @@ extern "C"
 				m_TextureCache.erase(it);
 				m_TextureCache[newPath.string()] = texture;
 			}
+			
+			ProjectManager::RefreshAssetDatabase();
 		}
 		catch (const std::exception& e) {
 			LNX_LOG_ERROR("Failed to rename {0}: {1}", oldPath.string(), e.what());
@@ -1324,6 +1345,7 @@ extern "C"
 			}
 
 			LNX_LOG_INFO("Duplicated {0} as {1}", path.filename().string(), destPath.filename().string());
+			ProjectManager::RefreshAssetDatabase();
 		}
 		catch (const std::exception& e) {
 			LNX_LOG_ERROR("Failed to duplicate {0}: {1}", path.filename().string(), e.what());
@@ -1348,6 +1370,7 @@ extern "C"
 				LNX_LOG_ERROR("Failed to import {0}: {1}", file, e.what());
 			}
 		}
+		ProjectManager::RefreshAssetDatabase();
 	}
 
 	void ContentBrowserPanel::ImportFilesToFolder(const std::vector<std::string>& files, const std::filesystem::path& targetFolder) {
@@ -1368,6 +1391,7 @@ extern "C"
 				LNX_LOG_ERROR("Failed to import {0}: {1}", file, e.what());
 			}
 		}
+		ProjectManager::RefreshAssetDatabase();
 	}
 
 	// ============================================================================
@@ -1607,6 +1631,7 @@ extern "C"
 		}
 
 		ClearSelection();
+		ProjectManager::RefreshAssetDatabase();
 	}
 
 	bool ContentBrowserPanel::CanPaste() const {
