@@ -10,12 +10,12 @@ namespace Lunex {
 	{
 		SetupMesh();
 	}
-	
+
 	void Mesh::SetupMesh() {
 		m_VertexArray = VertexArray::Create();
-		
+
 		m_VertexBuffer = VertexBuffer::Create((float*)m_Vertices.data(), (uint32_t)(m_Vertices.size() * sizeof(Vertex)));
-		
+
 		BufferLayout layout = {
 			{ ShaderDataType::Float3, "a_Position" },
 			{ ShaderDataType::Float3, "a_Normal" },
@@ -24,33 +24,33 @@ namespace Lunex {
 			{ ShaderDataType::Float3, "a_Bitangent" },
 			{ ShaderDataType::Int,    "a_EntityID" }
 		};
-		
+
 		m_VertexBuffer->SetLayout(layout);
 		m_VertexArray->AddVertexBuffer(m_VertexBuffer);
-		
+
 		m_IndexBuffer = IndexBuffer::Create(m_Indices.data(), (uint32_t)m_Indices.size());
 		m_VertexArray->SetIndexBuffer(m_IndexBuffer);
 	}
-	
+
 	void Mesh::SetEntityID(int entityID) {
 		for (auto& vertex : m_Vertices) {
 			vertex.EntityID = entityID;
 		}
-		
+
 		m_VertexBuffer->SetData(m_Vertices.data(),
 			(uint32_t)(m_Vertices.size() * sizeof(Vertex)));
 	}
-	
+
 	void Mesh::Draw(const Ref<Shader>& shader) {
 		uint32_t diffuseNr = 1;
 		uint32_t specularNr = 1;
 		uint32_t normalNr = 1;
 		uint32_t heightNr = 1;
-		
+
 		for (uint32_t i = 0; i < m_Textures.size(); i++) {
 			std::string number;
 			std::string name = m_Textures[i].Type;
-			
+
 			if (name == "texture_diffuse")
 				number = std::to_string(diffuseNr++);
 			else if (name == "texture_specular")
@@ -59,11 +59,11 @@ namespace Lunex {
 				number = std::to_string(normalNr++);
 			else if (name == "texture_height")
 				number = std::to_string(heightNr++);
-			
+
 			shader->SetInt((name + number).c_str(), i);
 			m_Textures[i].Texture->Bind(i);
 		}
-		
+
 		m_VertexArray->Bind();
 		auto* cmdList = RHI::GetImmediateCommandList();
 		if (cmdList) {
