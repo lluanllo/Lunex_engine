@@ -149,6 +149,17 @@ namespace Lunex {
 			SelectEntity(entity);
 			LNX_LOG_INFO("Created entity: {0}", name);
 		}
+		
+		void CreateMeshEntity(const std::string& name, ModelType type) {
+			Entity entity = m_Context->CreateEntity(name);
+			auto& mesh = entity.AddComponent<MeshComponent>();
+			mesh.CreatePrimitive(type);
+			if (!entity.HasComponent<MaterialComponent>()) {
+				entity.AddComponent<MaterialComponent>();
+			}
+			SelectEntity(entity);
+			LNX_LOG_INFO("Created 3D entity: {0} (type: {1})", name, (int)type);
+		}
 
 	private:
 		Ref<Scene> m_Context;

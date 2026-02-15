@@ -19,11 +19,19 @@ namespace Lunex {
 		void SetShowPhysics3DColliders(bool show) { m_ShowPhysics3DColliders = show; }
 
 	private:
+		// Tab drawing helpers
+		void DrawRenderTab();
+		void DrawEnvironmentTab();
+		void DrawShadowsTab();
+		void DrawPhysicsTab();
+		
 		// Section drawing helpers
+		void DrawRenderSection();
 		void DrawEnvironmentSection();
 		void DrawShadowsSection();
 		void DrawPhysics2DSection();
 		void DrawPhysics3DSection();
+		void DrawPhysicsGeneralSection();
 		
 	private:
 		bool m_ShowPhysicsColliders = false;

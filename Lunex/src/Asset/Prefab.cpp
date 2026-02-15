@@ -636,6 +636,55 @@ namespace Lunex {
 			data.Components.push_back(compData);
 		}
 		
+		// Serialize CylinderCollider3DComponent
+		if (entity.HasComponent<CylinderCollider3DComponent>()) {
+			PrefabComponentData compData;
+			compData.ComponentType = "CylinderCollider3DComponent";
+			
+			auto& cy = entity.GetComponent<CylinderCollider3DComponent>();
+			std::ostringstream oss;
+			oss << cy.HalfExtents.x << "," << cy.HalfExtents.y << "," << cy.HalfExtents.z << ";";
+			oss << cy.Offset.x << "," << cy.Offset.y << "," << cy.Offset.z;
+			compData.SerializedData = oss.str();
+			
+			data.Components.push_back(compData);
+		}
+		
+		// Serialize ConeCollider3DComponent
+		if (entity.HasComponent<ConeCollider3DComponent>()) {
+			PrefabComponentData compData;
+			compData.ComponentType = "ConeCollider3DComponent";
+			
+			auto& cn = entity.GetComponent<ConeCollider3DComponent>();
+			std::ostringstream oss;
+			oss << cn.Radius << ";";
+			oss << cn.Height << ";";
+			oss << cn.Offset.x << "," << cn.Offset.y << "," << cn.Offset.z;
+			compData.SerializedData = oss.str();
+			
+			data.Components.push_back(compData);
+		}
+		
+		// Serialize CharacterController3DComponent
+		if (entity.HasComponent<CharacterController3DComponent>()) {
+			PrefabComponentData compData;
+			compData.ComponentType = "CharacterController3DComponent";
+			
+			auto& cc = entity.GetComponent<CharacterController3DComponent>();
+			std::ostringstream oss;
+			oss << cc.Radius << ";";
+			oss << cc.Height << ";";
+			oss << cc.StepHeight << ";";
+			oss << cc.MaxSlopeAngle << ";";
+			oss << cc.MoveSpeed << ";";
+			oss << cc.JumpForce << ";";
+			oss << cc.GravityScale << ";";
+			oss << cc.SkinWidth;
+			compData.SerializedData = oss.str();
+			
+			data.Components.push_back(compData);
+		}
+		
 		// Serialize ScriptComponent
 		if (entity.HasComponent<ScriptComponent>()) {
 			PrefabComponentData compData;
@@ -1035,6 +1084,45 @@ namespace Lunex {
 				
 				std::getline(iss, token, ';'); mc.Type = (MeshCollider3DComponent::CollisionType)std::stoi(token);
 				std::getline(iss, token, ';'); mc.UseEntityMesh = token == "1";
+			}
+			else if (compData.ComponentType == "CylinderCollider3DComponent") {
+				auto& cy = entity.AddComponent<CylinderCollider3DComponent>();
+				
+				std::istringstream iss(compData.SerializedData);
+				std::string token;
+				
+				std::getline(iss, token, ';');
+				sscanf(token.c_str(), "%f,%f,%f", &cy.HalfExtents.x, &cy.HalfExtents.y, &cy.HalfExtents.z);
+				
+				std::getline(iss, token, ';');
+				sscanf(token.c_str(), "%f,%f,%f", &cy.Offset.x, &cy.Offset.y, &cy.Offset.z);
+			}
+			else if (compData.ComponentType == "ConeCollider3DComponent") {
+				auto& cn = entity.AddComponent<ConeCollider3DComponent>();
+				
+				std::istringstream iss(compData.SerializedData);
+				std::string token;
+				
+				std::getline(iss, token, ';'); cn.Radius = std::stof(token);
+				std::getline(iss, token, ';'); cn.Height = std::stof(token);
+				
+				std::getline(iss, token, ';');
+				sscanf(token.c_str(), "%f,%f,%f", &cn.Offset.x, &cn.Offset.y, &cn.Offset.z);
+			}
+			else if (compData.ComponentType == "CharacterController3DComponent") {
+				auto& cc = entity.AddComponent<CharacterController3DComponent>();
+				
+				std::istringstream iss(compData.SerializedData);
+				std::string token;
+				
+				std::getline(iss, token, ';'); cc.Radius = std::stof(token);
+				std::getline(iss, token, ';'); cc.Height = std::stof(token);
+				std::getline(iss, token, ';'); cc.StepHeight = std::stof(token);
+				std::getline(iss, token, ';'); cc.MaxSlopeAngle = std::stof(token);
+				std::getline(iss, token, ';'); cc.MoveSpeed = std::stof(token);
+				std::getline(iss, token, ';'); cc.JumpForce = std::stof(token);
+				std::getline(iss, token, ';'); cc.GravityScale = std::stof(token);
+				std::getline(iss, token, ';'); cc.SkinWidth = std::stof(token);
 			}
 			else if (compData.ComponentType == "ScriptComponent") {
 				auto& script = entity.AddComponent<ScriptComponent>();

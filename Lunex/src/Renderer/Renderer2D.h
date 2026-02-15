@@ -55,6 +55,8 @@ namespace Lunex  {
 			static void DrawWireBox(const glm::mat4& transform, const glm::vec4& color, int entityID = -1);
 			static void DrawWireSphere(const glm::mat4& transform, const glm::vec4& color, int segments = 32, int entityID = -1);
 			static void DrawWireCapsule(const glm::mat4& transform, float radius, float height, const glm::vec4& color, int segments = 16, int entityID = -1);
+			static void DrawWireCylinder(const glm::mat4& transform, const glm::vec4& color, int segments = 16, int entityID = -1);
+			static void DrawWireCone(const glm::mat4& transform, float radius, float height, const glm::vec4& color, int segments = 16, int entityID = -1);
 			
 			// ========================================
 			// LIGHT GIZMOS

@@ -99,13 +99,13 @@ namespace Lunex {
 			// 3D Objects submenu
 			if (ImGui::BeginMenu("3D Object")) {
 				if (ImGui::MenuItem("Cube"))
-					CreateEntityWithComponent<MeshComponent>("Cube");
+					CreateMeshEntity("Cube", ModelType::Cube);
 				if (ImGui::MenuItem("Sphere"))
-					CreateEntityWithComponent<MeshComponent>("Sphere");
+					CreateMeshEntity("Sphere", ModelType::Sphere);
 				if (ImGui::MenuItem("Plane"))
-					CreateEntityWithComponent<MeshComponent>("Plane");
+					CreateMeshEntity("Plane", ModelType::Plane);
 				if (ImGui::MenuItem("Cylinder"))
-					CreateEntityWithComponent<MeshComponent>("Cylinder");
+					CreateMeshEntity("Cylinder", ModelType::Cylinder);
 				ImGui::EndMenu();
 			}
 			
@@ -241,7 +241,7 @@ namespace Lunex {
 				CreateEntityWithComponent<SpriteRendererComponent>("Sprite");
 			
 			if (ImGui::MenuItem("3D Object"))
-				CreateEntityWithComponent<MeshComponent>("Cube");
+				CreateMeshEntity("Cube", ModelType::Cube);
 			
 			ImGui::EndPopup();
 		}

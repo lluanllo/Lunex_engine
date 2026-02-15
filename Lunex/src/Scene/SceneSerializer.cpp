@@ -313,6 +313,46 @@ namespace Lunex {
 			out << YAML::EndMap; // MeshCollider3DComponent
 		}
 
+		if (entity.HasComponent<CylinderCollider3DComponent>()) {
+			out << YAML::Key << "CylinderCollider3DComponent";
+			out << YAML::BeginMap;
+			
+			auto& cy3d = entity.GetComponent<CylinderCollider3DComponent>();
+			out << YAML::Key << "HalfExtents" << YAML::Value << cy3d.HalfExtents;
+			out << YAML::Key << "Offset" << YAML::Value << cy3d.Offset;
+			
+			out << YAML::EndMap;
+		}
+
+		if (entity.HasComponent<ConeCollider3DComponent>()) {
+			out << YAML::Key << "ConeCollider3DComponent";
+			out << YAML::BeginMap;
+			
+			auto& cn3d = entity.GetComponent<ConeCollider3DComponent>();
+			out << YAML::Key << "Radius" << YAML::Value << cn3d.Radius;
+			out << YAML::Key << "Height" << YAML::Value << cn3d.Height;
+			out << YAML::Key << "Offset" << YAML::Value << cn3d.Offset;
+			
+			out << YAML::EndMap;
+		}
+
+		if (entity.HasComponent<CharacterController3DComponent>()) {
+			out << YAML::Key << "CharacterController3DComponent";
+			out << YAML::BeginMap;
+			
+			auto& cc3d = entity.GetComponent<CharacterController3DComponent>();
+			out << YAML::Key << "Radius" << YAML::Value << cc3d.Radius;
+			out << YAML::Key << "Height" << YAML::Value << cc3d.Height;
+			out << YAML::Key << "StepHeight" << YAML::Value << cc3d.StepHeight;
+			out << YAML::Key << "MaxSlopeAngle" << YAML::Value << cc3d.MaxSlopeAngle;
+			out << YAML::Key << "MoveSpeed" << YAML::Value << cc3d.MoveSpeed;
+			out << YAML::Key << "JumpForce" << YAML::Value << cc3d.JumpForce;
+			out << YAML::Key << "GravityScale" << YAML::Value << cc3d.GravityScale;
+			out << YAML::Key << "SkinWidth" << YAML::Value << cc3d.SkinWidth;
+			
+			out << YAML::EndMap;
+		}
+
 		if (entity.HasComponent<MeshComponent>()) {
 			out << YAML::Key << "MeshComponent";
 			out << YAML::BeginMap; // MeshComponent
@@ -851,6 +891,34 @@ namespace Lunex {
 					auto& mc3d = deserializedEntity.AddComponent<MeshCollider3DComponent>();
 					mc3d.Type = (MeshCollider3DComponent::CollisionType)meshCollider3DComponent["Type"].as<int>();
 					mc3d.UseEntityMesh = meshCollider3DComponent["UseEntityMesh"].as<bool>();
+				}
+
+				auto cylinderCollider3DComponent = entity["CylinderCollider3DComponent"];
+				if (cylinderCollider3DComponent) {
+					auto& cy3d = deserializedEntity.AddComponent<CylinderCollider3DComponent>();
+					cy3d.HalfExtents = cylinderCollider3DComponent["HalfExtents"].as<glm::vec3>();
+					cy3d.Offset = cylinderCollider3DComponent["Offset"].as<glm::vec3>();
+				}
+
+				auto coneCollider3DComponent = entity["ConeCollider3DComponent"];
+				if (coneCollider3DComponent) {
+					auto& cn3d = deserializedEntity.AddComponent<ConeCollider3DComponent>();
+					cn3d.Radius = coneCollider3DComponent["Radius"].as<float>();
+					cn3d.Height = coneCollider3DComponent["Height"].as<float>();
+					cn3d.Offset = coneCollider3DComponent["Offset"].as<glm::vec3>();
+				}
+
+				auto characterController3DComponent = entity["CharacterController3DComponent"];
+				if (characterController3DComponent) {
+					auto& cc3d = deserializedEntity.AddComponent<CharacterController3DComponent>();
+					cc3d.Radius = characterController3DComponent["Radius"].as<float>();
+					cc3d.Height = characterController3DComponent["Height"].as<float>();
+					cc3d.StepHeight = characterController3DComponent["StepHeight"].as<float>();
+					cc3d.MaxSlopeAngle = characterController3DComponent["MaxSlopeAngle"].as<float>();
+					cc3d.MoveSpeed = characterController3DComponent["MoveSpeed"].as<float>();
+					cc3d.JumpForce = characterController3DComponent["JumpForce"].as<float>();
+					cc3d.GravityScale = characterController3DComponent["GravityScale"].as<float>();
+					cc3d.SkinWidth = characterController3DComponent["SkinWidth"].as<float>();
 				}
 
 				auto meshComponent = entity["MeshComponent"];

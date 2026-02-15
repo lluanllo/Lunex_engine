@@ -866,6 +866,64 @@ namespace Lunex {
 		}
 	}
 
+	void Renderer2D::DrawWireCylinder(const glm::mat4& transform, const glm::vec4& color, int segments, int entityID) {
+		LNX_PROFILE_FUNCTION();
+
+		// Cylinder with unit half-extents [-0.5, 0.5] on each axis, Y is up
+		const float angleStep = glm::two_pi<float>() / static_cast<float>(segments);
+
+		// Top ring (y = 0.5)
+		for (int i = 0; i < segments; i++) {
+			float a1 = i * angleStep;
+			float a2 = (i + 1) * angleStep;
+			glm::vec3 p1 = glm::vec3(transform * glm::vec4(glm::cos(a1) * 0.5f, 0.5f, glm::sin(a1) * 0.5f, 1.0f));
+			glm::vec3 p2 = glm::vec3(transform * glm::vec4(glm::cos(a2) * 0.5f, 0.5f, glm::sin(a2) * 0.5f, 1.0f));
+			DrawLine(p1, p2, color, entityID);
+		}
+
+		// Bottom ring (y = -0.5)
+		for (int i = 0; i < segments; i++) {
+			float a1 = i * angleStep;
+			float a2 = (i + 1) * angleStep;
+			glm::vec3 p1 = glm::vec3(transform * glm::vec4(glm::cos(a1) * 0.5f, -0.5f, glm::sin(a1) * 0.5f, 1.0f));
+			glm::vec3 p2 = glm::vec3(transform * glm::vec4(glm::cos(a2) * 0.5f, -0.5f, glm::sin(a2) * 0.5f, 1.0f));
+			DrawLine(p1, p2, color, entityID);
+		}
+
+		// 4 vertical lines connecting top and bottom rings
+		for (int i = 0; i < 4; i++) {
+			float a = i * glm::half_pi<float>();
+			glm::vec3 top = glm::vec3(transform * glm::vec4(glm::cos(a) * 0.5f, 0.5f, glm::sin(a) * 0.5f, 1.0f));
+			glm::vec3 bot = glm::vec3(transform * glm::vec4(glm::cos(a) * 0.5f, -0.5f, glm::sin(a) * 0.5f, 1.0f));
+			DrawLine(top, bot, color, entityID);
+		}
+	}
+
+	void Renderer2D::DrawWireCone(const glm::mat4& transform, float radius, float height, const glm::vec4& color, int segments, int entityID) {
+		LNX_PROFILE_FUNCTION();
+
+		// Cone with apex at top (y = height/2) and base circle at bottom (y = -height/2)
+		float halfHeight = height * 0.5f;
+		const float angleStep = glm::two_pi<float>() / static_cast<float>(segments);
+
+		// Base circle
+		for (int i = 0; i < segments; i++) {
+			float a1 = i * angleStep;
+			float a2 = (i + 1) * angleStep;
+			glm::vec3 p1 = glm::vec3(transform * glm::vec4(glm::cos(a1) * radius, -halfHeight, glm::sin(a1) * radius, 1.0f));
+			glm::vec3 p2 = glm::vec3(transform * glm::vec4(glm::cos(a2) * radius, -halfHeight, glm::sin(a2) * radius, 1.0f));
+			DrawLine(p1, p2, color, entityID);
+		}
+
+		// Lines from apex to base
+		glm::vec3 apex = glm::vec3(transform * glm::vec4(0.0f, halfHeight, 0.0f, 1.0f));
+		for (int i = 0; i < 8; i++) {
+			float a = (i / 8.0f) * glm::two_pi<float>();
+			glm::vec3 basePoint = glm::vec3(transform * glm::vec4(glm::cos(a) * radius, -halfHeight, glm::sin(a) * radius, 1.0f));
+			DrawLine(apex, basePoint, color, entityID);
+		}
+	}
+
 	float Renderer2D::GetLineWidth() {
 		return s_Data.LineWidth;
 	}
