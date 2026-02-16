@@ -629,8 +629,11 @@ namespace Lunex {
 							component.LoadFromFile(data->FilePath);
 							LNX_LOG_INFO("Loaded model (legacy): {0}", data->FilePath);
 						}
+						else if (ext == ".luprefab" || ext == ".lunex" || ext == ".lumat") {
+							// Silently ignore non-mesh asset types dropped on mesh slot
+						}
 						else {
-							LNX_LOG_WARN("Unsupported model format: {0}", ext);
+							LNX_LOG_WARN("Unsupported model format for Mesh Renderer: {0}", ext);
 						}
 					}
 				}

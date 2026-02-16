@@ -11,6 +11,9 @@
 
 namespace Lunex {
 
+	// Reference to the global asset path defined in ContentBrowserPanel
+	extern const std::filesystem::path g_AssetPath;
+
 	// ============================================================================
 	// YAML SERIALIZATION HELPERS (copied from SceneSerializer for consistency)
 	// ============================================================================
@@ -858,15 +861,49 @@ namespace Lunex {
 				
 				// Load mesh - prioritize MeshAsset over legacy FilePath
 				if (!meshAssetPath.empty()) {
-					// Resolve relative path to absolute path
-					// The path is relative to the "assets" folder
-					std::filesystem::path fullPath = std::filesystem::path("assets") / meshAssetPath;
+					// Try multiple path resolution strategies
+					std::filesystem::path resolvedPath;
+					bool found = false;
 					
-					if (std::filesystem::exists(fullPath)) {
-						mc.SetMeshAsset(fullPath);
-						LNX_LOG_TRACE("Prefab: Loaded MeshAsset from {0}", fullPath.string());
+					// Strategy 1: Use g_AssetPath (the actual asset directory)
+					{
+						std::filesystem::path fullPath = g_AssetPath / meshAssetPath;
+						if (std::filesystem::exists(fullPath)) {
+							resolvedPath = fullPath;
+							found = true;
+						}
+					}
+					
+					// Strategy 2: Try the path as-is (might be absolute already)
+					if (!found && std::filesystem::exists(meshAssetPath)) {
+						resolvedPath = meshAssetPath;
+						found = true;
+					}
+					
+					// Strategy 3: Try relative to the prefab file's directory
+					if (!found && !m_FilePath.empty()) {
+						std::filesystem::path prefabDir = m_FilePath.parent_path();
+						std::filesystem::path fullPath = prefabDir / meshAssetPath;
+						if (std::filesystem::exists(fullPath)) {
+							resolvedPath = fullPath;
+							found = true;
+						}
+					}
+					
+					// Strategy 4: Fallback to hardcoded "assets" path
+					if (!found) {
+						std::filesystem::path fullPath = std::filesystem::path("assets") / meshAssetPath;
+						if (std::filesystem::exists(fullPath)) {
+							resolvedPath = fullPath;
+							found = true;
+						}
+					}
+					
+					if (found) {
+						mc.SetMeshAsset(resolvedPath);
+						LNX_LOG_TRACE("Prefab: Loaded MeshAsset from {0}", resolvedPath.string());
 					} else {
-						LNX_LOG_WARN("Prefab: MeshAsset file not found: {0}", fullPath.string());
+						LNX_LOG_WARN("Prefab: MeshAsset file not found: {0} (tried multiple paths)", meshAssetPath);
 						// Fallback to primitive
 						mc.CreatePrimitive(mc.Type != ModelType::FromFile ? mc.Type : ModelType::Cube);
 					}
