@@ -105,7 +105,12 @@ layout(std140, binding = 2) uniform Material {
 
 	vec2 u_DetailUVTiling;                // 8
 	int u_AlphaMode;                      // 4
-	float _padding3;                      // 4  = 160
+	int u_FlipNormalMapY;                 // 4  = 160
+
+	int u_AlbedoColorSpace;               // 4
+	int u_NormalColorSpace;               // 4
+	int u_LayeredColorSpace;              // 4
+	int u_EmissionColorSpace;             // 4  = 176
 };
 
 // ============ LIGHTING SYSTEM (SSBO) ============
@@ -959,6 +964,37 @@ vec2 ParallaxMapping(vec2 texCoords, vec3 viewDirTangent) {
 	return mix(currentTexCoords, prevTexCoords, weight);
 }
 
+// ============ COLOR SPACE CONVERSION ============
+// Color space constants
+#define COLORSPACE_SRGB 0
+#define COLORSPACE_LINEAR 1
+#define COLORSPACE_LINEAR_REC709 2
+
+// sRGB to Linear conversion (accurate, not just pow 2.2)
+vec3 SRGBToLinear(vec3 srgb) {
+	return pow(srgb, vec3(2.2));
+}
+
+// Apply color space conversion based on the specified color space
+// For textures that are already linear (normal maps, ORM, etc.), no conversion needed
+// For sRGB textures (albedo, emission), apply gamma-to-linear
+// For Linear Rec.709, apply Rec.709 transfer function
+vec3 ApplyColorSpace(vec3 texColor, int colorSpace) {
+	if (colorSpace == COLORSPACE_SRGB) {
+		return pow(texColor, vec3(2.2));
+	} else if (colorSpace == COLORSPACE_LINEAR_REC709) {
+		// Rec.709 OETF inverse (linearize)
+		// threshold at 0.081
+		vec3 result;
+		result.r = texColor.r < 0.081 ? texColor.r / 4.5 : pow((texColor.r + 0.099) / 1.099, 1.0 / 0.45);
+		result.g = texColor.g < 0.081 ? texColor.g / 4.5 : pow((texColor.g + 0.099) / 1.099, 1.0 / 0.45);
+		result.b = texColor.b < 0.081 ? texColor.b / 4.5 : pow((texColor.b + 0.099) / 1.099, 1.0 / 0.45);
+		return result;
+	}
+	// COLORSPACE_LINEAR - already linear, no conversion
+	return texColor;
+}
+
 // ============ EXTRACT CHANNEL FROM LAYERED (ORM) TEXTURE ============
 
 float ExtractChannel(vec3 ormSample, int channel) {
@@ -990,7 +1026,7 @@ void main() {
 	float alpha = u_Color.a;
 	if (u_UseAlbedoMap != 0) {
 		vec4 texColor = texture(u_AlbedoMap, texCoords);
-		albedo = pow(texColor.rgb, vec3(2.2));
+		albedo = ApplyColorSpace(texColor.rgb, u_AlbedoColorSpace);
 		alpha *= texColor.a;
 	} else {
 		albedo = pow(u_Color.rgb, vec3(2.2));
@@ -1004,8 +1040,16 @@ void main() {
 	// ========== NORMAL MAPPING ==========
 	vec3 N;
 	if (u_UseNormalMap != 0) {
-		vec3 normalMap = texture(u_NormalMap, texCoords).rgb;
-		normalMap = normalMap * 2.0 - 1.0;
+		vec3 normalSample = texture(u_NormalMap, texCoords).rgb;
+		// Apply color space for normal map data
+		if (u_NormalColorSpace == COLORSPACE_LINEAR_REC709) {
+			normalSample = ApplyColorSpace(normalSample, COLORSPACE_LINEAR_REC709);
+		}
+		vec3 normalMap = normalSample * 2.0 - 1.0;
+		// Flip green channel (Y) for DirectX-style normal maps
+		if (u_FlipNormalMapY != 0) {
+			normalMap.y = -normalMap.y;
+		}
 		normalMap.xy *= u_NormalIntensity;
 		N = normalize(Input.TBN * normalMap);
 	} else {
@@ -1015,8 +1059,12 @@ void main() {
 	// ========== DETAIL NORMAL BLENDING ==========
 	if (u_UseDetailNormalMap != 0) {
 		vec2 detailUV = Input.TexCoords * u_DetailUVTiling;
-		vec3 detailNormal = texture(u_DetailNormalMap, detailUV).rgb;
-		detailNormal = detailNormal * 2.0 - 1.0;
+		vec3 detailSample = texture(u_DetailNormalMap, detailUV).rgb;
+		vec3 detailNormal = detailSample * 2.0 - 1.0;
+		// Apply same Y-flip to detail normal if enabled
+		if (u_FlipNormalMapY != 0) {
+			detailNormal.y = -detailNormal.y;
+		}
 		detailNormal.xy *= u_DetailNormalScale;
 		
 		// UDN blending (Unreal-style): combine normals in tangent space
@@ -1033,6 +1081,8 @@ void main() {
 	if (u_UseLayeredMap != 0) {
 		// Sample from packed ORM texture
 		vec3 ormSample = texture(u_LayeredMap, texCoords).rgb;
+		// Apply color space conversion for layered texture
+		ormSample = ApplyColorSpace(ormSample, u_LayeredColorSpace);
 		metallic = clamp(ExtractChannel(ormSample, u_LayeredChannelMetallic) * u_MetallicMultiplier, 0.0, 1.0);
 		roughness = clamp(ExtractChannel(ormSample, u_LayeredChannelRoughness) * u_RoughnessMultiplier, 0.0, 1.0);
 		ao = clamp(ExtractChannel(ormSample, u_LayeredChannelAO) * u_AOMultiplier, 0.0, 1.0);
@@ -1084,7 +1134,7 @@ void main() {
 		emission = u_EmissionColor * u_EmissionIntensity;
 		if (u_UseEmissionMap != 0) {
 			vec3 emissionTex = texture(u_EmissionMap, texCoords).rgb;
-			emissionTex = pow(emissionTex, vec3(2.2));
+			emissionTex = ApplyColorSpace(emissionTex, u_EmissionColorSpace);
 			emission = emissionTex * u_EmissionColor * u_EmissionIntensity;
 		}
 		

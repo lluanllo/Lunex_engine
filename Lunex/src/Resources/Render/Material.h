@@ -83,7 +83,12 @@ namespace Lunex {
 
 			glm::vec2 DetailUVTiling;
 			int AlphaMode;
-			float _padding3;
+			int FlipNormalMapY;
+
+			int AlbedoColorSpace;
+			int NormalColorSpace;
+			int LayeredColorSpace;
+			int EmissionColorSpace;
 		};
 
 		MaterialData GetMaterialData(const glm::vec3& viewPos, bool hasAlbedo, bool hasNormal, 
@@ -123,7 +128,11 @@ namespace Lunex {
 			data.AlphaCutoff = 0.5f;
 			data.DetailUVTiling = glm::vec2(4.0f, 4.0f);
 			data.AlphaMode = 0;
-			data._padding3 = 0.0f;
+			data.FlipNormalMapY = 0;
+			data.AlbedoColorSpace = 0;  // sRGB
+			data.NormalColorSpace = 1;   // Linear
+			data.LayeredColorSpace = 1;  // Linear
+			data.EmissionColorSpace = 0; // sRGB
 			return data;
 		}
 

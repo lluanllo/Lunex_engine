@@ -67,7 +67,12 @@ namespace Lunex {
 
 			glm::vec2 DetailUVTiling;         // 8
 			int AlphaMode;                    // 4
-			float _padding3;                  // 4  = 160
+			int FlipNormalMapY;               // 4  = 160
+
+			int AlbedoColorSpace;             // 4
+			int NormalColorSpace;             // 4
+			int LayeredColorSpace;            // 4
+			int EmissionColorSpace;           // 4  = 176
 		};
 
 		struct ViewPosData {
@@ -379,6 +384,12 @@ namespace Lunex {
 
 		s_Data.MaterialBuffer.DetailUVTiling = uniformData.DetailUVTiling;
 		s_Data.MaterialBuffer.AlphaMode = uniformData.AlphaMode;
+		s_Data.MaterialBuffer.FlipNormalMapY = uniformData.FlipNormalMapY;
+
+		s_Data.MaterialBuffer.AlbedoColorSpace = uniformData.AlbedoColorSpace;
+		s_Data.MaterialBuffer.NormalColorSpace = uniformData.NormalColorSpace;
+		s_Data.MaterialBuffer.LayeredColorSpace = uniformData.LayeredColorSpace;
+		s_Data.MaterialBuffer.EmissionColorSpace = uniformData.EmissionColorSpace;
 
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
 
@@ -429,7 +440,6 @@ namespace Lunex {
 		s_Data.MaterialBuffer.EmissionColor = glm::vec3(0.0f);
 		s_Data.MaterialBuffer.NormalIntensity = 1.0f;
 
-		// No textures in this overload
 		s_Data.MaterialBuffer.UseAlbedoMap = 0;
 		s_Data.MaterialBuffer.UseNormalMap = 0;
 		s_Data.MaterialBuffer.UseMetallicMap = 0;
@@ -458,7 +468,12 @@ namespace Lunex {
 
 		s_Data.MaterialBuffer.DetailUVTiling = glm::vec2(4.0f, 4.0f);
 		s_Data.MaterialBuffer.AlphaMode = 0;
-		s_Data.MaterialBuffer._padding3 = 0.0f;
+		s_Data.MaterialBuffer.FlipNormalMapY = 0;
+
+		s_Data.MaterialBuffer.AlbedoColorSpace = 0;  // sRGB
+		s_Data.MaterialBuffer.NormalColorSpace = 1;   // Linear
+		s_Data.MaterialBuffer.LayeredColorSpace = 1;  // Linear
+		s_Data.MaterialBuffer.EmissionColorSpace = 0; // sRGB
 
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
 
@@ -527,6 +542,12 @@ namespace Lunex {
 
 		s_Data.MaterialBuffer.DetailUVTiling = uniformData.DetailUVTiling;
 		s_Data.MaterialBuffer.AlphaMode = uniformData.AlphaMode;
+		s_Data.MaterialBuffer.FlipNormalMapY = uniformData.FlipNormalMapY;
+
+		s_Data.MaterialBuffer.AlbedoColorSpace = uniformData.AlbedoColorSpace;
+		s_Data.MaterialBuffer.NormalColorSpace = uniformData.NormalColorSpace;
+		s_Data.MaterialBuffer.LayeredColorSpace = uniformData.LayeredColorSpace;
+		s_Data.MaterialBuffer.EmissionColorSpace = uniformData.EmissionColorSpace;
 
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
 
@@ -582,7 +603,7 @@ namespace Lunex {
 			s_Data.MaterialBuffer.MetallicMultiplier = uniformData.MetallicMultiplier;
 			s_Data.MaterialBuffer.RoughnessMultiplier = uniformData.RoughnessMultiplier;
 			s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
-		 s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
+			s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
 
 			s_Data.MaterialBuffer.UVTiling = uniformData.UVTiling;
 			s_Data.MaterialBuffer.UVOffset = uniformData.UVOffset;

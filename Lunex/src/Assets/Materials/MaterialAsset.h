@@ -47,6 +47,30 @@ namespace Lunex {
 		return AlphaMode::Opaque;
 	}
 
+	// ============================================================================
+	// TEXTURE COLOR SPACE
+	// ============================================================================
+	enum class TextureColorSpace : int {
+		sRGB = 0,          // Standard sRGB (gamma-encoded) - default for albedo/emission
+		Linear = 1,        // Linear (no gamma) - default for normal/metallic/roughness/AO
+		LinearRec709 = 2   // Linear Rec.709 - useful for certain normal maps and layered textures
+	};
+
+	inline const char* TextureColorSpaceToString(TextureColorSpace cs) {
+		switch (cs) {
+			case TextureColorSpace::sRGB:          return "sRGB";
+			case TextureColorSpace::Linear:        return "Linear";
+			case TextureColorSpace::LinearRec709:  return "Linear Rec.709";
+		}
+		return "Unknown";
+	}
+
+	inline TextureColorSpace StringToTextureColorSpace(const std::string& str) {
+		if (str == "Linear")         return TextureColorSpace::Linear;
+		if (str == "Linear Rec.709") return TextureColorSpace::LinearRec709;
+		return TextureColorSpace::sRGB;
+	}
+
 	/**
 	 * @class MaterialAsset
 	 * @brief Serializable PBR material definition
@@ -93,6 +117,12 @@ namespace Lunex {
 		void SetNormalIntensity(float intensity) { m_NormalIntensity = glm::clamp(intensity, 0.0f, 2.0f); MarkDirty(); }
 		float GetNormalIntensity() const { return m_NormalIntensity; }
 
+		// ========== NORMAL MAP SETTINGS ==========
+
+		// Flip normal map green channel (Y axis) - for DirectX-style normal maps
+		void SetFlipNormalMapY(bool flip) { m_FlipNormalMapY = flip; MarkDirty(); }
+		bool GetFlipNormalMapY() const { return m_FlipNormalMapY; }
+
 		// ========== SURFACE SETTINGS ==========
 
 		// Alpha mode
@@ -114,6 +144,20 @@ namespace Lunex {
 		// UV Offset
 		void SetUVOffset(const glm::vec2& offset) { m_UVOffset = offset; MarkDirty(); }
 		const glm::vec2& GetUVOffset() const { return m_UVOffset; }
+
+		// ========== TEXTURE COLOR SPACES ==========
+
+		void SetAlbedoColorSpace(TextureColorSpace cs) { m_AlbedoColorSpace = cs; MarkDirty(); }
+		TextureColorSpace GetAlbedoColorSpace() const { return m_AlbedoColorSpace; }
+
+		void SetNormalColorSpace(TextureColorSpace cs) { m_NormalColorSpace = cs; MarkDirty(); }
+		TextureColorSpace GetNormalColorSpace() const { return m_NormalColorSpace; }
+
+		void SetLayeredColorSpace(TextureColorSpace cs) { m_LayeredColorSpace = cs; MarkDirty(); }
+		TextureColorSpace GetLayeredColorSpace() const { return m_LayeredColorSpace; }
+
+		void SetEmissionColorSpace(TextureColorSpace cs) { m_EmissionColorSpace = cs; MarkDirty(); }
+		TextureColorSpace GetEmissionColorSpace() const { return m_EmissionColorSpace; }
 
 		// ========== PBR TEXTURES =========
 		
@@ -279,7 +323,12 @@ namespace Lunex {
 
 			glm::vec2 DetailUVTiling;         // 8
 			int AlphaMode;                    // 4
-			float _padding3;                  // 4  = 160
+			int FlipNormalMapY;               // 4  = 160
+
+			int AlbedoColorSpace;             // 4
+			int NormalColorSpace;             // 4
+			int LayeredColorSpace;            // 4
+			int EmissionColorSpace;           // 4  = 176
 		};
 
 		MaterialUniformData GetUniformData() const;
@@ -294,12 +343,21 @@ namespace Lunex {
 		float m_EmissionIntensity = 0.0f;
 		float m_NormalIntensity = 1.0f;
 
+		// Normal map settings
+		bool m_FlipNormalMapY = false;
+
 		// Surface settings
 		AlphaMode m_AlphaMode = AlphaMode::Opaque;
 		float m_AlphaCutoff = 0.5f;
 		bool m_TwoSided = false;
 		glm::vec2 m_UVTiling = { 1.0f, 1.0f };
 		glm::vec2 m_UVOffset = { 0.0f, 0.0f };
+
+		// Texture color spaces
+		TextureColorSpace m_AlbedoColorSpace = TextureColorSpace::sRGB;
+		TextureColorSpace m_NormalColorSpace = TextureColorSpace::Linear;
+		TextureColorSpace m_LayeredColorSpace = TextureColorSpace::Linear;
+		TextureColorSpace m_EmissionColorSpace = TextureColorSpace::sRGB;
 
 		// Textures
 		Ref<Texture2D> m_AlbedoMap;

@@ -144,6 +144,16 @@ namespace Lunex {
 			<< m_UVTiling.x << m_UVTiling.y << YAML::EndSeq;
 		out << YAML::Key << "UVOffset" << YAML::Value << YAML::Flow << YAML::BeginSeq
 			<< m_UVOffset.x << m_UVOffset.y << YAML::EndSeq;
+		out << YAML::Key << "FlipNormalMapY" << YAML::Value << m_FlipNormalMapY;
+		out << YAML::EndMap;
+
+		// Texture Color Spaces
+		out << YAML::Key << "ColorSpaces" << YAML::Value;
+		out << YAML::BeginMap;
+		out << YAML::Key << "Albedo" << YAML::Value << TextureColorSpaceToString(m_AlbedoColorSpace);
+		out << YAML::Key << "Normal" << YAML::Value << TextureColorSpaceToString(m_NormalColorSpace);
+		out << YAML::Key << "Layered" << YAML::Value << TextureColorSpaceToString(m_LayeredColorSpace);
+		out << YAML::Key << "Emission" << YAML::Value << TextureColorSpaceToString(m_EmissionColorSpace);
 		out << YAML::EndMap;
 
 		// Textures
@@ -275,6 +285,17 @@ namespace Lunex {
 			if (uvOffset) {
 				material->m_UVOffset = glm::vec2(uvOffset[0].as<float>(0.0f), uvOffset[1].as<float>(0.0f));
 			}
+
+			material->m_FlipNormalMapY = surfaceNode["FlipNormalMapY"].as<bool>(false);
+		}
+
+		// Texture Color Spaces
+		auto colorSpacesNode = data["ColorSpaces"];
+		if (colorSpacesNode) {
+			material->m_AlbedoColorSpace = StringToTextureColorSpace(colorSpacesNode["Albedo"].as<std::string>("sRGB"));
+			material->m_NormalColorSpace = StringToTextureColorSpace(colorSpacesNode["Normal"].as<std::string>("Linear"));
+			material->m_LayeredColorSpace = StringToTextureColorSpace(colorSpacesNode["Layered"].as<std::string>("Linear"));
+			material->m_EmissionColorSpace = StringToTextureColorSpace(colorSpacesNode["Emission"].as<std::string>("sRGB"));
 		}
 
 		// Textures
@@ -334,12 +355,21 @@ namespace Lunex {
 		clone->m_EmissionIntensity = m_EmissionIntensity;
 		clone->m_NormalIntensity = m_NormalIntensity;
 
+		// Normal map settings
+		clone->m_FlipNormalMapY = m_FlipNormalMapY;
+
 		// Surface settings
 		clone->m_AlphaMode = m_AlphaMode;
 		clone->m_AlphaCutoff = m_AlphaCutoff;
 		clone->m_TwoSided = m_TwoSided;
 		clone->m_UVTiling = m_UVTiling;
 		clone->m_UVOffset = m_UVOffset;
+
+		// Color spaces
+		clone->m_AlbedoColorSpace = m_AlbedoColorSpace;
+		clone->m_NormalColorSpace = m_NormalColorSpace;
+		clone->m_LayeredColorSpace = m_LayeredColorSpace;
+		clone->m_EmissionColorSpace = m_EmissionColorSpace;
 
 		clone->m_AlbedoMap = m_AlbedoMap;
 		clone->m_AlbedoPath = m_AlbedoPath;
@@ -425,7 +455,12 @@ namespace Lunex {
 
 		data.DetailUVTiling = m_DetailUVTiling;
 		data.AlphaMode = static_cast<int>(m_AlphaMode);
-		data._padding3 = 0.0f;
+		data.FlipNormalMapY = m_FlipNormalMapY ? 1 : 0;
+
+		data.AlbedoColorSpace = static_cast<int>(m_AlbedoColorSpace);
+		data.NormalColorSpace = static_cast<int>(m_NormalColorSpace);
+		data.LayeredColorSpace = static_cast<int>(m_LayeredColorSpace);
+		data.EmissionColorSpace = static_cast<int>(m_EmissionColorSpace);
 
 		return data;
 	}

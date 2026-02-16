@@ -440,6 +440,15 @@ namespace Lunex {
 				MarkAsModified();
 			}
 		}
+
+		// Flip Normal Map Y (Green Channel)
+		{
+			bool flipY = m_EditingMaterial->GetFlipNormalMapY();
+			if (PropertyCheckbox("Flip Normal Y", flipY, "Invert green channel for DirectX-style normal maps")) {
+				m_EditingMaterial->SetFlipNormalMapY(flipY);
+				MarkAsModified();
+			}
+		}
 	}
 
 	// ============================================================================
@@ -527,6 +536,43 @@ namespace Lunex {
 				MarkAsModified();
 			}
 		}
+
+		// Emission Map
+		DrawTextureSlotNew("Emission", m_EditingMaterial->GetEmissionMap(), m_EditingMaterial->GetEmissionPath(),
+			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetEmissionMap(tex); MarkAsModified(); },
+			[this]() { m_EditingMaterial->SetEmissionMap(nullptr); MarkAsModified(); });
+
+		// Emission Color Space
+		if (m_EditingMaterial->HasEmissionMap()) {
+			Indent(16.0f);
+			const char* colorSpaces[] = { "sRGB", "Linear", "Linear Rec.709" };
+			int cs = static_cast<int>(m_EditingMaterial->GetEmissionColorSpace());
+			if (PropertyDropdown("Color Space##Emission", cs, colorSpaces, 3, "Emission texture color space")) {
+				m_EditingMaterial->SetEmissionColorSpace(static_cast<TextureColorSpace>(cs));
+				MarkAsModified();
+			}
+			Unindent(16.0f);
+		}
+
+		// AO Map with multiplier (disabled when layered map is active)
+		{
+			bool layeredActive = m_EditingMaterial->GetUseLayeredMap() && m_EditingMaterial->HasLayeredMap();
+			ScopedDisabled disabled(layeredActive);
+
+			DrawTextureSlotNew("Ambient Occlusion", m_EditingMaterial->GetAOMap(), m_EditingMaterial->GetAOPath(),
+				[this](Ref<Texture2D> tex) { m_EditingMaterial->SetAOMap(tex); MarkAsModified(); },
+				[this]() { m_EditingMaterial->SetAOMap(nullptr); MarkAsModified(); });
+			
+			if (m_EditingMaterial->HasAOMap() && !layeredActive) {
+				Indent(16.0f);
+				float mult = m_EditingMaterial->GetAOMultiplier();
+				if (PropertySlider("Multiplier AO", mult, 0.0f, 2.0f, "%.2f")) {
+					m_EditingMaterial->SetAOMultiplier(mult);
+					MarkAsModified();
+				}
+				Unindent(16.0f);
+			}
+		}
 	}
 
 	void MaterialEditorPanel::DrawTextureMapsSection() {
@@ -542,10 +588,34 @@ namespace Lunex {
 			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetAlbedoMap(tex); MarkAsModified(); },
 			[this]() { m_EditingMaterial->SetAlbedoMap(nullptr); MarkAsModified(); });
 
+		// Albedo Color Space
+		if (m_EditingMaterial->HasAlbedoMap()) {
+			Indent(16.0f);
+			const char* colorSpaces[] = { "sRGB", "Linear", "Linear Rec.709" };
+			int cs = static_cast<int>(m_EditingMaterial->GetAlbedoColorSpace());
+			if (PropertyDropdown("Color Space##Albedo", cs, colorSpaces, 3, "Texture color space")) {
+				m_EditingMaterial->SetAlbedoColorSpace(static_cast<TextureColorSpace>(cs));
+				MarkAsModified();
+			}
+			Unindent(16.0f);
+		}
+
 		// Normal Map
 		DrawTextureSlotNew("Normal", m_EditingMaterial->GetNormalMap(), m_EditingMaterial->GetNormalPath(),
 			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetNormalMap(tex); MarkAsModified(); },
 			[this]() { m_EditingMaterial->SetNormalMap(nullptr); MarkAsModified(); });
+
+		// Normal Color Space
+		if (m_EditingMaterial->HasNormalMap()) {
+			Indent(16.0f);
+			const char* colorSpaces[] = { "sRGB", "Linear", "Linear Rec.709" };
+			int cs = static_cast<int>(m_EditingMaterial->GetNormalColorSpace());
+			if (PropertyDropdown("Color Space##Normal", cs, colorSpaces, 3, "Normal map color space (typically Linear or Linear Rec.709)")) {
+				m_EditingMaterial->SetNormalColorSpace(static_cast<TextureColorSpace>(cs));
+				MarkAsModified();
+			}
+			Unindent(16.0f);
+		}
 
 		// Metallic Map with multiplier (disabled when layered map is active)
 		{
@@ -607,6 +677,18 @@ namespace Lunex {
 			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetEmissionMap(tex); MarkAsModified(); },
 			[this]() { m_EditingMaterial->SetEmissionMap(nullptr); MarkAsModified(); });
 
+		// Emission Color Space
+		if (m_EditingMaterial->HasEmissionMap()) {
+			Indent(16.0f);
+			const char* colorSpaces[] = { "sRGB", "Linear", "Linear Rec.709" };
+			int cs = static_cast<int>(m_EditingMaterial->GetEmissionColorSpace());
+			if (PropertyDropdown("Color Space##Emission", cs, colorSpaces, 3, "Emission texture color space")) {
+				m_EditingMaterial->SetEmissionColorSpace(static_cast<TextureColorSpace>(cs));
+				MarkAsModified();
+			}
+			Unindent(16.0f);
+		}
+
 		// AO Map with multiplier (disabled when layered map is active)
 		{
 			bool layeredActive = m_EditingMaterial->GetUseLayeredMap() && m_EditingMaterial->HasLayeredMap();
@@ -627,10 +709,6 @@ namespace Lunex {
 			}
 		}
 	}
-
-	// ============================================================================
-	// LAYERED (ORM) TEXTURE SECTION
-	// ============================================================================
 
 	void MaterialEditorPanel::DrawLayeredTextureSection() {
 		using namespace UI;
@@ -665,6 +743,16 @@ namespace Lunex {
 
 			if (m_EditingMaterial->HasLayeredMap()) {
 				AddSpacing(SpacingValues::SM);
+				
+				// Layered Color Space
+				{
+					const char* colorSpaces[] = { "sRGB", "Linear", "Linear Rec.709" };
+				 int cs = static_cast<int>(m_EditingMaterial->GetLayeredColorSpace());
+					if (PropertyDropdown("Color Space##Layered", cs, colorSpaces, 3, "ORM texture color space (typically Linear or Linear Rec.709)")) {
+						m_EditingMaterial->SetLayeredColorSpace(static_cast<TextureColorSpace>(cs));
+						MarkAsModified();
+					}
+				}
 				
 				// Channel assignment
 				const char* channelNames[] = { "Red (R)", "Green (G)", "Blue (B)" };
@@ -862,6 +950,11 @@ namespace Lunex {
 			// Height map
 			if (m_EditingMaterial->HasHeightMap()) {
 				TextColored(MaterialEditorStyle::AccentPrimary(), "Parallax: Active (scale: %.3f)", m_EditingMaterial->GetHeightScale());
+			}
+
+			// Normal Y flip
+			if (m_EditingMaterial->GetFlipNormalMapY()) {
+				TextColored(MaterialEditorStyle::AccentLayered(), "Normal Map: Y-Flipped (DirectX)");
 			}
 		}
 		EndChild();
