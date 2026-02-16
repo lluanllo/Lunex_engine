@@ -59,6 +59,10 @@ namespace Lunex::NodeGraph {
 				node->DisplayName = displayName;
 				node->Category = category;
 				node->HeaderColor = headerColor;
+				// Call Init() if the node type has it (creates pins)
+				if constexpr (requires(NodeType& n, NodeGraph& g) { n.Init(g); }) {
+					node->Init(graph);
+				}
 				return node;
 			};
 			Register(reg);

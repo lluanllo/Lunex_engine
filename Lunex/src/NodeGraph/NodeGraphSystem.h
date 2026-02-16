@@ -11,6 +11,7 @@
 
 #include "NodeGraphCore.h"
 #include "CommonNodes.h"
+#include "Shader/ShaderNodeTypes.h"
 
 namespace Lunex::NodeGraph {
 
@@ -20,6 +21,7 @@ namespace Lunex::NodeGraph {
 			if (s_Initialized) return;
 
 			RegisterCommonNodes();
+			Shader::RegisterShaderNodes();
 			s_Initialized = true;
 		}
 

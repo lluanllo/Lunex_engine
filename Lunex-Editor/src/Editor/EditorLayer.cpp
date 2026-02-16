@@ -26,6 +26,9 @@
 // ✅ AssetDatabase (Unified Assets)
 #include "Assets/Core/AssetDatabase.h"
 
+// ✅ Shader Editor Panel (Node-based material editing)
+#include "../Panels/ShaderEditorPanel.h"
+
 // ✅ Skybox Renderer for camera preview
 #include "Renderer/SkyboxRenderer.h"
 
@@ -245,6 +248,33 @@ namespace Lunex {
 		});
 		
 		LNX_LOG_INFO("✅ Material Editor Panel callbacks configured");
+
+		// ========================================
+		// SHADER EDITOR PANEL CALLBACKS
+		// ========================================
+		
+		// Material Editor -> Shader Editor (open node editor for material)
+		m_MaterialEditorPanel.SetOnOpenShaderEditorCallback([this](Ref<MaterialAsset> asset) {
+			m_ShaderEditorPanel.Open(asset);
+		});
+
+		// Shader Editor -> Material Editor (when compiled material is applied)
+		m_ShaderEditorPanel.SetOnMaterialCompiled([this](Ref<MaterialAsset> asset) {
+			// Hot reload: refresh preview in material editor
+			if (m_MaterialEditorPanel.IsMaterialOpen() && 
+				m_MaterialEditorPanel.GetEditingMaterial() == asset) {
+				// Material properties already updated by the shader editor
+				LNX_LOG_INFO("Shader graph compiled -> material updated");
+			}
+		});
+
+		m_ShaderEditorPanel.SetOnMaterialSaved([this](const std::filesystem::path& path) {
+			m_ContentBrowserPanel.InvalidateMaterialThumbnail(path);
+			m_ContentBrowserPanel.InvalidateThumbnailDiskCache(path);
+			LNX_LOG_INFO("Material saved from Shader Editor: {0}", path.filename().string());
+		});
+
+		LNX_LOG_INFO("✅ Shader Editor Panel callbacks configured");
 
 		// Configure project creation dialog
 		m_ProjectCreationDialog.SetOnCreateCallback([this](const std::string& name, const std::filesystem::path& location) {
@@ -831,6 +861,9 @@ namespace Lunex {
 		m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
 		//m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
 
+		// Shader Editor Update (node graph compilation + preview)
+		m_ShaderEditorPanel.OnUpdate(ts.GetSeconds());
+
 		OnOverlayRender();
 
 		m_Framebuffer->Unbind();
@@ -917,6 +950,7 @@ namespace Lunex {
 		m_PropertiesPanel.OnImGuiRender();
 		m_ContentBrowserPanel.OnImGuiRender();
 		m_MaterialEditorPanel.OnImGuiRender();
+		m_ShaderEditorPanel.OnImGuiRender();
 		m_StatsPanel.OnImGuiRender();
 		m_SettingsPanel.OnImGuiRender();
 		m_ConsolePanel.OnImGuiRender();

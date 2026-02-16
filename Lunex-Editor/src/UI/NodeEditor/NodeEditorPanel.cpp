@@ -108,6 +108,39 @@ namespace Lunex {
 		ImGui::End();
 	}
 
+	void NodeEditorPanel::OnImGuiRenderEmbedded() {
+		if (!m_IsOpen) return;
+
+		DrawToolbar();
+
+		if (m_Graph) {
+			float propertiesWidth = m_ShowProperties ? 280.0f : 0.0f;
+			float editorWidth = ImGui::GetContentRegionAvail().x - propertiesWidth;
+
+			if (m_ShowProperties && propertiesWidth > 0) {
+				ImGui::BeginChild("##NodeEditorCanvasEmbed", ImVec2(editorWidth, 0), false);
+			}
+
+			DrawNodeEditor();
+
+			if (m_ShowProperties && propertiesWidth > 0) {
+				ImGui::EndChild();
+				ImGui::SameLine();
+				ImGui::BeginChild("##NodePropertiesEmbed", ImVec2(0, 0), true);
+				DrawPropertiesPanel();
+				ImGui::EndChild();
+			}
+		}
+		else {
+			ImVec2 center = ImGui::GetContentRegionAvail();
+			ImVec2 textSize = ImGui::CalcTextSize("No graph loaded");
+			ImGui::SetCursorPos(ImVec2(
+				(center.x - textSize.x) * 0.5f,
+				(center.y - textSize.y) * 0.5f));
+			ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "No graph loaded");
+		}
+	}
+
 	// ============================================================================
 	// MENU BAR
 	// ============================================================================

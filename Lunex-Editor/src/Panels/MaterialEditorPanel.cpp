@@ -238,6 +238,12 @@ namespace Lunex {
 					}
 				}
 				Separator();
+				if (MenuItem("Open in Shader Editor")) {
+					if (m_EditingMaterial && m_OnOpenShaderEditor) {
+						m_OnOpenShaderEditor(m_EditingMaterial);
+					}
+				}
+				Separator();
 				if (MenuItem("Close", "Ctrl+W")) {
 					CloseMaterial();
 				}
@@ -694,7 +700,7 @@ namespace Lunex {
 			bool layeredActive = m_EditingMaterial->GetUseLayeredMap() && m_EditingMaterial->HasLayeredMap();
 			ScopedDisabled disabled(layeredActive);
 
-			DrawTextureSlotNew("Ambient Occlusion", m_EditingMaterial->GetAOMap(), m_EditingMaterial->GetAOPath(),
+		 DrawTextureSlotNew("Ambient Occlusion", m_EditingMaterial->GetAOMap(), m_EditingMaterial->GetAOPath(),
 				[this](Ref<Texture2D> tex) { m_EditingMaterial->SetAOMap(tex); MarkAsModified(); },
 				[this]() { m_EditingMaterial->SetAOMap(nullptr); MarkAsModified(); });
 			

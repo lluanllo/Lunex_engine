@@ -186,6 +186,14 @@ namespace Lunex::NodeGraph {
 			return nullptr;
 		}
 
+		const Pin* GetConnectedOutputPin(PinID inputPinID) const {
+			for (const auto& [id, link] : m_Links) {
+				if (link.EndPinID == inputPinID)
+					return FindPin(link.StartPinID);
+			}
+			return nullptr;
+		}
+
 		// ========== TOPOLOGICAL SORT ==========
 
 		std::vector<NodeID> GetTopologicalOrder() const {

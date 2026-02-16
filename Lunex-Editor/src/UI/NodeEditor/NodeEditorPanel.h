@@ -69,6 +69,7 @@ namespace Lunex {
 		// ========== RENDERING ==========
 
 		void OnImGuiRender();
+		void OnImGuiRenderEmbedded();
 		void OnUpdate(float deltaTime);
 
 		// ========== STATE ==========

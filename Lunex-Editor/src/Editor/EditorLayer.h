@@ -5,6 +5,7 @@
 #include "../Panels/PropertiesPanel.h"
 #include "../Panels/ContentBrowserPanel.h"
 #include "../Panels/MaterialEditorPanel.h"
+#include "../Panels/ShaderEditorPanel.h"
 #include "../Panels/StatsPanel.h"
 #include "../Panels/SettingsPanel.h"
 #include "../Panels/ViewportPanel.h"
@@ -123,6 +124,7 @@ namespace Lunex {
 			PropertiesPanel m_PropertiesPanel;
 			ContentBrowserPanel m_ContentBrowserPanel;
 			MaterialEditorPanel m_MaterialEditorPanel;
+			ShaderEditorPanel m_ShaderEditorPanel;
 			StatsPanel m_StatsPanel;
 			SettingsPanel m_SettingsPanel;
 			ViewportPanel m_ViewportPanel;
