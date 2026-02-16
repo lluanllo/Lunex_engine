@@ -71,6 +71,9 @@ namespace Lunex {
 		Ref<Texture2D> GetSpecularMap() const { return m_BaseAsset->GetSpecularMap(); }
 		Ref<Texture2D> GetEmissionMap() const { return m_BaseAsset->GetEmissionMap(); }
 		Ref<Texture2D> GetAOMap() const { return m_BaseAsset->GetAOMap(); }
+		Ref<Texture2D> GetLayeredMap() const { return m_BaseAsset->GetLayeredMap(); }
+		Ref<Texture2D> GetHeightMap() const { return m_BaseAsset->GetHeightMap(); }
+		Ref<Texture2D> GetDetailNormalMap() const { return m_BaseAsset->GetDetailNormalMap(); }
 
 		bool HasAlbedoMap() const { return m_BaseAsset->HasAlbedoMap(); }
 		bool HasNormalMap() const { return m_BaseAsset->HasNormalMap(); }
@@ -79,6 +82,9 @@ namespace Lunex {
 		bool HasSpecularMap() const { return m_BaseAsset->HasSpecularMap(); }
 		bool HasEmissionMap() const { return m_BaseAsset->HasEmissionMap(); }
 		bool HasAOMap() const { return m_BaseAsset->HasAOMap(); }
+		bool HasLayeredMap() const { return m_BaseAsset->HasLayeredMap(); }
+		bool HasHeightMap() const { return m_BaseAsset->HasHeightMap(); }
+		bool HasDetailNormalMap() const { return m_BaseAsset->HasDetailNormalMap(); }
 
 		// Multipliers
 		float GetMetallicMultiplier() const;

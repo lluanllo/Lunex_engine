@@ -8,6 +8,10 @@
  * - Real-time PBR material preview
  * - Clean, professional UI using Lunex UI Framework
  * - Drag & drop texture support
+ * - Layered (ORM) texture support
+ * - Height/Parallax mapping
+ * - Detail normal maps
+ * - Surface settings (alpha mode, two-sided, UV tiling)
  * - Hot-reload support
  */
 
@@ -26,11 +30,6 @@ namespace Lunex {
 	/**
 	 * @class MaterialEditorPanel
 	 * @brief Visual material editor with real-time preview
-	 * 
-	 * AAA Architecture Integration:
-	 * - Uses MaterialAsset from Assets/Materials/
-	 * - Uses Lunex UI Framework for consistent styling
-	 * - Supports hot-reload through MaterialRegistry
 	 */
 	class MaterialEditorPanel {
 	public:
@@ -77,7 +76,7 @@ namespace Lunex {
 		uint32_t m_PreviewWidth = 512;
 		uint32_t m_PreviewHeight = 512;
 
-		// ========== UI DRAWING (New AAA API) ==========
+		// ========== UI DRAWING ==========
 
 		void DrawMainLayout();
 		void DrawMenuBar();
@@ -87,7 +86,12 @@ namespace Lunex {
 		// Section drawing
 		void DrawPBRPropertiesSection();
 		void DrawEmissionSection();
+		void DrawSurfaceSettingsSection();
 		void DrawTextureMapsSection();
+		void DrawLayeredTextureSection();
+		void DrawHeightMapSection();
+		void DrawDetailMapSection();
+		void DrawMaterialInfoSection();
 		
 		// New texture slot with callbacks
 		void DrawTextureSlotNew(

@@ -238,22 +238,40 @@ namespace RHI {
 		auto cacheDir = GetCacheDirectory();
 		m_VulkanSPIRV.clear();
 		
+		// Check if source is newer than cache (invalidation)
+		std::filesystem::file_time_type sourceTime{};
+		bool hasSourceTime = false;
+		if (!m_FilePath.empty() && std::filesystem::exists(m_FilePath)) {
+			sourceTime = std::filesystem::last_write_time(m_FilePath);
+			hasSourceTime = true;
+		}
+		
 		for (auto&& [stage, source] : shaderSources) {
 			std::filesystem::path shaderPath = m_FilePath.empty() ? m_Name : m_FilePath;
 			std::filesystem::path cachePath = cacheDir / (shaderPath.filename().string() + GetVulkanCacheExtension(stage));
 			
-			// Try loading from cache
+			// Try loading from cache (only if cache is newer than source)
 			bool cacheLoaded = false;
 			if (std::filesystem::exists(cachePath)) {
-				std::ifstream in(cachePath, std::ios::binary);
-				if (in) {
-					in.seekg(0, std::ios::end);
-					size_t size = in.tellg();
-					if (size > 0 && size % sizeof(uint32_t) == 0) {
-						in.seekg(0, std::ios::beg);
-						m_VulkanSPIRV[stage].resize(size / sizeof(uint32_t));
-						in.read(reinterpret_cast<char*>(m_VulkanSPIRV[stage].data()), size);
-						cacheLoaded = in.good() && !m_VulkanSPIRV[stage].empty();
+				bool cacheValid = true;
+				if (hasSourceTime) {
+					auto cacheTime = std::filesystem::last_write_time(cachePath);
+					if (sourceTime > cacheTime) {
+						cacheValid = false; // Source is newer, invalidate cache
+					}
+				}
+				
+				if (cacheValid) {
+					std::ifstream in(cachePath, std::ios::binary);
+					if (in) {
+						in.seekg(0, std::ios::end);
+						size_t size = in.tellg();
+						if (size > 0 && size % sizeof(uint32_t) == 0) {
+							in.seekg(0, std::ios::beg);
+							m_VulkanSPIRV[stage].resize(size / sizeof(uint32_t));
+							in.read(reinterpret_cast<char*>(m_VulkanSPIRV[stage].data()), size);
+							cacheLoaded = in.good() && !m_VulkanSPIRV[stage].empty();
+						}
 					}
 				}
 			}

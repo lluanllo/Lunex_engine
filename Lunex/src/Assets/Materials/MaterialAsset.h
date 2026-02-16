@@ -23,6 +23,30 @@ namespace YAML {
 
 namespace Lunex {
 
+	// ============================================================================
+	// ALPHA MODE
+	// ============================================================================
+	enum class AlphaMode : int {
+		Opaque = 0,
+		Cutoff = 1,
+		Transparent = 2
+	};
+
+	inline const char* AlphaModeToString(AlphaMode mode) {
+		switch (mode) {
+			case AlphaMode::Opaque:      return "Opaque";
+			case AlphaMode::Cutoff:      return "Cutoff";
+			case AlphaMode::Transparent: return "Transparent";
+		}
+		return "Unknown";
+	}
+
+	inline AlphaMode StringToAlphaMode(const std::string& str) {
+		if (str == "Cutoff")      return AlphaMode::Cutoff;
+		if (str == "Transparent") return AlphaMode::Transparent;
+		return AlphaMode::Opaque;
+	}
+
 	/**
 	 * @class MaterialAsset
 	 * @brief Serializable PBR material definition
@@ -36,11 +60,11 @@ namespace Lunex {
 		MaterialAsset(const std::string& name);
 		~MaterialAsset() = default;
 
-		// ========== ASSET TYPE ==========
+		// ========== ASSET TYPE =========
 		AssetType GetType() const override { return AssetType::Material; }
 		static AssetType GetStaticType() { return AssetType::Material; }
 
-		// ========== PBR PROPERTIES ==========
+		// ========== PBR PROPERTIES =========
 		
 		// Albedo (Base Color)
 		void SetAlbedo(const glm::vec4& color) { m_Albedo = color; MarkDirty(); }
@@ -69,7 +93,29 @@ namespace Lunex {
 		void SetNormalIntensity(float intensity) { m_NormalIntensity = glm::clamp(intensity, 0.0f, 2.0f); MarkDirty(); }
 		float GetNormalIntensity() const { return m_NormalIntensity; }
 
-		// ========== PBR TEXTURES ==========
+		// ========== SURFACE SETTINGS ==========
+
+		// Alpha mode
+		void SetAlphaMode(AlphaMode mode) { m_AlphaMode = mode; MarkDirty(); }
+		AlphaMode GetAlphaMode() const { return m_AlphaMode; }
+
+		// Alpha cutoff (for AlphaMode::Cutoff)
+		void SetAlphaCutoff(float cutoff) { m_AlphaCutoff = glm::clamp(cutoff, 0.0f, 1.0f); MarkDirty(); }
+		float GetAlphaCutoff() const { return m_AlphaCutoff; }
+
+		// Two-sided rendering
+		void SetTwoSided(bool twoSided) { m_TwoSided = twoSided; MarkDirty(); }
+		bool IsTwoSided() const { return m_TwoSided; }
+
+		// UV Tiling
+		void SetUVTiling(const glm::vec2& tiling) { m_UVTiling = tiling; MarkDirty(); }
+		const glm::vec2& GetUVTiling() const { return m_UVTiling; }
+
+		// UV Offset
+		void SetUVOffset(const glm::vec2& offset) { m_UVOffset = offset; MarkDirty(); }
+		const glm::vec2& GetUVOffset() const { return m_UVOffset; }
+
+		// ========== PBR TEXTURES =========
 		
 		// Albedo Map
 		void SetAlbedoMap(Ref<Texture2D> texture);
@@ -121,6 +167,48 @@ namespace Lunex {
 		void SetAOMultiplier(float multiplier) { m_AOMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); MarkDirty(); }
 		float GetAOMultiplier() const { return m_AOMultiplier; }
 
+		// ========== LAYERED (ORM) TEXTURE ==========
+		// Packed texture: R=Metallic, G=Roughness, B=AO (game-optimized format)
+
+		void SetLayeredMap(Ref<Texture2D> texture);
+		Ref<Texture2D> GetLayeredMap() const { return m_LayeredMap; }
+		const std::string& GetLayeredPath() const { return m_LayeredPath; }
+		bool HasLayeredMap() const { return m_LayeredMap != nullptr; }
+		void SetUseLayeredMap(bool use) { m_UseLayeredMap = use; MarkDirty(); }
+		bool GetUseLayeredMap() const { return m_UseLayeredMap; }
+
+		// When layered map is active, these control which channels to use
+		// Default: R=Metallic, G=Roughness, B=AO (ORM standard)
+		void SetLayeredChannelMetallic(int channel) { m_LayeredChannelMetallic = glm::clamp(channel, 0, 2); MarkDirty(); }
+		int GetLayeredChannelMetallic() const { return m_LayeredChannelMetallic; }
+		void SetLayeredChannelRoughness(int channel) { m_LayeredChannelRoughness = glm::clamp(channel, 0, 2); MarkDirty(); }
+		int GetLayeredChannelRoughness() const { return m_LayeredChannelRoughness; }
+		void SetLayeredChannelAO(int channel) { m_LayeredChannelAO = glm::clamp(channel, 0, 2); MarkDirty(); }
+		int GetLayeredChannelAO() const { return m_LayeredChannelAO; }
+
+		// ========== HEIGHT / DISPLACEMENT MAP ==========
+
+		void SetHeightMap(Ref<Texture2D> texture);
+		Ref<Texture2D> GetHeightMap() const { return m_HeightMap; }
+		const std::string& GetHeightPath() const { return m_HeightPath; }
+		bool HasHeightMap() const { return m_HeightMap != nullptr; }
+
+		void SetHeightScale(float scale) { m_HeightScale = glm::clamp(scale, 0.0f, 0.5f); MarkDirty(); }
+		float GetHeightScale() const { return m_HeightScale; }
+
+		// ========== DETAIL NORMAL MAP ==========
+
+		void SetDetailNormalMap(Ref<Texture2D> texture);
+		Ref<Texture2D> GetDetailNormalMap() const { return m_DetailNormalMap; }
+		const std::string& GetDetailNormalPath() const { return m_DetailNormalPath; }
+		bool HasDetailNormalMap() const { return m_DetailNormalMap != nullptr; }
+
+		void SetDetailNormalScale(float scale) { m_DetailNormalScale = glm::clamp(scale, 0.0f, 2.0f); MarkDirty(); }
+		float GetDetailNormalScale() const { return m_DetailNormalScale; }
+
+		void SetDetailUVTiling(const glm::vec2& tiling) { m_DetailUVTiling = tiling; MarkDirty(); }
+		const glm::vec2& GetDetailUVTiling() const { return m_DetailUVTiling; }
+
 		// ========== SERIALIZATION ==========
 		
 		bool SaveToFile(const std::filesystem::path& path) override;
@@ -130,7 +218,23 @@ namespace Lunex {
 
 		bool HasAnyTexture() const {
 			return HasAlbedoMap() || HasNormalMap() || HasMetallicMap() || 
-				   HasRoughnessMap() || HasSpecularMap() || HasEmissionMap() || HasAOMap();
+				   HasRoughnessMap() || HasSpecularMap() || HasEmissionMap() || HasAOMap() ||
+				   HasLayeredMap() || HasHeightMap() || HasDetailNormalMap();
+		}
+
+		int GetTextureCount() const {
+			int count = 0;
+			if (HasAlbedoMap()) count++;
+			if (HasNormalMap()) count++;
+			if (HasMetallicMap()) count++;
+			if (HasRoughnessMap()) count++;
+			if (HasSpecularMap()) count++;
+			if (HasEmissionMap()) count++;
+			if (HasAOMap()) count++;
+			if (HasLayeredMap()) count++;
+			if (HasHeightMap()) count++;
+			if (HasDetailNormalMap()) count++;
+			return count;
 		}
 
 		Ref<MaterialAsset> Clone() const;
@@ -138,27 +242,44 @@ namespace Lunex {
 		// ========== GPU DATA ==========
 		
 		struct MaterialUniformData {
-			glm::vec4 Albedo;
-			float Metallic;
-			float Roughness;
-			float Specular;
-			float EmissionIntensity;
-			glm::vec3 EmissionColor;
-			float NormalIntensity;
+			glm::vec4 Albedo;                // 16
+			float Metallic;                   // 4
+			float Roughness;                  // 4
+			float Specular;                   // 4
+			float EmissionIntensity;          // 4  = 32
+			glm::vec3 EmissionColor;          // 12
+			float NormalIntensity;            // 4  = 48
 
-			int UseAlbedoMap;
-			int UseNormalMap;
-			int UseMetallicMap;
-			int UseRoughnessMap;
-			int UseSpecularMap;
-			int UseEmissionMap;
-			int UseAOMap;
-			float _padding;
+			int UseAlbedoMap;                 // 4
+			int UseNormalMap;                 // 4
+			int UseMetallicMap;               // 4
+			int UseRoughnessMap;              // 4  = 64
+			int UseSpecularMap;               // 4
+			int UseEmissionMap;               // 4
+			int UseAOMap;                     // 4
+			int UseLayeredMap;                // 4  = 80
 
-			float MetallicMultiplier;
-			float RoughnessMultiplier;
-			float SpecularMultiplier;
-			float AOMultiplier;
+			float MetallicMultiplier;         // 4
+			float RoughnessMultiplier;        // 4
+			float SpecularMultiplier;         // 4
+			float AOMultiplier;               // 4  = 96
+
+			glm::vec2 UVTiling;               // 8
+			glm::vec2 UVOffset;               // 8  = 112
+
+			int LayeredChannelMetallic;       // 4
+			int LayeredChannelRoughness;      // 4
+			int LayeredChannelAO;             // 4
+			int UseHeightMap;                 // 4  = 128
+
+			float HeightScale;                // 4
+			int UseDetailNormalMap;            // 4
+			float DetailNormalScale;           // 4
+			float AlphaCutoff;                // 4  = 144
+
+			glm::vec2 DetailUVTiling;         // 8
+			int AlphaMode;                    // 4
+			float _padding3;                  // 4  = 160
 		};
 
 		MaterialUniformData GetUniformData() const;
@@ -172,6 +293,13 @@ namespace Lunex {
 		glm::vec3 m_EmissionColor = { 0.0f, 0.0f, 0.0f };
 		float m_EmissionIntensity = 0.0f;
 		float m_NormalIntensity = 1.0f;
+
+		// Surface settings
+		AlphaMode m_AlphaMode = AlphaMode::Opaque;
+		float m_AlphaCutoff = 0.5f;
+		bool m_TwoSided = false;
+		glm::vec2 m_UVTiling = { 1.0f, 1.0f };
+		glm::vec2 m_UVOffset = { 0.0f, 0.0f };
 
 		// Textures
 		Ref<Texture2D> m_AlbedoMap;
@@ -198,6 +326,25 @@ namespace Lunex {
 		Ref<Texture2D> m_AOMap;
 		std::string m_AOPath;
 		float m_AOMultiplier = 1.0f;
+
+		// Layered (ORM) texture
+		Ref<Texture2D> m_LayeredMap;
+		std::string m_LayeredPath;
+		bool m_UseLayeredMap = false;
+		int m_LayeredChannelMetallic = 0;  // R
+		int m_LayeredChannelRoughness = 1; // G
+		int m_LayeredChannelAO = 2;        // B
+
+		// Height / Displacement
+		Ref<Texture2D> m_HeightMap;
+		std::string m_HeightPath;
+		float m_HeightScale = 0.05f;
+
+		// Detail Normal
+		Ref<Texture2D> m_DetailNormalMap;
+		std::string m_DetailNormalPath;
+		float m_DetailNormalScale = 1.0f;
+		glm::vec2 m_DetailUVTiling = { 4.0f, 4.0f };
 
 		// Serialization helpers
 		void SerializeTexture(YAML::Emitter& out, const std::string& key, const std::string& path) const;

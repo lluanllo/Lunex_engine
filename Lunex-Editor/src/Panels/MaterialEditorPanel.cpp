@@ -5,6 +5,11 @@
  * Features:
  * - Real-time PBR material preview
  * - Drag & drop texture support
+ * - Layered (ORM) packed texture support (R=Metallic, G=Roughness, B=AO)
+ * - Height/Parallax mapping
+ * - Detail normal maps with independent UV tiling
+ * - Surface settings (alpha mode, two-sided, UV tiling/offset)
+ * - Material statistics and info panel
  * - Clean, professional UI with no unnecessary scrollbars
  * - Proper ImGui ID handling to prevent window movement bugs
  */
@@ -36,8 +41,8 @@ namespace Lunex {
 		constexpr float PreviewColumnWidth = 500.0f;
 		constexpr float PropertiesMinWidth = 350.0f;
 		constexpr float PropertyLabelWidth = 130.0f;
-		constexpr float TextureSlotHeight = 130.0f;  // Increased from 72 for better texture visibility
-		constexpr float TextureThumbnailSize = 64.0f;  // Increased from 48 for better texture visibility
+		constexpr float TextureSlotHeight = 130.0f;
+		constexpr float TextureThumbnailSize = 64.0f;
 		
 		// Colors
 		UI::Color BgPanel()         { return UI::Color(0.12f, 0.12f, 0.13f, 1.0f); }
@@ -46,12 +51,17 @@ namespace Lunex {
 		UI::Color BgTextureSlot()   { return UI::Color(0.11f, 0.11f, 0.12f, 1.0f); }
 		UI::Color BorderSubtle()    { return UI::Color(0.20f, 0.20f, 0.22f, 1.0f); }
 		UI::Color AccentPrimary()   { return UI::Color(0.26f, 0.59f, 0.98f, 1.0f); }
+		UI::Color AccentLayered()   { return UI::Color(0.90f, 0.55f, 0.15f, 1.0f); }
 		UI::Color StatusSaved()     { return UI::Color(0.30f, 0.80f, 0.30f, 1.0f); }
 		UI::Color StatusUnsaved()   { return UI::Color(0.95f, 0.75f, 0.20f, 1.0f); }
 		UI::Color ButtonDanger()    { return UI::Color(0.70f, 0.25f, 0.25f, 1.0f); }
 		UI::Color ButtonDangerHover() { return UI::Color(0.80f, 0.30f, 0.30f, 1.0f); }
 		UI::Color TextMuted()       { return UI::Color(0.50f, 0.50f, 0.55f, 1.0f); }
 		UI::Color TextHeader()      { return UI::Color(0.90f, 0.90f, 0.92f, 1.0f); }
+		UI::Color ChannelR()        { return UI::Color(0.85f, 0.25f, 0.25f, 1.0f); }
+		UI::Color ChannelG()        { return UI::Color(0.25f, 0.80f, 0.25f, 1.0f); }
+		UI::Color ChannelB()        { return UI::Color(0.25f, 0.40f, 0.90f, 1.0f); }
+		UI::Color InfoBg()          { return UI::Color(0.10f, 0.12f, 0.15f, 1.0f); }
 	}
 
 	// ============================================================================
@@ -128,7 +138,7 @@ namespace Lunex {
 		if (m_HasUnsavedChanges) {
 			windowTitle += " *";
 		}
-		windowTitle += "###MaterialEditor"; // Fixed ID to prevent window recreation issues
+		windowTitle += "###MaterialEditor";
 
 		// Window styling
 		ScopedColor windowColors({
@@ -142,15 +152,14 @@ namespace Lunex {
 
 		ImGui::SetNextWindowSize(ImVec2(1100, 750), ImGuiCond_FirstUseEver);
 
-		// Use NoNavInputs to prevent window focus/movement issues on first click
 		ImGuiWindowFlags windowFlags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoNavInputs;
 		
 		if (ImGui::Begin(windowTitle.c_str(), &m_IsOpen, windowFlags)) {
-			ImGui::PopStyleVar(2); // Pop window styles after Begin
+			ImGui::PopStyleVar(2);
 			DrawMenuBar();
 			DrawMainLayout();
 		} else {
-			ImGui::PopStyleVar(2); // Pop even if window is collapsed
+			ImGui::PopStyleVar(2);
 		}
 		ImGui::End();
 
@@ -198,7 +207,6 @@ namespace Lunex {
 			ScopedColor propsBg(ImGuiCol_ChildBg, MaterialEditorStyle::BgPanel());
 			ScopedStyle propsPadding(ImGuiStyleVar_WindowPadding, ImVec2(12, 12));
 			
-			// Enable vertical scrollbar for properties panel
 			if (BeginChild("##PropertiesArea", Size(0, availSize.y), false, ImGuiWindowFlags_None)) {
 				DrawPropertiesPanel();
 			}
@@ -272,10 +280,10 @@ namespace Lunex {
 			
 			if (m_HasUnsavedChanges) {
 				ScopedColor statusColor(ImGuiCol_Text, MaterialEditorStyle::StatusUnsaved());
-				ImGui::Text("Modified");
+				UI::Text("Modified");
 			} else {
 				ScopedColor statusColor(ImGuiCol_Text, MaterialEditorStyle::StatusSaved());
-				ImGui::Text("Saved");
+				UI::Text("Saved");
 			}
 
 			EndMenuBar();
@@ -291,7 +299,6 @@ namespace Lunex {
 
 		ImVec2 viewportSize = ImGui::GetContentRegionAvail();
 
-		// Update renderer resolution if needed
 		if (m_PreviewRenderer && viewportSize.x > 0 && viewportSize.y > 0) {
 			uint32_t newWidth = static_cast<uint32_t>(viewportSize.x);
 			uint32_t newHeight = static_cast<uint32_t>(viewportSize.y);
@@ -303,17 +310,11 @@ namespace Lunex {
 			}
 		}
 
-		// Render preview image
 		if (m_PreviewRenderer && viewportSize.x > 0 && viewportSize.y > 0) {
 			uint32_t textureID = m_PreviewRenderer->GetPreviewTextureID();
 			if (textureID > 0) {
-				ImGui::Image(
-					(ImTextureID)(intptr_t)textureID,
-					viewportSize,
-					ImVec2(0, 1), ImVec2(1, 0)
-				);
+				UI::Image(textureID, Size(viewportSize.x, viewportSize.y), true);
 			} else {
-				// Centered placeholder text
 				ImVec2 textSize = ImGui::CalcTextSize("Preview Loading...");
 				ImVec2 cursorPos = ImVec2(
 					(viewportSize.x - textSize.x) * 0.5f,
@@ -339,7 +340,7 @@ namespace Lunex {
 		// Material name header
 		{
 			ScopedColor headerColor(ImGuiCol_Text, MaterialEditorStyle::TextHeader());
-			ImGui::Text("%s", m_EditingMaterial->GetName().c_str());
+			UI::Text("%s", m_EditingMaterial->GetName().c_str());
 		}
 		AddSpacing(SpacingValues::SM);
 		Separator();
@@ -350,6 +351,11 @@ namespace Lunex {
 		
 		AddSpacing(SpacingValues::MD);
 		
+		// Surface Settings Section
+		DrawSurfaceSettingsSection();
+		
+		AddSpacing(SpacingValues::MD);
+		
 		// Emission Section
 		DrawEmissionSection();
 		
@@ -357,6 +363,28 @@ namespace Lunex {
 		
 		// Texture Maps Section
 		DrawTextureMapsSection();
+		
+		AddSpacing(SpacingValues::MD);
+		
+		// Layered (ORM) Texture Section
+		DrawLayeredTextureSection();
+		
+		AddSpacing(SpacingValues::MD);
+		
+		// Height Map / Parallax Section
+		DrawHeightMapSection();
+		
+		AddSpacing(SpacingValues::MD);
+		
+		// Detail Normal Map Section
+		DrawDetailMapSection();
+		
+		AddSpacing(SpacingValues::MD);
+		
+		// Material Info Section
+		DrawMaterialInfoSection();
+		
+		AddSpacing(SpacingValues::XL);
 	}
 
 	void MaterialEditorPanel::DrawPBRPropertiesSection() {
@@ -364,7 +392,6 @@ namespace Lunex {
 
 		ScopedID sectionID("PBRSection");
 
-		// Section header
 		SeparatorText("PBR Properties");
 		AddSpacing(SpacingValues::SM);
 
@@ -410,6 +437,65 @@ namespace Lunex {
 			float normalIntensity = m_EditingMaterial->GetNormalIntensity();
 			if (PropertySlider("Normal Intensity", normalIntensity, 0.0f, 2.0f, "%.2f", "Strength of normal map")) {
 				m_EditingMaterial->SetNormalIntensity(normalIntensity);
+				MarkAsModified();
+			}
+		}
+	}
+
+	// ============================================================================
+	// SURFACE SETTINGS SECTION
+	// ============================================================================
+
+	void MaterialEditorPanel::DrawSurfaceSettingsSection() {
+		using namespace UI;
+
+		ScopedID sectionID("SurfaceSection");
+
+		SeparatorText("Surface Settings");
+		AddSpacing(SpacingValues::SM);
+
+		// Alpha Mode dropdown
+		{
+			const char* alphaModes[] = { "Opaque", "Cutoff", "Transparent" };
+			int currentMode = static_cast<int>(m_EditingMaterial->GetAlphaMode());
+			if (PropertyDropdown("Alpha Mode", currentMode, alphaModes, 3, "Surface transparency mode")) {
+				m_EditingMaterial->SetAlphaMode(static_cast<AlphaMode>(currentMode));
+				MarkAsModified();
+			}
+		}
+
+		// Alpha Cutoff (only visible in Cutoff mode)
+		if (m_EditingMaterial->GetAlphaMode() == AlphaMode::Cutoff) {
+			float cutoff = m_EditingMaterial->GetAlphaCutoff();
+			if (PropertySlider("Alpha Cutoff", cutoff, 0.0f, 1.0f, "%.2f", "Pixels below this alpha are discarded")) {
+				m_EditingMaterial->SetAlphaCutoff(cutoff);
+				MarkAsModified();
+			}
+		}
+
+		// Two-sided
+		{
+			bool twoSided = m_EditingMaterial->IsTwoSided();
+			if (PropertyCheckbox("Two Sided", twoSided, "Render both faces of polygons")) {
+				m_EditingMaterial->SetTwoSided(twoSided);
+				MarkAsModified();
+			}
+		}
+
+		// UV Tiling
+		{
+			glm::vec2 tiling = m_EditingMaterial->GetUVTiling();
+			if (PropertyVec2("UV Tiling", tiling, 0.01f, "Texture repeat in U and V")) {
+				m_EditingMaterial->SetUVTiling(tiling);
+				MarkAsModified();
+			}
+		}
+
+		// UV Offset
+		{
+			glm::vec2 offset = m_EditingMaterial->GetUVOffset();
+			if (PropertyVec2("UV Offset", offset, 0.01f, "Texture offset in U and V")) {
+				m_EditingMaterial->SetUVOffset(offset);
 				MarkAsModified();
 			}
 		}
@@ -461,34 +547,44 @@ namespace Lunex {
 			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetNormalMap(tex); MarkAsModified(); },
 			[this]() { m_EditingMaterial->SetNormalMap(nullptr); MarkAsModified(); });
 
-		// Metallic Map with multiplier
-		DrawTextureSlotNew("Metallic", m_EditingMaterial->GetMetallicMap(), m_EditingMaterial->GetMetallicPath(),
-			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetMetallicMap(tex); MarkAsModified(); },
-			[this]() { m_EditingMaterial->SetMetallicMap(nullptr); MarkAsModified(); });
-		
-		if (m_EditingMaterial->HasMetallicMap()) {
-			Indent(16.0f);
-			float mult = m_EditingMaterial->GetMetallicMultiplier();
-			if (PropertySlider("Multiplier Metallic", mult, 0.0f, 2.0f, "%.2f")) {
-				m_EditingMaterial->SetMetallicMultiplier(mult);
-				MarkAsModified();
+		// Metallic Map with multiplier (disabled when layered map is active)
+		{
+			bool layeredActive = m_EditingMaterial->GetUseLayeredMap() && m_EditingMaterial->HasLayeredMap();
+			ScopedDisabled disabled(layeredActive);
+			
+			DrawTextureSlotNew("Metallic", m_EditingMaterial->GetMetallicMap(), m_EditingMaterial->GetMetallicPath(),
+				[this](Ref<Texture2D> tex) { m_EditingMaterial->SetMetallicMap(tex); MarkAsModified(); },
+				[this]() { m_EditingMaterial->SetMetallicMap(nullptr); MarkAsModified(); });
+			
+			if (m_EditingMaterial->HasMetallicMap() && !layeredActive) {
+				Indent(16.0f);
+				float mult = m_EditingMaterial->GetMetallicMultiplier();
+				if (PropertySlider("Multiplier Metallic", mult, 0.0f, 2.0f, "%.2f")) {
+					m_EditingMaterial->SetMetallicMultiplier(mult);
+					MarkAsModified();
+				}
+				Unindent(16.0f);
 			}
-			Unindent(16.0f);
 		}
 
-		// Roughness Map with multiplier
-		DrawTextureSlotNew("Roughness", m_EditingMaterial->GetRoughnessMap(), m_EditingMaterial->GetRoughnessPath(),
-			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetRoughnessMap(tex); MarkAsModified(); },
-			[this]() { m_EditingMaterial->SetRoughnessMap(nullptr); MarkAsModified(); });
-		
-		if (m_EditingMaterial->HasRoughnessMap()) {
-			Indent(16.0f);
-			float mult = m_EditingMaterial->GetRoughnessMultiplier();
-			if (PropertySlider("Multiplier Roughness", mult, 0.0f, 2.0f, "%.2f")) {
-				m_EditingMaterial->SetRoughnessMultiplier(mult);
-				MarkAsModified();
+		// Roughness Map with multiplier (disabled when layered map is active)
+		{
+			bool layeredActive = m_EditingMaterial->GetUseLayeredMap() && m_EditingMaterial->HasLayeredMap();
+			ScopedDisabled disabled(layeredActive);
+
+			DrawTextureSlotNew("Roughness", m_EditingMaterial->GetRoughnessMap(), m_EditingMaterial->GetRoughnessPath(),
+				[this](Ref<Texture2D> tex) { m_EditingMaterial->SetRoughnessMap(tex); MarkAsModified(); },
+				[this]() { m_EditingMaterial->SetRoughnessMap(nullptr); MarkAsModified(); });
+			
+			if (m_EditingMaterial->HasRoughnessMap() && !layeredActive) {
+				Indent(16.0f);
+				float mult = m_EditingMaterial->GetRoughnessMultiplier();
+				if (PropertySlider("Multiplier Roughness", mult, 0.0f, 2.0f, "%.2f")) {
+					m_EditingMaterial->SetRoughnessMultiplier(mult);
+					MarkAsModified();
+				}
+				Unindent(16.0f);
 			}
-			Unindent(16.0f);
 		}
 
 		// Specular Map with multiplier
@@ -499,7 +595,7 @@ namespace Lunex {
 		if (m_EditingMaterial->HasSpecularMap()) {
 			Indent(16.0f);
 			float mult = m_EditingMaterial->GetSpecularMultiplier();
-			if (PropertySlider("Multiplier##Specular", mult, 0.0f, 2.0f, "%.2f")) {
+			if (PropertySlider("Multiplier Specular", mult, 0.0f, 2.0f, "%.2f")) {
 				m_EditingMaterial->SetSpecularMultiplier(mult);
 				MarkAsModified();
 			}
@@ -511,20 +607,264 @@ namespace Lunex {
 			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetEmissionMap(tex); MarkAsModified(); },
 			[this]() { m_EditingMaterial->SetEmissionMap(nullptr); MarkAsModified(); });
 
-		// AO Map with multiplier
-		DrawTextureSlotNew("Ambient Occlusion", m_EditingMaterial->GetAOMap(), m_EditingMaterial->GetAOPath(),
-			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetAOMap(tex); MarkAsModified(); },
-			[this]() { m_EditingMaterial->SetAOMap(nullptr); MarkAsModified(); });
-		
-		if (m_EditingMaterial->HasAOMap()) {
-			Indent(16.0f);
-			float mult = m_EditingMaterial->GetAOMultiplier();
-			if (PropertySlider("Multiplier##AO", mult, 0.0f, 2.0f, "%.2f")) {
-				m_EditingMaterial->SetAOMultiplier(mult);
+		// AO Map with multiplier (disabled when layered map is active)
+		{
+			bool layeredActive = m_EditingMaterial->GetUseLayeredMap() && m_EditingMaterial->HasLayeredMap();
+			ScopedDisabled disabled(layeredActive);
+
+			DrawTextureSlotNew("Ambient Occlusion", m_EditingMaterial->GetAOMap(), m_EditingMaterial->GetAOPath(),
+				[this](Ref<Texture2D> tex) { m_EditingMaterial->SetAOMap(tex); MarkAsModified(); },
+				[this]() { m_EditingMaterial->SetAOMap(nullptr); MarkAsModified(); });
+			
+			if (m_EditingMaterial->HasAOMap() && !layeredActive) {
+				Indent(16.0f);
+				float mult = m_EditingMaterial->GetAOMultiplier();
+				if (PropertySlider("Multiplier AO", mult, 0.0f, 2.0f, "%.2f")) {
+					m_EditingMaterial->SetAOMultiplier(mult);
+					MarkAsModified();
+				}
+				Unindent(16.0f);
+			}
+		}
+	}
+
+	// ============================================================================
+	// LAYERED (ORM) TEXTURE SECTION
+	// ============================================================================
+
+	void MaterialEditorPanel::DrawLayeredTextureSection() {
+		using namespace UI;
+
+		ScopedID sectionID("LayeredTextureSection");
+
+		SeparatorText("Layered Texture (ORM)");
+		AddSpacing(SpacingValues::SM);
+
+		// Info text
+		TextWrapped("Use a single packed texture for Metallic, Roughness and AO. "
+			"Standard format: R=Metallic, G=Roughness, B=AO. "
+			"Reduces texture count and VRAM usage.", TextVariant::Muted);
+		AddSpacing(SpacingValues::SM);
+
+		// Enable layered map
+		{
+			bool useLayered = m_EditingMaterial->GetUseLayeredMap();
+			if (PropertyCheckbox("Enable ORM", useLayered, "Use packed texture instead of separate maps")) {
+				m_EditingMaterial->SetUseLayeredMap(useLayered);
 				MarkAsModified();
 			}
+		}
+
+		if (m_EditingMaterial->GetUseLayeredMap()) {
+			AddSpacing(SpacingValues::SM);
+
+			// Layered texture slot
+			DrawTextureSlotNew("ORM Texture", m_EditingMaterial->GetLayeredMap(), m_EditingMaterial->GetLayeredPath(),
+				[this](Ref<Texture2D> tex) { m_EditingMaterial->SetLayeredMap(tex); MarkAsModified(); },
+				[this]() { m_EditingMaterial->SetLayeredMap(nullptr); MarkAsModified(); });
+
+			if (m_EditingMaterial->HasLayeredMap()) {
+				AddSpacing(SpacingValues::SM);
+				
+				// Channel assignment
+				const char* channelNames[] = { "Red (R)", "Green (G)", "Blue (B)" };
+
+				{
+					int chMetallic = m_EditingMaterial->GetLayeredChannelMetallic();
+					ScopedColor labelColor(ImGuiCol_Text, MaterialEditorStyle::ChannelR());
+					if (PropertyDropdown("Metallic Channel", chMetallic, channelNames, 3, "Which channel contains metallic data")) {
+						m_EditingMaterial->SetLayeredChannelMetallic(chMetallic);
+						MarkAsModified();
+					}
+				}
+
+				{
+					int chRoughness = m_EditingMaterial->GetLayeredChannelRoughness();
+					ScopedColor labelColor(ImGuiCol_Text, MaterialEditorStyle::ChannelG());
+					if (PropertyDropdown("Roughness Channel", chRoughness, channelNames, 3, "Which channel contains roughness data")) {
+						m_EditingMaterial->SetLayeredChannelRoughness(chRoughness);
+						MarkAsModified();
+					}
+				}
+
+				{
+					int chAO = m_EditingMaterial->GetLayeredChannelAO();
+					ScopedColor labelColor(ImGuiCol_Text, MaterialEditorStyle::ChannelB());
+					if (PropertyDropdown("AO Channel", chAO, channelNames, 3, "Which channel contains ambient occlusion data")) {
+						m_EditingMaterial->SetLayeredChannelAO(chAO);
+						MarkAsModified();
+					}
+				}
+
+				// Multipliers still apply
+				AddSpacing(SpacingValues::SM);
+				{
+					float metallicMult = m_EditingMaterial->GetMetallicMultiplier();
+					if (PropertySlider("Metallic Mult##ORM", metallicMult, 0.0f, 2.0f, "%.2f", "Multiplier for metallic from ORM")) {
+						m_EditingMaterial->SetMetallicMultiplier(metallicMult);
+						MarkAsModified();
+					}
+				}
+				{
+					float roughnessMult = m_EditingMaterial->GetRoughnessMultiplier();
+					if (PropertySlider("Roughness Mult##ORM", roughnessMult, 0.0f, 2.0f, "%.2f", "Multiplier for roughness from ORM")) {
+						m_EditingMaterial->SetRoughnessMultiplier(roughnessMult);
+						MarkAsModified();
+					}
+				}
+				{
+					float aoMult = m_EditingMaterial->GetAOMultiplier();
+					if (PropertySlider("AO Mult##ORM", aoMult, 0.0f, 2.0f, "%.2f", "Multiplier for AO from ORM")) {
+						m_EditingMaterial->SetAOMultiplier(aoMult);
+						MarkAsModified();
+					}
+				}
+
+				// Warn about separate maps being overridden
+				if (m_EditingMaterial->HasMetallicMap() || m_EditingMaterial->HasRoughnessMap() || m_EditingMaterial->HasAOMap()) {
+					AddSpacing(SpacingValues::SM);
+					TextWrapped("Note: ORM texture overrides separate Metallic, Roughness and AO maps.", TextVariant::Warning);
+				}
+			}
+		}
+	}
+
+	// ============================================================================
+	// HEIGHT MAP / PARALLAX SECTION
+	// ============================================================================
+
+	void MaterialEditorPanel::DrawHeightMapSection() {
+		using namespace UI;
+
+		ScopedID sectionID("HeightMapSection");
+
+		SeparatorText("Height / Parallax");
+		AddSpacing(SpacingValues::SM);
+
+		DrawTextureSlotNew("Height Map", m_EditingMaterial->GetHeightMap(), m_EditingMaterial->GetHeightPath(),
+			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetHeightMap(tex); MarkAsModified(); },
+			[this]() { m_EditingMaterial->SetHeightMap(nullptr); MarkAsModified(); });
+
+		if (m_EditingMaterial->HasHeightMap()) {
+			Indent(16.0f);
+			
+			float heightScale = m_EditingMaterial->GetHeightScale();
+			if (PropertySlider("Height Scale", heightScale, 0.0f, 0.5f, "%.3f", "Depth of parallax displacement")) {
+				m_EditingMaterial->SetHeightScale(heightScale);
+				MarkAsModified();
+			}
+
 			Unindent(16.0f);
 		}
+	}
+
+	// ============================================================================
+	// DETAIL NORMAL MAP SECTION
+	// ============================================================================
+
+	void MaterialEditorPanel::DrawDetailMapSection() {
+		using namespace UI;
+
+		ScopedID sectionID("DetailMapSection");
+
+		SeparatorText("Detail Normal");
+		AddSpacing(SpacingValues::SM);
+
+		TextWrapped("Adds high-frequency surface detail on top of the main normal map. "
+			"Uses independent UV tiling for micro-detail.", TextVariant::Muted);
+		AddSpacing(SpacingValues::SM);
+
+		DrawTextureSlotNew("Detail Normal", m_EditingMaterial->GetDetailNormalMap(), m_EditingMaterial->GetDetailNormalPath(),
+			[this](Ref<Texture2D> tex) { m_EditingMaterial->SetDetailNormalMap(tex); MarkAsModified(); },
+			[this]() { m_EditingMaterial->SetDetailNormalMap(nullptr); MarkAsModified(); });
+
+		if (m_EditingMaterial->HasDetailNormalMap()) {
+			Indent(16.0f);
+			
+			float detailScale = m_EditingMaterial->GetDetailNormalScale();
+			if (PropertySlider("Detail Intensity", detailScale, 0.0f, 2.0f, "%.2f", "Strength of detail normal")) {
+				m_EditingMaterial->SetDetailNormalScale(detailScale);
+				MarkAsModified();
+			}
+
+			glm::vec2 detailTiling = m_EditingMaterial->GetDetailUVTiling();
+			if (PropertyVec2("Detail UV Tiling", detailTiling, 0.1f, "Independent UV tiling for detail texture")) {
+				m_EditingMaterial->SetDetailUVTiling(detailTiling);
+				MarkAsModified();
+			}
+
+			Unindent(16.0f);
+		}
+	}
+
+	// ============================================================================
+	// MATERIAL INFO SECTION
+	// ============================================================================
+
+	void MaterialEditorPanel::DrawMaterialInfoSection() {
+		using namespace UI;
+
+		ScopedID sectionID("MaterialInfoSection");
+
+		SeparatorText("Material Info");
+		AddSpacing(SpacingValues::SM);
+
+		ScopedColor bgColor(ImGuiCol_ChildBg, MaterialEditorStyle::InfoBg());
+		ScopedStyle rounding(ImGuiStyleVar_ChildRounding, 4.0f);
+
+		if (BeginChild("##InfoPanel", Size(ImGui::GetContentRegionAvail().x, 0), true,
+			ImGuiWindowFlags_NoScrollbar)) {
+
+			// Asset ID
+			TextStyled("Asset ID:", TextVariant::Muted);
+			SameLine();
+			UI::Text("%llu", (unsigned long long)(uint64_t)m_EditingMaterial->GetID());
+
+			// File path
+			if (!m_EditingMaterial->GetPath().empty()) {
+				TextStyled("File:", TextVariant::Muted);
+				SameLine();
+				TextWrapped(m_EditingMaterial->GetPath().string());
+			}
+
+			// Texture count
+			TextStyled("Textures:", TextVariant::Muted);
+			SameLine();
+			int texCount = m_EditingMaterial->GetTextureCount();
+			UI::Text("%d loaded", texCount);
+
+			// Alpha mode
+			TextStyled("Alpha Mode:", TextVariant::Muted);
+			SameLine();
+			UI::Text("%s", AlphaModeToString(m_EditingMaterial->GetAlphaMode()));
+
+			// ORM status
+			if (m_EditingMaterial->GetUseLayeredMap()) {
+				TextColored(MaterialEditorStyle::AccentLayered(), "ORM: Active");
+				if (m_EditingMaterial->HasLayeredMap()) {
+					SameLine();
+					TextStyled("(saves 2 texture slots)", TextVariant::Muted);
+				}
+			}
+
+			// Two-sided
+			if (m_EditingMaterial->IsTwoSided()) {
+				TextColored(MaterialEditorStyle::StatusUnsaved(), "Two-Sided: Active");
+			}
+
+			// Detail normal
+			if (m_EditingMaterial->HasDetailNormalMap()) {
+				TextColored(MaterialEditorStyle::AccentPrimary(), "Detail Normal: Active (%.1fx%.1f tiling)",
+					m_EditingMaterial->GetDetailUVTiling().x,
+					m_EditingMaterial->GetDetailUVTiling().y);
+			}
+
+			// Height map
+			if (m_EditingMaterial->HasHeightMap()) {
+				TextColored(MaterialEditorStyle::AccentPrimary(), "Parallax: Active (scale: %.3f)", m_EditingMaterial->GetHeightScale());
+			}
+		}
+		EndChild();
 	}
 
 	// ============================================================================
@@ -547,7 +887,7 @@ namespace Lunex {
 		ScopedColor slotBg(ImGuiCol_ChildBg, MaterialEditorStyle::BgTextureSlot());
 		ScopedStyle slotRounding(ImGuiStyleVar_ChildRounding, 4.0f);
 
-		if (ImGui::BeginChild(("##TexSlot" + label).c_str(), slotSize, true, 
+		if (BeginChild("##TexSlot" + label, Size(slotSize.x, slotSize.y), true, 
 			ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
 			
 			// Header row: label + remove button
@@ -574,22 +914,21 @@ namespace Lunex {
 			{
 				if (texture && texture->IsLoaded()) {
 					// Thumbnail
-					ImGui::Image(
-						(ImTextureID)(intptr_t)texture->GetRendererID(),
-						ImVec2(MaterialEditorStyle::TextureThumbnailSize, MaterialEditorStyle::TextureThumbnailSize),
-						ImVec2(0, 1), ImVec2(1, 0)
-					);
+					UI::Image(texture, Size(MaterialEditorStyle::TextureThumbnailSize, MaterialEditorStyle::TextureThumbnailSize));
 					
-					ImGui::SameLine();
+					SameLine();
 					
-					// Filename
+					// Filename + resolution info
 					std::filesystem::path texPath(path);
-					ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (MaterialEditorStyle::TextureThumbnailSize - ImGui::GetTextLineHeight()) * 0.5f);
+					float yOffset = (MaterialEditorStyle::TextureThumbnailSize - ImGui::GetTextLineHeight() * 2) * 0.5f;
+					ImGui::SetCursorPosY(ImGui::GetCursorPosY() + yOffset);
+					ImGui::BeginGroup();
 					TextStyled(texPath.filename().string(), TextVariant::Muted);
+					TextColored(MaterialEditorStyle::TextMuted(), "%dx%d", texture->GetWidth(), texture->GetHeight());
+					ImGui::EndGroup();
 				} else {
 					// Drop zone placeholder
-					ScopedColor placeholderColor(ImGuiCol_Text, MaterialEditorStyle::TextMuted());
-					ImGui::Text("Drop texture here or click to browse");
+					TextStyled("Drop texture here or click to browse", TextVariant::Muted);
 				}
 			}
 
@@ -599,7 +938,6 @@ namespace Lunex {
 					ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
 					std::string ext = data->Extension;
 					
-					// Validate image extension
 					if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" || ext == ".hdr") {
 						auto newTexture = Texture2D::Create(data->FilePath);
 						if (newTexture && newTexture->IsLoaded()) {
@@ -610,7 +948,7 @@ namespace Lunex {
 				ImGui::EndDragDropTarget();
 			}
 		}
-		ImGui::EndChild();
+		EndChild();
 
 		AddSpacing(SpacingValues::XS);
 	}
