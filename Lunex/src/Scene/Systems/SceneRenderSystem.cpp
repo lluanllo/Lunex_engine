@@ -232,9 +232,12 @@ namespace Lunex {
 				return a.Distance > b.Distance;
 			});
 		
-		// Render billboards
+		// Render billboards - disable both depth test and depth write
+		// Billboards should always render on top of scene geometry
+		// Back-to-front sorting handles billboard-to-billboard ordering
 		auto* cmdList = RHI::GetImmediateCommandList();
 		if (cmdList) {
+			cmdList->SetDepthTestEnabled(false);
 			cmdList->SetDepthMask(false);
 		}
 		
@@ -244,6 +247,7 @@ namespace Lunex {
 		}
 		
 		if (cmdList) {
+			cmdList->SetDepthTestEnabled(true);
 			cmdList->SetDepthMask(true);
 		}
 	}

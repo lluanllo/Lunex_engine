@@ -70,7 +70,7 @@ namespace Lunex {
 
 		m_Initialized = true;
 		LNX_LOG_INFO("ShadowSystem initialized: atlas {0}x{0} x{1} layers, Depth32F",
-					 m_AtlasResolution, m_AtlasMaxLayers);
+			m_AtlasResolution, m_AtlasMaxLayers);
 	}
 
 	void ShadowSystem::Shutdown() {
@@ -156,8 +156,8 @@ namespace Lunex {
 
 	void ShadowSystem::SetConfig(const ShadowConfig& config) {
 		bool needsResize = (config.DirectionalResolution != m_Config.DirectionalResolution ||
-							config.SpotResolution != m_Config.SpotResolution ||
-							config.PointResolution != m_Config.PointResolution);
+			config.SpotResolution != m_Config.SpotResolution ||
+			config.PointResolution != m_Config.PointResolution);
 		m_Config = config;
 
 		if (needsResize && m_Initialized) {
@@ -341,7 +341,7 @@ namespace Lunex {
 					caster.Position,
 					caster.Position + caster.Direction,
 					glm::abs(glm::dot(caster.Direction, glm::vec3(0, 1, 0))) > 0.999f
-						? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0)
+					? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0)
 				);
 				caster.ViewProjections[0] = proj * view;
 				break;
@@ -397,7 +397,8 @@ namespace Lunex {
 			const GLboolean prevCullEnabledGL = glIsEnabled(GL_CULL_FACE);
 			if (!prevCullEnabledGL) {
 				prevCullMode = RHI::CullMode::None;
-			} else {
+			}
+			else {
 				GLint prevCullFaceModeGL = GL_BACK;
 				glGetIntegerv(GL_CULL_FACE_MODE, &prevCullFaceModeGL);
 				prevCullMode = (prevCullFaceModeGL == GL_FRONT) ? RHI::CullMode::Front : RHI::CullMode::Back;
@@ -435,7 +436,7 @@ namespace Lunex {
 					int layer = caster.AtlasFirstLayer + face;
 
 					cmd->AttachDepthTextureLayer(fboHandle, texHandle, layer);
-				    cmd->SetViewport(0.0f, 0.0f, static_cast<float>(res), static_cast<float>(res));
+					cmd->SetViewport(0.0f, 0.0f, static_cast<float>(res), static_cast<float>(res));
 					cmd->ClearDepthOnly();
 
 					// Disable face culling for point shadows
@@ -478,7 +479,8 @@ namespace Lunex {
 
 					if (caster.Type == ShadowType::Directional_CSM) {
 						m_Stats.CascadesRendered++;
-					} else {
+					}
+					else {
 						m_Stats.SpotMapsRendered++;
 					}
 				}
@@ -500,7 +502,7 @@ namespace Lunex {
 		// Restore previously bound FBO (NOT 0 — the editor scene FBO was bound)
 		cmd->BindFramebufferByHandle(prevFBO);
 		cmd->SetViewport(static_cast<float>(prevViewport[0]), static_cast<float>(prevViewport[1]),
-						 static_cast<float>(prevViewport[2]), static_cast<float>(prevViewport[3]));
+			static_cast<float>(prevViewport[2]), static_cast<float>(prevViewport[3]));
 	}
 
 	// ========================================================================
@@ -535,7 +537,7 @@ namespace Lunex {
 	}
 
 	void ShadowSystem::RenderSceneDepthPoint(Scene* scene, const glm::vec3& lightPos,
-											  float lightRange, const glm::mat4 faceVPs[6])
+		float lightRange, const glm::mat4 faceVPs[6])
 	{
 		auto* cmd = RHI::GetImmediateCommandList();
 

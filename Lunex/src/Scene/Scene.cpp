@@ -480,6 +480,18 @@ namespace Lunex {
 	}
 
 	template<>
+	void Scene::OnComponentAdded<CylinderCollider3DComponent>(Entity entity, CylinderCollider3DComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<ConeCollider3DComponent>(Entity entity, ConeCollider3DComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<CharacterController3DComponent>(Entity entity, CharacterController3DComponent& component) {
+	}
+
+	template<>
 	void Scene::OnComponentAdded<RelationshipComponent>(Entity entity, RelationshipComponent& component) {
 	}
 

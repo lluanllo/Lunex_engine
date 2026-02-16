@@ -193,7 +193,10 @@ namespace Lunex {
 			DisplayAddComponentEntry<BoxCollider3DComponent>("Box Collider 3D");
 			DisplayAddComponentEntry<SphereCollider3DComponent>("Sphere Collider 3D");
 			DisplayAddComponentEntry<CapsuleCollider3DComponent>("Capsule Collider 3D");
+			DisplayAddComponentEntry<CylinderCollider3DComponent>("Cylinder Collider 3D");
+			DisplayAddComponentEntry<ConeCollider3DComponent>("Cone Collider 3D");
 			DisplayAddComponentEntry<MeshCollider3DComponent>("Mesh Collider 3D");
+			DisplayAddComponentEntry<CharacterController3DComponent>("Character Controller 3D");
 
 			EndPopup();
 		}
@@ -218,7 +221,10 @@ namespace Lunex {
 		DrawBoxCollider3DComponent(entity);
 		DrawSphereCollider3DComponent(entity);
 		DrawCapsuleCollider3DComponent(entity);
+		DrawCylinderCollider3DComponent(entity);
+		DrawConeCollider3DComponent(entity);
 		DrawMeshCollider3DComponent(entity);
+		DrawCharacterController3DComponent(entity);
 	}
 
 	// ============================================================================
@@ -623,8 +629,11 @@ namespace Lunex {
 							component.LoadFromFile(data->FilePath);
 							LNX_LOG_INFO("Loaded model (legacy): {0}", data->FilePath);
 						}
+						else if (ext == ".luprefab" || ext == ".lunex" || ext == ".lumat") {
+							// Silently ignore non-mesh asset types dropped on mesh slot
+						}
 						else {
-							LNX_LOG_WARN("Unsupported model format: {0}", ext);
+							LNX_LOG_WARN("Unsupported model format for Mesh Renderer: {0}", ext);
 						}
 					}
 				}
@@ -1194,6 +1203,43 @@ namespace Lunex {
 	}
 
 	// ============================================================================
+	// CYLINDER COLLIDER 3D COMPONENT
+	// ============================================================================
+	
+	void PropertiesPanel::DrawCylinderCollider3DComponent(Entity entity) {
+		using namespace UI;
+		
+		ComponentDrawer::Draw<CylinderCollider3DComponent>("Cylinder Collider 3D", entity, [](auto& component) {
+			ComponentDrawer::DrawSectionHeader("", "Shape");
+			ComponentDrawer::BeginIndent();
+
+			PropertyVec3("Offset", component.Offset, 0.01f, "Center offset from entity position");
+			PropertyVec3("Half Extents", component.HalfExtents, 0.01f, "Half-size on each axis (x=radius, y=halfHeight, z=radius)");
+
+			ComponentDrawer::EndIndent();
+		});
+	}
+
+	// ============================================================================
+	// CONE COLLIDER 3D COMPONENT
+	// ============================================================================
+	
+	void PropertiesPanel::DrawConeCollider3DComponent(Entity entity) {
+		using namespace UI;
+		
+		ComponentDrawer::Draw<ConeCollider3DComponent>("Cone Collider 3D", entity, [](auto& component) {
+			ComponentDrawer::DrawSectionHeader("", "Shape");
+			ComponentDrawer::BeginIndent();
+
+			PropertyVec3("Offset", component.Offset, 0.01f, "Center offset from entity position");
+			PropertyFloat("Radius", component.Radius, 0.01f, 0.01f, 100.0f, "Cone base radius");
+			PropertyFloat("Height", component.Height, 0.01f, 0.01f, 100.0f, "Cone height");
+
+			ComponentDrawer::EndIndent();
+		});
+	}
+
+	// ============================================================================
 	// MESH COLLIDER 3D COMPONENT
 	// ============================================================================
 	
@@ -1201,28 +1247,63 @@ namespace Lunex {
 		using namespace UI;
 		
 		ComponentDrawer::Draw<MeshCollider3DComponent>("Mesh Collider 3D", entity, [](auto& component) {
-			ComponentDrawer::DrawSectionHeader("", "Warning");
+			ComponentDrawer::DrawSectionHeader("", "Collision Type");
 			ComponentDrawer::BeginIndent();
 
-			TextWrapped("Mesh colliders are expensive! Use for static geometry only.", TextVariant::Warning);
-
-			ComponentDrawer::EndIndent();
-
-			ComponentDrawer::DrawSectionHeader("", "Shape");
-			ComponentDrawer::BeginIndent();
-
-			const char* collisionTypes[] = { "Convex", "Concave" };
+			const char* collisionTypes[] = { "Convex", "Triangle Mesh" };
 			int currentType = (int)component.Type;
 
-			if (PropertyDropdown("Type", currentType, collisionTypes, 2, "Convex = faster but simplified, Concave = exact but slower")) {
+			if (PropertyDropdown("Type", currentType, collisionTypes, 2, "Convex = fast, Triangle Mesh = accurate (static only)")) {
 				component.Type = (MeshCollider3DComponent::CollisionType)currentType;
 			}
 
-			if (component.Type == MeshCollider3DComponent::CollisionType::Concave) {
-				TextWrapped("Concave meshes can only be used with static rigidbodies.", TextVariant::Muted);
+			ComponentDrawer::EndIndent();
+
+			ComponentDrawer::DrawSectionHeader("", "Mesh Source");
+			ComponentDrawer::BeginIndent();
+
+			PropertyCheckbox("Use Entity Mesh", component.UseEntityMesh, "Use the MeshComponent attached to this entity");
+
+			if (!component.UseEntityMesh) {
+				AddSpacing(SpacingValues::XS);
+				TextWrapped("Custom mesh data can be assigned via script.", TextVariant::Muted);
 			}
 
-			PropertyCheckbox("Use Entity Mesh", component.UseEntityMesh, "Automatically use mesh from MeshComponent");
+			ComponentDrawer::EndIndent();
+		});
+	}
+
+	// ============================================================================
+	// CHARACTER CONTROLLER 3D COMPONENT
+	// ============================================================================
+	
+	void PropertiesPanel::DrawCharacterController3DComponent(Entity entity) {
+		using namespace UI;
+		
+		ComponentDrawer::Draw<CharacterController3DComponent>("Character Controller 3D", entity, [](auto& component) {
+			ComponentDrawer::DrawSectionHeader("", "Capsule Shape");
+			ComponentDrawer::BeginIndent();
+
+			PropertyFloat("Radius", component.Radius, 0.01f, 0.01f, 10.0f, "Character capsule radius");
+			PropertyFloat("Height", component.Height, 0.01f, 0.1f, 10.0f, "Character total height");
+
+			ComponentDrawer::EndIndent();
+
+			ComponentDrawer::DrawSectionHeader("", "Movement");
+			ComponentDrawer::BeginIndent();
+
+			PropertyFloat("Move Speed", component.MoveSpeed, 0.1f, 0.0f, 100.0f, "Default movement speed (m/s)");
+			PropertyFloat("Jump Force", component.JumpForce, 0.1f, 0.0f, 50.0f, "Initial jump velocity (m/s)");
+			PropertyFloat("Gravity Scale", component.GravityScale, 0.01f, 0.0f, 10.0f, "Multiplier for gravity");
+
+			ComponentDrawer::EndIndent();
+
+			ComponentDrawer::DrawSectionHeader("", "Ground Detection");
+			ComponentDrawer::BeginIndent();
+
+			PropertyFloat("Step Height", component.StepHeight, 0.01f, 0.0f, 2.0f, "Max step the character can climb");
+			PropertyFloat("Max Slope Angle", component.MaxSlopeAngle, 1.0f, 0.0f, 90.0f, "Max walkable slope in degrees");
+			PropertyFloat("Skin Width", component.SkinWidth, 0.01f, 0.0f, 1.0f, "Small offset to prevent getting stuck");
 
 			ComponentDrawer::EndIndent();
 		});

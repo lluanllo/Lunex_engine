@@ -43,8 +43,8 @@ namespace Lunex::UI {
 		
 		{
 			ScopedColor frameColors({
-				{ImGuiCol_FrameBg, Color(0.18f, 0.10f, 0.10f, 1.0f)},
-				{ImGuiCol_FrameBgHovered, Color(0.25f, 0.12f, 0.12f, 1.0f)},
+				{ImGuiCol_FrameBg, Color(0.15f, 0.09f, 0.10f, 1.0f)},
+				{ImGuiCol_FrameBgHovered, Color(0.20f, 0.12f, 0.13f, 1.0f)},
 				{ImGuiCol_FrameBgActive, Color(0.89f, 0.22f, 0.21f, 0.40f)}
 			});
 			
@@ -74,8 +74,8 @@ namespace Lunex::UI {
 		
 		{
 			ScopedColor frameColors({
-				{ImGuiCol_FrameBg, Color(0.10f, 0.18f, 0.10f, 1.0f)},
-				{ImGuiCol_FrameBgHovered, Color(0.12f, 0.25f, 0.12f, 1.0f)},
+				{ImGuiCol_FrameBg, Color(0.09f, 0.15f, 0.10f, 1.0f)},
+				{ImGuiCol_FrameBgHovered, Color(0.12f, 0.20f, 0.13f, 1.0f)},
 				{ImGuiCol_FrameBgActive, Color(0.27f, 0.75f, 0.27f, 0.40f)}
 			});
 			
@@ -105,8 +105,8 @@ namespace Lunex::UI {
 		
 		{
 			ScopedColor frameColors({
-				{ImGuiCol_FrameBg, Color(0.10f, 0.12f, 0.22f, 1.0f)},
-				{ImGuiCol_FrameBgHovered, Color(0.12f, 0.16f, 0.30f, 1.0f)},
+				{ImGuiCol_FrameBg, Color(0.09f, 0.11f, 0.18f, 1.0f)},
+				{ImGuiCol_FrameBgHovered, Color(0.12f, 0.14f, 0.24f, 1.0f)},
 				{ImGuiCol_FrameBgActive, Color(0.22f, 0.46f, 0.93f, 0.40f)}
 			});
 			

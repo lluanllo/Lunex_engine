@@ -30,14 +30,14 @@ namespace Lunex {
 	// ============================================================================
 	
 	namespace InputSettingsStyle {
-		// Colors
-		inline UI::Color BgPanel()         { return UI::Color(0.06f, 0.06f, 0.06f, 0.95f); }
-		inline UI::Color KeyBg()           { return UI::Color(0.12f, 0.12f, 0.12f, 1.0f); }
+		// Colors (blue-tinted dark)
+		inline UI::Color BgPanel()         { return UI::Color(0.06f, 0.08f, 0.10f, 0.95f); }
+		inline UI::Color KeyBg()           { return UI::Color(0.09f, 0.11f, 0.14f, 1.0f); }
 		inline UI::Color KeyText()         { return UI::Colors::Primary(); }
-		inline UI::Color CaptureBg()       { return UI::Color(0.10f, 0.18f, 0.38f, 1.0f); }
+		inline UI::Color CaptureBg()       { return UI::Color(0.06f, 0.16f, 0.30f, 1.0f); }
 		inline UI::Color CaptureText()     { return UI::Color(1.0f, 1.0f, 1.0f, 1.0f); }
 		inline UI::Color CategoryText()    { return UI::Colors::Primary(); }
-		inline UI::Color TableHeader()     { return UI::Color(0.10f, 0.10f, 0.10f, 1.0f); }
+		inline UI::Color TableHeader()     { return UI::Color(0.08f, 0.10f, 0.13f, 1.0f); }
 	}
 
 	// ============================================================================

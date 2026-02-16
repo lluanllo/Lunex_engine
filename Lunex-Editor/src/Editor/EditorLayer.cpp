@@ -547,8 +547,7 @@ namespace Lunex {
 				
 				// Priority 1: Content Browser (if has selection and is focused)
 				if (focusedWindow && 
-					(strcmp(focusedWindow, "Content Browser") == 0 || 
-					 strstr(focusedWindow, "Content Browser") != nullptr)) {
+					strcmp(focusedWindow, "Content Browser") == 0) {
 					// Content Browser is focused - delete files/folders
 					m_ContentBrowserPanel.DeleteSelectedItems();
 					LNX_LOG_INFO("Context-aware delete: Content Browser items");
@@ -557,8 +556,7 @@ namespace Lunex {
 				
 				// Priority 2: Scene Hierarchy (if has selection and is focused)
 				if (focusedWindow && 
-					(strcmp(focusedWindow, "Scene Hierarchy") == 0 || 
-					 strstr(focusedWindow, "Scene Hierarchy") != nullptr)) {
+					(strcmp(focusedWindow, "Scene Hierarchy") == 0)) {
 					// Scene Hierarchy is focused - delete entities
 					m_SceneHierarchyPanel.DeleteSelectedEntities();
 					LNX_LOG_INFO("Context-aware delete: Scene entities");
@@ -1074,24 +1072,27 @@ namespace Lunex {
 	}
 
 	void EditorLayer::OnOverlayRender() {
-		// ========================================
-		// DETERMINE CAMERA VIEW-PROJECTION
-		// ========================================
-		glm::mat4 viewProjection;
-		if (m_SceneState == SceneState::Play) {
-			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
-			if (!camera)
-				return;
-			auto& cameraComp = camera.GetComponent<CameraComponent>();
-			auto& transformComp = camera.GetComponent<TransformComponent>();
-			viewProjection = cameraComp.Camera.GetProjection() * glm::inverse(transformComp.GetTransform());
-			Renderer2D::BeginScene(cameraComp.Camera, transformComp.GetTransform());
-		}
-		else {
-			viewProjection = m_EditorCamera.GetViewProjection();
-			Renderer2D::BeginScene(m_EditorCamera);
+		// Sync gizmo line width from preferences to SceneRenderSystem
+		if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+			renderSystem->GetSettings().BillboardLineWidth = m_OutlinePreferencesPanel.GetGizmoLineWidth();
 		}
 
+		if (m_SceneState == SceneState::Play) {
+			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
+			if (camera) {
+				auto& cameraComp = camera.GetComponent<CameraComponent>();
+				auto& transformComp = camera.GetComponent<TransformComponent>();
+				glm::mat4 cameraTransform = transformComp.GetTransform();
+				Renderer3D::BeginScene(cameraComp.Camera, cameraTransform);
+				Renderer3D::UpdateLights(m_ActiveScene.get());
+				Renderer3D::EndScene();
+			}
+		}
+		else {
+			Renderer2D::BeginScene(m_EditorCamera);
+			Renderer2D::ResetStats();
+		}
+		
 		auto& outlineRenderer = OutlineRenderer::Get();
 
 		// ========================================
@@ -1099,6 +1100,7 @@ namespace Lunex {
 		// ========================================
 		if (outlineRenderer.IsInitialized()) {
 			uint64_t sceneFBOHandle = static_cast<uint64_t>(m_Framebuffer->GetRendererID());
+			glm::mat4 viewProjection = m_EditorCamera.GetViewProjection();
 
 			const auto& selectedEntities = m_SceneHierarchyPanel.GetSelectedEntities();
 			Entity activeEntity = m_SceneHierarchyPanel.GetActiveEntity();
@@ -1199,6 +1201,9 @@ namespace Lunex {
 
 		// Draw 3D Physics Colliders
 		if (m_SettingsPanel.GetShowPhysics3DColliders()) {
+			float previousLineWidth = Renderer2D::GetLineWidth();
+			Renderer2D::SetLineWidth(m_OutlinePreferencesPanel.GetColliderLineWidth());
+
 			glm::vec4 collider3DColor = m_OutlinePreferencesPanel.GetCollider3DColor();
 			{
 				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, BoxCollider3DComponent>();
@@ -1243,10 +1248,51 @@ namespace Lunex {
 					Renderer2D::DrawWireCapsule(transform, cc3d.Radius, cc3d.Height, collider3DColor);
 				}
 			}
-		}
+			{
+				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, CylinderCollider3DComponent>();
+				for (auto entityID : view) {
+					auto [tc, cy3d] = view.get<TransformComponent, CylinderCollider3DComponent>(entityID);
 
-		// Restore previous line width
-		Renderer2D::SetLineWidth(previousLineWidth);
+					glm::vec3 translation = tc.Translation + cy3d.Offset;
+					glm::vec3 scale = tc.Scale * (cy3d.HalfExtents * 2.0f);
+
+					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
+						* glm::toMat4(glm::quat(tc.Rotation))
+						* glm::scale(glm::mat4(1.0f), scale);
+
+					Renderer2D::DrawWireCylinder(transform, collider3DColor);
+				}
+			}
+			{
+				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, ConeCollider3DComponent>();
+				for (auto entityID : view) {
+					auto [tc, cn3d] = view.get<TransformComponent, ConeCollider3DComponent>(entityID);
+
+					glm::vec3 translation = tc.Translation + cn3d.Offset;
+					float scaledRadius = cn3d.Radius * std::max(tc.Scale.x, tc.Scale.z);
+					float scaledHeight = cn3d.Height * tc.Scale.y;
+
+					glm::mat4 transform = glm::translate(glm::mat4(1.0f), translation)
+						* glm::toMat4(glm::quat(tc.Rotation));
+
+					Renderer2D::DrawWireCone(transform, scaledRadius, scaledHeight, collider3DColor);
+				}
+			}
+			{
+				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, CharacterController3DComponent>();
+				for (auto entityID : view) {
+					auto [tc, cc3d] = view.get<TransformComponent, CharacterController3DComponent>(entityID);
+
+					glm::mat4 transform = glm::translate(glm::mat4(1.0f), tc.Translation)
+						* glm::toMat4(glm::quat(tc.Rotation))
+						* glm::scale(glm::mat4(1.0f), tc.Scale);
+
+					Renderer2D::DrawWireCapsule(transform, cc3d.Radius, cc3d.Height, collider3DColor);
+				}
+			}
+
+			Renderer2D::SetLineWidth(previousLineWidth);
+		}
 
 		// Draw selected entity outline (thin wireframe fallback if OutlineRenderer not available)
 		if (!outlineRenderer.IsInitialized()) {
@@ -1769,4 +1815,5 @@ namespace Lunex {
 		LNX_LOG_INFO("Instantiated prefab '{0}' with {1} entities", prefabName, prefab->GetEntityCount());
 		m_ConsolePanel.AddLog("Instantiated prefab: " + prefabName, LogLevel::Info, "Scene");
 	}
+
 }

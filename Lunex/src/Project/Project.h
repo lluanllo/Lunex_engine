@@ -32,6 +32,9 @@ namespace Lunex {
 		glm::vec4 Collider2DColor    = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 		glm::vec4 Collider3DColor    = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
 		float     ColliderLineWidth  = 4.0f;
+		
+		// Gizmo Appearance (frustums, light gizmos, etc.)
+		float     GizmoLineWidth     = 1.5f;
 	};
 	
 	struct ProjectConfig {

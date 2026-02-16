@@ -17,8 +17,8 @@ namespace Lunex::UI {
 			{ImGuiCol_WindowBg, Colors::BgMedium()},
 			{ImGuiCol_ChildBg, Colors::BgMedium()},
 			{ImGuiCol_Border, Colors::Border()},
-			{ImGuiCol_TitleBg, Color::FromHex(0x141414)},
-			{ImGuiCol_TitleBgActive, Color::FromHex(0x1A1A1A)}
+			{ImGuiCol_TitleBg, Color::FromHex(0x111820)},
+			{ImGuiCol_TitleBgActive, Color::FromHex(0x151D26)}
 		});
 		
 		return ImGui::Begin(title.c_str(), open, flags);
@@ -130,9 +130,9 @@ namespace Lunex::UI {
 		
 		ScopedStyle framePadding(ImGuiStyleVar_FramePadding, ImVec2(6, 6));
 		ScopedColor colors({
-			{ImGuiCol_Header, Color::FromHex(0x1E1E1E)},
-			{ImGuiCol_HeaderHovered, Color::FromHex(0x282828)},
-			{ImGuiCol_HeaderActive, Color::FromHex(0x2E2E2E)}
+			{ImGuiCol_Header, Color::FromHex(0x1A2028)},
+			{ImGuiCol_HeaderHovered, Color::FromHex(0x212830)},
+			{ImGuiCol_HeaderActive, Color::FromHex(0x252D38)}
 		});
 		
 		std::string displayTitle = icon ? (std::string(icon) + " " + title) : title;
@@ -166,9 +166,9 @@ namespace Lunex::UI {
 		float lineHeight = ImGui::GetTextLineHeight() + ImGui::GetStyle().FramePadding.y * 2.0f;
 		
 		ScopedColor colors({
-			{ImGuiCol_Header, Color::FromHex(0x1E1E1E)},
-			{ImGuiCol_HeaderHovered, Color::FromHex(0x282828)},
-			{ImGuiCol_HeaderActive, Color::FromHex(0x2E2E2E)}
+			{ImGuiCol_Header, Color::FromHex(0x1A2028)},
+			{ImGuiCol_HeaderHovered, Color::FromHex(0x212830)},
+			{ImGuiCol_HeaderActive, Color::FromHex(0x252D38)}
 		});
 		
 		result.isOpen = ImGui::TreeNodeEx((void*)title.c_str(), flags, "%s", title.c_str());
@@ -178,9 +178,9 @@ namespace Lunex::UI {
 		
 		ScopedID buttonID(title.c_str());
 		ScopedColor buttonColors({
-			{ImGuiCol_Button, Color(0.18f, 0.18f, 0.18f, 1.0f)},
-			{ImGuiCol_ButtonHovered, Color(0.28f, 0.28f, 0.28f, 1.0f)},
-			{ImGuiCol_ButtonActive, Color(0.14f, 0.14f, 0.14f, 1.0f)}
+			{ImGuiCol_Button, Color(0.13f, 0.16f, 0.20f, 1.0f)},
+			{ImGuiCol_ButtonHovered, Color(0.20f, 0.25f, 0.31f, 1.0f)},
+			{ImGuiCol_ButtonActive, Color(0.10f, 0.13f, 0.16f, 1.0f)}
 		});
 		
 		if (!canRemove) {

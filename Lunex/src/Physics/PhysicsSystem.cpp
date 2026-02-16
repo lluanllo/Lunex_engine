@@ -9,8 +9,9 @@ namespace Lunex {
     PhysicsSystem::PhysicsSystem(Scene* scene)
         : m_Scene(scene)
     {
-        // Get registry from scene (requires friend access or public getter)
-        // For now, we'll assume Scene provides access to m_Registry
+        if (scene) {
+            m_Registry = &scene->m_Registry;
+        }
     }
 
     PhysicsSystem::~PhysicsSystem()
@@ -37,7 +38,6 @@ namespace Lunex {
         m_CollisionCallback.SetOnCollisionEnter([this](const CollisionEvent& event) {
             if (m_OnCollisionEnter)
             {
-                // Extract entity IDs from user pointers
                 entt::entity entityA = static_cast<entt::entity>(reinterpret_cast<intptr_t>(event.UserDataA));
                 entt::entity entityB = static_cast<entt::entity>(reinterpret_cast<intptr_t>(event.UserDataB));
                 m_OnCollisionEnter(entityA, entityB);
@@ -53,11 +53,13 @@ namespace Lunex {
             }
         });
 
-        // TODO: Create physics bodies for existing entities
-        // This requires access to Scene's registry
-        // m_Registry->view<TransformComponent, Rigidbody3DComponent>().each([this](auto entity, auto& transform, auto& rb) {
-        //     CreatePhysicsBody(entity);
-        // });
+        // Create physics bodies for existing entities
+        if (m_Registry) {
+            auto view = m_Registry->view<TransformComponent, Rigidbody3DComponent>();
+            for (auto entity : view) {
+                CreatePhysicsBody(entity);
+            }
+        }
 
         m_IsRunning = true;
     }
@@ -78,7 +80,19 @@ namespace Lunex {
         }
         m_EntityBodies.clear();
 
-        // Shutdown physics core
+        // Cleanup runtime colliders on entities
+        if (m_Registry) {
+            auto view = m_Registry->view<Rigidbody3DComponent>();
+            for (auto e : view) {
+                auto& rb3d = view.get<Rigidbody3DComponent>(e);
+                if (rb3d.RuntimeCollider) {
+                    delete static_cast<ColliderComponent*>(rb3d.RuntimeCollider);
+                    rb3d.RuntimeCollider = nullptr;
+                }
+                rb3d.RuntimeBody = nullptr;
+            }
+        }
+
         PhysicsCore::Get().Shutdown();
 
         m_IsRunning = false;
@@ -99,13 +113,10 @@ namespace Lunex {
         if (!m_IsRunning)
             return;
 
-        // Update physics world
         PhysicsCore::Get().Update(deltaTime);
 
-        // Sync transforms from physics to entities
         SyncTransformsFromPhysics();
 
-        // Process collisions
         ProcessCollisions();
     }
 
@@ -114,26 +125,130 @@ namespace Lunex {
         if (!m_IsRunning)
             return;
 
-        // Fixed timestep update
         PhysicsCore::Get().FixedUpdate(fixedDeltaTime);
 
-        // Sync transforms from physics to entities
         SyncTransformsFromPhysics();
 
-        // Process collisions
         ProcessCollisions();
     }
 
     void PhysicsSystem::CreatePhysicsBody(entt::entity entity)
     {
-        // TODO: Implement body creation
-        // This requires access to entity's components through registry
-        // 1. Get TransformComponent
-        // 2. Get Rigidbody3DComponent or create if not exists
-        // 3. Get Collider3DComponent
-        // 4. Create Bullet rigid body
-        // 5. Add to world
-        // 6. Store in m_EntityBodies
+        if (!m_Registry || !m_Registry->valid(entity)) return;
+        if (!m_Registry->all_of<TransformComponent, Rigidbody3DComponent>(entity)) return;
+
+        auto& transform = m_Registry->get<TransformComponent>(entity);
+        auto& rb3d = m_Registry->get<Rigidbody3DComponent>(entity);
+
+        // Create collider based on available collider component
+        ColliderComponent* collider = new ColliderComponent();
+
+        if (m_Registry->all_of<BoxCollider3DComponent>(entity)) {
+            auto& bc = m_Registry->get<BoxCollider3DComponent>(entity);
+            glm::vec3 scaled = bc.HalfExtents * transform.Scale;
+            collider->CreateBoxShape(scaled);
+            collider->SetOffset(bc.Offset);
+        }
+        else if (m_Registry->all_of<SphereCollider3DComponent>(entity)) {
+            auto& sc = m_Registry->get<SphereCollider3DComponent>(entity);
+            float scaledR = sc.Radius * std::max({ transform.Scale.x, transform.Scale.y, transform.Scale.z });
+            collider->CreateSphereShape(scaledR);
+            collider->SetOffset(sc.Offset);
+        }
+        else if (m_Registry->all_of<CapsuleCollider3DComponent>(entity)) {
+            auto& cc = m_Registry->get<CapsuleCollider3DComponent>(entity);
+            float scaledR = cc.Radius * std::max(transform.Scale.x, transform.Scale.z);
+            float scaledH = cc.Height * transform.Scale.y;
+            collider->CreateCapsuleShape(scaledR, scaledH);
+            collider->SetOffset(cc.Offset);
+        }
+        else if (m_Registry->all_of<CylinderCollider3DComponent>(entity)) {
+            auto& cy = m_Registry->get<CylinderCollider3DComponent>(entity);
+            glm::vec3 scaled = cy.HalfExtents * transform.Scale;
+            collider->CreateCylinderShape(scaled);
+            collider->SetOffset(cy.Offset);
+        }
+        else if (m_Registry->all_of<ConeCollider3DComponent>(entity)) {
+            auto& cn = m_Registry->get<ConeCollider3DComponent>(entity);
+            float scaledR = cn.Radius * std::max(transform.Scale.x, transform.Scale.z);
+            float scaledH = cn.Height * transform.Scale.y;
+            collider->CreateConeShape(scaledR, scaledH);
+            collider->SetOffset(cn.Offset);
+        }
+        else if (m_Registry->all_of<MeshCollider3DComponent>(entity)) {
+            auto& mc = m_Registry->get<MeshCollider3DComponent>(entity);
+            if (mc.UseEntityMesh && m_Registry->all_of<MeshComponent>(entity)) {
+                auto& meshComp = m_Registry->get<MeshComponent>(entity);
+                if (meshComp.MeshModel) {
+                    std::vector<glm::vec3> vertices;
+                    std::vector<uint32_t> indices;
+                    for (const auto& submesh : meshComp.MeshModel->GetMeshes()) {
+                        uint32_t offset = static_cast<uint32_t>(vertices.size());
+                        for (const auto& v : submesh->GetVertices()) {
+                            vertices.push_back(v.Position * transform.Scale);
+                        }
+                        for (const auto& idx : submesh->GetIndices()) {
+                            indices.push_back(idx + offset);
+                        }
+                    }
+                    if (mc.Type == MeshCollider3DComponent::CollisionType::Convex) {
+                        collider->CreateConvexHullShape(vertices);
+                    } else {
+                        collider->CreateTriangleMeshShape(vertices, indices);
+                    }
+                }
+            } else if (!mc.Vertices.empty()) {
+                if (mc.Type == MeshCollider3DComponent::CollisionType::Convex) {
+                    collider->CreateConvexHullShape(mc.Vertices);
+                } else {
+                    collider->CreateTriangleMeshShape(mc.Vertices, mc.Indices);
+                }
+            } else {
+                collider->CreateBoxShape(glm::vec3(0.5f) * transform.Scale);
+            }
+        }
+        else {
+            // Default: box collider matching scale
+            collider->CreateBoxShape(glm::vec3(0.5f) * transform.Scale);
+        }
+
+        rb3d.RuntimeCollider = collider;
+
+        // Create physics material
+        PhysicsMaterial material;
+        material.Mass = rb3d.Mass;
+        material.Friction = rb3d.Friction;
+        material.Restitution = rb3d.Restitution;
+        material.LinearDamping = rb3d.LinearDamping;
+        material.AngularDamping = rb3d.AngularDamping;
+        material.IsStatic = (rb3d.Type == Rigidbody3DComponent::BodyType::Static);
+        material.IsKinematic = (rb3d.Type == Rigidbody3DComponent::BodyType::Kinematic);
+        material.IsTrigger = rb3d.IsTrigger;
+        material.UseCCD = rb3d.UseCCD;
+        material.CcdMotionThreshold = rb3d.CcdMotionThreshold;
+        material.CcdSweptSphereRadius = rb3d.CcdSweptSphereRadius;
+
+        glm::quat rotation = glm::quat(transform.Rotation);
+
+        // Create rigid body
+        RigidBodyComponent* body = new RigidBodyComponent();
+        body->Create(
+            PhysicsCore::Get().GetWorld(),
+            collider,
+            material,
+            transform.Translation,
+            rotation
+        );
+
+        // Apply constraints
+        body->SetLinearFactor(rb3d.LinearFactor);
+        body->SetAngularFactor(rb3d.AngularFactor);
+
+        // Store user pointer for collision callbacks
+        body->GetRigidBody()->setUserPointer(reinterpret_cast<void*>(static_cast<intptr_t>(entity)));
+
+        rb3d.RuntimeBody = body;
+        m_EntityBodies[entity] = body;
     }
 
     void PhysicsSystem::DestroyPhysicsBody(entt::entity entity)
@@ -148,35 +263,45 @@ namespace Lunex {
             }
             m_EntityBodies.erase(it);
         }
+
+        // Clean up runtime collider
+        if (m_Registry && m_Registry->valid(entity) && m_Registry->all_of<Rigidbody3DComponent>(entity)) {
+            auto& rb3d = m_Registry->get<Rigidbody3DComponent>(entity);
+            if (rb3d.RuntimeCollider) {
+                delete static_cast<ColliderComponent*>(rb3d.RuntimeCollider);
+                rb3d.RuntimeCollider = nullptr;
+            }
+            rb3d.RuntimeBody = nullptr;
+        }
     }
 
     void PhysicsSystem::UpdatePhysicsBody(entt::entity entity)
     {
-        // Recreate body with updated properties
         DestroyPhysicsBody(entity);
         CreatePhysicsBody(entity);
     }
 
     void PhysicsSystem::SyncTransformsToPhysics()
     {
-        // Update Bullet bodies from TransformComponent
-        // Useful for kinematic bodies
         for (auto& [entity, body] : m_EntityBodies)
         {
             if (!body || !body->IsValid())
                 continue;
 
-            // TODO: Get TransformComponent and sync to physics
-            // auto& transform = m_Registry->get<TransformComponent>(entity);
-            // body->SetPosition(transform.Translation);
-            // body->SetRotation(glm::quat(transform.Rotation));
+            if (!m_Registry || !m_Registry->valid(entity))
+                continue;
+
+            if (!m_Registry->all_of<TransformComponent>(entity))
+                continue;
+
+            auto& transform = m_Registry->get<TransformComponent>(entity);
+            body->SetPosition(transform.Translation);
+            body->SetRotation(glm::quat(transform.Rotation));
         }
     }
 
     void PhysicsSystem::SyncTransformsFromPhysics()
     {
-        // Update TransformComponent from Bullet bodies
-        // For dynamic bodies
         for (auto& [entity, body] : m_EntityBodies)
         {
             if (!body || !body->IsValid())
@@ -186,11 +311,16 @@ namespace Lunex {
             if (body->IsKinematic() || body->IsStatic())
                 continue;
 
-            // TODO: Get TransformComponent and update from physics
-            // auto& transform = m_Registry->get<TransformComponent>(entity);
-            // transform.Translation = body->GetPosition();
-            // glm::quat rotation = body->GetRotation();
-            // transform.Rotation = glm::eulerAngles(rotation);
+            if (!m_Registry || !m_Registry->valid(entity))
+                continue;
+
+            if (!m_Registry->all_of<TransformComponent>(entity))
+                continue;
+
+            auto& transform = m_Registry->get<TransformComponent>(entity);
+            transform.Translation = body->GetPosition();
+            glm::quat rotation = body->GetRotation();
+            transform.Rotation = glm::eulerAngles(rotation);
         }
     }
 
@@ -213,7 +343,6 @@ namespace Lunex {
             hit.Normal = result.HitNormal;
             hit.Distance = glm::length(result.HitPoint - origin);
 
-            // Extract entity ID from user pointer
             if (result.HitBody)
             {
                 void* userPointer = result.HitBody->getUserPointer();

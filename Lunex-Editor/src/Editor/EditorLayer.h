@@ -19,6 +19,7 @@
 #include "../Panels/OutlinePreferencesPanel.h"
 
 #include "Scene/Camera/EditorCamera.h"
+#include "Scene/Systems/SceneRenderSystem.h"
 // Note: SceneMode.h is included via ToolbarPanel.h
 
 namespace Lunex {

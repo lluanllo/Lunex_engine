@@ -32,8 +32,8 @@ namespace Lunex::UI {
 				break;
 			case ButtonVariant::Ghost:
 				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.20f, 0.20f, 0.50f));
-				ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.20f, 0.20f, 0.20f, 0.70f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.15f, 0.19f, 0.24f, 0.50f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.19f, 0.24f, 0.70f));
 				break;
 			case ButtonVariant::Outline:
 				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
@@ -43,9 +43,9 @@ namespace Lunex::UI {
 				ImGui::PushStyleColor(ImGuiCol_Border, ToImVec4(Colors::Primary()));
 				break;
 			default:
-				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.16f, 0.16f, 1.0f));
-				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.22f, 0.22f, 1.0f));
-				ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.12f, 0.12f, 0.12f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.13f, 0.16f, 0.20f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.18f, 0.22f, 0.27f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.10f, 0.13f, 0.16f, 1.0f));
 				break;
 		}
 	}
@@ -92,9 +92,9 @@ namespace Lunex::UI {
 		ScopedID scopedID(id);
 		ScopedStyle rounding(ImGuiStyleVar_FrameRounding, SpacingValues::ButtonRounding);
 		ScopedColor colors({
-			{ImGuiCol_Button, Color(0.14f, 0.14f, 0.14f, 0.70f)},
-			{ImGuiCol_ButtonHovered, Color(0.22f, 0.22f, 0.22f, 0.85f)},
-			{ImGuiCol_ButtonActive, Color(0.10f, 0.10f, 0.10f, 0.90f)}
+			{ImGuiCol_Button, Color(0.11f, 0.14f, 0.17f, 0.70f)},
+			{ImGuiCol_ButtonHovered, Color(0.18f, 0.22f, 0.27f, 0.85f)},
+			{ImGuiCol_ButtonActive, Color(0.08f, 0.10f, 0.13f, 0.90f)}
 		});
 		
 		if (icon) {

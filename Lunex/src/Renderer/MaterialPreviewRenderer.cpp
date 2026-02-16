@@ -62,6 +62,48 @@ namespace Lunex {
 		return m_Camera.GetPosition();
 	}
 
+	glm::vec3 MaterialPreviewRenderer::ComputeCameraForBounds(const glm::vec3& boundsMin, const glm::vec3& boundsMax, float fovDegrees) {
+		glm::vec3 center = (boundsMin + boundsMax) * 0.5f;
+		glm::vec3 extents = boundsMax - boundsMin;
+		float radius = glm::length(extents) * 0.5f;
+		
+		if (radius < 0.001f) radius = 1.0f;
+		
+		float fovRad = glm::radians(fovDegrees);
+		float distance = (radius / std::sin(fovRad * 0.5f)) * 1.1f;
+		
+		// Position camera at a 30-degree elevation angle and slightly to the right
+		float elevation = glm::radians(20.0f);
+		float azimuth = glm::radians(30.0f);
+		
+		glm::vec3 cameraOffset;
+		cameraOffset.x = distance * std::cos(elevation) * std::sin(azimuth);
+		cameraOffset.y = center.y + distance * std::sin(elevation);
+		cameraOffset.z = distance * std::cos(elevation) * std::cos(azimuth);
+		
+		return glm::vec3(center.x + cameraOffset.x, cameraOffset.y, center.z + cameraOffset.z);
+	}
+
+	void MaterialPreviewRenderer::ComputeModelBounds(const Ref<Model>& model, glm::vec3& outMin, glm::vec3& outMax) {
+		outMin = glm::vec3(std::numeric_limits<float>::max());
+		outMax = glm::vec3(std::numeric_limits<float>::lowest());
+		
+		if (!model) return;
+		
+		for (const auto& mesh : model->GetMeshes()) {
+			for (const auto& vertex : mesh->GetVertices()) {
+				outMin = glm::min(outMin, vertex.Position);
+				outMax = glm::max(outMax, vertex.Position);
+			}
+		}
+		
+		// Fallback if no vertices found
+		if (outMin.x > outMax.x) {
+			outMin = glm::vec3(-0.5f);
+			outMax = glm::vec3(0.5f);
+		}
+	}
+
 	// ========== RENDERING ==========
 
 	void MaterialPreviewRenderer::RenderPreview(Ref<MaterialAsset> material) {
