@@ -7,6 +7,9 @@
 // NEW: Unified Asset System
 #include "Assets/Core/AssetCore.h"
 
+// Node Graph System
+#include "NodeGraph/NodeGraphSystem.h"
+
 #include "Input.h"
 
 #include <GLFW/glfw3.h>
@@ -55,6 +58,12 @@ namespace Lunex{
 		// ========================================
 		MaterialRegistry::Get();
 		LNX_LOG_INFO("✓ Material System initialized");
+
+		// ========================================
+		// Initialize Node Graph System
+		// ========================================
+		NodeGraph::NodeGraphSystem::Init();
+		LNX_LOG_INFO("✓ Node Graph System initialized");
 		
 		m_ImGuiLayer = new ImGuiLayer;
 		PushOverlay(m_ImGuiLayer);
@@ -63,6 +72,12 @@ namespace Lunex{
 	Application::~Application() {
 		LNX_PROFILE_FUNCTION();
 		
+		// ========================================
+		// Shutdown Node Graph System
+		// ========================================
+		NodeGraph::NodeGraphSystem::Shutdown();
+		LNX_LOG_INFO("Node Graph System shutdown");
+
 		// ========================================
 		// Shutdown Material System
 		// ========================================

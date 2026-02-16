@@ -12,6 +12,7 @@
 #include <GLFW/glfw3.h>
 
 #include "ImGuizmo.h"
+#include <imnodes.h>
 
 namespace Lunex {	
 	ImGuiLayer::ImGuiLayer() : Layer("ImGuiLayer") {
@@ -55,10 +56,15 @@ namespace Lunex {
 		// Setup Platform/Renderer bindings
 		ImGui_ImplGlfw_InitForOpenGL(window, true);
 		ImGui_ImplOpenGL3_Init("#version 410");
+
+		// Initialize imnodes context
+		ImNodes::CreateContext();
+		ImNodes::GetIO().LinkDetachWithModifierClick.Modifier = &ImGui::GetIO().KeyCtrl;
 	}
 	
 	void ImGuiLayer::OnDetach() {
 		LNX_PROFILE_FUNCTION();
+		ImNodes::DestroyContext();
 		ImGui_ImplOpenGL3_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
 		ImGui::DestroyContext();

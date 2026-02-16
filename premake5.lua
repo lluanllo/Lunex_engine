@@ -64,6 +64,7 @@ IncludeDir["Box2D"]     = "vendor/Box2D/include"
 IncludeDir["ImGuizmo"]  = "vendor/ImGuizmo"
 IncludeDir["Assimp"]    = "vendor/assimp/include"
 IncludeDir["Bullet3"]   = "vendor/Bullet3/src"
+IncludeDir["imnodes"]   = "vendor/imnodes"
 IncludeDir["Lunex"]     = "Lunex/src"
 IncludeDir["VulkanSDK"] = "%{VULKAN_SDK}/Include"
 
@@ -442,6 +443,7 @@ project "Lunex"
     pchheader "stpch.h"
     pchsource "Lunex/src/stpch.cpp"
 
+    -- LUNEX project files section
     files
     {
         "%{prj.name}/src/**.h",
@@ -453,6 +455,9 @@ project "Lunex"
         "%{prj.name}/src/**.inl",
         "vendor/ImGuizmo/ImGuizmo.h",
         "vendor/ImGuizmo/ImGuizmo.cpp",
+        "vendor/imnodes/imnodes.h",
+        "vendor/imnodes/imnodes_internal.h",
+        "vendor/imnodes/imnodes.cpp",
         "%{prj.name}/assets/**.glsl",
         "%{prj.name}/assets/**.lunex",
         "%{prj.name}/assets/**.png"
@@ -471,6 +476,7 @@ project "Lunex"
         defines { "LNX_HAS_KTX" }
     end
 
+    -- LUNEX project includedirs section
     includedirs
     {
         "%{prj.name}/src",
@@ -485,6 +491,7 @@ project "Lunex"
         "%{IncludeDir.entt}",
         "%{IncludeDir.yaml_cpp}",
         "%{IncludeDir.ImGuizmo}",
+        "%{IncludeDir.imnodes}",
         "%{IncludeDir.Assimp}",
         "%{IncludeDir.VulkanSDK}",
         "Lunex-ScriptCore/src"
@@ -508,6 +515,9 @@ project "Lunex"
     }
 
     filter "files:vendor/ImGuizmo/**.cpp"
+        flags { "NoPCH" }
+
+    filter "files:vendor/imnodes/**.cpp"
         flags { "NoPCH" }
     
     filter "files:vendor/Bullet3/**.cpp"
@@ -633,9 +643,9 @@ project "Sandbox"
         "%{IncludeDir.glm}",
         "%{IncludeDir.entt}",
         "%{IncludeDir.yaml_cpp}",
-        "%{IncludeDir.ImGuizmo}",
         "%{IncludeDir.Assimp}",
-        "%{IncludeDir.Box2D}",
+        "%{IncludeDir.ImGuizmo}",
+        "%{IncludeDir.imnodes}",
         "%{IncludeDir.Bullet3}"
     }
 
@@ -702,6 +712,9 @@ project "Lunex-Editor"
         "%{prj.name}/src/**.inl",
         "vendor/ImGuizmo/ImGuizmo.h",
         "vendor/ImGuizmo/ImGuizmo.cpp",
+        "vendor/imnodes/imnodes.h",
+        "vendor/imnodes/imnodes_internal.h",
+        "vendor/imnodes/imnodes.cpp",
         "%{prj.name}/assets/**.glsl",
         "%{prj.name}/assets/**.lunex",
         "%{prj.name}/assets/**.png",
@@ -715,8 +728,10 @@ project "Lunex-Editor"
         "vendor/ImGuiLib",
         "%{IncludeDir.glm}",
         "%{IncludeDir.entt}",
+        "%{IncludeDir.yaml_cpp}",
         "%{IncludeDir.Assimp}",
         "%{IncludeDir.ImGuizmo}",
+        "%{IncludeDir.imnodes}",
         "%{IncludeDir.Bullet3}"
     }
 

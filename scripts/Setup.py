@@ -38,6 +38,7 @@ submodules = [
     ("vendor/ImGuiLib", "https://github.com/ocornut/imgui.git", "docking"),
     ("vendor/glm", "https://github.com/g-truc/glm.git", "master"),
     ("vendor/ImGuizmo", "https://github.com/CedricGuillemet/ImGuizmo.git", "master"),
+    ("vendor/imnodes", "https://github.com/Nelarius/imnodes.git", "master"),
     ("vendor/yaml-cpp", "https://github.com/jbeder/yaml-cpp.git", "master"),
     ("vendor/Box2D", "https://github.com/erincatto/box2d.git", "main"),
     ("vendor/assimp", "https://github.com/assimp/assimp.git", "master"),
@@ -76,6 +77,7 @@ required_files = {
     "vendor/ImGuiLib/imgui.h": "ImGui",
     "vendor/glm/glm/glm.hpp": "GLM",
     "vendor/ImGuizmo/ImGuizmo.h": "ImGuizmo",
+    "vendor/imnodes/imnodes.h": "imnodes",
     "vendor/yaml-cpp/include/yaml-cpp/yaml.h": "yaml-cpp",
     "vendor/Box2D/include/box2d/box2d.h": "Box2D",
     "vendor/assimp/include/assimp/Importer.hpp": "Assimp",
@@ -162,6 +164,7 @@ print("  ✓ Bullet3 - Motor de física 3D")
 print("  ✓ Assimp - Carga de modelos 3D")
 print("  ✓ GLFW - Manejo de ventanas")
 print("  ✓ ImGui - Interfaz de usuario")
+print("  ✓ imnodes - Sistema de nodos visual")
 print("  ✓ Vulkan SDK - Compilación de shaders SPIR-V")
 if ktxInstalled:
     print("  ✓ KTX-Software - Compresión de texturas GPU")
