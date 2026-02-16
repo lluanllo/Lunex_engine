@@ -20,24 +20,24 @@ namespace Lunex {
 	// ============================================================================
 	
 	struct HierarchyPanelStyle {
-		// Colors
-		UI::Color WindowBg = UI::Color(0.11f, 0.11f, 0.12f, 1.0f);
-		UI::Color ChildBg = UI::Color(0.11f, 0.11f, 0.12f, 1.0f);
-		UI::Color ItemEven = UI::Color(0.11f, 0.11f, 0.12f, 1.0f);
-		UI::Color ItemOdd = UI::Color(0.13f, 0.13f, 0.14f, 1.0f);
-		UI::Color ItemHover = UI::Color(0.20f, 0.20f, 0.22f, 1.0f);
-		UI::Color ItemSelected = UI::Color(0.18f, 0.40f, 0.68f, 0.35f);
-		UI::Color ItemSelectedBorder = UI::Color(0.26f, 0.59f, 0.98f, 0.80f);
+		// Colors (Blue-tinted dark theme)
+		UI::Color WindowBg = UI::Color::FromHex(0x151A21);
+		UI::Color ChildBg = UI::Color::FromHex(0x151A21);
+		UI::Color ItemEven = UI::Color(0.082f, 0.102f, 0.129f, 1.0f);
+		UI::Color ItemOdd = UI::Color(0.094f, 0.114f, 0.145f, 1.0f);
+		UI::Color ItemHover = UI::Color(0.145f, 0.176f, 0.220f, 1.0f);
+		UI::Color ItemSelected = UI::Color(0.055f, 0.647f, 0.769f, 0.25f);
+		UI::Color ItemSelectedBorder = UI::Color(0.055f, 0.647f, 0.769f, 0.80f);
 		// Active element (last selected) - Light orange (Blender-style)
 		UI::Color ItemActive = UI::Color(0.90f, 0.60f, 0.20f, 0.40f);
 		UI::Color ItemActiveBorder = UI::Color(1.0f, 0.70f, 0.25f, 0.90f);
 		// Non-active selected elements - Dark orange (Blender-style)
 		UI::Color ItemSelectedMulti = UI::Color(0.70f, 0.40f, 0.10f, 0.30f);
 		UI::Color ItemSelectedMultiBorder = UI::Color(0.80f, 0.50f, 0.15f, 0.70f);
-		UI::Color TextPrimary = UI::Color(0.92f, 0.92f, 0.94f, 1.0f);
-		UI::Color TextMuted = UI::Color(0.60f, 0.60f, 0.62f, 1.0f);
-		UI::Color Border = UI::Color(0.08f, 0.08f, 0.09f, 1.0f);
-		UI::Color SeparatorLine = UI::Color(0.25f, 0.25f, 0.28f, 1.0f);
+		UI::Color TextPrimary = UI::Colors::TextPrimary();
+		UI::Color TextMuted = UI::Colors::TextSecondary();
+		UI::Color Border = UI::Color(0.06f, 0.08f, 0.10f, 1.0f);
+		UI::Color SeparatorLine = UI::Color(0.16f, 0.20f, 0.25f, 1.0f);
 		
 		// Entity type indicator colors
 		UI::Color TypeCamera = UI::Color(0.40f, 0.75f, 0.95f, 1.0f);    // Light Blue

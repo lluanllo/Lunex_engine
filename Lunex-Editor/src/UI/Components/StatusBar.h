@@ -15,7 +15,7 @@ namespace Lunex::UI {
 	
 	struct StatusBarStyle {
 		float height = 28.0f;
-		Color backgroundColor = Color::FromHex(0x111111);
+		Color backgroundColor = Color::FromHex(0x111820);
 		bool showShadow = true;
 	};
 	

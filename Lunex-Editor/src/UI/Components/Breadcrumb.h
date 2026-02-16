@@ -20,9 +20,9 @@ namespace Lunex::UI {
 	};
 	
 	struct BreadcrumbStyle {
-		Color textColor = Color(0.55f, 0.55f, 0.55f, 1.0f);
-		Color activeTextColor = Color(0.92f, 0.92f, 0.92f, 1.0f);
-		Color separatorColor = Color(0.35f, 0.35f, 0.35f, 1.0f);
+		Color textColor = Color(0.48f, 0.52f, 0.56f, 1.0f);
+		Color activeTextColor = Color(0.88f, 0.90f, 0.92f, 1.0f);
+		Color separatorColor = Color(0.30f, 0.34f, 0.38f, 1.0f);
 		const char* separator = ">";
 	};
 	

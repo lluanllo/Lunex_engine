@@ -31,8 +31,8 @@ namespace Lunex::UI {
 		Color hoverColor = Colors::BgHover();
 		Color selectedBorderColor = Colors::SelectedBorder();
 		Color selectedFillColor = Colors::Selected();
-		Color selectionRectFill = Color(0.16f, 0.47f, 1.0f, 0.12f);
-		Color selectionRectBorder = Color(0.16f, 0.47f, 1.0f, 0.55f);
+		Color selectionRectFill = Color(0.05f, 0.65f, 0.77f, 0.12f);
+		Color selectionRectBorder = Color(0.05f, 0.65f, 0.77f, 0.55f);
 		Color dropTargetColor = Colors::Primary();
 	};
 	

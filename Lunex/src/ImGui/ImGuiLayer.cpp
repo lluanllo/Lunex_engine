@@ -102,7 +102,7 @@ namespace Lunex {
 		auto& colors = ImGui::GetStyle().Colors;
 		auto& style = ImGui::GetStyle();
 		
-		// ===== HAZEL / UNREAL INSPIRED DARK THEME =====
+		// ===== LUNEX DARK THEME - Blue-tinted with Teal/Cyan accent =====
 		
 		// Compact professional spacing
 		style.WindowPadding = ImVec2(8, 8);
@@ -122,14 +122,14 @@ namespace Lunex {
 		style.FrameBorderSize = 0.0f;
 		style.TabBorderSize = 0.0f;
 		
-		// Minimal rounding (Hazel style)
+		// Slightly rounded (modern feel)
 		style.WindowRounding = 0.0f;
-		style.ChildRounding = 0.0f;
-		style.FrameRounding = 2.0f;
-		style.PopupRounding = 0.0f;
+		style.ChildRounding = 2.0f;
+		style.FrameRounding = 3.0f;
+		style.PopupRounding = 2.0f;
 		style.ScrollbarRounding = 9.0f;
-		style.GrabRounding = 2.0f;
-		style.TabRounding = 0.0f;
+		style.GrabRounding = 3.0f;
+		style.TabRounding = 2.0f;
 		
 		// Professional alignment
 		style.WindowTitleAlign = ImVec2(0.0f, 0.5f);
@@ -138,39 +138,39 @@ namespace Lunex {
 		style.ButtonTextAlign = ImVec2(0.5f, 0.5f);
 		style.SelectableTextAlign = ImVec2(0.0f, 0.5f);
 		
-		// ===== COLOR PALETTE (PROFESSIONAL DARK) =====
+		// ===== COLOR PALETTE (BLUE-TINTED DARK + TEAL ACCENT) =====
 		
-		// Dark backgrounds with clear hierarchy
-		const ImVec4 bgVeryDark    = ImVec4(0.094f, 0.094f, 0.094f, 1.0f);  // #181818 - Deepest
-		const ImVec4 bgDark        = ImVec4(0.118f, 0.118f, 0.118f, 1.0f);  // #1E1E1E - Main panels
-		const ImVec4 bgMedium      = ImVec4(0.145f, 0.145f, 0.149f, 1.0f);  // #252526 - Elevated
-		const ImVec4 bgLight       = ImVec4(0.165f, 0.176f, 0.180f, 1.0f);  // #2A2D2E - Controls
-		const ImVec4 bgHeader      = ImVec4(0.118f, 0.118f, 0.118f, 1.0f);  // #1E1E1E - Headers
+		// Dark backgrounds with blue undertone
+		const ImVec4 bgVeryDark    = ImVec4(0.082f, 0.102f, 0.129f, 1.0f);   // #151A21
+		const ImVec4 bgDark        = ImVec4(0.102f, 0.125f, 0.157f, 1.0f);   // #1A2028
+		const ImVec4 bgMedium      = ImVec4(0.129f, 0.157f, 0.188f, 1.0f);   // #212830
+		const ImVec4 bgLight       = ImVec4(0.145f, 0.176f, 0.220f, 1.0f);   // #252D38
+		const ImVec4 bgHeader      = ImVec4(0.094f, 0.114f, 0.145f, 1.0f);   // #181D25
 		
-		// Blue accent (professional, not intrusive)
-		const ImVec4 accent        = ImVec4(0.16f, 0.47f, 1.0f, 1.0f);      // #2979FF - Primary blue
-		const ImVec4 accentHover   = ImVec4(0.27f, 0.54f, 1.0f, 1.0f);      // Lighter hover
-		const ImVec4 accentActive  = ImVec4(0.16f, 0.38f, 1.0f, 1.0f);      // Deeper active
-		const ImVec4 accentDim     = ImVec4(0.16f, 0.47f, 1.0f, 0.50f);     // Semi-transparent
-		const ImVec4 accentSubtle  = ImVec4(0.16f, 0.47f, 1.0f, 0.12f);     // Very subtle
+		// Teal/Cyan accent
+		const ImVec4 accent        = ImVec4(0.055f, 0.647f, 0.769f, 1.0f);   // #0EA5C4
+		const ImVec4 accentHover   = ImVec4(0.133f, 0.741f, 0.847f, 1.0f);   // #22BDD8
+		const ImVec4 accentActive  = ImVec4(0.035f, 0.565f, 0.678f, 1.0f);   // #0990AD
+		const ImVec4 accentDim     = ImVec4(0.055f, 0.647f, 0.769f, 0.50f);
+		const ImVec4 accentSubtle  = ImVec4(0.055f, 0.647f, 0.769f, 0.12f);
 		
 		// Text with proper contrast
-		const ImVec4 text          = ImVec4(0.90f, 0.90f, 0.92f, 1.0f);     // Primary text
-		const ImVec4 textBright    = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);        // Highlighted
-		const ImVec4 textDisabled  = ImVec4(0.40f, 0.40f, 0.42f, 1.0f);     // Disabled
-		const ImVec4 textDim       = ImVec4(0.56f, 0.56f, 0.58f, 1.0f);     // Secondary
+		const ImVec4 text          = ImVec4(0.88f, 0.90f, 0.92f, 1.0f);      // Primary text
+		const ImVec4 textBright    = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);         // Highlighted
+		const ImVec4 textDisabled  = ImVec4(0.36f, 0.40f, 0.44f, 1.0f);      // Disabled
+		const ImVec4 textDim       = ImVec4(0.50f, 0.54f, 0.58f, 1.0f);      // Secondary
 		
-		// Subtle borders
-		const ImVec4 border        = ImVec4(0.10f, 0.10f, 0.10f, 1.0f);     // #1A1A1A
-		const ImVec4 borderLight   = ImVec4(0.20f, 0.20f, 0.20f, 1.0f);     // #333333
-		const ImVec4 separator     = ImVec4(0.20f, 0.20f, 0.20f, 0.50f);
+		// Subtle borders (blue-tinted)
+		const ImVec4 border        = ImVec4(0.10f, 0.13f, 0.16f, 1.0f);      // #1A2128
+		const ImVec4 borderLight   = ImVec4(0.16f, 0.20f, 0.25f, 1.0f);      // #293340
+		const ImVec4 separator     = ImVec4(0.16f, 0.20f, 0.25f, 0.50f);
 		
 		// ===== APPLY COLORS =====
 		
 		// Backgrounds
 		colors[ImGuiCol_WindowBg]               = bgDark;
 		colors[ImGuiCol_ChildBg]                = bgVeryDark;
-		colors[ImGuiCol_PopupBg]                = ImVec4(0.09f, 0.09f, 0.09f, 0.98f);
+		colors[ImGuiCol_PopupBg]                = ImVec4(0.08f, 0.10f, 0.13f, 0.98f);
 		colors[ImGuiCol_MenuBarBg]              = bgHeader;
 		
 		// Borders
@@ -183,39 +183,39 @@ namespace Lunex {
 		colors[ImGuiCol_TextSelectedBg]         = ImVec4(accent.x, accent.y, accent.z, 0.30f);
 		
 		// Headers
-		colors[ImGuiCol_Header]                 = ImVec4(0.14f, 0.14f, 0.14f, 1.0f);
-		colors[ImGuiCol_HeaderHovered]          = ImVec4(0.19f, 0.19f, 0.19f, 1.0f);
+		colors[ImGuiCol_Header]                 = ImVec4(0.11f, 0.14f, 0.17f, 1.0f);
+		colors[ImGuiCol_HeaderHovered]          = ImVec4(0.15f, 0.19f, 0.23f, 1.0f);
 		colors[ImGuiCol_HeaderActive]           = ImVec4(accent.x, accent.y, accent.z, 0.25f);
 		
-		// Buttons (flat, professional)
-		colors[ImGuiCol_Button]                 = ImVec4(0.16f, 0.16f, 0.16f, 1.0f);
-		colors[ImGuiCol_ButtonHovered]          = ImVec4(0.22f, 0.22f, 0.22f, 1.0f);
-		colors[ImGuiCol_ButtonActive]           = ImVec4(0.12f, 0.12f, 0.12f, 1.0f);
+		// Buttons (blue-tinted dark)
+		colors[ImGuiCol_Button]                 = ImVec4(0.13f, 0.16f, 0.20f, 1.0f);
+		colors[ImGuiCol_ButtonHovered]          = ImVec4(0.18f, 0.22f, 0.27f, 1.0f);
+		colors[ImGuiCol_ButtonActive]           = ImVec4(0.10f, 0.13f, 0.16f, 1.0f);
 		
 		// Frame backgrounds (inputs, sliders, etc.)
-		colors[ImGuiCol_FrameBg]                = ImVec4(0.10f, 0.10f, 0.10f, 1.0f);
-		colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.14f, 0.14f, 0.14f, 1.0f);
-		colors[ImGuiCol_FrameBgActive]          = ImVec4(0.17f, 0.17f, 0.17f, 1.0f);
+		colors[ImGuiCol_FrameBg]                = ImVec4(0.09f, 0.11f, 0.14f, 1.0f);
+		colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.12f, 0.15f, 0.19f, 1.0f);
+		colors[ImGuiCol_FrameBgActive]          = ImVec4(0.14f, 0.18f, 0.22f, 1.0f);
 		
-		// Tabs (Hazel style - active tab matches panel bg)
-		colors[ImGuiCol_Tab]                    = ImVec4(0.09f, 0.09f, 0.09f, 1.0f);
-		colors[ImGuiCol_TabHovered]             = ImVec4(0.16f, 0.16f, 0.16f, 1.0f);
-		colors[ImGuiCol_TabActive]              = bgDark;
-		colors[ImGuiCol_TabUnfocused]           = ImVec4(0.07f, 0.07f, 0.07f, 1.0f);
-		colors[ImGuiCol_TabUnfocusedActive]     = ImVec4(0.09f, 0.09f, 0.09f, 1.0f);
+		// Tabs (active tab with teal underline feel)
+		colors[ImGuiCol_Tab]                    = ImVec4(0.08f, 0.10f, 0.13f, 1.0f);
+		colors[ImGuiCol_TabHovered]             = ImVec4(accent.x, accent.y, accent.z, 0.30f);
+		colors[ImGuiCol_TabActive]              = ImVec4(accent.x * 0.3f, accent.y * 0.3f, accent.z * 0.3f, 1.0f);
+		colors[ImGuiCol_TabUnfocused]           = ImVec4(0.07f, 0.09f, 0.11f, 1.0f);
+		colors[ImGuiCol_TabUnfocusedActive]     = ImVec4(0.10f, 0.13f, 0.16f, 1.0f);
 		
 		// Title bar
-		colors[ImGuiCol_TitleBg]                = ImVec4(0.06f, 0.06f, 0.06f, 1.0f);
-		colors[ImGuiCol_TitleBgActive]          = ImVec4(0.08f, 0.08f, 0.08f, 1.0f);
-		colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.06f, 0.06f, 0.06f, 1.0f);
+		colors[ImGuiCol_TitleBg]                = ImVec4(0.06f, 0.08f, 0.10f, 1.0f);
+		colors[ImGuiCol_TitleBgActive]          = ImVec4(0.08f, 0.10f, 0.13f, 1.0f);
+		colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.06f, 0.08f, 0.10f, 1.0f);
 		
 		// Scrollbar
-		colors[ImGuiCol_ScrollbarBg]            = ImVec4(0.06f, 0.06f, 0.06f, 0.50f);
-		colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.25f, 0.25f, 0.25f, 1.0f);
-		colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.35f, 0.35f, 0.35f, 1.0f);
-		colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.45f, 0.45f, 0.45f, 1.0f);
+		colors[ImGuiCol_ScrollbarBg]            = ImVec4(0.06f, 0.08f, 0.10f, 0.50f);
+		colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.20f, 0.24f, 0.30f, 1.0f);
+		colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.28f, 0.33f, 0.40f, 1.0f);
+		colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.36f, 0.42f, 0.50f, 1.0f);
 		
-		// Checkmarks and sliders use the orange accent
+		// Checkmarks and sliders use teal accent
 		colors[ImGuiCol_CheckMark]              = accent;
 		colors[ImGuiCol_SliderGrab]             = accent;
 		colors[ImGuiCol_SliderGrabActive]       = accentHover;
@@ -237,14 +237,14 @@ namespace Lunex {
 		// Tables
 		colors[ImGuiCol_TableHeaderBg]          = bgHeader;
 		colors[ImGuiCol_TableBorderStrong]      = border;
-		colors[ImGuiCol_TableBorderLight]       = ImVec4(0.15f, 0.15f, 0.15f, 1.0f);
+		colors[ImGuiCol_TableBorderLight]       = ImVec4(0.13f, 0.16f, 0.20f, 1.0f);
 		colors[ImGuiCol_TableRowBg]             = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 		colors[ImGuiCol_TableRowBgAlt]          = ImVec4(1.0f, 1.0f, 1.0f, 0.02f);
 		
 		// Plots
 		colors[ImGuiCol_PlotLines]              = accent;
 		colors[ImGuiCol_PlotLinesHovered]       = accentHover;
-		colors[ImGuiCol_PlotHistogram]          = ImVec4(0.35f, 0.35f, 0.35f, 1.0f);
+		colors[ImGuiCol_PlotHistogram]          = ImVec4(0.28f, 0.33f, 0.40f, 1.0f);
 		colors[ImGuiCol_PlotHistogramHovered]   = accent;
 		
 		// Drag and drop

@@ -50,7 +50,7 @@ namespace Lunex::UI {
 	
 	void ComponentDrawer::DrawDropZone(const std::string& text, const Size& size) {
 		ImGui::PushStyleColor(ImGuiCol_Button, ToImVec4(ComponentStyle::BgDark()));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.16f, 0.16f, 0.16f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ToImVec4(Colors::BgHover()));
 		ImGui::PushStyleColor(ImGuiCol_Border, ToImVec4(ComponentStyle::AccentColor()));
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.5f);
 		

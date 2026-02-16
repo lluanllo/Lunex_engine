@@ -73,7 +73,7 @@ namespace Lunex::UI {
 		
 		ScopedColor colors({
 			{ImGuiCol_Button, Color(0, 0, 0, 0)},
-			{ImGuiCol_ButtonHovered, Color(0.16f, 0.16f, 0.16f, 0.6f)},
+			{ImGuiCol_ButtonHovered, Color(0.13f, 0.16f, 0.20f, 0.6f)},
 			{ImGuiCol_ButtonActive, Colors::BorderFocus()}
 		});
 		

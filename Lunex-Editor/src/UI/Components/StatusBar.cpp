@@ -38,8 +38,8 @@ namespace Lunex::UI {
 		ImGui::SetNextItemWidth(width);
 		
 		ScopedColor colors({
-			{ImGuiCol_FrameBg, Color(0.10f, 0.10f, 0.10f, 1.0f)},
-			{ImGuiCol_SliderGrab, Color(0.45f, 0.45f, 0.45f, 1.0f)},
+			{ImGuiCol_FrameBg, Color(0.09f, 0.11f, 0.14f, 1.0f)},
+			{ImGuiCol_SliderGrab, Color(0.35f, 0.40f, 0.48f, 1.0f)},
 			{ImGuiCol_SliderGrabActive, Colors::Primary()}
 		});
 		

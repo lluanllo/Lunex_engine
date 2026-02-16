@@ -18,7 +18,7 @@ namespace Lunex::UI {
 		inline Color LabelColor()    { return Colors::TextSecondary(); }
 		inline Color ValueColor()    { return Colors::TextPrimary(); }
 		inline Color HeaderColor()   { return Colors::Primary(); }
-		inline Color SectionBg()     { return Color(0.08f, 0.08f, 0.08f, 0.80f); }
+		inline Color SectionBg()     { return Color(0.07f, 0.09f, 0.11f, 0.80f); }
 	}
 
 	// ============================================================================
