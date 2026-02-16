@@ -3,7 +3,7 @@
 /**
  * @file Mesh.h
  * @brief GPU mesh resource
- * 
+ *
  * AAA Architecture: Mesh lives in Resources/Mesh/
  * This is the GPU-ready mesh with vertex/index buffers.
  */
@@ -50,7 +50,7 @@ namespace Lunex {
 	class Mesh {
 	public:
 		Mesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices,
-			 const std::vector<MeshTexture>& textures = {});
+			const std::vector<MeshTexture>& textures = {});
 		~Mesh() = default;
 
 		void Draw(const Ref<Shader>& shader);

@@ -44,6 +44,12 @@ namespace Lunex {
 		void SetCameraPosition(const glm::vec3& position);
 		glm::vec3 GetCameraPosition() const;
 
+		// Compute optimal camera position to frame a model's bounding box
+		static glm::vec3 ComputeCameraForBounds(const glm::vec3& boundsMin, const glm::vec3& boundsMax, float fovDegrees = 45.0f);
+
+		// Compute bounding box from a Model
+		static void ComputeModelBounds(const Ref<Model>& model, glm::vec3& outMin, glm::vec3& outMax);
+
 		// Configurar iluminación del preview
 		void SetLightIntensity(float intensity) { m_LightIntensity = intensity; }
 		void SetLightColor(const glm::vec3& color) { m_LightColor = color; }

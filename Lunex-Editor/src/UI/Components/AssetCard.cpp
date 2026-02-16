@@ -97,10 +97,10 @@ namespace Lunex::UI {
 			ImVec2 shadowOffset(2.0f, 2.0f);
 			ImVec2 shadowMin = ImVec2(cardMin.x + shadowOffset.x, cardMin.y + shadowOffset.y);
 			ImVec2 shadowMax = ImVec2(cardMax.x + shadowOffset.x, cardMax.y + shadowOffset.y);
-			drawList->AddRectFilled(shadowMin, shadowMax, IM_COL32(0, 0, 0, 60), m_Style.rounding);
+			drawList->AddRectFilled(shadowMin, shadowMax, IM_COL32(0, 0, 0, 50), m_Style.rounding);
 		}
 		
-		// Card background
+		// Card background (blue-tinted dark)
 		drawList->AddRectFilled(cardMin, cardMax, Colors::BgCard().ToImU32(), m_Style.rounding);
 		
 		// Thumbnail area
@@ -112,8 +112,8 @@ namespace Lunex::UI {
 		ImVec2 iconMin = ImVec2(cardMin.x + padding, cardMin.y + padding);
 		ImVec2 iconMax = ImVec2(iconMin.x + iconWidth, iconMin.y + iconHeight);
 		
-		// Icon background
-		drawList->AddRectFilled(iconMin, iconMax, IM_COL32(20, 20, 20, 255), 3.0f);
+		// Icon background (blue-tinted dark)
+		drawList->AddRectFilled(iconMin, iconMax, Colors::BgDark().ToImU32(), 3.0f);
 		
 		// Thumbnail
 		if (thumbnail && thumbnail->GetRendererID() != 0) {
@@ -165,12 +165,12 @@ namespace Lunex::UI {
 			displayName = displayName.substr(0, maxChars - 2) + "..";
 		}
 		
-		// Draw name (centered)
+		// Draw name (centered, using theme text color)
 		float nameWidth = ImGui::CalcTextSize(displayName.c_str()).x;
 		float nameOffsetX = (cardWidth - nameWidth) * 0.5f;
 		drawList->AddText(
 			ImVec2(cursorPos.x + nameOffsetX, textAreaY),
-			IM_COL32(235, 235, 235, 255),
+			Colors::TextPrimary().ToImU32(),
 			displayName.c_str()
 		);
 		
@@ -215,17 +215,17 @@ namespace Lunex::UI {
 	
 	void AssetCard::RenderSelectionEffects(ImDrawList* drawList, ImVec2 cardMin, ImVec2 cardMax,
 										   bool isSelected, bool isHovered) {
-		// Hover effect
+		// Hover effect (blue-tinted)
 		if (isHovered && !isSelected) {
-			drawList->AddRect(cardMin, cardMax, IM_COL32(70, 70, 75, 200), m_Style.rounding, 0, 1.0f);
+			drawList->AddRect(cardMin, cardMax, IM_COL32(55, 68, 85, 200), m_Style.rounding, 0, 1.0f);
 		}
 		
-		// Selection effect (blue accent)
+		// Selection effect (teal accent)
 		if (isSelected) {
 			Color sel = Colors::SelectedBorder();
 			ImU32 borderCol = IM_COL32((int)(sel.r * 255), (int)(sel.g * 255), (int)(sel.b * 255), 220);
-			ImU32 fillCol = IM_COL32((int)(sel.r * 255), (int)(sel.g * 255), (int)(sel.b * 255), 20);
-			drawList->AddRect(cardMin, cardMax, borderCol, m_Style.rounding, 0, 1.5f);
+			ImU32 fillCol = IM_COL32((int)(sel.r * 255), (int)(sel.g * 255), (int)(sel.b * 255), 25);
+			drawList->AddRect(cardMin, cardMax, borderCol, m_Style.rounding, 0, 2.0f);
 			drawList->AddRectFilled(cardMin, cardMax, fillCol, m_Style.rounding);
 		}
 	}

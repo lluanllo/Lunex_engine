@@ -110,7 +110,12 @@ namespace Lunex {
 			}
 
 			// Collider line width
-			if (PropertySlider("Line Width", m_ColliderLineWidth, 1.0f, 10.0f, "%.1f", "Width of collider wireframe lines")) {
+			if (PropertySlider("Collider Line Width", m_ColliderLineWidth, 1.0f, 10.0f, "%.1f", "Width of collider wireframe lines")) {
+				NotifyChanged();
+			}
+
+			// Gizmo line width (frustums, lights)
+			if (PropertySlider("Gizmo Line Width", m_GizmoLineWidth, 0.5f, 6.0f, "%.1f", "Width of frustum, light, and grid gizmo lines")) {
 				NotifyChanged();
 			}
 
@@ -131,6 +136,7 @@ namespace Lunex {
 		m_Collider2DColor   = config.Collider2DColor;
 		m_Collider3DColor   = config.Collider3DColor;
 		m_ColliderLineWidth = config.ColliderLineWidth;
+		m_GizmoLineWidth    = config.GizmoLineWidth;
 
 		// Apply to OutlineRenderer config
 		auto& outlineConfig = OutlineRenderer::Get().GetConfig();
@@ -151,6 +157,7 @@ namespace Lunex {
 		config.Collider2DColor    = m_Collider2DColor;
 		config.Collider3DColor    = m_Collider3DColor;
 		config.ColliderLineWidth  = m_ColliderLineWidth;
+		config.GizmoLineWidth     = m_GizmoLineWidth;
 	}
 
 	void OutlinePreferencesPanel::NotifyChanged() {

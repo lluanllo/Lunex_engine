@@ -4,6 +4,7 @@
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
 #include "Core/JobSystem/JobSystem.h"
+#include "Physics/PhysicsCore.h"
 
 namespace Lunex {
 
@@ -104,6 +105,12 @@ namespace Lunex {
 		if (B2_IS_NON_NULL(m_PhysicsWorld)) {
 			DestroyPhysicsWorld();
 		}
+		
+		// Read current global PhysicsCore config (set by SettingsPanel presets)
+		const PhysicsConfig& globalConfig = PhysicsCore::Get().GetConfig();
+		
+		// Use global gravity (XY components for 2D)
+		m_Settings.Gravity = glm::vec2(globalConfig.Gravity.x, globalConfig.Gravity.y);
 		
 		b2WorldDef worldDef = b2DefaultWorldDef();
 		worldDef.gravity = { m_Settings.Gravity.x, m_Settings.Gravity.y };

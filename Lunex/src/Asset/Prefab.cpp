@@ -11,6 +11,9 @@
 
 namespace Lunex {
 
+	// Reference to the global asset path defined in ContentBrowserPanel
+	extern const std::filesystem::path g_AssetPath;
+
 	// ============================================================================
 	// YAML SERIALIZATION HELPERS (copied from SceneSerializer for consistency)
 	// ============================================================================
@@ -636,6 +639,55 @@ namespace Lunex {
 			data.Components.push_back(compData);
 		}
 		
+		// Serialize CylinderCollider3DComponent
+		if (entity.HasComponent<CylinderCollider3DComponent>()) {
+			PrefabComponentData compData;
+			compData.ComponentType = "CylinderCollider3DComponent";
+			
+			auto& cy = entity.GetComponent<CylinderCollider3DComponent>();
+			std::ostringstream oss;
+			oss << cy.HalfExtents.x << "," << cy.HalfExtents.y << "," << cy.HalfExtents.z << ";";
+			oss << cy.Offset.x << "," << cy.Offset.y << "," << cy.Offset.z;
+			compData.SerializedData = oss.str();
+			
+			data.Components.push_back(compData);
+		}
+		
+		// Serialize ConeCollider3DComponent
+		if (entity.HasComponent<ConeCollider3DComponent>()) {
+			PrefabComponentData compData;
+			compData.ComponentType = "ConeCollider3DComponent";
+			
+			auto& cn = entity.GetComponent<ConeCollider3DComponent>();
+			std::ostringstream oss;
+			oss << cn.Radius << ";";
+			oss << cn.Height << ";";
+			oss << cn.Offset.x << "," << cn.Offset.y << "," << cn.Offset.z;
+			compData.SerializedData = oss.str();
+			
+			data.Components.push_back(compData);
+		}
+		
+		// Serialize CharacterController3DComponent
+		if (entity.HasComponent<CharacterController3DComponent>()) {
+			PrefabComponentData compData;
+			compData.ComponentType = "CharacterController3DComponent";
+			
+			auto& cc = entity.GetComponent<CharacterController3DComponent>();
+			std::ostringstream oss;
+			oss << cc.Radius << ";";
+			oss << cc.Height << ";";
+			oss << cc.StepHeight << ";";
+			oss << cc.MaxSlopeAngle << ";";
+			oss << cc.MoveSpeed << ";";
+			oss << cc.JumpForce << ";";
+			oss << cc.GravityScale << ";";
+			oss << cc.SkinWidth;
+			compData.SerializedData = oss.str();
+			
+			data.Components.push_back(compData);
+		}
+		
 		// Serialize ScriptComponent
 		if (entity.HasComponent<ScriptComponent>()) {
 			PrefabComponentData compData;
@@ -809,15 +861,49 @@ namespace Lunex {
 				
 				// Load mesh - prioritize MeshAsset over legacy FilePath
 				if (!meshAssetPath.empty()) {
-					// Resolve relative path to absolute path
-					// The path is relative to the "assets" folder
-					std::filesystem::path fullPath = std::filesystem::path("assets") / meshAssetPath;
+					// Try multiple path resolution strategies
+					std::filesystem::path resolvedPath;
+					bool found = false;
 					
-					if (std::filesystem::exists(fullPath)) {
-						mc.SetMeshAsset(fullPath);
-						LNX_LOG_TRACE("Prefab: Loaded MeshAsset from {0}", fullPath.string());
+					// Strategy 1: Use g_AssetPath (the actual asset directory)
+					{
+						std::filesystem::path fullPath = g_AssetPath / meshAssetPath;
+						if (std::filesystem::exists(fullPath)) {
+							resolvedPath = fullPath;
+							found = true;
+						}
+					}
+					
+					// Strategy 2: Try the path as-is (might be absolute already)
+					if (!found && std::filesystem::exists(meshAssetPath)) {
+						resolvedPath = meshAssetPath;
+						found = true;
+					}
+					
+					// Strategy 3: Try relative to the prefab file's directory
+					if (!found && !m_FilePath.empty()) {
+						std::filesystem::path prefabDir = m_FilePath.parent_path();
+						std::filesystem::path fullPath = prefabDir / meshAssetPath;
+						if (std::filesystem::exists(fullPath)) {
+							resolvedPath = fullPath;
+							found = true;
+						}
+					}
+					
+					// Strategy 4: Fallback to hardcoded "assets" path
+					if (!found) {
+						std::filesystem::path fullPath = std::filesystem::path("assets") / meshAssetPath;
+						if (std::filesystem::exists(fullPath)) {
+							resolvedPath = fullPath;
+							found = true;
+						}
+					}
+					
+					if (found) {
+						mc.SetMeshAsset(resolvedPath);
+						LNX_LOG_TRACE("Prefab: Loaded MeshAsset from {0}", resolvedPath.string());
 					} else {
-						LNX_LOG_WARN("Prefab: MeshAsset file not found: {0}", fullPath.string());
+						LNX_LOG_WARN("Prefab: MeshAsset file not found: {0} (tried multiple paths)", meshAssetPath);
 						// Fallback to primitive
 						mc.CreatePrimitive(mc.Type != ModelType::FromFile ? mc.Type : ModelType::Cube);
 					}
@@ -1035,6 +1121,45 @@ namespace Lunex {
 				
 				std::getline(iss, token, ';'); mc.Type = (MeshCollider3DComponent::CollisionType)std::stoi(token);
 				std::getline(iss, token, ';'); mc.UseEntityMesh = token == "1";
+			}
+			else if (compData.ComponentType == "CylinderCollider3DComponent") {
+				auto& cy = entity.AddComponent<CylinderCollider3DComponent>();
+				
+				std::istringstream iss(compData.SerializedData);
+				std::string token;
+				
+				std::getline(iss, token, ';');
+				sscanf(token.c_str(), "%f,%f,%f", &cy.HalfExtents.x, &cy.HalfExtents.y, &cy.HalfExtents.z);
+				
+				std::getline(iss, token, ';');
+				sscanf(token.c_str(), "%f,%f,%f", &cy.Offset.x, &cy.Offset.y, &cy.Offset.z);
+			}
+			else if (compData.ComponentType == "ConeCollider3DComponent") {
+				auto& cn = entity.AddComponent<ConeCollider3DComponent>();
+				
+				std::istringstream iss(compData.SerializedData);
+				std::string token;
+				
+				std::getline(iss, token, ';'); cn.Radius = std::stof(token);
+				std::getline(iss, token, ';'); cn.Height = std::stof(token);
+				
+				std::getline(iss, token, ';');
+				sscanf(token.c_str(), "%f,%f,%f", &cn.Offset.x, &cn.Offset.y, &cn.Offset.z);
+			}
+			else if (compData.ComponentType == "CharacterController3DComponent") {
+				auto& cc = entity.AddComponent<CharacterController3DComponent>();
+				
+				std::istringstream iss(compData.SerializedData);
+				std::string token;
+				
+				std::getline(iss, token, ';'); cc.Radius = std::stof(token);
+				std::getline(iss, token, ';'); cc.Height = std::stof(token);
+				std::getline(iss, token, ';'); cc.StepHeight = std::stof(token);
+				std::getline(iss, token, ';'); cc.MaxSlopeAngle = std::stof(token);
+				std::getline(iss, token, ';'); cc.MoveSpeed = std::stof(token);
+				std::getline(iss, token, ';'); cc.JumpForce = std::stof(token);
+				std::getline(iss, token, ';'); cc.GravityScale = std::stof(token);
+				std::getline(iss, token, ';'); cc.SkinWidth = std::stof(token);
 			}
 			else if (compData.ComponentType == "ScriptComponent") {
 				auto& script = entity.AddComponent<ScriptComponent>();

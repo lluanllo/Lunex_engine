@@ -4,12 +4,12 @@
 #include <glm/glm.hpp>
 #include <memory>
 #include "../PhysicsMaterial.h"
+#include "../CustomMotionState.h"
 #include "ColliderComponent.h"
 
 namespace Lunex {
 
     // Forward declarations
-    class CustomMotionState;
     class PhysicsWorld;
 
     /**

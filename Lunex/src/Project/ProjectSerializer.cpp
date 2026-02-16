@@ -57,6 +57,7 @@ namespace Lunex {
 			out << YAML::Key << "Collider2DColor" << YAML::Value << YAML::Flow << YAML::BeginSeq << op.Collider2DColor.r << op.Collider2DColor.g << op.Collider2DColor.b << op.Collider2DColor.a << YAML::EndSeq;
 			out << YAML::Key << "Collider3DColor" << YAML::Value << YAML::Flow << YAML::BeginSeq << op.Collider3DColor.r << op.Collider3DColor.g << op.Collider3DColor.b << op.Collider3DColor.a << YAML::EndSeq;
 			out << YAML::Key << "ColliderLineWidth" << YAML::Value << op.ColliderLineWidth;
+			out << YAML::Key << "GizmoLineWidth" << YAML::Value << op.GizmoLineWidth;
 			out << YAML::EndMap;
 		}
 		
@@ -140,6 +141,8 @@ namespace Lunex {
 			}
 			if (outlineNode["ColliderLineWidth"])
 				op.ColliderLineWidth = outlineNode["ColliderLineWidth"].as<float>();
+			if (outlineNode["GizmoLineWidth"])
+				op.GizmoLineWidth = outlineNode["GizmoLineWidth"].as<float>();
 			
 			LNX_LOG_INFO("Loaded outline preferences from project");
 		}

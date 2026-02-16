@@ -30,7 +30,7 @@ namespace Lunex {
 		if (m_Initialized) return;
 		if (width == 0 || height == 0) return;
 
-		m_Width  = width;
+		m_Width = width;
 		m_Height = height;
 
 		CreateResources();
@@ -72,7 +72,7 @@ namespace Lunex {
 		if (width == 0 || height == 0) return;
 		if (width == m_Width && height == m_Height) return;
 
-		m_Width  = width;
+		m_Width = width;
 		m_Height = height;
 
 		// Recreate FBOs at new size
@@ -83,7 +83,7 @@ namespace Lunex {
 		// Silhouette FBO: RGBA8 color + depth
 		{
 			RHI::FramebufferDesc desc;
-			desc.Width  = m_Width;
+			desc.Width = m_Width;
 			desc.Height = m_Height;
 			desc.AddColorAttachment(RHI::TextureFormat::RGBA8);
 			desc.SetDepthAttachment(RHI::TextureFormat::Depth24Stencil8);
@@ -94,7 +94,7 @@ namespace Lunex {
 		// Blur ping FBO: RGBA8, no depth
 		{
 			RHI::FramebufferDesc desc;
-			desc.Width  = m_Width;
+			desc.Width = m_Width;
 			desc.Height = m_Height;
 			desc.AddColorAttachment(RHI::TextureFormat::RGBA8);
 			desc.DebugName = "OutlineBlurPingFBO";
@@ -104,7 +104,7 @@ namespace Lunex {
 		// Blur pong FBO: RGBA8, no depth
 		{
 			RHI::FramebufferDesc desc;
-			desc.Width  = m_Width;
+			desc.Width = m_Width;
 			desc.Height = m_Height;
 			desc.AddColorAttachment(RHI::TextureFormat::RGBA8);
 			desc.DebugName = "OutlineBlurPongFBO";
@@ -126,8 +126,8 @@ namespace Lunex {
 	void OutlineRenderer::CreateResources() {
 		// ---- Shaders ----
 		m_SilhouetteShader = Shader::Create("assets/shaders/OutlineSilhouette.glsl");
-		m_BlurShader       = Shader::Create("assets/shaders/OutlineBlur.glsl");
-		m_CompositeShader  = Shader::Create("assets/shaders/OutlineComposite.glsl");
+		m_BlurShader = Shader::Create("assets/shaders/OutlineBlur.glsl");
+		m_CompositeShader = Shader::Create("assets/shaders/OutlineComposite.glsl");
 
 		// ---- UBOs ----
 		m_SilhouetteUBO = UniformBuffer::Create(sizeof(SilhouetteUBOData), 8);
@@ -154,7 +154,7 @@ namespace Lunex {
 		m_FullscreenQuadVB->SetLayout({
 			{ ShaderDataType::Float2, "a_Position" },
 			{ ShaderDataType::Float2, "a_TexCoord" },
-		});
+			});
 		m_FullscreenQuadVA->AddVertexBuffer(m_FullscreenQuadVB);
 		m_FullscreenQuadIB = IndexBuffer::Create(quadIndices, 6);
 		m_FullscreenQuadVA->SetIndexBuffer(m_FullscreenQuadIB);
@@ -163,7 +163,7 @@ namespace Lunex {
 		// Silhouette FBO
 		{
 			RHI::FramebufferDesc desc;
-			desc.Width  = m_Width;
+			desc.Width = m_Width;
 			desc.Height = m_Height;
 			desc.AddColorAttachment(RHI::TextureFormat::RGBA8);
 			desc.SetDepthAttachment(RHI::TextureFormat::Depth24Stencil8);
@@ -174,7 +174,7 @@ namespace Lunex {
 		// Blur ping
 		{
 			RHI::FramebufferDesc desc;
-			desc.Width  = m_Width;
+			desc.Width = m_Width;
 			desc.Height = m_Height;
 			desc.AddColorAttachment(RHI::TextureFormat::RGBA8);
 			desc.DebugName = "OutlineBlurPingFBO";
@@ -184,7 +184,7 @@ namespace Lunex {
 		// Blur pong
 		{
 			RHI::FramebufferDesc desc;
-			desc.Width  = m_Width;
+			desc.Width = m_Width;
 			desc.Height = m_Height;
 			desc.AddColorAttachment(RHI::TextureFormat::RGBA8);
 			desc.DebugName = "OutlineBlurPongFBO";

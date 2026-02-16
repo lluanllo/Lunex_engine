@@ -846,6 +846,47 @@ namespace Lunex {
 		MeshCollider3DComponent(const MeshCollider3DComponent&) = default;
 	};
 
+	struct CylinderCollider3DComponent {
+		glm::vec3 HalfExtents = { 0.5f, 0.5f, 0.5f }; // x=radius, y=halfHeight, z=radius
+		glm::vec3 Offset = { 0.0f, 0.0f, 0.0f };
+		
+		CylinderCollider3DComponent() = default;
+		CylinderCollider3DComponent(const CylinderCollider3DComponent&) = default;
+	};
+
+	struct ConeCollider3DComponent {
+		float Radius = 0.5f;
+		float Height = 1.0f;
+		glm::vec3 Offset = { 0.0f, 0.0f, 0.0f };
+		
+		ConeCollider3DComponent() = default;
+		ConeCollider3DComponent(const ConeCollider3DComponent&) = default;
+	};
+
+	struct CharacterController3DComponent {
+		// Capsule shape for the character
+		float Radius = 0.3f;
+		float Height = 1.8f;
+		
+		// Movement properties
+		float StepHeight = 0.35f;       // Max step the character can climb
+		float MaxSlopeAngle = 45.0f;    // Max slope angle in degrees the character can walk
+		float MoveSpeed = 5.0f;         // Default movement speed (m/s)
+		float JumpForce = 5.0f;         // Initial jump velocity (m/s)
+		float GravityScale = 1.0f;      // Multiplier for gravity
+		
+		// Ground detection
+		float SkinWidth = 0.08f;        // Small offset to prevent getting stuck
+		bool IsGrounded = false;        // Runtime: is the character on the ground
+		
+		// Runtime data (not serialized)
+		void* RuntimeController = nullptr;
+		void* RuntimeGhostObject = nullptr;
+		
+		CharacterController3DComponent() = default;
+		CharacterController3DComponent(const CharacterController3DComponent&) = default;
+	};
+
 	// C++ Script Component - integración con sistema de scripting dinámico
 	// SOPORTA MÚLTIPLES SCRIPTS POR ENTIDAD
 	struct ScriptComponent {
@@ -1108,7 +1149,8 @@ namespace Lunex {
 		CircleRendererComponent, CameraComponent, NativeScriptComponent,
 		Rigidbody2DComponent, BoxCollider2DComponent, CircleCollider2DComponent,
 		Rigidbody3DComponent, BoxCollider3DComponent, SphereCollider3DComponent, 
-		CapsuleCollider3DComponent, MeshCollider3DComponent,
+		CapsuleCollider3DComponent, CylinderCollider3DComponent, ConeCollider3DComponent,
+		MeshCollider3DComponent, CharacterController3DComponent,
 		MeshComponent, MaterialComponent, LightComponent, TextureComponent, ScriptComponent,
-		RelationshipComponent, EnvironmentComponent>;  // Added EnvironmentComponent
+		RelationshipComponent, EnvironmentComponent>;
 }

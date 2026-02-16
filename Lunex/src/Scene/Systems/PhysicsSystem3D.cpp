@@ -95,9 +95,22 @@ namespace Lunex {
 	// ========================================================================
 
 	void PhysicsSystem3D::InitializePhysics() {
+		// Read current global PhysicsCore config (set by SettingsPanel presets)
+		const PhysicsConfig& globalConfig = PhysicsCore::Get().GetConfig();
+		
+		// Use global gravity if our local settings haven't been explicitly changed
+		// (i.e., if they're still at the default value)
+		m_Settings.Gravity = globalConfig.Gravity;
+		m_Settings.FixedTimestep = globalConfig.FixedTimestep;
+		
 		PhysicsConfig config;
 		config.Gravity = m_Settings.Gravity;
 		config.FixedTimestep = m_Settings.FixedTimestep;
+		config.MaxSubSteps = m_Settings.MaxSubsteps;
+		config.SolverIterations = globalConfig.SolverIterations;
+		config.DefaultCcdMotionThreshold = globalConfig.DefaultCcdMotionThreshold;
+		config.DefaultCcdSweptSphereRadius = globalConfig.DefaultCcdSweptSphereRadius;
+		config.EnableDebugDraw = globalConfig.EnableDebugDraw;
 		PhysicsCore::Get().Initialize(config);
 		
 		m_Initialized = true;
@@ -144,6 +157,60 @@ namespace Lunex {
 				float scaledHeight = cc3d.Height * transform.Scale.y;
 				collider->CreateCapsuleShape(scaledRadius, scaledHeight);
 				collider->SetOffset(cc3d.Offset);
+			}
+			else if (m_Context->Registry->all_of<CylinderCollider3DComponent>(e)) {
+				auto& cy3d = m_Context->Registry->get<CylinderCollider3DComponent>(e);
+				glm::vec3 scaledHalfExtents = cy3d.HalfExtents * transform.Scale;
+				collider->CreateCylinderShape(scaledHalfExtents);
+				collider->SetOffset(cy3d.Offset);
+			}
+			else if (m_Context->Registry->all_of<ConeCollider3DComponent>(e)) {
+				auto& cn3d = m_Context->Registry->get<ConeCollider3DComponent>(e);
+				float scaledRadius = cn3d.Radius * std::max(transform.Scale.x, transform.Scale.z);
+				float scaledHeight = cn3d.Height * transform.Scale.y;
+				collider->CreateConeShape(scaledRadius, scaledHeight);
+				collider->SetOffset(cn3d.Offset);
+			}
+			else if (m_Context->Registry->all_of<MeshCollider3DComponent>(e)) {
+				auto& mc3d = m_Context->Registry->get<MeshCollider3DComponent>(e);
+				bool created = false;
+				
+				if (mc3d.UseEntityMesh && m_Context->Registry->all_of<MeshComponent>(e)) {
+					auto& meshComp = m_Context->Registry->get<MeshComponent>(e);
+					if (meshComp.MeshModel) {
+						std::vector<glm::vec3> vertices;
+						std::vector<uint32_t> indices;
+						for (const auto& submesh : meshComp.MeshModel->GetMeshes()) {
+							uint32_t offset = static_cast<uint32_t>(vertices.size());
+							for (const auto& v : submesh->GetVertices()) {
+								vertices.push_back(v.Position * transform.Scale);
+							}
+							for (const auto& idx : submesh->GetIndices()) {
+								indices.push_back(idx + offset);
+							}
+						}
+						if (!vertices.empty()) {
+							if (mc3d.Type == MeshCollider3DComponent::CollisionType::Convex) {
+								collider->CreateConvexHullShape(vertices);
+							} else {
+								collider->CreateTriangleMeshShape(vertices, indices);
+							}
+							created = true;
+						}
+					}
+				}
+				else if (!mc3d.Vertices.empty()) {
+					if (mc3d.Type == MeshCollider3DComponent::CollisionType::Convex) {
+						collider->CreateConvexHullShape(mc3d.Vertices);
+					} else {
+						collider->CreateTriangleMeshShape(mc3d.Vertices, mc3d.Indices);
+					}
+					created = true;
+				}
+				
+				if (!created) {
+					collider->CreateBoxShape(glm::vec3(0.5f) * transform.Scale);
+				}
 			}
 			else {
 				// Default box collider

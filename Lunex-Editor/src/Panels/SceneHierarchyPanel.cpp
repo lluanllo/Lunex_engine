@@ -80,9 +80,9 @@ namespace Lunex {
 		
 		ScopedStyle padding(ImGuiStyleVar_FramePadding, ImVec2(8, 4));
 		ScopedColor buttonColors({
-			{ImGuiCol_Button, Color(0.16f, 0.16f, 0.18f, 1.0f)},
-			{ImGuiCol_ButtonHovered, Color(0.22f, 0.22f, 0.25f, 1.0f)},
-			{ImGuiCol_ButtonActive, Color(0.26f, 0.50f, 0.85f, 0.6f)}
+			{ImGuiCol_Button, Color(0.13f, 0.16f, 0.20f, 1.0f)},
+			{ImGuiCol_ButtonHovered, Color(0.18f, 0.22f, 0.27f, 1.0f)},
+			{ImGuiCol_ButtonActive, Color(0.055f, 0.647f, 0.769f, 0.6f)}
 		});
 		
 		if (ImGui::Button("+ Create")) {
@@ -99,13 +99,13 @@ namespace Lunex {
 			// 3D Objects submenu
 			if (ImGui::BeginMenu("3D Object")) {
 				if (ImGui::MenuItem("Cube"))
-					CreateEntityWithComponent<MeshComponent>("Cube");
+					CreateMeshEntity("Cube", ModelType::Cube);
 				if (ImGui::MenuItem("Sphere"))
-					CreateEntityWithComponent<MeshComponent>("Sphere");
+					CreateMeshEntity("Sphere", ModelType::Sphere);
 				if (ImGui::MenuItem("Plane"))
-					CreateEntityWithComponent<MeshComponent>("Plane");
+					CreateMeshEntity("Plane", ModelType::Plane);
 				if (ImGui::MenuItem("Cylinder"))
-					CreateEntityWithComponent<MeshComponent>("Cylinder");
+					CreateMeshEntity("Cylinder", ModelType::Cylinder);
 				ImGui::EndMenu();
 			}
 			
@@ -165,9 +165,9 @@ namespace Lunex {
 		using namespace UI;
 		
 		ScopedColor frameColors({
-			{ImGuiCol_FrameBg, Color(0.14f, 0.14f, 0.16f, 1.0f).ToImVec4()},
-			{ImGuiCol_FrameBgHovered, Color(0.18f, 0.18f, 0.20f, 1.0f).ToImVec4()},
-			{ImGuiCol_FrameBgActive, Color(0.20f, 0.40f, 0.68f, 0.3f).ToImVec4()}
+			{ImGuiCol_FrameBg, Color(0.09f, 0.11f, 0.14f, 1.0f).ToImVec4()},
+			{ImGuiCol_FrameBgHovered, Color(0.12f, 0.15f, 0.19f, 1.0f).ToImVec4()},
+			{ImGuiCol_FrameBgActive, Color(0.055f, 0.647f, 0.769f, 0.3f).ToImVec4()}
 		});
 		
 		ImGui::SetNextItemWidth(-1);
@@ -241,7 +241,7 @@ namespace Lunex {
 				CreateEntityWithComponent<SpriteRendererComponent>("Sprite");
 			
 			if (ImGui::MenuItem("3D Object"))
-				CreateEntityWithComponent<MeshComponent>("Cube");
+				CreateMeshEntity("Cube", ModelType::Cube);
 			
 			ImGui::EndPopup();
 		}
@@ -393,7 +393,7 @@ namespace Lunex {
 		
 		if (isRenaming) {
 			ImGui::SetKeyboardFocusHere();
-			ScopedColor frameColor(ImGuiCol_FrameBg, Color(0.18f, 0.40f, 0.65f, 0.3f).ToImVec4());
+			ScopedColor frameColor(ImGuiCol_FrameBg, Color(0.055f, 0.647f, 0.769f, 0.2f).ToImVec4());
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 20.0f);
 			
 			if (ImGui::InputText("##RenameEntity", m_RenameBuffer, sizeof(m_RenameBuffer), 

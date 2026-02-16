@@ -21,7 +21,7 @@ namespace Lunex::UI {
 		float itemSpacing = 2.0f;
 		float iconSize = 16.0f;
 		float arrowWidth = 20.0f;
-		Color headerColor = Color(0.14f, 0.14f, 0.14f, 0.0f);
+		Color headerColor = Color(0.11f, 0.14f, 0.17f, 0.0f);
 		Color hoverColor = Colors::BgHover();
 		Color selectedColor = Colors::Selected();
 		Color textColor = Colors::TextPrimary();

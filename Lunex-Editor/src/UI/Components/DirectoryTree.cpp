@@ -162,10 +162,10 @@ namespace Lunex::UI {
 		ImVec2 itemMin = ImGui::GetItemRectMin();
 		ImVec2 itemMax = ImGui::GetItemRectMax();
 		
-		ImU32 highlightColor = IM_COL32(90, 150, 255, 80);
+		ImU32 highlightColor = IM_COL32(14, 165, 196, 60);
 		drawList->AddRectFilled(itemMin, itemMax, highlightColor);
 		
-		ImU32 borderColor = IM_COL32(90, 150, 255, 200);
+		ImU32 borderColor = IM_COL32(14, 165, 196, 200);
 		drawList->AddRect(itemMin, itemMax, borderColor, 0.0f, 0, 2.0f);
 		
 		// Accept single item

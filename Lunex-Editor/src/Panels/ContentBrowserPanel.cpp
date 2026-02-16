@@ -11,6 +11,8 @@
 #include "Assets/Mesh/MeshAsset.h"
 #include "Asset/Prefab.h"
 #include "Assets/Core/AssetRegistry.h"
+#include "Assets/Core/AssetDatabase.h"
+#include "Project/ProjectManager.h"
 #include <sstream>
 
 namespace Lunex {
@@ -20,12 +22,12 @@ namespace Lunex {
 	// PANEL STYLE CONSTANTS
 	// ============================================================================
 	namespace PanelColors {
-		static constexpr UI::Color WindowBg(0.12f, 0.12f, 0.13f, 1.0f);
-		static constexpr UI::Color ChildBg(0.12f, 0.12f, 0.13f, 1.0f);
-		static constexpr UI::Color Border(0.08f, 0.08f, 0.09f, 1.0f);
-		static constexpr UI::Color SidebarBg(0.10f, 0.10f, 0.11f, 1.0f);
-		static constexpr UI::Color FileGridBg(0.14f, 0.14f, 0.15f, 1.0f);
-		static constexpr UI::Color BottomBarBg(0.09f, 0.09f, 0.09f, 1.0f);
+		static constexpr UI::Color WindowBg(0.082f, 0.102f, 0.129f, 1.0f);   // #151A21 blue-tinted
+		static constexpr UI::Color ChildBg(0.082f, 0.102f, 0.129f, 1.0f);
+		static constexpr UI::Color Border(0.06f, 0.08f, 0.10f, 1.0f);        // Blue-tinted dark border
+		static constexpr UI::Color SidebarBg(0.071f, 0.090f, 0.114f, 1.0f);  // Slightly darker blue-tinted
+		static constexpr UI::Color FileGridBg(0.102f, 0.125f, 0.157f, 1.0f); // #1A2028 blue-tinted
+		static constexpr UI::Color BottomBarBg(0.06f, 0.08f, 0.10f, 1.0f);   // Blue-tinted very dark
 	}
 
 	// ============================================================================
@@ -284,12 +286,12 @@ namespace Lunex {
 			
 			if (!m_ContextMenuTargetItem.empty()) {
 				ScopedColor popupColors({
-					{ImGuiCol_PopupBg, Color(0.16f, 0.16f, 0.18f, 1.0f)},
+					{ImGuiCol_PopupBg, Color(0.10f, 0.13f, 0.16f, 0.98f)},
 					{ImGuiCol_Border, PanelColors::Border},
-					{ImGuiCol_Header, Color(0.20f, 0.22f, 0.26f, 1.0f)},
-					{ImGuiCol_HeaderHovered, Color(0.26f, 0.50f, 0.85f, 0.55f)},
-					{ImGuiCol_HeaderActive, Color(0.26f, 0.50f, 0.85f, 0.75f)},
-					{ImGuiCol_Text, Color(0.92f, 0.92f, 0.94f, 1.0f)},
+					{ImGuiCol_Header, Color(0.13f, 0.16f, 0.20f, 1.0f)},
+					{ImGuiCol_HeaderHovered, Color(0.055f, 0.647f, 0.769f, 0.35f)},
+					{ImGuiCol_HeaderActive, Color(0.055f, 0.647f, 0.769f, 0.50f)},
+					{ImGuiCol_Text, Colors::TextPrimary()},
 					{ImGuiCol_Separator, PanelColors::Border}
 				});
 				ScopedStyle popupPadding(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
@@ -330,9 +332,9 @@ namespace Lunex {
 		
 		ScopedColor barColors({
 			{ImGuiCol_ChildBg, PanelColors::BottomBarBg},
-			{ImGuiCol_FrameBg, Color(0.15f, 0.15f, 0.15f, 1.0f)},
-			{ImGuiCol_SliderGrab, Color(0.50f, 0.50f, 0.50f, 1.0f)},
-			{ImGuiCol_SliderGrabActive, Color(0.70f, 0.70f, 0.70f, 1.0f)}
+			{ImGuiCol_FrameBg, Color(0.09f, 0.11f, 0.14f, 1.0f)},
+			{ImGuiCol_SliderGrab, Color(0.20f, 0.24f, 0.30f, 1.0f)},
+			{ImGuiCol_SliderGrabActive, Colors::Primary()}
 		});
 		
 		if (BeginChild("BottomBar", Size(0, 0), false)) {
@@ -411,12 +413,12 @@ namespace Lunex {
 		using namespace UI;
 		
 		ScopedColor popupColors({
-			{ImGuiCol_PopupBg, Color(0.16f, 0.16f, 0.18f, 1.0f)},
+			{ImGuiCol_PopupBg, Color(0.10f, 0.13f, 0.16f, 0.98f)},
 			{ImGuiCol_Border, PanelColors::Border},
-			{ImGuiCol_Header, Color(0.20f, 0.22f, 0.26f, 1.0f)},
-			{ImGuiCol_HeaderHovered, Color(0.26f, 0.50f, 0.85f, 0.55f)},
-			{ImGuiCol_HeaderActive, Color(0.26f, 0.50f, 0.85f, 0.75f)},
-			{ImGuiCol_Text, Color(0.92f, 0.92f, 0.94f, 1.0f)},
+			{ImGuiCol_Header, Color(0.13f, 0.16f, 0.20f, 1.0f)},
+			{ImGuiCol_HeaderHovered, Color(0.055f, 0.647f, 0.769f, 0.35f)},
+			{ImGuiCol_HeaderActive, Color(0.055f, 0.647f, 0.769f, 0.50f)},
+			{ImGuiCol_Text, Colors::TextPrimary()},
 			{ImGuiCol_Separator, PanelColors::Border}
 		});
 		ScopedStyle popupPadding(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
@@ -839,7 +841,15 @@ namespace Lunex {
 					auto originalCameraPos = m_MaterialPreviewRenderer->GetCameraPosition();
 					auto originalBgColor = m_MaterialPreviewRenderer->GetBackgroundColor();
 
-					m_MaterialPreviewRenderer->SetCameraPosition(glm::vec3(2.0f, 1.2f, 2.5f));
+					// Compute camera position from model bounds for proper centering
+					glm::vec3 boundsMin = meshAsset->GetBoundsMin();
+					glm::vec3 boundsMax = meshAsset->GetBoundsMax();
+					// If metadata bounds are zero (not computed), compute from model directly
+					if (glm::length(boundsMax - boundsMin) < 0.001f) {
+						MaterialPreviewRenderer::ComputeModelBounds(meshAsset->GetModel(), boundsMin, boundsMax);
+					}
+					glm::vec3 cameraPos = MaterialPreviewRenderer::ComputeCameraForBounds(boundsMin, boundsMax);
+					m_MaterialPreviewRenderer->SetCameraPosition(cameraPos);
 					m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.447f, 0.592f, 0.761f, 1.0f));
 
 					auto defaultMaterial = CreateRef<MaterialAsset>("MeshPreview");
@@ -899,7 +909,14 @@ namespace Lunex {
 											auto originalCameraPos = m_MaterialPreviewRenderer->GetCameraPosition();
 											auto originalBgColor = m_MaterialPreviewRenderer->GetBackgroundColor();
 
-											m_MaterialPreviewRenderer->SetCameraPosition(glm::vec3(2.2f, 1.5f, 2.8f));
+											// Compute camera position from model bounds for proper centering
+											glm::vec3 boundsMin = meshAsset->GetBoundsMin();
+											glm::vec3 boundsMax = meshAsset->GetBoundsMax();
+											if (glm::length(boundsMax - boundsMin) < 0.001f) {
+												MaterialPreviewRenderer::ComputeModelBounds(meshAsset->GetModel(), boundsMin, boundsMax);
+											}
+											glm::vec3 cameraPos = MaterialPreviewRenderer::ComputeCameraForBounds(boundsMin, boundsMax);
+											m_MaterialPreviewRenderer->SetCameraPosition(cameraPos);
 											m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.447f, 0.592f, 0.761f, 1.0f));
 
 											auto defaultMaterial = CreateRef<MaterialAsset>("PrefabPreview");
@@ -1240,6 +1257,8 @@ extern "C"
 			if (it != m_TextureCache.end()) {
 				m_TextureCache.erase(it);
 			}
+			
+			ProjectManager::RefreshAssetDatabase();
 		}
 		catch (const std::exception& e) {
 			LNX_LOG_ERROR("Failed to delete {0}: {1}", path.string(), e.what());
@@ -1293,6 +1312,8 @@ extern "C"
 				m_TextureCache.erase(it);
 				m_TextureCache[newPath.string()] = texture;
 			}
+			
+			ProjectManager::RefreshAssetDatabase();
 		}
 		catch (const std::exception& e) {
 			LNX_LOG_ERROR("Failed to rename {0}: {1}", oldPath.string(), e.what());
@@ -1324,6 +1345,7 @@ extern "C"
 			}
 
 			LNX_LOG_INFO("Duplicated {0} as {1}", path.filename().string(), destPath.filename().string());
+			ProjectManager::RefreshAssetDatabase();
 		}
 		catch (const std::exception& e) {
 			LNX_LOG_ERROR("Failed to duplicate {0}: {1}", path.filename().string(), e.what());
@@ -1348,6 +1370,7 @@ extern "C"
 				LNX_LOG_ERROR("Failed to import {0}: {1}", file, e.what());
 			}
 		}
+		ProjectManager::RefreshAssetDatabase();
 	}
 
 	void ContentBrowserPanel::ImportFilesToFolder(const std::vector<std::string>& files, const std::filesystem::path& targetFolder) {
@@ -1368,6 +1391,7 @@ extern "C"
 				LNX_LOG_ERROR("Failed to import {0}: {1}", file, e.what());
 			}
 		}
+		ProjectManager::RefreshAssetDatabase();
 	}
 
 	// ============================================================================
@@ -1538,7 +1562,7 @@ extern "C"
 
 	// ============================================================================
 	// CLIPBOARD OPERATIONS
-	// ============================================================================
+	// ==============================================================================
 
 	void ContentBrowserPanel::CopySelectedItems() {
 		m_ClipboardOperation = ClipboardOperation::Copy;
@@ -1607,6 +1631,7 @@ extern "C"
 		}
 
 		ClearSelection();
+		ProjectManager::RefreshAssetDatabase();
 	}
 
 	bool ContentBrowserPanel::CanPaste() const {

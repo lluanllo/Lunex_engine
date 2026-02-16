@@ -124,10 +124,10 @@ namespace Lunex::UI {
 	// ============================================================================
 	
 	namespace Colors {
-		// Primary palette (Hazel-style subtle warm accent - not orange)
-		inline Color Primary()      { return Color::FromHex(0x2979FF); }      // Clean blue accent
-		inline Color PrimaryHover() { return Color::FromHex(0x448AFF); }      // Lighter blue
-		inline Color PrimaryActive(){ return Color::FromHex(0x2962FF); }      // Deeper blue
+		// Primary palette (Teal/Cyan accent - modern editor style)
+		inline Color Primary()      { return Color::FromHex(0x0EA5C4); }      // Teal/Cyan accent
+		inline Color PrimaryHover() { return Color::FromHex(0x22BDD8); }      // Lighter teal
+		inline Color PrimaryActive(){ return Color::FromHex(0x0990AD); }      // Deeper teal
 		
 		// Semantic colors
 		inline Color Success()      { return Color::FromHex(0x4CAF50); }      // Material green
@@ -136,22 +136,22 @@ namespace Lunex::UI {
 		inline Color Info()         { return Color::FromHex(0x42A5F5); }      // Light blue
 		
 		// Text colors (proper contrast hierarchy)
-		inline Color TextPrimary()  { return Color(0.90f, 0.90f, 0.92f, 1.0f); }  // Near white, cool
-		inline Color TextSecondary(){ return Color(0.56f, 0.56f, 0.58f, 1.0f); }  // Medium gray
-		inline Color TextMuted()    { return Color(0.38f, 0.38f, 0.40f, 1.0f); }  // Dark gray
-		inline Color TextDisabled() { return Color(0.28f, 0.28f, 0.30f, 1.0f); }  // Very dark gray
+		inline Color TextPrimary()  { return Color(0.88f, 0.90f, 0.92f, 1.0f); }  // Near white, cool tint
+		inline Color TextSecondary(){ return Color(0.50f, 0.54f, 0.58f, 1.0f); }  // Medium gray-blue
+		inline Color TextMuted()    { return Color(0.34f, 0.38f, 0.42f, 1.0f); }  // Dark gray-blue
+		inline Color TextDisabled() { return Color(0.26f, 0.28f, 0.32f, 1.0f); }  // Very dark gray-blue
 		
-		// Background colors (Hazel-style dark with cool undertone)
-		inline Color BgDark()       { return Color::FromHex(0x181818); }      // Darkest background
-		inline Color BgMedium()     { return Color::FromHex(0x1E1E1E); }      // Main panel background
-		inline Color BgLight()      { return Color::FromHex(0x252526); }      // Elevated panels
-		inline Color BgCard()       { return Color::FromHex(0x222222); }      // Card background
-		inline Color BgHover()      { return Color::FromHex(0x2A2D2E); }      // Hover state (cool)
+		// Background colors (Blue-tinted dark theme)
+		inline Color BgDark()       { return Color::FromHex(0x151A21); }      // Darkest background
+		inline Color BgMedium()     { return Color::FromHex(0x1A2028); }      // Main panel background
+		inline Color BgLight()      { return Color::FromHex(0x212830); }      // Elevated panels
+		inline Color BgCard()       { return Color::FromHex(0x1E2530); }      // Card background
+		inline Color BgHover()      { return Color::FromHex(0x252D38); }      // Hover state
 		
 		// Border colors
-		inline Color Border()       { return Color::FromHex(0x1A1A1A); }      // Dark border
-		inline Color BorderLight()  { return Color::FromHex(0x333333); }      // Subtle border
-		inline Color BorderFocus()  { return Color(0.16f, 0.47f, 1.0f, 0.50f); } // Blue focus glow
+		inline Color Border()       { return Color::FromHex(0x1A2028); }      // Dark border
+		inline Color BorderLight()  { return Color::FromHex(0x2A3340); }      // Subtle border
+		inline Color BorderFocus()  { return Color(0.05f, 0.65f, 0.77f, 0.50f); } // Teal focus glow
 		
 		// Axis colors (standard R/G/B)
 		inline Color AxisX()        { return Color(0.89f, 0.22f, 0.21f, 1.0f); }  // Red
@@ -161,9 +161,9 @@ namespace Lunex::UI {
 		inline Color AxisZ()        { return Color(0.22f, 0.46f, 0.93f, 1.0f); }  // Blue
 		inline Color AxisZHover()   { return Color(0.32f, 0.56f, 1.00f, 1.0f); }
 		
-		// Selection colors (blue tinted)
-		inline Color Selected()     { return Color(0.16f, 0.47f, 1.0f, 0.18f); }
-		inline Color SelectedBorder(){ return Color::FromHex(0x2979FF); }
+		// Selection colors (teal tinted)
+		inline Color Selected()     { return Color(0.05f, 0.65f, 0.77f, 0.18f); }
+		inline Color SelectedBorder(){ return Color::FromHex(0x0EA5C4); }
 		
 		// Shadow
 		inline Color Shadow()       { return Color(0.0f, 0.0f, 0.0f, 0.50f); }
@@ -201,8 +201,8 @@ namespace Lunex::UI {
 		constexpr float SectionIndent = 12.0f;
 		
 		constexpr float CardRounding = 4.0f;
-		constexpr float ButtonRounding = 3.0f;
-		constexpr float InputRounding = 2.0f;
+		constexpr float ButtonRounding = 4.0f;
+		constexpr float InputRounding = 3.0f;
 	}
 
 	// ============================================================================

@@ -139,6 +139,7 @@ namespace Lunex {
 			friend class SceneSerializer;
 			friend class SceneHierarchyPanel;
 			friend class ScriptingEngine;
+			friend class PhysicsSystem;
 			friend class PhysicsSystem2D;
 			friend class PhysicsSystem3D;
 			friend class ScriptSystem;

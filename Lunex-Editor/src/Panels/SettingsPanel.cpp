@@ -7,9 +7,14 @@
 #include "SettingsPanel.h"
 #include "ContentBrowserPanel.h"
 
+#include "Core/Application.h"
 #include "Renderer/SkyboxRenderer.h"
 #include "Renderer/Shadows/ShadowSystem.h"
+#include "Renderer/GridRenderer.h"
+#include "Rendering/RenderSystem.h"
 #include "Scene/Lighting/LightSystem.h"
+#include "Physics/PhysicsCore.h"
+#include "Physics/PhysicsConfig.h"
 #include "Log/Log.h"
 
 #include <filesystem>
@@ -25,19 +30,156 @@ namespace Lunex {
 			return;
 		}
 		
-		DrawEnvironmentSection();
-		
-		Separator();
-		
-		DrawShadowsSection();
-		
-		Separator();
-		
-		DrawPhysics2DSection();
-		
-		DrawPhysics3DSection();
+		if (BeginTabBar("SettingsTabs")) {
+			if (BeginTabItem("Render")) {
+				DrawRenderTab();
+				EndTabItem();
+			}
+			if (BeginTabItem("Environment")) {
+				DrawEnvironmentTab();
+				EndTabItem();
+			}
+			if (BeginTabItem("Shadows")) {
+				DrawShadowsTab();
+				EndTabItem();
+			}
+			if (BeginTabItem("Physics")) {
+				DrawPhysicsTab();
+				EndTabItem();
+			}
+			EndTabBar();
+		}
 		
 		EndPanel();
+	}
+	
+	// ========================================
+	// RENDER TAB
+	// ========================================
+	
+	void SettingsPanel::DrawRenderTab() {
+		using namespace UI;
+		
+		DrawRenderSection();
+	}
+	
+	// ========================================
+	// ENVIRONMENT TAB
+	// ========================================
+	
+	void SettingsPanel::DrawEnvironmentTab() {
+		DrawEnvironmentSection();
+	}
+	
+	// ========================================
+	// SHADOWS TAB
+	// ========================================
+	
+	void SettingsPanel::DrawShadowsTab() {
+		DrawShadowsSection();
+	}
+	
+	// ========================================
+	// RENDER SECTION
+	// ========================================
+	
+	void SettingsPanel::DrawRenderSection() {
+		using namespace UI;
+		
+		if (BeginSection("Renderer", true)) {
+			auto& config = RenderSystem::GetConfig();
+			
+			// ========================================
+			// QUALITY SETTINGS
+			// ========================================
+			Text("Quality");
+			AddSpacing(SpacingValues::XS);
+			
+			if (PropertyCheckbox("VSync", config.EnableVSync, "Enable vertical synchronization")) {
+				auto& window = Application::Get().GetWindow();
+				window.SetVSync(config.EnableVSync);
+			}
+			
+			if (PropertyCheckbox("HDR Rendering", config.EnableHDR, "Enable High Dynamic Range rendering")) {
+			}
+			
+			if (config.EnableHDR) {
+				if (PropertyFloat("Exposure", config.Exposure, 0.01f, 0.01f, 10.0f, "Tone mapping exposure")) {
+				}
+			}
+			
+			if (PropertyCheckbox("MSAA", config.EnableMSAA, "Enable Multi-Sample Anti-Aliasing")) {
+			}
+			
+			if (config.EnableMSAA) {
+				int msaaIdx = 0;
+				const char* msaaOptions[] = { "2x", "4x", "8x" };
+				int msaaValues[] = { 2, 4, 8 };
+				for (int i = 0; i < 3; i++) {
+					if (msaaValues[i] == (int)config.MSAASamples) { msaaIdx = i; break; }
+				}
+				if (PropertyDropdown("MSAA Samples", msaaIdx, msaaOptions, 3, "Number of MSAA samples")) {
+					config.MSAASamples = msaaValues[msaaIdx];
+				}
+			}
+			
+			Separator();
+			
+			// ========================================
+			// POST-PROCESSING
+			// ========================================
+			Text("Post-Processing");
+			AddSpacing(SpacingValues::XS);
+			
+			if (PropertyCheckbox("Bloom", config.EnableBloom, "Enable bloom effect")) {
+			}
+			
+			if (PropertyCheckbox("SSAO", config.EnableSSAO, "Enable Screen-Space Ambient Occlusion")) {
+			}
+			
+			Separator();
+			
+			// ========================================
+			// GRID SETTINGS
+			// ========================================
+			Text("Editor Grid");
+			AddSpacing(SpacingValues::XS);
+			
+			auto& gridSettings = GridRenderer::GetSettings();
+			
+			if (PropertyColor("Grid Color", gridSettings.GridColor)) {
+			}
+			
+			if (PropertyFloat("Grid Scale", gridSettings.GridScale, 0.1f, 0.1f, 100.0f, "Size of each grid cell in units")) {
+			}
+			
+			if (PropertyFloat("Grid Extent", gridSettings.FadeDistance, 1.0f, 5.0f, 500.0f, "How far the grid extends")) {
+			}
+			
+			if (PropertyFloat("Minor Thickness", gridSettings.MinorLineThickness, 0.1f, 0.1f, 5.0f, "Minor grid line thickness")) {
+			}
+			
+			if (PropertyFloat("Major Thickness", gridSettings.MajorLineThickness, 0.1f, 0.1f, 5.0f, "Major grid line thickness (every 10 lines)")) {
+			}
+			
+			Separator();
+			
+			// ========================================
+			// PERFORMANCE
+			// ========================================
+			Text("Performance");
+			AddSpacing(SpacingValues::XS);
+			
+			bool parallelPasses = RenderSystem::IsParallelPassesEnabled();
+			if (PropertyCheckbox("Parallel Passes", parallelPasses, "Enable parallel render pass execution")) {
+				RenderSystem::SetParallelPassesEnabled(parallelPasses);
+			}
+			
+			if (PropertyCheckbox("Parallel Draw Collection", config.EnableParallelDrawCollection, "Enable parallel entity iteration for draw commands")) {
+			}
+			
+			EndSection();
+		}
 	}
 	
 	void SettingsPanel::DrawEnvironmentSection() {
@@ -235,11 +377,11 @@ namespace Lunex {
 			
 			bool hasSunLight = LightSystem::Get().HasSunLight();
 			if (hasSunLight) {
-				TextColored(Colors::Success(), "Sun Light detected — CSM active");
+				TextColored(Colors::Success(), "Sun Light detected ~ CSM active");
 			} else {
 				uint32_t dirCount = LightSystem::Get().GetDirectionalLightCount();
 				if (dirCount > 0) {
-					TextColored(Colors::Info(), "%d Directional Light(s) — CSM active", dirCount);
+					TextColored(Colors::Info(), "%d Directional Light(s) ~ CSM active", dirCount);
 				} else {
 					TextColored(Colors::TextMuted(), "No directional lights in scene");
 				}
@@ -327,9 +469,9 @@ namespace Lunex {
 			
 			// Point bias
 			if (PropertyFloat("Point Bias", config.PointBias, 0.001f, 0.0f, 0.5f, "Depth bias for point light shadows")) {
-				configChanged = true;
-			}
-			
+                configChanged = true;
+            }
+            
 			Separator();
 			
 			// ========================================
@@ -394,6 +536,158 @@ namespace Lunex {
 			// Apply config changes
 			if (configChanged) {
 				shadowSystem.SetConfig(config);
+			}
+			
+			EndSection();
+		}
+	}
+	
+	void SettingsPanel::DrawPhysicsTab() {
+		DrawPhysicsGeneralSection();
+		
+		DrawPhysics2DSection();
+		
+		DrawPhysics3DSection();
+	}
+	
+	void SettingsPanel::DrawPhysicsGeneralSection() {
+		using namespace UI;
+		
+		if (BeginSection("General Physics", true)) {
+			auto& physicsCore = PhysicsCore::Get();
+			PhysicsConfig config = physicsCore.GetConfig();
+			bool configChanged = false;
+			
+			// ========================================
+			// GRAVITY
+			// ========================================
+			Text("World Gravity");
+			AddSpacing(SpacingValues::XS);
+			
+			glm::vec3 gravity = config.Gravity;
+			if (PropertyFloat("Gravity X", gravity.x, 0.1f, -100.0f, 100.0f, "Horizontal gravity (m/s^2)")) {
+				config.Gravity.x = gravity.x;
+				configChanged = true;
+			}
+			if (PropertyFloat("Gravity Y", gravity.y, 0.1f, -100.0f, 100.0f, "Vertical gravity (m/s^2), -9.81 = Earth")) {
+				config.Gravity.y = gravity.y;
+				configChanged = true;
+			}
+			if (PropertyFloat("Gravity Z", gravity.z, 0.1f, -100.0f, 100.0f, "Depth gravity (m/s^2)")) {
+				config.Gravity.z = gravity.z;
+				configChanged = true;
+			}
+			
+			// Gravity presets
+			AddSpacing(SpacingValues::XS);
+			Text("Presets:");
+			AddSpacing(SpacingValues::XS);
+			
+			if (Button("Earth", ButtonVariant::Outline)) {
+				config.Gravity = glm::vec3(0.0f, -9.81f, 0.0f);
+				configChanged = true;
+			}
+			ImGui::SameLine();
+			if (Button("Moon", ButtonVariant::Outline)) {
+				config.Gravity = glm::vec3(0.0f, -1.62f, 0.0f);
+				configChanged = true;
+			}
+			ImGui::SameLine();
+			if (Button("Mars", ButtonVariant::Outline)) {
+				config.Gravity = glm::vec3(0.0f, -3.72f, 0.0f);
+				configChanged = true;
+			}
+			ImGui::SameLine();
+			if (Button("Zero-G", ButtonVariant::Outline)) {
+				config.Gravity = glm::vec3(0.0f, 0.0f, 0.0f);
+				configChanged = true;
+			}
+			
+			Separator();
+			
+			// ========================================
+			// SIMULATION SETTINGS
+			// ========================================
+			Text("Simulation");
+			AddSpacing(SpacingValues::XS);
+			
+			const char* timestepOptions[] = { "30 Hz", "60 Hz", "120 Hz", "240 Hz" };
+			float timestepValues[] = { 1.0f / 30.0f, 1.0f / 60.0f, 1.0f / 120.0f, 1.0f / 240.0f };
+			int timestepIdx = 1;
+			for (int i = 0; i < 4; i++) {
+				if (std::abs(timestepValues[i] - config.FixedTimestep) < 0.0001f) { timestepIdx = i; break; }
+			}
+			if (PropertyDropdown("Fixed Timestep", timestepIdx, timestepOptions, 4, "Physics simulation frequency")) {
+				config.FixedTimestep = timestepValues[timestepIdx];
+				configChanged = true;
+			}
+			
+			float maxSubStepsF = static_cast<float>(config.MaxSubSteps);
+			if (PropertyFloat("Max Substeps", maxSubStepsF, 1.0f, 1.0f, 60.0f, "Maximum physics substeps per frame")) {
+				config.MaxSubSteps = static_cast<int>(maxSubStepsF);
+				configChanged = true;
+			}
+			
+			float solverIterF = static_cast<float>(config.SolverIterations);
+			if (PropertyFloat("Solver Iterations", solverIterF, 1.0f, 1.0f, 100.0f, "Higher = more stable stacking, slower")) {
+				config.SolverIterations = static_cast<int>(solverIterF);
+				configChanged = true;
+			}
+			
+			Separator();
+			
+			// ========================================
+			// CCD (Continuous Collision Detection)
+			// ========================================
+			Text("Continuous Collision Detection");
+			AddSpacing(SpacingValues::XS);
+			
+			TextWrapped("CCD prevents fast-moving objects from tunneling through thin surfaces.", TextVariant::Muted);
+			AddSpacing(SpacingValues::XS);
+			
+			if (PropertyFloat("Motion Threshold", config.DefaultCcdMotionThreshold, 0.01f, 0.0f, 10.0f,
+				"Objects moving faster than this (m/frame) use CCD")) {
+				configChanged = true;
+			}
+			
+			if (PropertyFloat("Swept Sphere Radius", config.DefaultCcdSweptSphereRadius, 0.01f, 0.0f, 5.0f,
+				"Radius for CCD swept sphere test")) {
+				configChanged = true;
+			}
+			
+			Separator();
+			
+			// ========================================
+			// DEBUG
+			// ========================================
+			Text("Debug");
+			AddSpacing(SpacingValues::XS);
+			
+			bool debugDraw = config.EnableDebugDraw;
+			if (PropertyCheckbox("Debug Draw", debugDraw, "Render physics debug wireframes")) {
+				config.EnableDebugDraw = debugDraw;
+				configChanged = true;
+			}
+			
+			Separator();
+			
+			// ========================================
+			// STATISTICS
+			// ========================================
+			Text("Statistics");
+			AddSpacing(SpacingValues::XS);
+			
+			auto* world = physicsCore.GetWorld();
+			if (world) {
+				TextColored(Colors::TextSecondary(), "  Rigid Bodies: %d", world->GetNumRigidBodies());
+				TextColored(Colors::TextSecondary(), "  Contact Manifolds: %d", world->GetNumManifolds());
+				TextColored(Colors::TextSecondary(), "  Sim Steps (total): %d", physicsCore.GetSimulationSteps());
+			} else {
+				TextColored(Colors::TextMuted(), "  Physics not initialized");
+			}
+			
+			if (configChanged) {
+				physicsCore.SetConfig(config);
 			}
 			
 			EndSection();

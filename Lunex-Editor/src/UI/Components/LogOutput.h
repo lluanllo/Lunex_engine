@@ -60,7 +60,7 @@ namespace Lunex::UI {
 	struct LogOutputStyle {
 		// Background colors
 		Color Background = Colors::BgDark();
-		Color FilterBarBg = Color::FromHex(0x1A1A1A);
+		Color FilterBarBg = Color::FromHex(0x151A21);
 		
 		// Text colors by level
 		Color TraceColor = Color(0.45f, 0.45f, 0.45f, 1.0f);
@@ -81,8 +81,8 @@ namespace Lunex::UI {
 		Color CompileWarningColor = Color(1.0f, 0.65f, 0.0f, 1.0f);
 		
 		// UI colors
-		Color TimestampColor = Color(0.35f, 0.35f, 0.37f, 1.0f);
-		Color CategoryColor = Color(0.45f, 0.65f, 0.85f, 1.0f);
+		Color TimestampColor = Color(0.30f, 0.34f, 0.38f, 1.0f);
+		Color CategoryColor = Color(0.35f, 0.60f, 0.80f, 1.0f);
 		
 		// Sizing
 		float MessageSpacing = 2.0f;
