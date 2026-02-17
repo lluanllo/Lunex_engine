@@ -7,6 +7,7 @@
  * Features:
  * - Real-time PBR material preview
  * - Clean, professional UI using Lunex UI Framework
+ * - Collapsible sections with persistent state
  * - Drag & drop texture support
  * - Layered (ORM) texture support
  * - Height/Parallax mapping
@@ -22,6 +23,7 @@
 #include "Resources/Render/MaterialInstance.h"
 #include "Renderer/MaterialPreviewRenderer.h"
 
+#include <imgui.h>
 #include <filesystem>
 #include <functional>
 
@@ -72,6 +74,17 @@ namespace Lunex {
 		bool m_AutoSave = false;
 		bool m_HasUnsavedChanges = false;
 
+		// Section collapse state (persistent during session)
+		bool m_SectionBaseColor = true;
+		bool m_SectionPBR = true;
+		bool m_SectionSurface = false;
+		bool m_SectionTextures = true;
+		bool m_SectionLayered = false;
+		bool m_SectionEmission = false;
+		bool m_SectionHeight = false;
+		bool m_SectionDetail = false;
+		bool m_SectionInfo = false;
+
 		// Preview state
 		uint32_t m_PreviewWidth = 512;
 		uint32_t m_PreviewHeight = 512;
@@ -83,17 +96,30 @@ namespace Lunex {
 		void DrawPreviewViewport();
 		void DrawPropertiesPanel();
 
-		// Section drawing
+		// Section drawing - reorganized for clarity
+		void DrawBaseColorSection();
 		void DrawPBRPropertiesSection();
-		void DrawEmissionSection();
 		void DrawSurfaceSettingsSection();
 		void DrawTextureMapsSection();
 		void DrawLayeredTextureSection();
+		void DrawEmissionSection();
 		void DrawHeightMapSection();
 		void DrawDetailMapSection();
 		void DrawMaterialInfoSection();
 
-		// New texture slot with callbacks
+		// Collapsible section header helper
+		// accentColor: optional ImVec4 accent bar color (pass nullptr for no accent)
+		bool DrawSectionHeader(const char* label, bool& isOpen, const ImVec4* accentColor = nullptr);
+
+		// Compact texture slot
+		void DrawTextureSlotCompact(
+			const std::string& label,
+			Ref<Texture2D> texture,
+			const std::string& path,
+			std::function<void(Ref<Texture2D>)> onTextureSet,
+			std::function<void()> onTextureClear);
+
+		// New texture slot with callbacks (kept for compatibility)
 		void DrawTextureSlotNew(
 			const std::string& label,
 			Ref<Texture2D> texture,
