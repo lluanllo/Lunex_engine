@@ -60,6 +60,7 @@ namespace Lunex {
 		// Initialize imnodes context
 		ImNodes::CreateContext();
 		ImNodes::GetIO().LinkDetachWithModifierClick.Modifier = &ImGui::GetIO().KeyCtrl;
+		ImNodes::GetIO().AltMouseButton = ImGuiMouseButton_Right;
 	}
 	
 	void ImGuiLayer::OnDetach() {

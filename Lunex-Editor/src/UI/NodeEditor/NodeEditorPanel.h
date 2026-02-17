@@ -16,6 +16,7 @@
 #include <imnodes.h>
 #include <functional>
 #include <string>
+#include <unordered_set>
 
 namespace Lunex {
 
@@ -47,6 +48,10 @@ namespace Lunex {
 
 		// Properties panel for selected node
 		virtual void DrawNodeProperties(NodeGraph::Node& node) {}
+
+		// Node preview thumbnail rendering (like Blender Node Preview addon)
+		// Return true if a preview was rendered for this node
+		virtual bool DrawNodePreview(NodeGraph::Node& node, NodeGraph::NodeGraph& graph) { return false; }
 	};
 
 	// ============================================================================
@@ -106,12 +111,14 @@ namespace Lunex {
 		void HandleLinkCreation();
 		void HandleLinkDeletion();
 		void HandleNodeDeletion();
-		void HandleContextMenu();
+		void HandleLinkCutting();
+		void HandleCtrlClickConnect();
 
 		// ========== HELPERS ==========
 
 		void CreateNodeAtPosition(const std::string& typeName, const glm::vec2& position);
 		void NotifyGraphChanged();
+		void AutoConnectToOutput(NodeGraph::NodeID nodeID);
 
 	private:
 		Ref<NodeGraph::NodeGraph> m_Graph;
@@ -125,6 +132,7 @@ namespace Lunex {
 		bool m_ShowMiniMap = true;
 		bool m_ShowProperties = true;
 		bool m_ShowGrid = true;
+		bool m_ShowNodePreviews = true;
 
 		// Context menu state
 		bool m_OpenCreatePopup = false;
@@ -133,6 +141,15 @@ namespace Lunex {
 
 		// Selection state
 		NodeGraph::NodeID m_SelectedNodeID = NodeGraph::InvalidNodeID;
+
+		// Track which nodes have been positioned in imnodes (to avoid resetting every frame)
+		std::unordered_set<NodeGraph::NodeID> m_InitializedNodePositions;
+
+		// Link cutting state (Ctrl+RMB drag to cut links, like Blender)
+		bool m_IsCuttingLinks = false;
+		ImVec2 m_CutLineStart = { 0.0f, 0.0f };
+		ImVec2 m_CutLineEnd = { 0.0f, 0.0f };
+		ImVec2 m_CutStartPanning = { 0.0f, 0.0f };
 
 		// Callbacks
 		GraphChangedCallback m_OnGraphChanged;

@@ -993,7 +993,9 @@ namespace Lunex {
 	void EditorLayer::OnEvent(Lunex::Event& e) {
 		m_CameraController.OnEvent(e);
 		if (m_SceneState == SceneState::Edit) {
-			m_EditorCamera.OnEvent(e);
+			if (m_ViewportPanel.IsViewportHovered()) {
+				m_EditorCamera.OnEvent(e);
+			}
 		}
 		
 		// Forward events to Content Browser for file drop
