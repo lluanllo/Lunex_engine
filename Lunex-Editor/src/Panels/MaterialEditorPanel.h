@@ -3,17 +3,21 @@
 /**
  * @file MaterialEditorPanel.h
  * @brief AAA-Quality Material Editor Panel
- * 
+ *
  * Features:
  * - Real-time PBR material preview
  * - Clean, professional UI using Lunex UI Framework
  * - Drag & drop texture support
+ * - Layered (ORM) texture support
+ * - Height/Parallax mapping
+ * - Detail normal maps
+ * - Surface settings (alpha mode, two-sided, UV tiling)
  * - Hot-reload support
  */
 
 #include "Core/Core.h"
 
-// AAA Architecture - Material system
+ // AAA Architecture - Material system
 #include "Assets/Materials/MaterialAsset.h"
 #include "Resources/Render/MaterialInstance.h"
 #include "Renderer/MaterialPreviewRenderer.h"
@@ -26,11 +30,6 @@ namespace Lunex {
 	/**
 	 * @class MaterialEditorPanel
 	 * @brief Visual material editor with real-time preview
-	 * 
-	 * AAA Architecture Integration:
-	 * - Uses MaterialAsset from Assets/Materials/
-	 * - Uses Lunex UI Framework for consistent styling
-	 * - Supports hot-reload through MaterialRegistry
 	 */
 	class MaterialEditorPanel {
 	public:
@@ -47,7 +46,7 @@ namespace Lunex {
 		Ref<MaterialAsset> GetEditingMaterial() const { return m_EditingMaterial; }
 
 		// ========== CALLBACKS ==========
-		
+
 		using MaterialSavedCallback = std::function<void(const std::filesystem::path&)>;
 		void SetOnMaterialSavedCallback(MaterialSavedCallback callback) { m_OnMaterialSaved = callback; }
 
@@ -77,18 +76,23 @@ namespace Lunex {
 		uint32_t m_PreviewWidth = 512;
 		uint32_t m_PreviewHeight = 512;
 
-		// ========== UI DRAWING (New AAA API) ==========
+		// ========== UI DRAWING ==========
 
 		void DrawMainLayout();
 		void DrawMenuBar();
 		void DrawPreviewViewport();
 		void DrawPropertiesPanel();
-		
+
 		// Section drawing
 		void DrawPBRPropertiesSection();
 		void DrawEmissionSection();
+		void DrawSurfaceSettingsSection();
 		void DrawTextureMapsSection();
-		
+		void DrawLayeredTextureSection();
+		void DrawHeightMapSection();
+		void DrawDetailMapSection();
+		void DrawMaterialInfoSection();
+
 		// New texture slot with callbacks
 		void DrawTextureSlotNew(
 			const std::string& label,
@@ -102,9 +106,9 @@ namespace Lunex {
 		bool DrawColorProperty(const char* label, glm::vec4& color);
 		bool DrawColor3Property(const char* label, glm::vec3& color);
 		bool DrawFloatProperty(const char* label, float& value, float min, float max);
-		void DrawTextureSlot(const char* label, const char* icon, 
-							 Ref<Texture2D> texture, const std::string& path,
-							 std::function<void(const std::string&)> loadFunc);
+		void DrawTextureSlot(const char* label, const char* icon,
+			Ref<Texture2D> texture, const std::string& path,
+			std::function<void(const std::string&)> loadFunc);
 
 		// ========== HELPERS ==========
 

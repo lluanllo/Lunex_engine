@@ -3,7 +3,7 @@
 /**
  * @file Material.h
  * @brief GPU-facing material for rendering
- * 
+ *
  * AAA Architecture: Material lives in Resources/Render/
  * This is the runtime GPU resource, not the asset.
  */
@@ -17,7 +17,7 @@ namespace Lunex {
 	/**
 	 * @class Material
 	 * @brief GPU-ready material data for rendering
-	 * 
+	 *
 	 * This is the runtime representation used by the renderer.
 	 * Created from MaterialAsset or MaterialInstance.
 	 */
@@ -28,7 +28,7 @@ namespace Lunex {
 		~Material() = default;
 
 		// ========== PBR PROPERTIES ==========
-		
+
 		void SetColor(const glm::vec4& color) { m_Color = color; }
 		void SetMetallic(float metallic) { m_Metallic = glm::clamp(metallic, 0.0f, 1.0f); }
 		void SetRoughness(float roughness) { m_Roughness = glm::clamp(roughness, 0.0f, 1.0f); }
@@ -44,7 +44,7 @@ namespace Lunex {
 		float GetEmissionIntensity() const { return m_EmissionIntensity; }
 
 		// ========== GPU DATA ==========
-		
+
 		struct MaterialData {
 			glm::vec4 Color;
 			float Metallic;
@@ -52,9 +52,8 @@ namespace Lunex {
 			float Specular;
 			float EmissionIntensity;
 			glm::vec3 EmissionColor;
-			float _padding;
-			glm::vec3 ViewPos;
-			
+			float NormalIntensity;
+
 			int UseAlbedoMap;
 			int UseNormalMap;
 			int UseMetallicMap;
@@ -62,41 +61,79 @@ namespace Lunex {
 			int UseSpecularMap;
 			int UseEmissionMap;
 			int UseAOMap;
-			float _padding2;
-			
+			int UseLayeredMap;
+
 			float MetallicMultiplier;
 			float RoughnessMultiplier;
 			float SpecularMultiplier;
 			float AOMultiplier;
+
+			glm::vec2 UVTiling;
+			glm::vec2 UVOffset;
+
+			int LayeredChannelMetallic;
+			int LayeredChannelRoughness;
+			int LayeredChannelAO;
+			int UseHeightMap;
+
+			float HeightScale;
+			int UseDetailNormalMap;
+			float DetailNormalScale;
+			float AlphaCutoff;
+
+			glm::vec2 DetailUVTiling;
+			int AlphaMode;
+			int FlipNormalMapY;
+
+			int AlbedoColorSpace;
+			int NormalColorSpace;
+			int LayeredColorSpace;
+			int EmissionColorSpace;
 		};
 
-		MaterialData GetMaterialData(const glm::vec3& viewPos, bool hasAlbedo, bool hasNormal, 
-									 bool hasMetallic, bool hasRoughness, bool hasSpecular,
-									 bool hasEmission, bool hasAO,
-									 float metallicMult, float roughnessMult, 
-									 float specularMult, float aoMult) const {
-			return {
-				m_Color,
-				m_Metallic,
-				m_Roughness,
-				m_Specular,
-				m_EmissionIntensity,
-				m_EmissionColor,
-				0.0f,
-				viewPos,
-				hasAlbedo ? 1 : 0,
-				hasNormal ? 1 : 0,
-				hasMetallic ? 1 : 0,
-				hasRoughness ? 1 : 0,
-				hasSpecular ? 1 : 0,
-				hasEmission ? 1 : 0,
-				hasAO ? 1 : 0,
-				0.0f,
-				metallicMult,
-				roughnessMult,
-				specularMult,
-				aoMult
-			};
+		MaterialData GetMaterialData(const glm::vec3& viewPos, bool hasAlbedo, bool hasNormal,
+			bool hasMetallic, bool hasRoughness, bool hasSpecular,
+			bool hasEmission, bool hasAO,
+			float metallicMult, float roughnessMult,
+			float specularMult, float aoMult) const {
+			MaterialData data{};
+			data.Color = m_Color;
+			data.Metallic = m_Metallic;
+			data.Roughness = m_Roughness;
+			data.Specular = m_Specular;
+			data.EmissionIntensity = m_EmissionIntensity;
+			data.EmissionColor = m_EmissionColor;
+			data.NormalIntensity = 1.0f;
+			data.UseAlbedoMap = hasAlbedo ? 1 : 0;
+			data.UseNormalMap = hasNormal ? 1 : 0;
+			data.UseMetallicMap = hasMetallic ? 1 : 0;
+			data.UseRoughnessMap = hasRoughness ? 1 : 0;
+			data.UseSpecularMap = hasSpecular ? 1 : 0;
+			data.UseEmissionMap = hasEmission ? 1 : 0;
+			data.UseAOMap = hasAO ? 1 : 0;
+			data.UseLayeredMap = 0;
+			data.MetallicMultiplier = metallicMult;
+			data.RoughnessMultiplier = roughnessMult;
+			data.SpecularMultiplier = specularMult;
+			data.AOMultiplier = aoMult;
+			data.UVTiling = glm::vec2(1.0f, 1.0f);
+			data.UVOffset = glm::vec2(0.0f, 0.0f);
+			data.LayeredChannelMetallic = 0;
+			data.LayeredChannelRoughness = 1;
+			data.LayeredChannelAO = 2;
+			data.UseHeightMap = 0;
+			data.HeightScale = 0.05f;
+			data.UseDetailNormalMap = 0;
+			data.DetailNormalScale = 1.0f;
+			data.AlphaCutoff = 0.5f;
+			data.DetailUVTiling = glm::vec2(4.0f, 4.0f);
+			data.AlphaMode = 0;
+			data.FlipNormalMapY = 0;
+			data.AlbedoColorSpace = 0;  // sRGB
+			data.NormalColorSpace = 1;   // Linear
+			data.LayeredColorSpace = 1;  // Linear
+			data.EmissionColorSpace = 0; // sRGB
+			return data;
 		}
 
 	private:

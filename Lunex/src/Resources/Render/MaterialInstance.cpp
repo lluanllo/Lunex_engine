@@ -29,7 +29,7 @@ namespace Lunex {
 
 	Ref<MaterialInstance> MaterialInstance::Clone() const {
 		auto clone = CreateRef<MaterialInstance>(m_BaseAsset);
-		
+
 		clone->m_HasLocalOverrides = m_HasLocalOverrides;
 		clone->m_AlbedoOverride = m_AlbedoOverride;
 		clone->m_MetallicOverride = m_MetallicOverride;
@@ -42,7 +42,7 @@ namespace Lunex {
 		clone->m_RoughnessMultiplierOverride = m_RoughnessMultiplierOverride;
 		clone->m_SpecularMultiplierOverride = m_SpecularMultiplierOverride;
 		clone->m_AOMultiplierOverride = m_AOMultiplierOverride;
-		
+
 		return clone;
 	}
 
@@ -75,7 +75,8 @@ namespace Lunex {
 		if (asOverride) {
 			m_AlbedoOverride = color;
 			MarkAsOverridden();
-		} else {
+		}
+		else {
 			m_BaseAsset->SetAlbedo(color);
 		}
 	}
@@ -88,7 +89,8 @@ namespace Lunex {
 		if (asOverride) {
 			m_MetallicOverride = metallic;
 			MarkAsOverridden();
-		} else {
+		}
+		else {
 			m_BaseAsset->SetMetallic(metallic);
 		}
 	}
@@ -101,7 +103,8 @@ namespace Lunex {
 		if (asOverride) {
 			m_RoughnessOverride = roughness;
 			MarkAsOverridden();
-		} else {
+		}
+		else {
 			m_BaseAsset->SetRoughness(roughness);
 		}
 	}
@@ -114,7 +117,8 @@ namespace Lunex {
 		if (asOverride) {
 			m_SpecularOverride = specular;
 			MarkAsOverridden();
-		} else {
+		}
+		else {
 			m_BaseAsset->SetSpecular(specular);
 		}
 	}
@@ -127,7 +131,8 @@ namespace Lunex {
 		if (asOverride) {
 			m_EmissionColorOverride = color;
 			MarkAsOverridden();
-		} else {
+		}
+		else {
 			m_BaseAsset->SetEmissionColor(color);
 		}
 	}
@@ -140,7 +145,8 @@ namespace Lunex {
 		if (asOverride) {
 			m_EmissionIntensityOverride = intensity;
 			MarkAsOverridden();
-		} else {
+		}
+		else {
 			m_BaseAsset->SetEmissionIntensity(intensity);
 		}
 	}
@@ -153,7 +159,8 @@ namespace Lunex {
 		if (asOverride) {
 			m_NormalIntensityOverride = intensity;
 			MarkAsOverridden();
-		} else {
+		}
+		else {
 			m_BaseAsset->SetNormalIntensity(intensity);
 		}
 	}
@@ -166,7 +173,8 @@ namespace Lunex {
 		if (asOverride) {
 			m_MetallicMultiplierOverride = multiplier;
 			MarkAsOverridden();
-		} else {
+		}
+		else {
 			m_BaseAsset->SetMetallicMultiplier(multiplier);
 		}
 	}
@@ -179,7 +187,8 @@ namespace Lunex {
 		if (asOverride) {
 			m_RoughnessMultiplierOverride = multiplier;
 			MarkAsOverridden();
-		} else {
+		}
+		else {
 			m_BaseAsset->SetRoughnessMultiplier(multiplier);
 		}
 	}
@@ -192,7 +201,8 @@ namespace Lunex {
 		if (asOverride) {
 			m_SpecularMultiplierOverride = multiplier;
 			MarkAsOverridden();
-		} else {
+		}
+		else {
 			m_BaseAsset->SetSpecularMultiplier(multiplier);
 		}
 	}
@@ -205,35 +215,28 @@ namespace Lunex {
 		if (asOverride) {
 			m_AOMultiplierOverride = multiplier;
 			MarkAsOverridden();
-		} else {
+		}
+		else {
 			m_BaseAsset->SetAOMultiplier(multiplier);
 		}
 	}
 
 	MaterialAsset::MaterialUniformData MaterialInstance::GetUniformData() const {
-		MaterialAsset::MaterialUniformData data;
+		// Delegate to base asset which now fills all fields, then apply overrides
+		MaterialAsset::MaterialUniformData data = m_BaseAsset->GetUniformData();
 
-		data.Albedo = GetAlbedo();
-		data.Metallic = GetMetallic();
-		data.Roughness = GetRoughness();
-		data.Specular = GetSpecular();
-		data.EmissionIntensity = GetEmissionIntensity();
-		data.EmissionColor = GetEmissionColor();
-		data.NormalIntensity = GetNormalIntensity();
-
-		data.UseAlbedoMap = HasAlbedoMap() ? 1 : 0;
-		data.UseNormalMap = HasNormalMap() ? 1 : 0;
-		data.UseMetallicMap = HasMetallicMap() ? 1 : 0;
-		data.UseRoughnessMap = HasRoughnessMap() ? 1 : 0;
-		data.UseSpecularMap = HasSpecularMap() ? 1 : 0;
-		data.UseEmissionMap = HasEmissionMap() ? 1 : 0;
-		data.UseAOMap = HasAOMap() ? 1 : 0;
-		data._padding = 0.0f;
-
-		data.MetallicMultiplier = GetMetallicMultiplier();
-		data.RoughnessMultiplier = GetRoughnessMultiplier();
-		data.SpecularMultiplier = GetSpecularMultiplier();
-		data.AOMultiplier = GetAOMultiplier();
+		// Apply local overrides
+		if (m_AlbedoOverride) data.Albedo = *m_AlbedoOverride;
+		if (m_MetallicOverride) data.Metallic = *m_MetallicOverride;
+		if (m_RoughnessOverride) data.Roughness = *m_RoughnessOverride;
+		if (m_SpecularOverride) data.Specular = *m_SpecularOverride;
+		if (m_EmissionIntensityOverride) data.EmissionIntensity = *m_EmissionIntensityOverride;
+		if (m_EmissionColorOverride) data.EmissionColor = *m_EmissionColorOverride;
+		if (m_NormalIntensityOverride) data.NormalIntensity = *m_NormalIntensityOverride;
+		if (m_MetallicMultiplierOverride) data.MetallicMultiplier = *m_MetallicMultiplierOverride;
+		if (m_RoughnessMultiplierOverride) data.RoughnessMultiplier = *m_RoughnessMultiplierOverride;
+		if (m_SpecularMultiplierOverride) data.SpecularMultiplier = *m_SpecularMultiplierOverride;
+		if (m_AOMultiplierOverride) data.AOMultiplier = *m_AOMultiplierOverride;
 
 		return data;
 	}
@@ -246,6 +249,10 @@ namespace Lunex {
 		if (auto specularMap = GetSpecularMap()) specularMap->Bind(4);
 		if (auto emissionMap = GetEmissionMap()) emissionMap->Bind(5);
 		if (auto aoMap = GetAOMap()) aoMap->Bind(6);
+		if (auto layeredMap = GetLayeredMap()) layeredMap->Bind(7);
+		// binding 8,9,10 = IBL, binding 11 = shadow atlas
+		if (auto heightMap = GetHeightMap()) heightMap->Bind(12);
+		if (auto detailNormalMap = GetDetailNormalMap()) detailNormalMap->Bind(13);
 	}
 
 } // namespace Lunex
