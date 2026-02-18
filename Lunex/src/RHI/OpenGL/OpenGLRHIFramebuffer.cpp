@@ -83,9 +83,14 @@ namespace RHI {
 		}
 		
 		// Check framebuffer completeness
-		GLenum status = glCheckNamedFramebufferStatus(m_FramebufferID, GL_FRAMEBUFFER);
-		if (status != GL_FRAMEBUFFER_COMPLETE) {
-			LNX_LOG_ERROR("Framebuffer incomplete! Status: 0x{0:X}", status);
+		// Skip check for FBOs with no attachments (e.g. shadow atlas FBO where
+		// depth texture array layers are attached dynamically per render pass)
+		bool hasAnyAttachment = !m_ColorAttachments.empty() || m_Desc.HasDepth;
+		if (hasAnyAttachment) {
+			GLenum status = glCheckNamedFramebufferStatus(m_FramebufferID, GL_FRAMEBUFFER);
+			if (status != GL_FRAMEBUFFER_COMPLETE) {
+				LNX_LOG_ERROR("Framebuffer incomplete! Status: 0x{0:X}", status);
+			}
 		}
 	}
 	

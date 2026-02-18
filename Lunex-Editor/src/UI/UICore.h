@@ -400,4 +400,32 @@ namespace Lunex::UI {
 		bool m_Pushed = false;
 	};
 
+	// ============================================================================
+	// IMGUI WRAPPERS (avoid direct ImGui usage in panels)
+	// ============================================================================
+
+	namespace ColorVar {
+		inline constexpr ImGuiCol WindowBg = ImGuiCol_WindowBg;
+		inline constexpr ImGuiCol ChildBg = ImGuiCol_ChildBg;
+		inline constexpr ImGuiCol Border = ImGuiCol_Border;
+		inline constexpr ImGuiCol Text = ImGuiCol_Text;
+		inline constexpr ImGuiCol Button = ImGuiCol_Button;
+		inline constexpr ImGuiCol ButtonHovered = ImGuiCol_ButtonHovered;
+		inline constexpr ImGuiCol ButtonActive = ImGuiCol_ButtonActive;
+	}
+
+	namespace StyleVar {
+		inline constexpr ImGuiStyleVar WindowPadding = ImGuiStyleVar_WindowPadding;
+		inline constexpr ImGuiStyleVar WindowRounding = ImGuiStyleVar_WindowRounding;
+		inline constexpr ImGuiStyleVar ItemSpacing = ImGuiStyleVar_ItemSpacing;
+		inline constexpr ImGuiStyleVar FrameRounding = ImGuiStyleVar_FrameRounding;
+	}
+
+	namespace WindowFlags {
+		inline constexpr ImGuiWindowFlags MenuBar = ImGuiWindowFlags_MenuBar;
+		inline constexpr ImGuiWindowFlags NoNavInputs = ImGuiWindowFlags_NoNavInputs;
+		inline constexpr ImGuiWindowFlags NoScrollbar = ImGuiWindowFlags_NoScrollbar;
+		inline constexpr ImGuiWindowFlags NoScrollWithMouse = ImGuiWindowFlags_NoScrollWithMouse;
+	}
+
 } // namespace Lunex::UI

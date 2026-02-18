@@ -37,10 +37,18 @@ void main() {
 	Output.Normal = N;
 	Output.TexCoords = a_TexCoords;
 	
-	vec3 T = normalize(normalMatrix * a_Tangent);
+	vec3 rawT = normalMatrix * a_Tangent;
+	
+	// Handle degenerate tangents (e.g. sphere poles where tangent is zero)
+	if (dot(rawT, rawT) < 0.0001) {
+		// Generate a fallback tangent perpendicular to the normal
+		vec3 up = abs(N.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+		rawT = cross(N, up);
+	}
+	
+	vec3 T = normalize(rawT);
 	T = normalize(T - dot(T, N) * N);
-	vec3 B = normalize(normalMatrix * a_Bitangent);
-	B = normalize(B - dot(B, N) * N - dot(B, T) * T);
+	vec3 B = cross(N, T);
 	Output.TBN = mat3(T, B, N);
 	
 	v_EntityID = a_EntityID;
@@ -474,8 +482,8 @@ float D_GGX(float NdotH, float roughness) {
 
 // Height-correlated Smith GGX visibility term
 float V_SmithGGXCorrelated(float NdotV, float NdotL, float roughness) {
-	float a2 = roughness * roughness;
-	a2 = a2 * a2; // roughness^4 for perceptual roughness remapping
+	float a = roughness * roughness;
+	float a2 = a * a;
 	
 	float lambdaV = NdotL * sqrt(NdotV * NdotV * (1.0 - a2) + a2);
 	float lambdaL = NdotV * sqrt(NdotL * NdotL * (1.0 - a2) + a2);
@@ -1100,8 +1108,10 @@ void main() {
 	
 	roughness = max(roughness, MIN_ROUGHNESS);
 	
-	// Specular anti-aliasing: widen roughness on surfaces with high-frequency normals
-	roughness = SpecularAntiAliasing(N, roughness);
+	// Specular anti-aliasing: only apply when normal maps are active (high-frequency normals)
+	if (u_UseNormalMap != 0 || u_UseDetailNormalMap != 0) {
+		roughness = SpecularAntiAliasing(N, roughness);
+	}
 	
 	float specular = u_Specular;
 	if (u_UseSpecularMap != 0) {
@@ -1112,10 +1122,9 @@ void main() {
 	
 	vec3 V = normalize(u_ViewPos - Input.FragPos);
 	
-	vec3 F0 = vec3(MIN_DIELECTRIC_F0);
+	vec3 F0 = vec3(MIN_DIELECTRIC_F0 * specular);
 	F0 = mix(F0, albedo, metallic);
-	F0 = mix(F0 * specular, F0, metallic);
-	
+
 	vec3 directLighting = CalculateDirectLighting(N, V, F0, albedo, metallic, roughness, Input.FragPos, ao);
 	
 	vec3 ambient;

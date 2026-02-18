@@ -6,7 +6,7 @@
  *
  * Features:
  * - Real-time PBR material preview
- * - Clean, professional UI using Lunex UI Framework
+ * - Clean, professional UI using Lunex UI Framework exclusively
  * - Collapsible sections with persistent state
  * - Drag & drop texture support
  * - Layered (ORM) texture support
@@ -18,12 +18,14 @@
 
 #include "Core/Core.h"
 
- // AAA Architecture - Material system
 #include "Assets/Materials/MaterialAsset.h"
 #include "Resources/Render/MaterialInstance.h"
 #include "Renderer/MaterialPreviewRenderer.h"
 
-#include <imgui.h>
+#include "../UI/UICore.h"
+#include "../UI/UIComponents.h"
+#include "../UI/UILayout.h"
+
 #include <filesystem>
 #include <functional>
 
@@ -74,7 +76,7 @@ namespace Lunex {
 		bool m_AutoSave = false;
 		bool m_HasUnsavedChanges = false;
 
-		// Section collapse state (persistent during session)
+		// Section collapse state
 		bool m_SectionBaseColor = true;
 		bool m_SectionPBR = true;
 		bool m_SectionSurface = false;
@@ -96,7 +98,6 @@ namespace Lunex {
 		void DrawPreviewViewport();
 		void DrawPropertiesPanel();
 
-		// Section drawing - reorganized for clarity
 		void DrawBaseColorSection();
 		void DrawPBRPropertiesSection();
 		void DrawSurfaceSettingsSection();
@@ -106,35 +107,6 @@ namespace Lunex {
 		void DrawHeightMapSection();
 		void DrawDetailMapSection();
 		void DrawMaterialInfoSection();
-
-		// Collapsible section header helper
-		// accentColor: optional ImVec4 accent bar color (pass nullptr for no accent)
-		bool DrawSectionHeader(const char* label, bool& isOpen, const ImVec4* accentColor = nullptr);
-
-		// Compact texture slot
-		void DrawTextureSlotCompact(
-			const std::string& label,
-			Ref<Texture2D> texture,
-			const std::string& path,
-			std::function<void(Ref<Texture2D>)> onTextureSet,
-			std::function<void()> onTextureClear);
-
-		// New texture slot with callbacks (kept for compatibility)
-		void DrawTextureSlotNew(
-			const std::string& label,
-			Ref<Texture2D> texture,
-			const std::string& path,
-			std::function<void(Ref<Texture2D>)> onTextureSet,
-			std::function<void()> onTextureClear);
-
-		// ========== LEGACY API (backwards compatibility) ==========
-
-		bool DrawColorProperty(const char* label, glm::vec4& color);
-		bool DrawColor3Property(const char* label, glm::vec3& color);
-		bool DrawFloatProperty(const char* label, float& value, float min, float max);
-		void DrawTextureSlot(const char* label, const char* icon,
-			Ref<Texture2D> texture, const std::string& path,
-			std::function<void(const std::string&)> loadFunc);
 
 		// ========== HELPERS ==========
 

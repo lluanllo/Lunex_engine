@@ -251,6 +251,41 @@ namespace Lunex::UI {
 						  bool enabled = true);
 	
 	// ============================================================================
+	// WINDOW UTILITIES
+	// ============================================================================
+
+	/**
+	 * @brief Set the size of the next window (first use only by default)
+	 */
+	void SetNextWindowSize(const Size& size);
+
+	/**
+	 * @brief Begin a styled window (ImGui window with consistent styling)
+	 * Uses Begin instead of BeginPanel for floating/dockable windows
+	 * @return true if the window is visible
+	 */
+	bool BeginWindow(const std::string& title, bool* open = nullptr, ImGuiWindowFlags flags = 0);
+	void EndWindow();
+
+	/**
+	 * @brief Get the available content region size
+	 */
+	Size GetContentRegionAvail();
+
+	/**
+	 * @brief Get/Set cursor position (local to current window)
+	 */
+	Position GetCursorPos();
+	void SetCursorPos(const Position& pos);
+	void SetCursorPosX(float x);
+	void SetCursorPosY(float y);
+
+	/**
+	 * @brief Calculate text size
+	 */
+	Size CalcTextSize(const std::string& text);
+
+	// ============================================================================
 	// TOOLTIPS
 	// ============================================================================
 	

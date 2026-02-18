@@ -450,6 +450,47 @@ namespace Lunex::UI {
 	}
 	
 	// ============================================================================
+	// WINDOW UTILITIES
+	// ============================================================================
+
+	void SetNextWindowSize(const Size& size) {
+		ImGui::SetNextWindowSize(ToImVec2(size), ImGuiCond_FirstUseEver);
+	}
+
+	bool BeginWindow(const std::string& title, bool* open, ImGuiWindowFlags flags) {
+		return ImGui::Begin(title.c_str(), open, flags);
+	}
+
+	void EndWindow() {
+		ImGui::End();
+	}
+
+	Size GetContentRegionAvail() {
+		return FromImVec2(ImGui::GetContentRegionAvail());
+	}
+
+	Position GetCursorPos() {
+		return FromImVec2(ImGui::GetCursorPos());
+	}
+
+	void SetCursorPos(const Position& pos) {
+		ImGui::SetCursorPos(ToImVec2(pos));
+	}
+
+	void SetCursorPosX(float x) {
+		ImGui::SetCursorPosX(x);
+	}
+
+	void SetCursorPosY(float y) {
+		ImGui::SetCursorPosY(y);
+	}
+
+	Size CalcTextSize(const std::string& text) {
+		ImVec2 size = ImGui::CalcTextSize(text.c_str());
+		return Size(size.x, size.y);
+	}
+
+	// ============================================================================
 	// TOOLTIPS
 	// ============================================================================
 	
