@@ -446,6 +446,14 @@ namespace Lunex {
 			return Instance ? Instance->GetSpecular() : 0.5f;
 		}
 		
+		void SetNormalIntensity(float intensity, bool asOverride = true) {
+			if (Instance) Instance->SetNormalIntensity(intensity, asOverride);
+		}
+		
+		float GetNormalIntensity() const {
+			return Instance ? Instance->GetNormalIntensity() : 1.0f;
+		}
+		
 		void SetEmissionColor(const glm::vec3& color, bool asOverride = true) {
 			if (Instance) Instance->SetEmissionColor(color, asOverride);
 		}

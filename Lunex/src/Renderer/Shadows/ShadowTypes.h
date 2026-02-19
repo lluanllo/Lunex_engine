@@ -40,10 +40,10 @@ namespace Lunex {
 
 		// Bias
 		float DefaultDepthBias = 0.005f;
-		float DefaultNormalBias = 0.02f;
+		float DefaultNormalBias = 0.03f;
 		float DirectionalBias = 0.002f;
-		float SpotBias = 0.005f;
-		float PointBias = 0.05f;
+		float SpotBias = 0.004f;
+		float PointBias = 0.015f;
 	};
 
 	// ============================================================================

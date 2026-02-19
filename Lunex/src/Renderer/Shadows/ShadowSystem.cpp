@@ -348,7 +348,8 @@ namespace Lunex {
 			}
 
 			case ShadowType::Point_Cubemap: {
-				glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, caster.Range);
+				float nearPlane = 0.05f;
+				glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, nearPlane, caster.Range);
 
 				struct FaceDir { glm::vec3 target; glm::vec3 up; };
 				FaceDir faces[6] = {
@@ -460,7 +461,7 @@ namespace Lunex {
 				m_DepthShader->Bind();
 
 				// Disable face culling to capture all geometry
-				cmd->SetCullMode(RHI::CullMode::None);
+			 cmd->SetCullMode(RHI::CullMode::None);
 
 				for (int m = 0; m < caster.NumMatrices; ++m) {
 					int layer = caster.AtlasFirstLayer + m;

@@ -780,8 +780,13 @@ namespace Lunex {
 			}
 
 			float specular = component.GetSpecular();
-			if (PropertySlider("Specular", specular, 0.0f, 1.0f)) {
+			if (PropertySlider("Specular", specular, 0.0f, 1.0f, "%.2f", "Specular reflection intensity")) {
 				component.SetSpecular(specular, true);
+			}
+
+			float normalIntensity = component.GetNormalIntensity();
+			if (PropertySlider("Normal Intensity", normalIntensity, 0.0f, 2.0f, "%.2f", "Strength of the normal map effect")) {
+				component.SetNormalIntensity(normalIntensity, true);
 			}
 
 			ComponentDrawer::EndIndent();

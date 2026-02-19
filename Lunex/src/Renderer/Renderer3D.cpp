@@ -35,7 +35,7 @@ namespace Lunex {
 			float Specular;
 			float EmissionIntensity;
 			glm::vec3 EmissionColor;
-			float _padding1;
+			float NormalIntensity;
 			glm::vec3 ViewPos;
 
 			// Texture flags
@@ -53,6 +53,21 @@ namespace Lunex {
 			float RoughnessMultiplier;
 			float SpecularMultiplier;
 			float AOMultiplier;
+
+			// Detail normals & layered
+			int DetailNormalCount;
+			int UseLayeredTexture;
+			int LayeredMetallicChannel;
+			int LayeredRoughnessChannel;
+
+			int LayeredAOChannel;
+			int LayeredUseMetallic;
+			int LayeredUseRoughness;
+			int LayeredUseAO;
+
+			glm::vec4 DetailNormalIntensities;
+			glm::vec4 DetailNormalTilingX;
+			glm::vec4 DetailNormalTilingY;
 		};
 
 		struct IBLUniformData {
@@ -313,6 +328,7 @@ namespace Lunex {
 		s_Data.MaterialBuffer.Specular = uniformData.Specular;
 		s_Data.MaterialBuffer.EmissionIntensity = uniformData.EmissionIntensity;
 		s_Data.MaterialBuffer.EmissionColor = uniformData.EmissionColor;
+		s_Data.MaterialBuffer.NormalIntensity = uniformData.NormalIntensity;
 		s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
 
 		s_Data.MaterialBuffer.UseAlbedoMap = uniformData.UseAlbedoMap;
@@ -328,6 +344,18 @@ namespace Lunex {
 		s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
 		s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
 
+		s_Data.MaterialBuffer.DetailNormalCount = uniformData.DetailNormalCount;
+		s_Data.MaterialBuffer.UseLayeredTexture = uniformData.UseLayeredTexture;
+		s_Data.MaterialBuffer.LayeredMetallicChannel = uniformData.LayeredMetallicChannel;
+		s_Data.MaterialBuffer.LayeredRoughnessChannel = uniformData.LayeredRoughnessChannel;
+		s_Data.MaterialBuffer.LayeredAOChannel = uniformData.LayeredAOChannel;
+		s_Data.MaterialBuffer.LayeredUseMetallic = uniformData.LayeredUseMetallic;
+		s_Data.MaterialBuffer.LayeredUseRoughness = uniformData.LayeredUseRoughness;
+		s_Data.MaterialBuffer.LayeredUseAO = uniformData.LayeredUseAO;
+		s_Data.MaterialBuffer.DetailNormalIntensities = uniformData.DetailNormalIntensities;
+		s_Data.MaterialBuffer.DetailNormalTilingX = uniformData.DetailNormalTilingX;
+		s_Data.MaterialBuffer.DetailNormalTilingY = uniformData.DetailNormalTilingY;
+
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
 
 		// Bind shader and textures
@@ -341,7 +369,7 @@ namespace Lunex {
 		s_Data.Stats.MeshCount += (uint32_t)meshComponent.MeshModel->GetMeshes().size();
 
 		for (const auto& mesh : meshComponent.MeshModel->GetMeshes()) {
-			s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
+		 s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
 		}
 	}
 
@@ -369,22 +397,16 @@ namespace Lunex {
 		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
 
 		// Update Material uniform buffer with default values
+		memset(&s_Data.MaterialBuffer, 0, sizeof(Renderer3DData::MaterialUniformData));
 		s_Data.MaterialBuffer.Color = color;
 		s_Data.MaterialBuffer.Metallic = 0.0f;
 		s_Data.MaterialBuffer.Roughness = 0.5f;
 		s_Data.MaterialBuffer.Specular = 0.5f;
 		s_Data.MaterialBuffer.EmissionIntensity = 0.0f;
 		s_Data.MaterialBuffer.EmissionColor = glm::vec3(0.0f);
+		s_Data.MaterialBuffer.NormalIntensity = 1.0f;
 		s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
 
-		// No textures in this overload
-		s_Data.MaterialBuffer.UseAlbedoMap = 0;
-		s_Data.MaterialBuffer.UseNormalMap = 0;
-		s_Data.MaterialBuffer.UseMetallicMap = 0;
-		s_Data.MaterialBuffer.UseRoughnessMap = 0;
-		s_Data.MaterialBuffer.UseSpecularMap = 0;
-		s_Data.MaterialBuffer.UseEmissionMap = 0;
-		s_Data.MaterialBuffer.UseAOMap = 0;
 		s_Data.MaterialBuffer.MetallicMultiplier = 1.0f;
 		s_Data.MaterialBuffer.RoughnessMultiplier = 1.0f;
 		s_Data.MaterialBuffer.SpecularMultiplier = 1.0f;
@@ -400,7 +422,7 @@ namespace Lunex {
 		s_Data.Stats.MeshCount += (uint32_t)model->GetMeshes().size();
 
 		for (const auto& mesh : model->GetMeshes()) {
-			s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
+		 s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
 		}
 	}
 
@@ -426,6 +448,7 @@ namespace Lunex {
 		s_Data.MaterialBuffer.Specular = uniformData.Specular;
 		s_Data.MaterialBuffer.EmissionIntensity = uniformData.EmissionIntensity;
 		s_Data.MaterialBuffer.EmissionColor = uniformData.EmissionColor;
+		s_Data.MaterialBuffer.NormalIntensity = uniformData.NormalIntensity;
 		s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
 
 		s_Data.MaterialBuffer.UseAlbedoMap = uniformData.UseAlbedoMap;
@@ -441,6 +464,18 @@ namespace Lunex {
 		s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
 		s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
 
+		s_Data.MaterialBuffer.DetailNormalCount = uniformData.DetailNormalCount;
+		s_Data.MaterialBuffer.UseLayeredTexture = uniformData.UseLayeredTexture;
+		s_Data.MaterialBuffer.LayeredMetallicChannel = uniformData.LayeredMetallicChannel;
+		s_Data.MaterialBuffer.LayeredRoughnessChannel = uniformData.LayeredRoughnessChannel;
+		s_Data.MaterialBuffer.LayeredAOChannel = uniformData.LayeredAOChannel;
+		s_Data.MaterialBuffer.LayeredUseMetallic = uniformData.LayeredUseMetallic;
+		s_Data.MaterialBuffer.LayeredUseRoughness = uniformData.LayeredUseRoughness;
+		s_Data.MaterialBuffer.LayeredUseAO = uniformData.LayeredUseAO;
+		s_Data.MaterialBuffer.DetailNormalIntensities = uniformData.DetailNormalIntensities;
+		s_Data.MaterialBuffer.DetailNormalTilingX = uniformData.DetailNormalTilingX;
+		s_Data.MaterialBuffer.DetailNormalTilingY = uniformData.DetailNormalTilingY;
+
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
 
 		// Bind shader and textures
@@ -454,7 +489,7 @@ namespace Lunex {
 		s_Data.Stats.MeshCount += (uint32_t)model->GetMeshes().size();
 
 		for (const auto& mesh : model->GetMeshes()) {
-			s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
+		 s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
 		}
 	}
 
@@ -481,6 +516,7 @@ namespace Lunex {
 			s_Data.MaterialBuffer.Specular = uniformData.Specular;
 			s_Data.MaterialBuffer.EmissionIntensity = uniformData.EmissionIntensity;
 			s_Data.MaterialBuffer.EmissionColor = uniformData.EmissionColor;
+			s_Data.MaterialBuffer.NormalIntensity = uniformData.NormalIntensity;
 			s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
 
 			s_Data.MaterialBuffer.UseAlbedoMap = uniformData.UseAlbedoMap;
@@ -494,7 +530,7 @@ namespace Lunex {
 			s_Data.MaterialBuffer.MetallicMultiplier = uniformData.MetallicMultiplier;
 			s_Data.MaterialBuffer.RoughnessMultiplier = uniformData.RoughnessMultiplier;
 			s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
-			s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
+		 s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
 
 			s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
 
@@ -510,7 +546,7 @@ namespace Lunex {
 		s_Data.Stats.MeshCount += (uint32_t)model->GetMeshes().size();
 
 		for (const auto& mesh : model->GetMeshes()) {
-			s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
+		 s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
 		}
 	}
 

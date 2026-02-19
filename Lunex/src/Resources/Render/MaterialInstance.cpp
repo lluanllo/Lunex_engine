@@ -246,6 +246,20 @@ namespace Lunex {
 		if (auto specularMap = GetSpecularMap()) specularMap->Bind(4);
 		if (auto emissionMap = GetEmissionMap()) emissionMap->Bind(5);
 		if (auto aoMap = GetAOMap()) aoMap->Bind(6);
+
+		// Layered texture at slot 7
+		if (HasLayeredTexture()) {
+			auto layeredTex = GetLayeredTextureConfig().Texture;
+			if (layeredTex) layeredTex->Bind(7);
+		}
+
+		// Detail normals at slots 12-15
+		const auto& details = GetDetailNormalMaps();
+		for (size_t i = 0; i < details.size() && i < MaterialAsset::MAX_DETAIL_NORMALS; ++i) {
+			if (details[i].Texture) {
+				details[i].Texture->Bind(12 + static_cast<uint32_t>(i));
+			}
+		}
 	}
 
 } // namespace Lunex

@@ -6,14 +6,13 @@
  * 
  * Features:
  * - Real-time PBR material preview
- * - Clean, professional UI using Lunex UI Framework
- * - Drag & drop texture support
- * - Hot-reload support
+ * - Detail normal maps (unlimited)
+ * - Layered (channel-packed) textures
+ * - Color space & alpha packing controls
+ * - 100% Lunex UI Framework (no raw ImGui)
  */
 
 #include "Core/Core.h"
-
-// AAA Architecture - Material system
 #include "Assets/Materials/MaterialAsset.h"
 #include "Resources/Render/MaterialInstance.h"
 #include "Renderer/MaterialPreviewRenderer.h"
@@ -84,18 +83,21 @@ namespace Lunex {
 		void DrawPreviewViewport();
 		void DrawPropertiesPanel();
 		
-		// Section drawing
 		void DrawPBRPropertiesSection();
 		void DrawEmissionSection();
 		void DrawTextureMapsSection();
+		void DrawDetailNormalsSection();
+		void DrawLayeredTextureSection();
+		void DrawAdvancedSection();
 		
-		// New texture slot with callbacks
 		void DrawTextureSlotNew(
 			const std::string& label,
 			Ref<Texture2D> texture,
 			const std::string& path,
+			TextureColorSpace colorSpace,
 			std::function<void(Ref<Texture2D>)> onTextureSet,
-			std::function<void()> onTextureClear);
+			std::function<void()> onTextureClear,
+			std::function<void(TextureColorSpace)> onColorSpaceChanged);
 
 		// ========== LEGACY API (backwards compatibility) ==========
 
