@@ -54,6 +54,14 @@ namespace Lunex {
 			glm::mat4 Transform;
 		};
 
+		// Post-process control UBO (binding 6) - matches shader layout
+		struct PostProcessControlData {
+			int SkipToneMapGamma;
+			float _pad1;
+			float _pad2;
+			float _pad3;
+		};
+
 		// Material UBO uses same layout as forward renderer (binding 2)
 		struct MaterialUniformData {
 			glm::vec4 Color;
@@ -99,10 +107,12 @@ namespace Lunex {
 		CameraData CameraBuffer;
 		TransformData TransformBuffer;
 		MaterialUniformData MaterialBuffer;
+		PostProcessControlData PostProcessControlBuffer;
 
 		Ref<UniformBuffer> CameraUniformBuffer;
 		Ref<UniformBuffer> TransformUniformBuffer;
 		Ref<UniformBuffer> MaterialUniformBuffer;
+		Ref<UniformBuffer> PostProcessControlUniformBuffer;
 
 		// ========== CAMERA STATE ==========
 		glm::vec3 CameraPosition = { 0.0f, 0.0f, 0.0f };
@@ -137,6 +147,7 @@ namespace Lunex {
 		s_Data.CameraUniformBuffer = UniformBuffer::Create(sizeof(DeferredRendererData::CameraData), 0);
 		s_Data.TransformUniformBuffer = UniformBuffer::Create(sizeof(DeferredRendererData::TransformData), 1);
 		s_Data.MaterialUniformBuffer = UniformBuffer::Create(sizeof(DeferredRendererData::MaterialUniformData), 2);
+		s_Data.PostProcessControlUniformBuffer = UniformBuffer::Create(sizeof(DeferredRendererData::PostProcessControlData), 6);
 
 		// Create full-screen quad for lighting pass (6 vertices, 2 triangles)
 		float quadVertices[] = {
@@ -400,8 +411,12 @@ namespace Lunex {
 		// Bind the lighting shader
 		s_Data.LightingShader->Bind();
 
-		// Tell shader whether to skip tone mapping (post-process will handle it)
-		s_Data.LightingShader->SetInt("u_SkipToneMapGamma", postProcessActive ? 1 : 0);
+		// Tell shader whether to skip tone mapping (post-process will handle it) via UBO
+		s_Data.PostProcessControlBuffer.SkipToneMapGamma = postProcessActive ? 1 : 0;
+		s_Data.PostProcessControlBuffer._pad1 = 0.0f;
+		s_Data.PostProcessControlBuffer._pad2 = 0.0f;
+		s_Data.PostProcessControlBuffer._pad3 = 0.0f;
+		s_Data.PostProcessControlUniformBuffer->SetData(&s_Data.PostProcessControlBuffer, sizeof(DeferredRendererData::PostProcessControlData));
 
 		// Bind G-Buffer textures for sampling
 		s_Data.LightingShader->SetInt("gAlbedoMetallic",   0);

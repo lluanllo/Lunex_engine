@@ -21,6 +21,37 @@ namespace Lunex {
 		uint32_t TexID = 0;   // GL texture
 	};
 
+	// UBO data matching shader layout(std140, binding = 0) uniform BloomDownParams
+	struct BloomDownParamsUBO {
+		glm::vec2 SrcResolution;
+		float Threshold;
+		int ApplyThreshold;
+	};
+
+	// UBO data matching shader layout(std140, binding = 0) uniform BloomUpParams
+	struct BloomUpParamsUBO {
+		float FilterRadius;
+		float _pad1;
+		float _pad2;
+		float _pad3;
+	};
+
+	// UBO data matching shader layout(std140, binding = 0) uniform CompositeParams
+	struct CompositeParamsUBO {
+		int   EnableBloom;
+		float BloomIntensity;
+		int   EnableVignette;
+		float VignetteIntensity;
+		float VignetteRoundness;
+		float VignetteSmoothness;
+		int   EnableChromaticAberration;
+		float ChromaticAberrationIntensity;
+		int   ToneMapOperator;
+		float Exposure;
+		float Gamma;
+		float _pad0;
+	};
+
 	struct PostProcessData {
 		bool Initialized = false;
 
@@ -30,6 +61,11 @@ namespace Lunex {
 		Ref<Shader> BloomDownsampleShader;
 		Ref<Shader> BloomUpsampleShader;
 		Ref<Shader> CompositeShader;
+
+		// ========== UNIFORM BUFFERS ==========
+		Ref<UniformBuffer> BloomDownUBO;
+		Ref<UniformBuffer> BloomUpUBO;
+		Ref<UniformBuffer> CompositeUBO;
 
 		// ========== FULL-SCREEN QUAD ==========
 		Ref<VertexArray>  QuadVAO;
@@ -75,6 +111,11 @@ namespace Lunex {
 			LNX_LOG_ERROR("PostProcessRenderer: Failed to compile PostProcess_BloomUp shader!");
 		if (!s_Data.CompositeShader || !s_Data.CompositeShader->IsValid())
 			LNX_LOG_ERROR("PostProcessRenderer: Failed to compile PostProcess_Composite shader!");
+
+		// Create UBOs (binding 0 for each shader - they are separate programs)
+		s_Data.BloomDownUBO = UniformBuffer::Create(sizeof(BloomDownParamsUBO), 0);
+		s_Data.BloomUpUBO   = UniformBuffer::Create(sizeof(BloomUpParamsUBO), 0);
+		s_Data.CompositeUBO = UniformBuffer::Create(sizeof(CompositeParamsUBO), 0);
 
 		// Create full-screen quad (same as DeferredRenderer)
 		float quadVertices[] = {
@@ -190,7 +231,6 @@ namespace Lunex {
 
 		// ===== DOWNSAMPLE PASS (with threshold on first iteration) =====
 		s_Data.BloomDownsampleShader->Bind();
-		s_Data.BloomDownsampleShader->SetFloat("u_Threshold", s_Data.Config.BloomThreshold);
 
 		uint32_t srcTexture = sceneColorTexID;
 
@@ -200,13 +240,15 @@ namespace Lunex {
 			glNamedFramebufferTexture(s_Data.BloomFBO, GL_COLOR_ATTACHMENT0, mip.TexID, 0);
 			glViewport(0, 0, mip.Size.x, mip.Size.y);
 
-			s_Data.BloomDownsampleShader->SetInt("u_SrcTexture", 0);
-			s_Data.BloomDownsampleShader->SetFloat2("u_SrcResolution",
-				i == 0 ? glm::vec2((float)width, (float)height)
-					   : glm::vec2((float)s_Data.BloomMips[i - 1].Size.x,
-								   (float)s_Data.BloomMips[i - 1].Size.y));
-			// Only apply threshold on the first downsample
-			s_Data.BloomDownsampleShader->SetInt("u_ApplyThreshold", i == 0 ? 1 : 0);
+			// Upload UBO data per iteration
+			BloomDownParamsUBO downParams;
+			downParams.SrcResolution = i == 0
+				? glm::vec2((float)width, (float)height)
+				: glm::vec2((float)s_Data.BloomMips[i - 1].Size.x,
+							(float)s_Data.BloomMips[i - 1].Size.y);
+			downParams.Threshold = s_Data.Config.BloomThreshold;
+			downParams.ApplyThreshold = (i == 0) ? 1 : 0;
+			s_Data.BloomDownUBO->SetData(&downParams, sizeof(BloomDownParamsUBO));
 
 			glBindTextureUnit(0, srcTexture);
 			DrawFullScreenQuad();
@@ -216,7 +258,13 @@ namespace Lunex {
 
 		// ===== UPSAMPLE PASS (additive) =====
 		s_Data.BloomUpsampleShader->Bind();
-		s_Data.BloomUpsampleShader->SetFloat("u_FilterRadius", s_Data.Config.BloomRadius);
+
+		BloomUpParamsUBO upParams;
+		upParams.FilterRadius = s_Data.Config.BloomRadius;
+		upParams._pad1 = 0.0f;
+		upParams._pad2 = 0.0f;
+		upParams._pad3 = 0.0f;
+		s_Data.BloomUpUBO->SetData(&upParams, sizeof(BloomUpParamsUBO));
 
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_ONE, GL_ONE);  // Additive blending
@@ -228,9 +276,7 @@ namespace Lunex {
 			glNamedFramebufferTexture(s_Data.BloomFBO, GL_COLOR_ATTACHMENT0, dstMip.TexID, 0);
 			glViewport(0, 0, dstMip.Size.x, dstMip.Size.y);
 
-			s_Data.BloomUpsampleShader->SetInt("u_SrcTexture", 0);
 			glBindTextureUnit(0, srcMip.TexID);
-
 			DrawFullScreenQuad();
 		}
 
@@ -267,6 +313,9 @@ namespace Lunex {
 
 		targetFramebuffer->Bind();
 
+		// Restore viewport to full resolution after bloom mip passes
+		glViewport(0, 0, width, height);
+
 		auto* cmdList = RHI::GetImmediateCommandList();
 		if (cmdList) {
 			cmdList->SetDrawBuffers({ 0 });
@@ -277,32 +326,29 @@ namespace Lunex {
 
 		s_Data.CompositeShader->Bind();
 
-		// Bind scene color
-		s_Data.CompositeShader->SetInt("u_SceneColor", 0);
+		// Bind textures
 		glBindTextureUnit(0, sceneColorTexID);
 
-		// Bind bloom texture (first mip = result)
 		bool hasBloom = s_Data.Config.EnableBloom && !s_Data.BloomMips.empty();
-		s_Data.CompositeShader->SetInt("u_BloomTexture", 1);
 		if (hasBloom) {
 			glBindTextureUnit(1, s_Data.BloomMips[0].TexID);
 		}
 
-		// Set uniforms
-		s_Data.CompositeShader->SetInt("u_EnableBloom", hasBloom ? 1 : 0);
-		s_Data.CompositeShader->SetFloat("u_BloomIntensity", s_Data.Config.BloomIntensity);
-
-		s_Data.CompositeShader->SetInt("u_EnableVignette", s_Data.Config.EnableVignette ? 1 : 0);
-		s_Data.CompositeShader->SetFloat("u_VignetteIntensity", s_Data.Config.VignetteIntensity);
-		s_Data.CompositeShader->SetFloat("u_VignetteRoundness", s_Data.Config.VignetteRoundness);
-		s_Data.CompositeShader->SetFloat("u_VignetteSmoothness", s_Data.Config.VignetteSmoothness);
-
-		s_Data.CompositeShader->SetInt("u_EnableChromaticAberration", s_Data.Config.EnableChromaticAberration ? 1 : 0);
-		s_Data.CompositeShader->SetFloat("u_ChromaticAberrationIntensity", s_Data.Config.ChromaticAberrationIntensity);
-
-		s_Data.CompositeShader->SetInt("u_ToneMapOperator", s_Data.Config.ToneMapOperator);
-		s_Data.CompositeShader->SetFloat("u_Exposure", s_Data.Config.Exposure);
-		s_Data.CompositeShader->SetFloat("u_Gamma", s_Data.Config.Gamma);
+		// Upload composite UBO
+		CompositeParamsUBO compositeParams;
+		compositeParams.EnableBloom = hasBloom ? 1 : 0;
+		compositeParams.BloomIntensity = s_Data.Config.BloomIntensity;
+		compositeParams.EnableVignette = s_Data.Config.EnableVignette ? 1 : 0;
+		compositeParams.VignetteIntensity = s_Data.Config.VignetteIntensity;
+		compositeParams.VignetteRoundness = s_Data.Config.VignetteRoundness;
+		compositeParams.VignetteSmoothness = s_Data.Config.VignetteSmoothness;
+		compositeParams.EnableChromaticAberration = s_Data.Config.EnableChromaticAberration ? 1 : 0;
+		compositeParams.ChromaticAberrationIntensity = s_Data.Config.ChromaticAberrationIntensity;
+		compositeParams.ToneMapOperator = s_Data.Config.ToneMapOperator;
+		compositeParams.Exposure = s_Data.Config.Exposure;
+		compositeParams.Gamma = s_Data.Config.Gamma;
+		compositeParams._pad0 = 0.0f;
+		s_Data.CompositeUBO->SetData(&compositeParams, sizeof(CompositeParamsUBO));
 
 		DrawFullScreenQuad();
 

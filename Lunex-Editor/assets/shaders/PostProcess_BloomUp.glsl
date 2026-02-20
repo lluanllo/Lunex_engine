@@ -25,8 +25,14 @@ layout(location = 0) out vec3 FragColor;
 
 layout(location = 0) in vec2 v_TexCoords;
 
-uniform sampler2D u_SrcTexture;
-uniform float u_FilterRadius;
+layout(binding = 0) uniform sampler2D u_SrcTexture;
+
+layout(std140, binding = 0) uniform BloomUpParams {
+	float u_FilterRadius;
+	float _pad1;
+	float _pad2;
+	float _pad3;
+};
 
 // 9-tap tent filter (3x3 bilinear taps)
 vec3 UpsampleTent9(sampler2D tex, vec2 uv, vec2 texelSize, float radius) {

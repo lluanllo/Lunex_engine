@@ -121,7 +121,12 @@ layout(std140, binding = 5) uniform IBLData {
 };
 
 // ============ POST-PROCESSING ============
-uniform int u_SkipToneMapGamma;  // 1 = output linear HDR (post-process will handle it)
+layout(std140, binding = 6) uniform PostProcessControl {
+	int u_SkipToneMapGamma;  // 1 = output linear HDR (post-process will handle it)
+	float _ppPad1;
+	float _ppPad2;
+	float _ppPad3;
+};
 
 // ============ CONSTANTS ============
 const float PI = 3.14159265359;

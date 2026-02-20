@@ -25,10 +25,13 @@ layout(location = 0) out vec3 FragColor;
 
 layout(location = 0) in vec2 v_TexCoords;
 
-uniform sampler2D u_SrcTexture;
-uniform vec2 u_SrcResolution;
-uniform float u_Threshold;
-uniform int u_ApplyThreshold;
+layout(binding = 0) uniform sampler2D u_SrcTexture;
+
+layout(std140, binding = 0) uniform BloomDownParams {
+	vec2 u_SrcResolution;
+	float u_Threshold;
+	int u_ApplyThreshold;
+};
 
 // 13-tap downsample filter (CoD:AW style - energy conserving)
 vec3 DownsampleBox13(sampler2D tex, vec2 uv, vec2 texelSize) {

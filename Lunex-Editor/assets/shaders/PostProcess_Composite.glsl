@@ -26,27 +26,28 @@ layout(location = 0) out vec4 FragColor;
 layout(location = 0) in vec2 v_TexCoords;
 
 // ============ SAMPLERS ============
-uniform sampler2D u_SceneColor;
-uniform sampler2D u_BloomTexture;
+layout(binding = 0) uniform sampler2D u_SceneColor;
+layout(binding = 1) uniform sampler2D u_BloomTexture;
 
-// ============ BLOOM ============
-uniform int   u_EnableBloom;
-uniform float u_BloomIntensity;
-
-// ============ VIGNETTE ============
-uniform int   u_EnableVignette;
-uniform float u_VignetteIntensity;
-uniform float u_VignetteRoundness;
-uniform float u_VignetteSmoothness;
-
-// ============ CHROMATIC ABERRATION ============
-uniform int   u_EnableChromaticAberration;
-uniform float u_ChromaticAberrationIntensity;
-
-// ============ TONE MAPPING ============
-uniform int   u_ToneMapOperator;  // 0=ACES, 1=Reinhard, 2=Uncharted2, 3=None
-uniform float u_Exposure;
-uniform float u_Gamma;
+// ============ UNIFORMS (packed in UBO for SPIR-V) ============
+layout(std140, binding = 0) uniform CompositeParams {
+	// Bloom
+	int   u_EnableBloom;
+	float u_BloomIntensity;
+	// Vignette
+	int   u_EnableVignette;
+	float u_VignetteIntensity;
+	float u_VignetteRoundness;
+	float u_VignetteSmoothness;
+	// Chromatic Aberration
+	int   u_EnableChromaticAberration;
+	float u_ChromaticAberrationIntensity;
+	// Tone Mapping
+	int   u_ToneMapOperator;  // 0=ACES, 1=Reinhard, 2=Uncharted2, 3=None
+	float u_Exposure;
+	float u_Gamma;
+	float _pad0;
+};
 
 // ============ TONE MAP FUNCTIONS ============
 
