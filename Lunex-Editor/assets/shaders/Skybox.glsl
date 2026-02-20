@@ -10,6 +10,7 @@
 //   - Rotation support
 //   - Intensity/tint control
 //   - Blur (LOD) support for different mip levels
+//   - Post-process aware: outputs linear HDR when post-processing handles tone mapping
 // ============================================================================
 
 #ifdef VERTEX
@@ -72,6 +73,14 @@ layout(std140, binding = 4) uniform SkyboxData {
 	float _padding;
 };
 
+// Post-processing control (shared with deferred lighting pass)
+layout(std140, binding = 6) uniform PostProcessControl {
+	int u_SkipToneMapGamma;  // 1 = output linear HDR (post-process will handle it)
+	float _ppPad1;
+	float _ppPad2;
+	float _ppPad3;
+};
+
 layout(binding = 7) uniform samplerCube u_EnvironmentMap;
 
 // ACES tone mapping
@@ -92,11 +101,15 @@ void main() {
 	// Apply intensity and tint
 	envColor *= u_Intensity * u_Tint;
 	
-	// Tone mapping (HDR to LDR)
-	envColor = ACESFilm(envColor);
-	
-	// Gamma correction
-	envColor = pow(envColor, vec3(1.0 / 2.2));
+	// When post-processing is active, output linear HDR so the composite pass
+	// handles tone mapping + gamma uniformly for the entire scene (including bloom).
+	// When inactive, apply tone mapping + gamma here.
+	if (u_SkipToneMapGamma == 0) {
+		// No post-processing: apply tone mapping + gamma in shader
+		envColor = ACESFilm(envColor);
+		envColor = pow(envColor, vec3(1.0 / 2.2));
+	}
+	// else: output linear HDR, composite pass will tone map + gamma correct
 	
 	o_Color = vec4(envColor, 1.0);
 	

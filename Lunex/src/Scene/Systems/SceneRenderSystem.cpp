@@ -122,15 +122,13 @@ namespace Lunex {
 		// ========================================
 		
 		// Skybox renders with depth func LEQUAL, writes at far plane
+		// Skybox IS affected by bloom (correct: bright sky areas should glow)
 		if (m_Settings.RenderSkybox) {
 			SkyboxRenderer::RenderGlobalSkybox(camera);
 		}
 		
-		// Grid and 2D overlays
+		// Sprites that are part of the scene should also be affected by bloom
 		Renderer2D::BeginScene(camera);
-		if (m_Settings.RenderGrid) {
-			GridRenderer::DrawGrid(camera);
-		}
 		RenderSprites(camera, camera.GetViewMatrix());
 		RenderCircles(camera, camera.GetViewMatrix());
 		Renderer2D::EndScene();
@@ -145,6 +143,13 @@ namespace Lunex {
 		// Called AFTER post-processing (bloom + tone mapping).
 		// These elements are NOT affected by bloom.
 		// ========================================
+		
+		// Grid renders here so it's not affected by bloom/tone mapping
+		Renderer2D::BeginScene(camera);
+		if (m_Settings.RenderGrid) {
+			GridRenderer::DrawGrid(camera);
+		}
+		Renderer2D::EndScene();
 		
 		if (m_Settings.RenderBillboards || m_Settings.RenderGizmos) {
 			Renderer2D::BeginScene(camera);
@@ -174,12 +179,12 @@ namespace Lunex {
 		if (!m_Context || !m_Context->Registry) return;
 		if (!DeferredRenderer::IsEnabled()) return;
 		
-		// Skybox
+		// Skybox (affected by bloom)
 		if (m_Settings.RenderSkybox) {
 			SkyboxRenderer::RenderGlobalSkybox(camera, cameraTransform);
 		}
 		
-		// 2D
+		// 2D sprites (affected by bloom)
 		Renderer2D::BeginScene(camera, cameraTransform);
 		RenderSprites(camera, cameraTransform);
 		RenderCircles(camera, cameraTransform);
