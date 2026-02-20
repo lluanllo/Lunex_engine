@@ -507,6 +507,12 @@ namespace Lunex {
 		cmd->BindFramebufferByHandle(prevFBO);
 		cmd->SetViewport(static_cast<float>(prevViewport[0]), static_cast<float>(prevViewport[1]),
 			static_cast<float>(prevViewport[2]), static_cast<float>(prevViewport[3]));
+
+		// Restore draw buffers on the restored FBO (shadow pass set GL_NONE on the atlas FBO,
+		// but rebinding the scene FBO needs its draw buffers to be valid)
+		if (prevFBO != 0) {
+			cmd->SetDrawBuffers({ 0, 1 });
+		}
 	}
 
 	// ========================================================================

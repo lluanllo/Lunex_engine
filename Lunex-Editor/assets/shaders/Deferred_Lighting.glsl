@@ -301,6 +301,7 @@ float CalculatePointShadow(int shadowIndex, vec3 fragPos, vec3 normal, vec3 ligh
 	vec3 biasedFrag = fragPos + normal * normalBiasScale;
 	float biasedDist = length(biasedFrag - lightPos);
 	
+	// Determine which cubemap face to sample
 	vec3 absDir = abs(fragToLight);
 	int face;
 	if (absDir.x >= absDir.y && absDir.x >= absDir.z) {
@@ -311,14 +312,17 @@ float CalculatePointShadow(int shadowIndex, vec3 fragPos, vec3 normal, vec3 ligh
 		face = fragToLight.z > 0.0 ? 4 : 5;
 	}
 	
+	// Project onto the selected face
 	vec4 lightSpacePos = sd.ViewProjection[face] * vec4(biasedFrag, 1.0);
 	vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
 	projCoords = projCoords * 0.5 + 0.5;
 	
-	if (projCoords.z > 1.0 || projCoords.z < 0.0) return 1.0;
-	if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
-		projCoords.y < 0.0 || projCoords.y > 1.0) return 1.0;
+	// UV boundary check with small margin to avoid face-edge artifacts
+	float margin = 2.0 / max(resolution, 1.0);
+	if (projCoords.x < margin || projCoords.x > 1.0 - margin ||
+		projCoords.y < margin || projCoords.y > 1.0 - margin) return 1.0;
 	
+	// Compare using linear depth (matches gl_FragDepth = dist/range in depth shader)
 	float normalizedDist = biasedDist / lightRange;
 	float adaptiveBias = bias * mix(0.2, 1.5, currentDist / lightRange);
 	float compareDepth = clamp(normalizedDist - adaptiveBias, 0.0, 1.0);
@@ -515,7 +519,7 @@ void main() {
 	vec3 albedo   = albedoMetallic.rgb;
 	float metallic = albedoMetallic.a;
 	
-	vec3 N        = normalize(normalRoughness.rgb);  // Already in [-1,1] (RGBA16F stores full range)
+	vec3 N        = normalize(normalRoughness.rgb * 2.0 - 1.0);  // Decode from [0,1] back to [-1,1]
 	float roughness = normalRoughness.a;
 	
 	vec3 emission = emissionAO.rgb;

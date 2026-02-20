@@ -381,6 +381,13 @@ namespace Lunex {
 			cmdList->SetDepthMask(false);
 		}
 
+		// ? FIX: Disable blending for the lighting pass.
+		// InitializeRenderState() enables GL_BLEND globally, which causes the
+		// lighting quad to be incorrectly alpha-blended with the clear color.
+		// The scene appeared dark/broken until the OutlineRenderer's composite
+		// pass happened to disable blending as a side effect.
+		glDisable(GL_BLEND);
+
 		// Bind the lighting shader
 		s_Data.LightingShader->Bind();
 
