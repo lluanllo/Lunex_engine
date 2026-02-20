@@ -15,6 +15,8 @@
 #include "Scene/Lighting/LightSystem.h"
 #include "Log/Log.h"
 
+#include <glad/glad.h>
+
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
 
@@ -64,6 +66,10 @@ namespace Lunex {
 			int LayeredUseMetallic;
 			int LayeredUseRoughness;
 			int LayeredUseAO;
+
+			// std140 requires vec4 to be 16-byte aligned; the 8 ints above
+			// end at a non-16-byte-aligned offset, so we need explicit padding
+			float _detailPad0;
 
 			glm::vec4 DetailNormalIntensities;
 			glm::vec4 DetailNormalTilingX;
@@ -380,9 +386,9 @@ namespace Lunex {
 		DrawMesh(transform, meshComponent, materialComponent, entityID);
 	}
 
-	// ============================================================================
+	// ================================================================================
 	// DrawModel overloads (internal use)
-	// ============================================================================
+	// ================================================================================
 
 	void Renderer3D::DrawModel(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& color, int entityID) {
 		LNX_PROFILE_FUNCTION();
@@ -414,15 +420,23 @@ namespace Lunex {
 
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
 
-		// Draw the model
+		// Unbind all texture slots to prevent bleeding from previous draws
 		s_Data.MeshShader->Bind();
+		for (uint32_t slot = 0; slot <= 7; ++slot) {
+			glBindTextureUnit(slot, 0);
+		}
+		for (uint32_t slot = 12; slot <= 15; ++slot) {
+			glBindTextureUnit(slot, 0);
+		}
+
+		// Draw the model
 		model->Draw(s_Data.MeshShader);
 
 		s_Data.Stats.DrawCalls++;
 		s_Data.Stats.MeshCount += (uint32_t)model->GetMeshes().size();
 
 		for (const auto& mesh : model->GetMeshes()) {
-		 s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
+		    s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
 		}
 	}
 
@@ -489,7 +503,7 @@ namespace Lunex {
 		s_Data.Stats.MeshCount += (uint32_t)model->GetMeshes().size();
 
 		for (const auto& mesh : model->GetMeshes()) {
-		 s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
+		    s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
 		}
 	}
 
@@ -512,7 +526,7 @@ namespace Lunex {
 
 			s_Data.MaterialBuffer.Color = uniformData.Albedo;
 			s_Data.MaterialBuffer.Metallic = uniformData.Metallic;
-			s_Data.MaterialBuffer.Roughness = uniformData.Roughness;
+		 s_Data.MaterialBuffer.Roughness = uniformData.Roughness;
 			s_Data.MaterialBuffer.Specular = uniformData.Specular;
 			s_Data.MaterialBuffer.EmissionIntensity = uniformData.EmissionIntensity;
 			s_Data.MaterialBuffer.EmissionColor = uniformData.EmissionColor;
@@ -530,7 +544,7 @@ namespace Lunex {
 			s_Data.MaterialBuffer.MetallicMultiplier = uniformData.MetallicMultiplier;
 			s_Data.MaterialBuffer.RoughnessMultiplier = uniformData.RoughnessMultiplier;
 			s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
-		 s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
+		    s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
 
 			s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
 
@@ -546,7 +560,7 @@ namespace Lunex {
 		s_Data.Stats.MeshCount += (uint32_t)model->GetMeshes().size();
 
 		for (const auto& mesh : model->GetMeshes()) {
-		 s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
+		    s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
 		}
 	}
 

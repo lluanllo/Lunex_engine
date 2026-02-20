@@ -2,6 +2,8 @@
 #include "MaterialInstance.h"
 #include "Log/Log.h"
 
+#include <glad/glad.h>
+
 namespace Lunex {
 
 	MaterialInstance::MaterialInstance(Ref<MaterialAsset> baseAsset)
@@ -212,6 +214,7 @@ namespace Lunex {
 
 	MaterialAsset::MaterialUniformData MaterialInstance::GetUniformData() const {
 		MaterialAsset::MaterialUniformData data;
+		memset(&data, 0, sizeof(data));
 
 		data.Albedo = GetAlbedo();
 		data.Metallic = GetMetallic();
@@ -235,29 +238,71 @@ namespace Lunex {
 		data.SpecularMultiplier = GetSpecularMultiplier();
 		data.AOMultiplier = GetAOMultiplier();
 
+		// Detail normals (from base asset)
+		const auto& details = GetDetailNormalMaps();
+		data.DetailNormalCount = static_cast<int>(std::min(details.size(), (size_t)MaterialAsset::MAX_DETAIL_NORMALS));
+		for (int i = 0; i < data.DetailNormalCount; ++i) {
+			data.DetailNormalIntensities[i] = details[i].Intensity;
+			data.DetailNormalTilingX[i] = details[i].TilingX;
+			data.DetailNormalTilingY[i] = details[i].TilingY;
+		}
+
+		// Layered texture (from base asset)
+		if (HasLayeredTexture()) {
+			const auto& config = GetLayeredTextureConfig();
+			data.UseLayeredTexture = 1;
+			data.LayeredMetallicChannel = static_cast<int>(config.MetallicChannel);
+			data.LayeredRoughnessChannel = static_cast<int>(config.RoughnessChannel);
+			data.LayeredAOChannel = static_cast<int>(config.AOChannel);
+			data.LayeredUseMetallic = config.UseForMetallic ? 1 : 0;
+			data.LayeredUseRoughness = config.UseForRoughness ? 1 : 0;
+			data.LayeredUseAO = config.UseForAO ? 1 : 0;
+		} else {
+			data.UseLayeredTexture = 0;
+		}
+
 		return data;
 	}
 
 	void MaterialInstance::BindTextures() const {
+		// Bind or unbind each texture slot to prevent texture bleeding between draws
 		if (auto albedoMap = GetAlbedoMap()) albedoMap->Bind(0);
+		else glBindTextureUnit(0, 0);
+		
 		if (auto normalMap = GetNormalMap()) normalMap->Bind(1);
+		else glBindTextureUnit(1, 0);
+		
 		if (auto metallicMap = GetMetallicMap()) metallicMap->Bind(2);
+		else glBindTextureUnit(2, 0);
+		
 		if (auto roughnessMap = GetRoughnessMap()) roughnessMap->Bind(3);
+		else glBindTextureUnit(3, 0);
+		
 		if (auto specularMap = GetSpecularMap()) specularMap->Bind(4);
+		else glBindTextureUnit(4, 0);
+		
 		if (auto emissionMap = GetEmissionMap()) emissionMap->Bind(5);
+		else glBindTextureUnit(5, 0);
+		
 		if (auto aoMap = GetAOMap()) aoMap->Bind(6);
+		else glBindTextureUnit(6, 0);
 
 		// Layered texture at slot 7
 		if (HasLayeredTexture()) {
 			auto layeredTex = GetLayeredTextureConfig().Texture;
 			if (layeredTex) layeredTex->Bind(7);
+			else glBindTextureUnit(7, 0);
+		} else {
+			glBindTextureUnit(7, 0);
 		}
 
 		// Detail normals at slots 12-15
 		const auto& details = GetDetailNormalMaps();
-		for (size_t i = 0; i < details.size() && i < MaterialAsset::MAX_DETAIL_NORMALS; ++i) {
-			if (details[i].Texture) {
-				details[i].Texture->Bind(12 + static_cast<uint32_t>(i));
+		for (uint32_t i = 0; i < MaterialAsset::MAX_DETAIL_NORMALS; ++i) {
+			if (i < details.size() && details[i].Texture) {
+				details[i].Texture->Bind(12 + i);
+			} else {
+				glBindTextureUnit(12 + i, 0);
 			}
 		}
 	}

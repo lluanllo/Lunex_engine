@@ -147,7 +147,7 @@ namespace Lunex {
 		Ref<Texture2D> GetMetallicMap() const { return m_MetallicMap; }
 		const std::string& GetMetallicPath() const { return m_MetallicPath; }
 		bool HasMetallicMap() const { return m_MetallicMap != nullptr; }
-		void SetMetallicMultiplier(float multiplier) { m_MetallicMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); MarkDirty(); }
+		void SetMetallicMultiplier(float multiplier) { m_MetallicMultiplier = glm::clamp(multiplier, 0.0f, 10.0f); MarkDirty(); }
 		float GetMetallicMultiplier() const { return m_MetallicMultiplier; }
 
 		// Roughness Map
@@ -155,7 +155,7 @@ namespace Lunex {
 		Ref<Texture2D> GetRoughnessMap() const { return m_RoughnessMap; }
 		const std::string& GetRoughnessPath() const { return m_RoughnessPath; }
 		bool HasRoughnessMap() const { return m_RoughnessMap != nullptr; }
-		void SetRoughnessMultiplier(float multiplier) { m_RoughnessMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); MarkDirty(); }
+		void SetRoughnessMultiplier(float multiplier) { m_RoughnessMultiplier = glm::clamp(multiplier, 0.0f, 10.0f); MarkDirty(); }
 		float GetRoughnessMultiplier() const { return m_RoughnessMultiplier; }
 
 		// Specular Map
@@ -163,7 +163,7 @@ namespace Lunex {
 		Ref<Texture2D> GetSpecularMap() const { return m_SpecularMap; }
 		const std::string& GetSpecularPath() const { return m_SpecularPath; }
 		bool HasSpecularMap() const { return m_SpecularMap != nullptr; }
-		void SetSpecularMultiplier(float multiplier) { m_SpecularMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); MarkDirty(); }
+		void SetSpecularMultiplier(float multiplier) { m_SpecularMultiplier = glm::clamp(multiplier, 0.0f, 10.0f); MarkDirty(); }
 		float GetSpecularMultiplier() const { return m_SpecularMultiplier; }
 
 		// Emission Map
@@ -177,7 +177,7 @@ namespace Lunex {
 		Ref<Texture2D> GetAOMap() const { return m_AOMap; }
 		const std::string& GetAOPath() const { return m_AOPath; }
 		bool HasAOMap() const { return m_AOMap != nullptr; }
-		void SetAOMultiplier(float multiplier) { m_AOMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); MarkDirty(); }
+		void SetAOMultiplier(float multiplier) { m_AOMultiplier = glm::clamp(multiplier, 0.0f, 10.0f); MarkDirty(); }
 		float GetAOMultiplier() const { return m_AOMultiplier; }
 
 		// ========== COLOR SPACE ==========

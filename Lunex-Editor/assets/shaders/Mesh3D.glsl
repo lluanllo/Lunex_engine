@@ -38,9 +38,8 @@ void main() {
 	Output.TexCoords = a_TexCoords;
 	
 	vec3 T = normalize(normalMatrix * a_Tangent);
-	T = normalize(T - dot(T, N) * N);
-	vec3 B = normalize(normalMatrix * a_Bitangent);
-	B = normalize(B - dot(B, N) * N - dot(B, T) * T);
+	T = normalize(T - dot(T, N) * N); // Re-orthogonalize
+	vec3 B = cross(N, T) * sign(dot(cross(a_Normal, a_Tangent), a_Bitangent)); // Preserve handedness
 	Output.TBN = mat3(T, B, N);
 	
 	v_EntityID = a_EntityID;
@@ -101,6 +100,9 @@ layout(std140, binding = 2) uniform Material {
 	int u_LayeredUseMetallic;
 	int u_LayeredUseRoughness;
 	int u_LayeredUseAO;
+
+	// Explicit padding to align vec4 to 16-byte boundary (std140)
+	float _detailPad0;
 
 	vec4 u_DetailNormalIntensities;
 	vec4 u_DetailNormalTilingX;
@@ -266,7 +268,7 @@ float CalculateDirectionalShadow(int shadowIndex, vec3 fragPos, vec3 normal) {
 	}
 	
 	// Scale bias by cascade index to reduce artifacts on far cascades
-	float cascadeBiasScale = 1.0 + float(cascadeIndex) * 0.75;
+	float cascadeBiasScale = 1.0 + float(cascadeIndex) * 0.5;
 	float adjustedBias = bias * cascadeBiasScale;
 	float adjustedNormalBias = normalBias * cascadeBiasScale;
 	
@@ -276,9 +278,9 @@ float CalculateDirectionalShadow(int shadowIndex, vec3 fragPos, vec3 normal) {
 	vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
 	projCoords = projCoords * 0.5 + 0.5;
 	
-	// Out of shadow map range -> fully lit
-	if (projCoords.x < 0.001 || projCoords.x > 0.999 ||
-		projCoords.y < 0.001 || projCoords.y > 0.999 ||
+	// Out of shadow map range -> fully lit (use wider margin)
+	if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
+		projCoords.y < 0.0 || projCoords.y > 1.0 ||
 		projCoords.z > 1.0 || projCoords.z < 0.0) {
 		return 1.0;
 	}
@@ -288,35 +290,35 @@ float CalculateDirectionalShadow(int shadowIndex, vec3 fragPos, vec3 normal) {
 	float layer = firstLayer + float(cascadeIndex);
 	
 	// PCF sampling with cascade-scaled radius
-	float cascadePCFRadius = pcfRadius * (1.0 + float(cascadeIndex) * 0.4);
+	float cascadePCFRadius = pcfRadius * (1.0 + float(cascadeIndex) * 0.3);
 	float shadow = SampleShadowPCF(layer, projCoords.xy, compareDepth, cascadePCFRadius, resolution);
 	
 	// Fade out at max shadow distance
-	float fadeStart = u_MaxShadowDistance * 0.75;
+	float fadeStart = u_MaxShadowDistance * 0.8;
 	float fadeFactor = clamp((u_MaxShadowDistance - v_ViewDepth) / (u_MaxShadowDistance - fadeStart + 0.001), 0.0, 1.0);
 	shadow = mix(1.0, shadow, fadeFactor);
 	
 	// Cascade transition blending (smooth transition between cascades)
 	if (cascadeIndex < u_CSMCascadeCount - 1) {
 		float cascadeFar = u_Cascades[cascadeIndex].SplitDepth;
-		float blendRange = cascadeFar * 0.2;
+		float blendRange = cascadeFar * 0.15;
 		float blendFactor = clamp((cascadeFar - v_ViewDepth) / max(blendRange, 0.001), 0.0, 1.0);
 		
 		if (blendFactor < 1.0) {
 			// Sample next cascade
 			int nextCascade = cascadeIndex + 1;
-			float nextBiasScale = 1.0 + float(nextCascade) * 0.75;
+			float nextBiasScale = 1.0 + float(nextCascade) * 0.5;
 			vec3 nextBiasedPos = fragPos + normal * (normalBias * nextBiasScale);
 			vec4 nextLightSpace = u_Cascades[nextCascade].ViewProjection * vec4(nextBiasedPos, 1.0);
 			vec3 nextProj = nextLightSpace.xyz / nextLightSpace.w;
 			nextProj = nextProj * 0.5 + 0.5;
 			
-			if (nextProj.x > 0.001 && nextProj.x < 0.999 &&
-				nextProj.y > 0.001 && nextProj.y < 0.999 &&
+			if (nextProj.x > 0.0 && nextProj.x < 1.0 &&
+				nextProj.y > 0.0 && nextProj.y < 1.0 &&
 				nextProj.z >= 0.0 && nextProj.z <= 1.0) {
 				float nextLayer = firstLayer + float(nextCascade);
 				float nextCompare = clamp(nextProj.z - (bias * nextBiasScale), 0.0, 1.0);
-				float nextPCFRadius = pcfRadius * (1.0 + float(nextCascade) * 0.4);
+				float nextPCFRadius = pcfRadius * (1.0 + float(nextCascade) * 0.3);
 				float nextShadow = SampleShadowPCF(nextLayer, nextProj.xy, nextCompare, nextPCFRadius, resolution);
 				
 				shadow = mix(nextShadow, shadow, blendFactor);

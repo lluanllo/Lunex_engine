@@ -398,7 +398,7 @@ namespace Lunex {
 		if (m_EditingMaterial->HasMetallicMap()) {
 			Indent(16.0f);
 			float mult = m_EditingMaterial->GetMetallicMultiplier();
-			if (PropertySlider("Multiplier##Met", mult, 0.0f, 2.0f, "%.2f")) {
+			if (PropertySlider("Multiplier Metalic", mult, 0.0f, 10.0f, "%.2f")) {
 				m_EditingMaterial->SetMetallicMultiplier(mult);
 				MarkAsModified();
 			}
@@ -415,7 +415,7 @@ namespace Lunex {
 		if (m_EditingMaterial->HasRoughnessMap()) {
 			Indent(16.0f);
 			float mult = m_EditingMaterial->GetRoughnessMultiplier();
-			if (PropertySlider("Multiplier##Rough", mult, 0.0f, 2.0f, "%.2f")) {
+			if (PropertySlider("Multiplier Roughness", mult, 0.0f, 10.0f, "%.2f")) {
 				m_EditingMaterial->SetRoughnessMultiplier(mult);
 				MarkAsModified();
 			}
@@ -432,7 +432,7 @@ namespace Lunex {
 		if (m_EditingMaterial->HasSpecularMap()) {
 			Indent(16.0f);
 			float mult = m_EditingMaterial->GetSpecularMultiplier();
-			if (PropertySlider("Multiplier##Spec", mult, 0.0f, 2.0f, "%.2f")) {
+			if (PropertySlider("Multiplier Specular", mult, 0.0f, 10.0f, "%.2f")) {
 				m_EditingMaterial->SetSpecularMultiplier(mult);
 				MarkAsModified();
 			}
@@ -456,7 +456,7 @@ namespace Lunex {
 		if (m_EditingMaterial->HasAOMap()) {
 			Indent(16.0f);
 			float mult = m_EditingMaterial->GetAOMultiplier();
-			if (PropertySlider("Multiplier##AO", mult, 0.0f, 2.0f, "%.2f")) {
+			if (PropertySlider("Multiplier AO", mult, 0.0f, 10.0f, "%.2f")) {
 				m_EditingMaterial->SetAOMultiplier(mult);
 				MarkAsModified();
 			}
@@ -505,7 +505,7 @@ namespace Lunex {
 					nullptr);
 
 				float intensity = details[i].Intensity;
-				if (PropertySlider("Intensity##D" + std::to_string(i), intensity, 0.0f, 2.0f, "%.2f", "Detail strength")) {
+				if (PropertySlider("Intensity Detail" + std::to_string(i), intensity, 0.0f, 2.0f, "%.2f", "Detail strength")) {
 					m_EditingMaterial->GetDetailNormalMaps()[i].Intensity = intensity;
 					MarkAsModified();
 				}
@@ -562,7 +562,7 @@ namespace Lunex {
 		AddSpacing(SpacingValues::SM);
 
 		TextStyled("Use a single texture with data packed in R/G/B/A channels.", TextVariant::Muted);
-		TextStyled("Default: R=Metallic, G=Roughness, B=AO", TextVariant::Muted);
+		TextStyled("Default: R=Metallic, G=Roughness, B=AO (Non-Color data)", TextVariant::Muted);
 		AddSpacing(SpacingValues::SM);
 
 		auto& config = m_EditingMaterial->GetLayeredTextureConfig();
@@ -577,7 +577,7 @@ namespace Lunex {
 
 		AddSpacing(SpacingValues::SM);
 
-		// Texture slot
+		// Texture slot - always Non-Color for layered data textures
 		DrawTextureSlotNew("Layered Map", config.Texture, config.Path,
 			TextureColorSpace::NonColor,
 			[this](Ref<Texture2D> tex) {
@@ -610,6 +610,11 @@ namespace Lunex {
 					m_EditingMaterial->GetLayeredTextureConfig().MetallicChannel = static_cast<TextureChannel>(ch);
 					MarkAsModified();
 				}
+				float metMult = m_EditingMaterial->GetMetallicMultiplier();
+				if (PropertySlider("Intensity##MetLayered", metMult, 0.0f, 10.0f, "%.2f", "Metallic channel multiplier")) {
+					m_EditingMaterial->SetMetallicMultiplier(metMult);
+					MarkAsModified();
+				}
 				Unindent(16.0f);
 			}
 		}
@@ -628,6 +633,11 @@ namespace Lunex {
 					m_EditingMaterial->GetLayeredTextureConfig().RoughnessChannel = static_cast<TextureChannel>(ch);
 					MarkAsModified();
 				}
+				float roughMult = m_EditingMaterial->GetRoughnessMultiplier();
+				if (PropertySlider("Intensity##RoughLayered", roughMult, 0.0f, 10.0f, "%.2f", "Roughness channel multiplier")) {
+					m_EditingMaterial->SetRoughnessMultiplier(roughMult);
+					MarkAsModified();
+				}
 				Unindent(16.0f);
 			}
 		}
@@ -644,6 +654,11 @@ namespace Lunex {
 				int ch = static_cast<int>(config.AOChannel);
 				if (PropertyDropdown("Channel##AOCh", ch, channelNames, 4, "Source channel for AO")) {
 					m_EditingMaterial->GetLayeredTextureConfig().AOChannel = static_cast<TextureChannel>(ch);
+					MarkAsModified();
+				}
+				float aoMult = m_EditingMaterial->GetAOMultiplier();
+				if (PropertySlider("Intensity##AOLayered", aoMult, 0.0f, 10.0f, "%.2f", "AO channel multiplier")) {
+					m_EditingMaterial->SetAOMultiplier(aoMult);
 					MarkAsModified();
 				}
 				Unindent(16.0f);

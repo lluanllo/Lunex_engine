@@ -24,6 +24,8 @@ namespace Lunex {
 		m_AlbedoMap = texture;
 		if (texture && texture->IsLoaded()) {
 			m_AlbedoPath = texture->GetPath();
+		} else {
+			m_AlbedoPath.clear();
 		}
 		MarkDirty();
 	}
@@ -32,6 +34,8 @@ namespace Lunex {
 		m_NormalMap = texture;
 		if (texture && texture->IsLoaded()) {
 			m_NormalPath = texture->GetPath();
+		} else {
+			m_NormalPath.clear();
 		}
 		MarkDirty();
 	}
@@ -40,6 +44,8 @@ namespace Lunex {
 		m_MetallicMap = texture;
 		if (texture && texture->IsLoaded()) {
 			m_MetallicPath = texture->GetPath();
+		} else {
+			m_MetallicPath.clear();
 		}
 		MarkDirty();
 	}
@@ -48,6 +54,8 @@ namespace Lunex {
 		m_RoughnessMap = texture;
 		if (texture && texture->IsLoaded()) {
 			m_RoughnessPath = texture->GetPath();
+		} else {
+			m_RoughnessPath.clear();
 		}
 		MarkDirty();
 	}
@@ -56,6 +64,8 @@ namespace Lunex {
 		m_SpecularMap = texture;
 		if (texture && texture->IsLoaded()) {
 			m_SpecularPath = texture->GetPath();
+		} else {
+			m_SpecularPath.clear();
 		}
 		MarkDirty();
 	}
@@ -64,6 +74,8 @@ namespace Lunex {
 		m_EmissionMap = texture;
 		if (texture && texture->IsLoaded()) {
 			m_EmissionPath = texture->GetPath();
+		} else {
+			m_EmissionPath.clear();
 		}
 		MarkDirty();
 	}
@@ -72,6 +84,8 @@ namespace Lunex {
 		m_AOMap = texture;
 		if (texture && texture->IsLoaded()) {
 			m_AOPath = texture->GetPath();
+		} else {
+			m_AOPath.clear();
 		}
 		MarkDirty();
 	}

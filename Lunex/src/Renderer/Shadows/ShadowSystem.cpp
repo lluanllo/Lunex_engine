@@ -232,18 +232,21 @@ namespace Lunex {
 			switch (light.Properties.Type) {
 			case LightType::Directional:
 				info.Type = ShadowType::Directional_CSM;
-				info.Priority = 1000.0f / (glm::distance(cameraPos, light.WorldPosition) + 1.0f);
+				info.Priority = 10000.0f; // Directional lights always have highest priority
 				info.Bias = m_Config.DirectionalBias;
+				info.NormalBias = m_Config.DefaultNormalBias;
 				break;
 			case LightType::Spot:
 				info.Type = ShadowType::Spot;
 				info.Priority = 100.0f / (glm::distance(cameraPos, light.WorldPosition) + 1.0f);
 				info.Bias = m_Config.SpotBias;
+				info.NormalBias = m_Config.DefaultNormalBias;
 				break;
 			case LightType::Point:
 				info.Type = ShadowType::Point_Cubemap;
 				info.Priority = 50.0f / (glm::distance(cameraPos, light.WorldPosition) + 1.0f);
 				info.Bias = m_Config.PointBias;
+				info.NormalBias = m_Config.DefaultNormalBias;
 				break;
 			default:
 				continue;
