@@ -80,6 +80,12 @@ namespace Lunex {
 		bool HasEmissionMap() const { return m_BaseAsset->HasEmissionMap(); }
 		bool HasAOMap() const { return m_BaseAsset->HasAOMap(); }
 
+		// Detail normals & layered (from base asset)
+		const std::vector<DetailNormalMap>& GetDetailNormalMaps() const { return m_BaseAsset->GetDetailNormalMaps(); }
+		bool HasDetailNormalMaps() const { return m_BaseAsset->HasDetailNormalMaps(); }
+		bool HasLayeredTexture() const { return m_BaseAsset->HasLayeredTexture(); }
+		const LayeredTextureConfig& GetLayeredTextureConfig() const { return m_BaseAsset->GetLayeredTextureConfig(); }
+
 		// Multipliers
 		float GetMetallicMultiplier() const;
 		void SetMetallicMultiplier(float multiplier, bool asOverride = false);

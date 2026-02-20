@@ -38,9 +38,8 @@ void main() {
 	Output.TexCoords = a_TexCoords;
 	
 	vec3 T = normalize(normalMatrix * a_Tangent);
-	T = normalize(T - dot(T, N) * N);
-	vec3 B = normalize(normalMatrix * a_Bitangent);
-	B = normalize(B - dot(B, N) * N - dot(B, T) * T);
+	T = normalize(T - dot(T, N) * N); // Re-orthogonalize
+	vec3 B = cross(N, T) * sign(dot(cross(a_Normal, a_Tangent), a_Bitangent)); // Preserve handedness
 	Output.TBN = mat3(T, B, N);
 	
 	v_EntityID = a_EntityID;
@@ -74,7 +73,7 @@ layout(std140, binding = 2) uniform Material {
 	float u_Specular;
 	float u_EmissionIntensity;
 	vec3 u_EmissionColor;
-	float _padding1;
+	float u_NormalIntensity;
 	vec3 u_ViewPos;
 	
 	int u_UseAlbedoMap;
@@ -90,6 +89,24 @@ layout(std140, binding = 2) uniform Material {
 	float u_RoughnessMultiplier;
 	float u_SpecularMultiplier;
 	float u_AOMultiplier;
+
+	// Detail normals & layered texture
+	int u_DetailNormalCount;
+	int u_UseLayeredTexture;
+	int u_LayeredMetallicChannel;   // 0=R, 1=G, 2=B, 3=A
+	int u_LayeredRoughnessChannel;
+
+	int u_LayeredAOChannel;
+	int u_LayeredUseMetallic;
+	int u_LayeredUseRoughness;
+	int u_LayeredUseAO;
+
+	// Explicit padding to align vec4 to 16-byte boundary (std140)
+	float _detailPad0;
+
+	vec4 u_DetailNormalIntensities;
+	vec4 u_DetailNormalTilingX;
+	vec4 u_DetailNormalTilingY;
 };
 
 // ============ LIGHTING SYSTEM (SSBO) ============
@@ -156,6 +173,7 @@ layout (binding = 3) uniform sampler2D u_RoughnessMap;
 layout (binding = 4) uniform sampler2D u_SpecularMap;
 layout (binding = 5) uniform sampler2D u_EmissionMap;
 layout (binding = 6) uniform sampler2D u_AOMap;
+layout (binding = 7) uniform sampler2D u_LayeredMap;
 
 // ============ IBL SAMPLERS ============
 layout (binding = 8) uniform samplerCube u_IrradianceMap;
@@ -164,6 +182,12 @@ layout (binding = 10) uniform sampler2D u_BRDFLUT;
 
 // ============ SHADOW ATLAS SAMPLER ============
 layout (binding = 11) uniform sampler2DArrayShadow u_ShadowAtlas;
+
+// ============ DETAIL NORMAL MAP SAMPLERS ============
+layout (binding = 12) uniform sampler2D u_DetailNormal0;
+layout (binding = 13) uniform sampler2D u_DetailNormal1;
+layout (binding = 14) uniform sampler2D u_DetailNormal2;
+layout (binding = 15) uniform sampler2D u_DetailNormal3;
 
 // ============ IBL UNIFORM ============
 layout(std140, binding = 5) uniform IBLData {
@@ -243,48 +267,62 @@ float CalculateDirectionalShadow(int shadowIndex, vec3 fragPos, vec3 normal) {
 		}
 	}
 	
+	// Scale bias by cascade index to reduce artifacts on far cascades
+	float cascadeBiasScale = 1.0 + float(cascadeIndex) * 0.5;
+	float adjustedBias = bias * cascadeBiasScale;
+	float adjustedNormalBias = normalBias * cascadeBiasScale;
+	
 	// Transform to light space of selected cascade
-	vec3 biasedPos = fragPos + normal * normalBias;
+	vec3 biasedPos = fragPos + normal * adjustedNormalBias;
 	vec4 lightSpacePos = u_Cascades[cascadeIndex].ViewProjection * vec4(biasedPos, 1.0);
 	vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
 	projCoords = projCoords * 0.5 + 0.5;
 	
-	// Out of shadow map range ? fully lit
+	// Out of shadow map range -> fully lit (use wider margin)
 	if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
 		projCoords.y < 0.0 || projCoords.y > 1.0 ||
-		projCoords.z > 1.0) {
+		projCoords.z > 1.0 || projCoords.z < 0.0) {
 		return 1.0;
 	}
 	
-	float compareDepth = projCoords.z - bias;
+	float compareDepth = projCoords.z - adjustedBias;
+	compareDepth = clamp(compareDepth, 0.0, 1.0);
 	float layer = firstLayer + float(cascadeIndex);
 	
-	// PCF sampling
-	float shadow = SampleShadowPCF(layer, projCoords.xy, compareDepth, pcfRadius, resolution);
+	// PCF sampling with cascade-scaled radius
+	float cascadePCFRadius = pcfRadius * (1.0 + float(cascadeIndex) * 0.3);
+	float shadow = SampleShadowPCF(layer, projCoords.xy, compareDepth, cascadePCFRadius, resolution);
 	
 	// Fade out at max shadow distance
 	float fadeStart = u_MaxShadowDistance * 0.8;
-	float fadeFactor = clamp((u_MaxShadowDistance - v_ViewDepth) / (u_MaxShadowDistance - fadeStart), 0.0, 1.0);
+	float fadeFactor = clamp((u_MaxShadowDistance - v_ViewDepth) / (u_MaxShadowDistance - fadeStart + 0.001), 0.0, 1.0);
 	shadow = mix(1.0, shadow, fadeFactor);
 	
 	// Cascade transition blending (smooth transition between cascades)
 	if (cascadeIndex < u_CSMCascadeCount - 1) {
 		float cascadeFar = u_Cascades[cascadeIndex].SplitDepth;
-		float blendRange = cascadeFar * 0.1;
-		float blendFactor = clamp((cascadeFar - v_ViewDepth) / blendRange, 0.0, 1.0);
+		float blendRange = cascadeFar * 0.15;
+		float blendFactor = clamp((cascadeFar - v_ViewDepth) / max(blendRange, 0.001), 0.0, 1.0);
 		
 		if (blendFactor < 1.0) {
 			// Sample next cascade
 			int nextCascade = cascadeIndex + 1;
-			vec4 nextLightSpace = u_Cascades[nextCascade].ViewProjection * vec4(biasedPos, 1.0);
+			float nextBiasScale = 1.0 + float(nextCascade) * 0.5;
+			vec3 nextBiasedPos = fragPos + normal * (normalBias * nextBiasScale);
+			vec4 nextLightSpace = u_Cascades[nextCascade].ViewProjection * vec4(nextBiasedPos, 1.0);
 			vec3 nextProj = nextLightSpace.xyz / nextLightSpace.w;
 			nextProj = nextProj * 0.5 + 0.5;
 			
-			float nextLayer = firstLayer + float(nextCascade);
-			float nextCompare = nextProj.z - bias;
-			float nextShadow = SampleShadowPCF(nextLayer, nextProj.xy, nextCompare, pcfRadius, resolution);
-			
-			shadow = mix(nextShadow, shadow, blendFactor);
+			if (nextProj.x > 0.0 && nextProj.x < 1.0 &&
+				nextProj.y > 0.0 && nextProj.y < 1.0 &&
+				nextProj.z >= 0.0 && nextProj.z <= 1.0) {
+				float nextLayer = firstLayer + float(nextCascade);
+				float nextCompare = clamp(nextProj.z - (bias * nextBiasScale), 0.0, 1.0);
+				float nextPCFRadius = pcfRadius * (1.0 + float(nextCascade) * 0.3);
+				float nextShadow = SampleShadowPCF(nextLayer, nextProj.xy, nextCompare, nextPCFRadius, resolution);
+				
+				shadow = mix(nextShadow, shadow, blendFactor);
+			}
 		}
 	}
 	
@@ -329,8 +367,15 @@ float CalculatePointShadow(int shadowIndex, vec3 fragPos, vec3 normal, vec3 ligh
 	float resolution = sd.ShadowParams2.w;
 	
 	vec3 fragToLight = fragPos - lightPos;
-	vec3 biasedFrag = fragPos + normal * normalBias;
-	float currentDist = length(biasedFrag - lightPos);
+	float currentDist = length(fragToLight);
+	
+	// Skip shadow if fragment is beyond light range (keep very close fragments)
+	if (currentDist > lightRange) return 1.0;
+	
+	// Apply normal bias scaled by distance to light
+	float normalBiasScale = max(normalBias, normalBias * (currentDist / lightRange));
+	vec3 biasedFrag = fragPos + normal * normalBiasScale;
+	float biasedDist = length(biasedFrag - lightPos);
 	
 	// Determine which cubemap face to sample
 	vec3 absDir = abs(fragToLight);
@@ -348,14 +393,26 @@ float CalculatePointShadow(int shadowIndex, vec3 fragPos, vec3 normal, vec3 ligh
 	vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
 	projCoords = projCoords * 0.5 + 0.5;
 	
-	if (projCoords.z > 1.0) return 1.0;
+	if (projCoords.z > 1.0 || projCoords.z < 0.0) return 1.0;
+	if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
+		projCoords.y < 0.0 || projCoords.y > 1.0) return 1.0;
 	
-	// For point lights, compare linear depth
-	float normalizedDist = currentDist / lightRange;
-	float compareDepth = normalizedDist - bias;
+	// For point lights, compare linear depth (written by ShadowDepthPoint shader)
+	float normalizedDist = biasedDist / lightRange;
+	
+	// Adaptive bias: smaller bias when close, larger when far
+	// This prevents both near-plane artifacts and far-plane clipping
+	float adaptiveBias = bias * mix(0.2, 1.5, currentDist / lightRange);
+	float compareDepth = normalizedDist - adaptiveBias;
+	
+	// Clamp to valid range
+	compareDepth = clamp(compareDepth, 0.0, 1.0);
 	
 	float layer = firstLayer + float(face);
-	return SampleShadowPCF(layer, projCoords.xy, compareDepth, 1.0, resolution);
+	
+	// Use smaller PCF radius for point lights (they already have 6 face transitions)
+	float pointPCFRadius = max(0.5, 1.0 * (1.0 - currentDist / lightRange));
+	return SampleShadowPCF(layer, projCoords.xy, compareDepth, pointPCFRadius, resolution);
 }
 
 // Find shadow index for a given light index
@@ -389,10 +446,11 @@ float D_GGX(float NdotH, float roughness) {
 }
 
 float V_SmithGGXCorrelated(float NdotV, float NdotL, float roughness) {
-	float a2 = roughness * roughness;
+	float a = roughness * roughness;
+	float a2 = a * a;
 	
-	float lambdaV = NdotL * sqrt((-NdotV * a2 + NdotV) * NdotV + a2);
-	float lambdaL = NdotV * sqrt((-NdotL * a2 + NdotL) * NdotL + a2);
+	float lambdaV = NdotL * sqrt(NdotV * NdotV * (1.0 - a2) + a2);
+	float lambdaL = NdotV * sqrt(NdotL * NdotL * (1.0 - a2) + a2);
 	
 	return 0.5 / max(lambdaV + lambdaL, EPSILON);
 }
@@ -718,6 +776,27 @@ vec3 CalculateFallbackAmbient(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metall
 	return (ambientDiffuse + ambientSpecular) * 1.2;
 }
 
+// ============ HELPER: SAMPLE CHANNEL FROM LAYERED TEXTURE ============
+
+float SampleLayeredChannel(vec4 layeredSample, int channel) {
+	if (channel == 0) return layeredSample.r;
+	if (channel == 1) return layeredSample.g;
+	if (channel == 2) return layeredSample.b;
+	return layeredSample.a;
+}
+
+// ============ HELPER: BLEND DETAIL NORMALS (UDN blending) ============
+
+vec3 BlendNormals_UDN(vec3 base, vec3 detail) {
+	return normalize(vec3(base.xy + detail.xy, base.z));
+}
+
+vec3 SampleDetailNormal(sampler2D detailMap, vec2 uv, float tilingX, float tilingY) {
+	vec2 detailUV = uv * vec2(tilingX, tilingY);
+	vec3 n = texture(detailMap, detailUV).rgb;
+	return n * 2.0 - 1.0;
+}
+
 // ============ TONE MAPPING ============
 
 vec3 ACESFilm(vec3 x) {
@@ -728,8 +807,6 @@ vec3 ACESFilm(vec3 x) {
 	float e = 0.14;
 	return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
 }
-
-// ============ MAIN FRAGMENT SHADER ============
 
 void main() {
 	// ========== TEXTURE SAMPLING ==========
@@ -744,22 +821,90 @@ void main() {
 		albedo = pow(u_Color.rgb, vec3(2.2));
 	}
 	
+	// ========== NORMAL MAPPING ==========
 	vec3 N;
 	if (u_UseNormalMap != 0) {
 		vec3 normalMap = texture(u_NormalMap, Input.TexCoords).rgb;
 		normalMap = normalMap * 2.0 - 1.0;
+		normalMap.xy *= u_NormalIntensity;
+		normalMap = normalize(normalMap);
+		
+		// Blend detail normals (UDN method)
+		if (u_DetailNormalCount > 0) {
+			vec3 detailN;
+			detailN = SampleDetailNormal(u_DetailNormal0, Input.TexCoords, u_DetailNormalTilingX.x, u_DetailNormalTilingY.x);
+			detailN.xy *= u_DetailNormalIntensities.x;
+			normalMap = BlendNormals_UDN(normalMap, detailN);
+		}
+		if (u_DetailNormalCount > 1) {
+			vec3 detailN;
+			detailN = SampleDetailNormal(u_DetailNormal1, Input.TexCoords, u_DetailNormalTilingX.y, u_DetailNormalTilingY.y);
+			detailN.xy *= u_DetailNormalIntensities.y;
+			normalMap = BlendNormals_UDN(normalMap, detailN);
+		}
+		if (u_DetailNormalCount > 2) {
+			vec3 detailN;
+			detailN = SampleDetailNormal(u_DetailNormal2, Input.TexCoords, u_DetailNormalTilingX.z, u_DetailNormalTilingY.z);
+			detailN.xy *= u_DetailNormalIntensities.z;
+			normalMap = BlendNormals_UDN(normalMap, detailN);
+		}
+		if (u_DetailNormalCount > 3) {
+			vec3 detailN;
+			detailN = SampleDetailNormal(u_DetailNormal3, Input.TexCoords, u_DetailNormalTilingX.w, u_DetailNormalTilingY.w);
+			detailN.xy *= u_DetailNormalIntensities.w;
+			normalMap = BlendNormals_UDN(normalMap, detailN);
+		}
+		
 		N = normalize(Input.TBN * normalMap);
 	} else {
 		N = normalize(Input.Normal);
+		
+		// Even without a base normal map, detail normals can be used
+		if (u_DetailNormalCount > 0) {
+			vec3 detailAccum = vec3(0.0, 0.0, 1.0);
+			if (u_DetailNormalCount > 0) {
+				vec3 d = SampleDetailNormal(u_DetailNormal0, Input.TexCoords, u_DetailNormalTilingX.x, u_DetailNormalTilingY.x);
+				d.xy *= u_DetailNormalIntensities.x;
+				detailAccum = BlendNormals_UDN(detailAccum, d);
+			}
+			if (u_DetailNormalCount > 1) {
+				vec3 d = SampleDetailNormal(u_DetailNormal1, Input.TexCoords, u_DetailNormalTilingX.y, u_DetailNormalTilingY.y);
+				d.xy *= u_DetailNormalIntensities.y;
+				detailAccum = BlendNormals_UDN(detailAccum, d);
+			}
+			if (u_DetailNormalCount > 2) {
+				vec3 d = SampleDetailNormal(u_DetailNormal2, Input.TexCoords, u_DetailNormalTilingX.z, u_DetailNormalTilingY.z);
+				d.xy *= u_DetailNormalIntensities.z;
+				detailAccum = BlendNormals_UDN(detailAccum, d);
+			}
+			if (u_DetailNormalCount > 3) {
+				vec3 d = SampleDetailNormal(u_DetailNormal3, Input.TexCoords, u_DetailNormalTilingX.w, u_DetailNormalTilingY.w);
+				d.xy *= u_DetailNormalIntensities.w;
+				detailAccum = BlendNormals_UDN(detailAccum, d);
+			}
+			N = normalize(Input.TBN * detailAccum);
+		}
 	}
 	
+	// ========== LAYERED TEXTURE SAMPLING ==========
+	vec4 layeredSample = vec4(0.0);
+	if (u_UseLayeredTexture != 0) {
+		layeredSample = texture(u_LayeredMap, Input.TexCoords);
+	}
+	
+	// ========== METALLIC ==========
 	float metallic = u_Metallic;
-	if (u_UseMetallicMap != 0) {
+	if (u_UseLayeredTexture != 0 && u_LayeredUseMetallic != 0) {
+		metallic = clamp(SampleLayeredChannel(layeredSample, u_LayeredMetallicChannel) * u_MetallicMultiplier, 0.0, 1.0);
+	} else if (u_UseMetallicMap != 0) {
 		metallic = clamp(texture(u_MetallicMap, Input.TexCoords).r * u_MetallicMultiplier, 0.0, 1.0);
 	}
 	
+	// ========== ROUGHNESS ==========
 	float roughness = u_Roughness;
-	if (u_UseRoughnessMap != 0) {
+	if (u_UseLayeredTexture != 0 && u_LayeredUseRoughness != 0) {
+		roughness = clamp(SampleLayeredChannel(layeredSample, u_LayeredRoughnessChannel) * u_RoughnessMultiplier, 0.0, 1.0);
+	} else if (u_UseRoughnessMap != 0) {
 		roughness = clamp(texture(u_RoughnessMap, Input.TexCoords).r * u_RoughnessMultiplier, 0.0, 1.0);
 	}
 	roughness = max(roughness, MIN_ROUGHNESS);
@@ -769,8 +914,11 @@ void main() {
 		specular = clamp(texture(u_SpecularMap, Input.TexCoords).r * u_SpecularMultiplier, 0.0, 1.0);
 	}
 	
+	// ========== AMBIENT OCCLUSION ==========
 	float ao = 1.0;
-	if (u_UseAOMap != 0) {
+	if (u_UseLayeredTexture != 0 && u_LayeredUseAO != 0) {
+		ao = clamp(SampleLayeredChannel(layeredSample, u_LayeredAOChannel) * u_AOMultiplier, 0.0, 1.0);
+	} else if (u_UseAOMap != 0) {
 		ao = clamp(texture(u_AOMap, Input.TexCoords).r * u_AOMultiplier, 0.0, 1.0);
 	}
 	
@@ -778,9 +926,8 @@ void main() {
 	
 	vec3 V = normalize(u_ViewPos - Input.FragPos);
 	
-	vec3 F0 = vec3(MIN_DIELECTRIC_F0);
+	vec3 F0 = vec3(MIN_DIELECTRIC_F0 * specular * 2.0);
 	F0 = mix(F0, albedo, metallic);
-	F0 = mix(F0 * specular, F0, metallic);
 	
 	vec3 directLighting = CalculateDirectLighting(N, V, F0, albedo, metallic, roughness, Input.FragPos, ao);
 	
@@ -819,38 +966,26 @@ void main() {
 	
 	// ========== FINAL COMPOSITION ==========
 	
-	// Apply directional shadow to IBL ambient when a directional light is present.
-	// This simulates the dominant sun light in the HDRI casting shadows:
-	// - In shadow: only receive diffuse sky light (reduced ambient)
-	// - In light: full IBL ambient
-	// We blend between full ambient and reduced ambient based on directional shadow.
 	if (u_NumShadowLights > 0 && g_DirectionalShadowFactor < 1.0) {
-		// Keep some ambient even in full shadow (indirect sky light remains)
-		float ambientShadow = mix(0.3, 1.0, g_DirectionalShadowFactor);
+		float ambientShadow = mix(0.35, 1.0, g_DirectionalShadowFactor);
 		ambient *= ambientShadow;
 	}
 	
 	vec3 color = ambient + directLighting + emission + emissiveContribution;
 	
 	// Sky color tinting on shadowed areas
-	// In real life, shadows receive indirect light from the sky, giving them a blue/cool tint
 	if (u_SkyTintStrength > 0.0 && u_NumShadowLights > 0) {
-		// Estimate sky color: use IBL if available, otherwise use a default sky color
 		vec3 skyColor;
 		if (u_UseIBL != 0) {
-			// Sample the sky from above (upward hemisphere)
 			skyColor = texture(u_IrradianceMap, vec3(0.0, 1.0, 0.0)).rgb;
 		} else {
-			skyColor = vec3(0.4, 0.5, 0.7); // Default sky blue
+			skyColor = vec3(0.4, 0.5, 0.7);
 		}
 		
-		// Calculate how much this fragment is in shadow (average across all light contributions)
-		// Use the ratio: if directLighting is very low compared to what it could be, we're in shadow
 		float luminanceDirect = dot(directLighting, vec3(0.2126, 0.7152, 0.0722));
 		float luminanceAmbient = dot(ambient, vec3(0.2126, 0.7152, 0.0722));
 		float shadowAmount = 1.0 - clamp(luminanceDirect / max(luminanceAmbient + luminanceDirect, 0.001), 0.0, 1.0);
 		
-		// Apply sky color contamination to shadowed areas
 		vec3 skyTint = skyColor * u_SkyTintStrength * shadowAmount * albedo;
 		color += skyTint;
 	}

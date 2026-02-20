@@ -2,18 +2,17 @@
 
 /**
  * @file MaterialEditorPanel.h
- * @brief AAA-Quality Material Editor Panel
+ * @brief AAA-Quality Material Editor Panel with Dockable Sub-Panels
  * 
  * Features:
- * - Real-time PBR material preview
- * - Clean, professional UI using Lunex UI Framework
- * - Drag & drop texture support
- * - Hot-reload support
+ * - Real-time PBR material preview (dockable)
+ * - Texture Maps panel for all texture assignments (dockable)
+ * - PBR Properties panel for base material values (dockable)
+ * - Advanced Options panel for layered/channel-packed textures (dockable)
+ * - 100% Lunex UI Framework (no raw ImGui)
  */
 
 #include "Core/Core.h"
-
-// AAA Architecture - Material system
 #include "Assets/Materials/MaterialAsset.h"
 #include "Resources/Render/MaterialInstance.h"
 #include "Renderer/MaterialPreviewRenderer.h"
@@ -25,12 +24,16 @@ namespace Lunex {
 
 	/**
 	 * @class MaterialEditorPanel
-	 * @brief Visual material editor with real-time preview
+	 * @brief Visual material editor with 4 dockable sub-panels
 	 * 
-	 * AAA Architecture Integration:
-	 * - Uses MaterialAsset from Assets/Materials/
-	 * - Uses Lunex UI Framework for consistent styling
-	 * - Supports hot-reload through MaterialRegistry
+	 * Layout (default):
+	 * ?????????????????????????????????????
+	 * ?               ?  PBR Properties   ?
+	 * ?   Preview     ?????????????????????
+	 * ?               ?  Texture Maps     ?
+	 * ?               ?????????????????????
+	 * ?               ? Advanced Options  ?
+	 * ?????????????????????????????????????
 	 */
 	class MaterialEditorPanel {
 	public:
@@ -72,30 +75,44 @@ namespace Lunex {
 		bool m_IsOpen = false;
 		bool m_AutoSave = false;
 		bool m_HasUnsavedChanges = false;
+		bool m_DockspaceInitialized = false;
 
 		// Preview state
 		uint32_t m_PreviewWidth = 512;
 		uint32_t m_PreviewHeight = 512;
 
-		// ========== UI DRAWING (New AAA API) ==========
+		// ========== HOST WINDOW ==========
 
-		void DrawMainLayout();
+		void DrawHostWindow();
 		void DrawMenuBar();
-		void DrawPreviewViewport();
-		void DrawPropertiesPanel();
-		
-		// Section drawing
-		void DrawPBRPropertiesSection();
+		void SetupDockspace(unsigned int dockspaceID);
+
+		// ========== SUB-PANELS (Dockable) ==========
+
+		void DrawPreviewPanel();
+		void DrawTextureMapsPanel();
+		void DrawPBRPropertiesPanel();
+		void DrawAdvancedOptionsPanel();
+
+		// ========== SECTION DRAWING ==========
+
+		void DrawPBRSection();
 		void DrawEmissionSection();
-		void DrawTextureMapsSection();
-		
-		// New texture slot with callbacks
+		void DrawTextureSlotsSection();
+		void DrawDetailNormalsSection();
+		void DrawLayeredTextureSection();
+		void DrawChannelPackingSection();
+
+		// ========== TEXTURE SLOT ==========
+
 		void DrawTextureSlotNew(
 			const std::string& label,
 			Ref<Texture2D> texture,
 			const std::string& path,
+			TextureColorSpace colorSpace,
 			std::function<void(Ref<Texture2D>)> onTextureSet,
-			std::function<void()> onTextureClear);
+			std::function<void()> onTextureClear,
+			std::function<void(TextureColorSpace)> onColorSpaceChanged);
 
 		// ========== LEGACY API (backwards compatibility) ==========
 

@@ -38,7 +38,10 @@ layout(std140, binding = 6) uniform ShadowDepthPointData {
 void main() {
 	// Write linear depth normalized to [0, 1] range
 	float dist = length(v_FragPos - u_LightPosAndRange.xyz);
-	gl_FragDepth = dist / u_LightPosAndRange.w;
+	float range = u_LightPosAndRange.w;
+	
+	// Clamp to valid range to avoid artifacts at boundaries
+	gl_FragDepth = clamp(dist / range, 0.0, 1.0);
 }
 
 #endif

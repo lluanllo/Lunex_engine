@@ -24,6 +24,8 @@ namespace Lunex {
 		m_AlbedoMap = texture;
 		if (texture && texture->IsLoaded()) {
 			m_AlbedoPath = texture->GetPath();
+		} else {
+			m_AlbedoPath.clear();
 		}
 		MarkDirty();
 	}
@@ -32,6 +34,8 @@ namespace Lunex {
 		m_NormalMap = texture;
 		if (texture && texture->IsLoaded()) {
 			m_NormalPath = texture->GetPath();
+		} else {
+			m_NormalPath.clear();
 		}
 		MarkDirty();
 	}
@@ -40,6 +44,8 @@ namespace Lunex {
 		m_MetallicMap = texture;
 		if (texture && texture->IsLoaded()) {
 			m_MetallicPath = texture->GetPath();
+		} else {
+			m_MetallicPath.clear();
 		}
 		MarkDirty();
 	}
@@ -48,6 +54,8 @@ namespace Lunex {
 		m_RoughnessMap = texture;
 		if (texture && texture->IsLoaded()) {
 			m_RoughnessPath = texture->GetPath();
+		} else {
+			m_RoughnessPath.clear();
 		}
 		MarkDirty();
 	}
@@ -56,6 +64,8 @@ namespace Lunex {
 		m_SpecularMap = texture;
 		if (texture && texture->IsLoaded()) {
 			m_SpecularPath = texture->GetPath();
+		} else {
+			m_SpecularPath.clear();
 		}
 		MarkDirty();
 	}
@@ -64,6 +74,8 @@ namespace Lunex {
 		m_EmissionMap = texture;
 		if (texture && texture->IsLoaded()) {
 			m_EmissionPath = texture->GetPath();
+		} else {
+			m_EmissionPath.clear();
 		}
 		MarkDirty();
 	}
@@ -72,6 +84,43 @@ namespace Lunex {
 		m_AOMap = texture;
 		if (texture && texture->IsLoaded()) {
 			m_AOPath = texture->GetPath();
+		} else {
+			m_AOPath.clear();
+		}
+		MarkDirty();
+	}
+
+	// ========== DETAIL NORMAL MAPS ==========
+
+	void MaterialAsset::AddDetailNormalMap(const DetailNormalMap& detail) {
+		m_DetailNormalMaps.push_back(detail);
+		MarkDirty();
+	}
+
+	void MaterialAsset::RemoveDetailNormalMap(size_t index) {
+		if (index < m_DetailNormalMaps.size()) {
+			m_DetailNormalMaps.erase(m_DetailNormalMaps.begin() + index);
+			MarkDirty();
+		}
+	}
+
+	void MaterialAsset::SetDetailNormalMap(size_t index, const DetailNormalMap& detail) {
+		if (index < m_DetailNormalMaps.size()) {
+			m_DetailNormalMaps[index] = detail;
+			MarkDirty();
+		}
+	}
+
+	// ========== LAYERED TEXTURE ==========
+
+	void MaterialAsset::SetLayeredTexture(Ref<Texture2D> texture) {
+		m_LayeredConfig.Texture = texture;
+		if (texture && texture->IsLoaded()) {
+			m_LayeredConfig.Path = texture->GetPath();
+			m_LayeredConfig.Enabled = true;
+		} else {
+			m_LayeredConfig.Path.clear();
+			m_LayeredConfig.Enabled = false;
 		}
 		MarkDirty();
 	}
@@ -130,6 +179,55 @@ namespace Lunex {
 		out << YAML::Key << "Specular" << YAML::Value << m_SpecularMultiplier;
 		out << YAML::Key << "AO" << YAML::Value << m_AOMultiplier;
 		out << YAML::EndMap;
+
+		// Color spaces
+		out << YAML::Key << "ColorSpaces" << YAML::Value;
+		out << YAML::BeginMap;
+		out << YAML::Key << "Albedo" << YAML::Value << static_cast<int>(m_AlbedoColorSpace);
+		out << YAML::Key << "Emission" << YAML::Value << static_cast<int>(m_EmissionColorSpace);
+		out << YAML::Key << "Normal" << YAML::Value << static_cast<int>(m_NormalColorSpace);
+		out << YAML::Key << "Metallic" << YAML::Value << static_cast<int>(m_MetallicColorSpace);
+		out << YAML::Key << "Roughness" << YAML::Value << static_cast<int>(m_RoughnessColorSpace);
+		out << YAML::Key << "AO" << YAML::Value << static_cast<int>(m_AOColorSpace);
+		out << YAML::EndMap;
+
+		// Alpha packing
+		out << YAML::Key << "AlphaPacking" << YAML::Value;
+		out << YAML::BeginMap;
+		out << YAML::Key << "Enabled" << YAML::Value << m_AlphaIsPacked;
+		out << YAML::Key << "Channel" << YAML::Value << static_cast<int>(m_AlphaPackedChannel);
+		out << YAML::EndMap;
+
+		// Detail normal maps
+		if (!m_DetailNormalMaps.empty()) {
+			out << YAML::Key << "DetailNormals" << YAML::Value;
+			out << YAML::BeginSeq;
+			for (const auto& detail : m_DetailNormalMaps) {
+				out << YAML::BeginMap;
+				out << YAML::Key << "Path" << YAML::Value << detail.Path;
+				out << YAML::Key << "Intensity" << YAML::Value << detail.Intensity;
+				out << YAML::Key << "TilingX" << YAML::Value << detail.TilingX;
+				out << YAML::Key << "TilingY" << YAML::Value << detail.TilingY;
+				out << YAML::Key << "OffsetX" << YAML::Value << detail.OffsetX;
+				out << YAML::Key << "OffsetY" << YAML::Value << detail.OffsetY;
+				out << YAML::EndMap;
+			}
+			out << YAML::EndSeq;
+		}
+
+		// Layered texture
+		if (m_LayeredConfig.Enabled) {
+			out << YAML::Key << "LayeredTexture" << YAML::Value;
+			out << YAML::BeginMap;
+			out << YAML::Key << "Path" << YAML::Value << m_LayeredConfig.Path;
+			out << YAML::Key << "MetallicChannel" << YAML::Value << static_cast<int>(m_LayeredConfig.MetallicChannel);
+			out << YAML::Key << "RoughnessChannel" << YAML::Value << static_cast<int>(m_LayeredConfig.RoughnessChannel);
+			out << YAML::Key << "AOChannel" << YAML::Value << static_cast<int>(m_LayeredConfig.AOChannel);
+			out << YAML::Key << "UseForMetallic" << YAML::Value << m_LayeredConfig.UseForMetallic;
+			out << YAML::Key << "UseForRoughness" << YAML::Value << m_LayeredConfig.UseForRoughness;
+			out << YAML::Key << "UseForAO" << YAML::Value << m_LayeredConfig.UseForAO;
+			out << YAML::EndMap;
+		}
 
 		out << YAML::EndMap;
 
@@ -228,6 +326,61 @@ namespace Lunex {
 			material->m_AOMultiplier = multipliersNode["AO"].as<float>(1.0f);
 		}
 
+		// Color spaces
+		auto csNode = data["ColorSpaces"];
+		if (csNode) {
+			material->m_AlbedoColorSpace = static_cast<TextureColorSpace>(csNode["Albedo"].as<int>(0));
+			material->m_EmissionColorSpace = static_cast<TextureColorSpace>(csNode["Emission"].as<int>(0));
+			material->m_NormalColorSpace = static_cast<TextureColorSpace>(csNode["Normal"].as<int>(1));
+			material->m_MetallicColorSpace = static_cast<TextureColorSpace>(csNode["Metallic"].as<int>(1));
+			material->m_RoughnessColorSpace = static_cast<TextureColorSpace>(csNode["Roughness"].as<int>(1));
+			material->m_AOColorSpace = static_cast<TextureColorSpace>(csNode["AO"].as<int>(1));
+		}
+
+		// Alpha packing
+		auto alphaNode = data["AlphaPacking"];
+		if (alphaNode) {
+			material->m_AlphaIsPacked = alphaNode["Enabled"].as<bool>(false);
+			material->m_AlphaPackedChannel = static_cast<TextureChannel>(alphaNode["Channel"].as<int>(3));
+		}
+
+		// Detail normal maps
+		auto detailNode = data["DetailNormals"];
+		if (detailNode && detailNode.IsSequence()) {
+			for (const auto& entry : detailNode) {
+				DetailNormalMap detail;
+				detail.Path = entry["Path"].as<std::string>("");
+				detail.Intensity = entry["Intensity"].as<float>(1.0f);
+				detail.TilingX = entry["TilingX"].as<float>(1.0f);
+				detail.TilingY = entry["TilingY"].as<float>(1.0f);
+				detail.OffsetX = entry["OffsetX"].as<float>(0.0f);
+				detail.OffsetY = entry["OffsetY"].as<float>(0.0f);
+
+				if (!detail.Path.empty() && std::filesystem::exists(detail.Path)) {
+					detail.Texture = Texture2D::Create(detail.Path);
+				}
+
+				material->m_DetailNormalMaps.push_back(detail);
+			}
+		}
+
+		// Layered texture
+		auto layeredNode = data["LayeredTexture"];
+		if (layeredNode) {
+			material->m_LayeredConfig.Enabled = true;
+			material->m_LayeredConfig.Path = layeredNode["Path"].as<std::string>("");
+			material->m_LayeredConfig.MetallicChannel = static_cast<TextureChannel>(layeredNode["MetallicChannel"].as<int>(0));
+			material->m_LayeredConfig.RoughnessChannel = static_cast<TextureChannel>(layeredNode["RoughnessChannel"].as<int>(1));
+			material->m_LayeredConfig.AOChannel = static_cast<TextureChannel>(layeredNode["AOChannel"].as<int>(2));
+			material->m_LayeredConfig.UseForMetallic = layeredNode["UseForMetallic"].as<bool>(true);
+			material->m_LayeredConfig.UseForRoughness = layeredNode["UseForRoughness"].as<bool>(true);
+			material->m_LayeredConfig.UseForAO = layeredNode["UseForAO"].as<bool>(true);
+
+			if (!material->m_LayeredConfig.Path.empty() && std::filesystem::exists(material->m_LayeredConfig.Path)) {
+				material->m_LayeredConfig.Texture = Texture2D::Create(material->m_LayeredConfig.Path);
+			}
+		}
+
 		material->ClearDirty();
 		material->SetLoaded(true);
 		LNX_LOG_INFO("Material loaded: {0}", path.string());
@@ -264,12 +417,26 @@ namespace Lunex {
 		clone->m_AOPath = m_AOPath;
 		clone->m_AOMultiplier = m_AOMultiplier;
 
+		clone->m_AlbedoColorSpace = m_AlbedoColorSpace;
+		clone->m_EmissionColorSpace = m_EmissionColorSpace;
+		clone->m_NormalColorSpace = m_NormalColorSpace;
+		clone->m_MetallicColorSpace = m_MetallicColorSpace;
+		clone->m_RoughnessColorSpace = m_RoughnessColorSpace;
+		clone->m_AOColorSpace = m_AOColorSpace;
+
+		clone->m_AlphaIsPacked = m_AlphaIsPacked;
+		clone->m_AlphaPackedChannel = m_AlphaPackedChannel;
+
+		clone->m_DetailNormalMaps = m_DetailNormalMaps;
+		clone->m_LayeredConfig = m_LayeredConfig;
+
 		clone->MarkDirty();
 		return clone;
 	}
 
 	MaterialAsset::MaterialUniformData MaterialAsset::GetUniformData() const {
 		MaterialUniformData data;
+		memset(&data, 0, sizeof(data));
 
 		data.Albedo = m_Albedo;
 		data.Metallic = m_Metallic;
@@ -292,6 +459,25 @@ namespace Lunex {
 		data.RoughnessMultiplier = m_RoughnessMultiplier;
 		data.SpecularMultiplier = m_SpecularMultiplier;
 		data.AOMultiplier = m_AOMultiplier;
+
+		// Detail normals
+		data.DetailNormalCount = static_cast<int>(std::min(m_DetailNormalMaps.size(), (size_t)MAX_DETAIL_NORMALS));
+		for (int i = 0; i < data.DetailNormalCount; ++i) {
+			data.DetailNormalIntensities[i] = m_DetailNormalMaps[i].Intensity;
+			data.DetailNormalTilingX[i] = m_DetailNormalMaps[i].TilingX;
+			data.DetailNormalTilingY[i] = m_DetailNormalMaps[i].TilingY;
+		}
+
+		// Layered texture
+		data.UseLayeredTexture = HasLayeredTexture() ? 1 : 0;
+		if (HasLayeredTexture()) {
+			data.LayeredMetallicChannel = static_cast<int>(m_LayeredConfig.MetallicChannel);
+			data.LayeredRoughnessChannel = static_cast<int>(m_LayeredConfig.RoughnessChannel);
+			data.LayeredAOChannel = static_cast<int>(m_LayeredConfig.AOChannel);
+			data.LayeredUseMetallic = m_LayeredConfig.UseForMetallic ? 1 : 0;
+			data.LayeredUseRoughness = m_LayeredConfig.UseForRoughness ? 1 : 0;
+			data.LayeredUseAO = m_LayeredConfig.UseForAO ? 1 : 0;
+		}
 
 		return data;
 	}

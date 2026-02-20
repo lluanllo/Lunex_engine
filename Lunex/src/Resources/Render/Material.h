@@ -52,7 +52,7 @@ namespace Lunex {
 			float Specular;
 			float EmissionIntensity;
 			glm::vec3 EmissionColor;
-			float _padding;
+			float NormalIntensity;
 			glm::vec3 ViewPos;
 			
 			int UseAlbedoMap;
@@ -82,7 +82,7 @@ namespace Lunex {
 				m_Specular,
 				m_EmissionIntensity,
 				m_EmissionColor,
-				0.0f,
+				1.0f,
 				viewPos,
 				hasAlbedo ? 1 : 0,
 				hasNormal ? 1 : 0,

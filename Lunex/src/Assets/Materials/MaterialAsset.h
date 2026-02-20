@@ -6,6 +6,13 @@
  * 
  * AAA Architecture: MaterialAsset lives in Assets/Materials/
  * This is the serializable, CPU-side material definition.
+ * 
+ * Features:
+ * - Standard PBR properties (albedo, metallic, roughness, specular, emission, AO)
+ * - Detail normal maps (unlimited)
+ * - Layered (channel-packed) textures with configurable channel mapping
+ * - Color space annotations (sRGB / Non-Color)
+ * - Alpha channel packing
  */
 
 #include "Core/Core.h"
@@ -14,6 +21,7 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <filesystem>
+#include <vector>
 
 // Forward declarations
 namespace YAML {
@@ -23,12 +31,69 @@ namespace YAML {
 
 namespace Lunex {
 
+	// ============================================================================
+	// ENUMS & STRUCTS
+	// ============================================================================
+
+	/**
+	 * @brief Color space for texture interpretation
+	 */
+	enum class TextureColorSpace : uint8_t {
+		sRGB = 0,       // Color textures (albedo, emission)
+		NonColor = 1     // Data textures (normal, metallic, roughness, AO)
+	};
+
+	/**
+	 * @brief Which channel of a texture to read from
+	 */
+	enum class TextureChannel : uint8_t {
+		Red = 0,
+		Green = 1,
+		Blue = 2,
+		Alpha = 3,
+		RGB = 4          // Use full RGB (for color textures)
+	};
+
+	/**
+	 * @brief A single detail normal map entry
+	 */
+	struct DetailNormalMap {
+		Ref<Texture2D> Texture;
+		std::string Path;
+		float Intensity = 1.0f;
+		float TilingX = 1.0f;
+		float TilingY = 1.0f;
+		float OffsetX = 0.0f;
+		float OffsetY = 0.0f;
+	};
+
+	/**
+	 * @brief Configuration for a layered (channel-packed) texture
+	 * Default: R=Metallic, G=Roughness, B=AO
+	 */
+	struct LayeredTextureConfig {
+		Ref<Texture2D> Texture;
+		std::string Path;
+		bool Enabled = false;
+
+		// Channel assignments
+		TextureChannel MetallicChannel = TextureChannel::Red;
+		TextureChannel RoughnessChannel = TextureChannel::Green;
+		TextureChannel AOChannel = TextureChannel::Blue;
+
+		// Per-channel enable
+		bool UseForMetallic = true;
+		bool UseForRoughness = true;
+		bool UseForAO = true;
+	};
+
+	// ============================================================================
+	// MATERIAL ASSET
+	// ============================================================================
+
 	/**
 	 * @class MaterialAsset
 	 * @brief Serializable PBR material definition
-	 * 
-	 * This is an Asset that can be saved to .umat files.
-	 * It defines material properties and texture references.
 	 */
 	class MaterialAsset : public Asset {
 	public:
@@ -42,30 +107,24 @@ namespace Lunex {
 
 		// ========== PBR PROPERTIES ==========
 		
-		// Albedo (Base Color)
 		void SetAlbedo(const glm::vec4& color) { m_Albedo = color; MarkDirty(); }
 		const glm::vec4& GetAlbedo() const { return m_Albedo; }
 
-		// Metallic (0 = dielectric, 1 = metal)
 		void SetMetallic(float metallic) { m_Metallic = glm::clamp(metallic, 0.0f, 1.0f); MarkDirty(); }
 		float GetMetallic() const { return m_Metallic; }
 
-		// Roughness (0 = smooth, 1 = rough)
 		void SetRoughness(float roughness) { m_Roughness = glm::clamp(roughness, 0.0f, 1.0f); MarkDirty(); }
 		float GetRoughness() const { return m_Roughness; }
 
-		// Specular
 		void SetSpecular(float specular) { m_Specular = glm::clamp(specular, 0.0f, 1.0f); MarkDirty(); }
 		float GetSpecular() const { return m_Specular; }
 
-		// Emission
 		void SetEmissionColor(const glm::vec3& color) { m_EmissionColor = color; MarkDirty(); }
 		const glm::vec3& GetEmissionColor() const { return m_EmissionColor; }
 
 		void SetEmissionIntensity(float intensity) { m_EmissionIntensity = glm::max(0.0f, intensity); MarkDirty(); }
 		float GetEmissionIntensity() const { return m_EmissionIntensity; }
 
-		// Normal intensity
 		void SetNormalIntensity(float intensity) { m_NormalIntensity = glm::clamp(intensity, 0.0f, 2.0f); MarkDirty(); }
 		float GetNormalIntensity() const { return m_NormalIntensity; }
 
@@ -88,7 +147,7 @@ namespace Lunex {
 		Ref<Texture2D> GetMetallicMap() const { return m_MetallicMap; }
 		const std::string& GetMetallicPath() const { return m_MetallicPath; }
 		bool HasMetallicMap() const { return m_MetallicMap != nullptr; }
-		void SetMetallicMultiplier(float multiplier) { m_MetallicMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); MarkDirty(); }
+		void SetMetallicMultiplier(float multiplier) { m_MetallicMultiplier = glm::clamp(multiplier, 0.0f, 10.0f); MarkDirty(); }
 		float GetMetallicMultiplier() const { return m_MetallicMultiplier; }
 
 		// Roughness Map
@@ -96,7 +155,7 @@ namespace Lunex {
 		Ref<Texture2D> GetRoughnessMap() const { return m_RoughnessMap; }
 		const std::string& GetRoughnessPath() const { return m_RoughnessPath; }
 		bool HasRoughnessMap() const { return m_RoughnessMap != nullptr; }
-		void SetRoughnessMultiplier(float multiplier) { m_RoughnessMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); MarkDirty(); }
+		void SetRoughnessMultiplier(float multiplier) { m_RoughnessMultiplier = glm::clamp(multiplier, 0.0f, 10.0f); MarkDirty(); }
 		float GetRoughnessMultiplier() const { return m_RoughnessMultiplier; }
 
 		// Specular Map
@@ -104,7 +163,7 @@ namespace Lunex {
 		Ref<Texture2D> GetSpecularMap() const { return m_SpecularMap; }
 		const std::string& GetSpecularPath() const { return m_SpecularPath; }
 		bool HasSpecularMap() const { return m_SpecularMap != nullptr; }
-		void SetSpecularMultiplier(float multiplier) { m_SpecularMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); MarkDirty(); }
+		void SetSpecularMultiplier(float multiplier) { m_SpecularMultiplier = glm::clamp(multiplier, 0.0f, 10.0f); MarkDirty(); }
 		float GetSpecularMultiplier() const { return m_SpecularMultiplier; }
 
 		// Emission Map
@@ -118,8 +177,55 @@ namespace Lunex {
 		Ref<Texture2D> GetAOMap() const { return m_AOMap; }
 		const std::string& GetAOPath() const { return m_AOPath; }
 		bool HasAOMap() const { return m_AOMap != nullptr; }
-		void SetAOMultiplier(float multiplier) { m_AOMultiplier = glm::clamp(multiplier, 0.0f, 2.0f); MarkDirty(); }
+		void SetAOMultiplier(float multiplier) { m_AOMultiplier = glm::clamp(multiplier, 0.0f, 10.0f); MarkDirty(); }
 		float GetAOMultiplier() const { return m_AOMultiplier; }
+
+		// ========== COLOR SPACE ==========
+
+		void SetAlbedoColorSpace(TextureColorSpace cs) { m_AlbedoColorSpace = cs; MarkDirty(); }
+		TextureColorSpace GetAlbedoColorSpace() const { return m_AlbedoColorSpace; }
+
+		void SetEmissionColorSpace(TextureColorSpace cs) { m_EmissionColorSpace = cs; MarkDirty(); }
+		TextureColorSpace GetEmissionColorSpace() const { return m_EmissionColorSpace; }
+
+		void SetNormalColorSpace(TextureColorSpace cs) { m_NormalColorSpace = cs; MarkDirty(); }
+		TextureColorSpace GetNormalColorSpace() const { return m_NormalColorSpace; }
+
+		void SetMetallicColorSpace(TextureColorSpace cs) { m_MetallicColorSpace = cs; MarkDirty(); }
+		TextureColorSpace GetMetallicColorSpace() const { return m_MetallicColorSpace; }
+
+		void SetRoughnessColorSpace(TextureColorSpace cs) { m_RoughnessColorSpace = cs; MarkDirty(); }
+		TextureColorSpace GetRoughnessColorSpace() const { return m_RoughnessColorSpace; }
+
+		void SetAOColorSpace(TextureColorSpace cs) { m_AOColorSpace = cs; MarkDirty(); }
+		TextureColorSpace GetAOColorSpace() const { return m_AOColorSpace; }
+
+		// ========== ALPHA CHANNEL PACKING ==========
+
+		void SetAlphaIsPacked(bool packed) { m_AlphaIsPacked = packed; MarkDirty(); }
+		bool IsAlphaChannelPacked() const { return m_AlphaIsPacked; }
+
+		void SetAlphaPackedChannel(TextureChannel ch) { m_AlphaPackedChannel = ch; MarkDirty(); }
+		TextureChannel GetAlphaPackedChannel() const { return m_AlphaPackedChannel; }
+
+		// ========== DETAIL NORMAL MAPS ==========
+
+		void AddDetailNormalMap(const DetailNormalMap& detail);
+		void RemoveDetailNormalMap(size_t index);
+		void SetDetailNormalMap(size_t index, const DetailNormalMap& detail);
+		const std::vector<DetailNormalMap>& GetDetailNormalMaps() const { return m_DetailNormalMaps; }
+		std::vector<DetailNormalMap>& GetDetailNormalMaps() { return m_DetailNormalMaps; }
+		size_t GetDetailNormalMapCount() const { return m_DetailNormalMaps.size(); }
+		bool HasDetailNormalMaps() const { return !m_DetailNormalMaps.empty(); }
+
+		// ========== LAYERED (CHANNEL-PACKED) TEXTURE ==========
+
+		void SetLayeredTextureConfig(const LayeredTextureConfig& config) { m_LayeredConfig = config; MarkDirty(); }
+		const LayeredTextureConfig& GetLayeredTextureConfig() const { return m_LayeredConfig; }
+		LayeredTextureConfig& GetLayeredTextureConfig() { return m_LayeredConfig; }
+		bool HasLayeredTexture() const { return m_LayeredConfig.Enabled && m_LayeredConfig.Texture != nullptr; }
+
+		void SetLayeredTexture(Ref<Texture2D> texture);
 
 		// ========== SERIALIZATION ==========
 		
@@ -130,13 +236,17 @@ namespace Lunex {
 
 		bool HasAnyTexture() const {
 			return HasAlbedoMap() || HasNormalMap() || HasMetallicMap() || 
-				   HasRoughnessMap() || HasSpecularMap() || HasEmissionMap() || HasAOMap();
+				   HasRoughnessMap() || HasSpecularMap() || HasEmissionMap() || HasAOMap() ||
+				   HasDetailNormalMaps() || HasLayeredTexture();
 		}
 
 		Ref<MaterialAsset> Clone() const;
 
 		// ========== GPU DATA ==========
 		
+		// Max detail normal maps the shader supports
+		static constexpr int MAX_DETAIL_NORMALS = 4;
+
 		struct MaterialUniformData {
 			glm::vec4 Albedo;
 			float Metallic;
@@ -159,6 +269,22 @@ namespace Lunex {
 			float RoughnessMultiplier;
 			float SpecularMultiplier;
 			float AOMultiplier;
+
+			// New: detail normals
+			int DetailNormalCount;
+			int UseLayeredTexture;
+			int LayeredMetallicChannel;   // 0=R, 1=G, 2=B, 3=A
+			int LayeredRoughnessChannel;  // 0=R, 1=G, 2=B, 3=A
+
+			int LayeredAOChannel;         // 0=R, 1=G, 2=B, 3=A
+			int LayeredUseMetallic;
+			int LayeredUseRoughness;
+			int LayeredUseAO;
+
+			// Detail normal intensities & tiling (packed)
+			glm::vec4 DetailNormalIntensities;  // .x = detail0, .y = detail1, .z = detail2, .w = detail3
+			glm::vec4 DetailNormalTilingX;
+			glm::vec4 DetailNormalTilingY;
 		};
 
 		MaterialUniformData GetUniformData() const;
@@ -198,6 +324,24 @@ namespace Lunex {
 		Ref<Texture2D> m_AOMap;
 		std::string m_AOPath;
 		float m_AOMultiplier = 1.0f;
+
+		// Color space per texture
+		TextureColorSpace m_AlbedoColorSpace = TextureColorSpace::sRGB;
+		TextureColorSpace m_EmissionColorSpace = TextureColorSpace::sRGB;
+		TextureColorSpace m_NormalColorSpace = TextureColorSpace::NonColor;
+		TextureColorSpace m_MetallicColorSpace = TextureColorSpace::NonColor;
+		TextureColorSpace m_RoughnessColorSpace = TextureColorSpace::NonColor;
+		TextureColorSpace m_AOColorSpace = TextureColorSpace::NonColor;
+
+		// Alpha channel packing
+		bool m_AlphaIsPacked = false;
+		TextureChannel m_AlphaPackedChannel = TextureChannel::Alpha;
+
+		// Detail normal maps
+		std::vector<DetailNormalMap> m_DetailNormalMaps;
+
+		// Layered (channel-packed) texture
+		LayeredTextureConfig m_LayeredConfig;
 
 		// Serialization helpers
 		void SerializeTexture(YAML::Emitter& out, const std::string& key, const std::string& path) const;

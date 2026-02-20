@@ -103,10 +103,20 @@ namespace Lunex {
 			}
 			center /= 8.0f;
 
+			// Calculate frustum radius for a good offset distance
+			float frustumRadius = 0.0f;
+			for (const auto& c : corners) {
+				frustumRadius = std::max(frustumRadius, glm::length(c - center));
+			}
+
 			// Build light view matrix looking along lightDirection
 			glm::vec3 lightDir = glm::normalize(lightDirection);
+			
+			// Use frustum-based offset to ensure near plane captures all geometry
+			float lightOffset = frustumRadius * 3.0f + 100.0f;
+			
 			glm::mat4 lightView = glm::lookAt(
-				center - lightDir * 100.0f, // Offset so near plane catches geometry
+				center - lightDir * lightOffset,
 				center,
 				glm::vec3(0.0f, 1.0f, 0.0f)
 			);
@@ -114,7 +124,7 @@ namespace Lunex {
 			// Handle degenerate up vector (light pointing straight up/down)
 			if (std::abs(glm::dot(lightDir, glm::vec3(0, 1, 0))) > 0.999f) {
 				lightView = glm::lookAt(
-					center - lightDir * 100.0f,
+					center - lightDir * lightOffset,
 					center,
 					glm::vec3(0.0f, 0.0f, 1.0f)
 				);
