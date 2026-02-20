@@ -63,6 +63,21 @@ namespace Lunex {
 		bool EnableHDR = true;
 		float Exposure = 1.0f;
 		
+		// Post-Processing
+		float BloomThreshold = 1.0f;
+		float BloomIntensity = 0.5f;
+		float BloomRadius = 1.0f;
+
+		bool EnableVignette = false;
+		float VignetteIntensity = 0.3f;
+		float VignetteRoundness = 1.0f;
+		float VignetteSmoothness = 0.4f;
+
+		bool EnableChromaticAberration = false;
+		float ChromaticAberrationIntensity = 0.005f;
+
+		int ToneMapOperator = 0; // 0=ACES, 1=Reinhard, 2=Uncharted2, 3=None
+		
 		// Debug
 		bool EnableDebugOutput = true;
 		bool ExportRenderGraph = false;

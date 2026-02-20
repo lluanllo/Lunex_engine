@@ -11,6 +11,7 @@
 #include "Renderer/SkyboxRenderer.h"
 #include "Renderer/Shadows/ShadowSystem.h"
 #include "Renderer/GridRenderer.h"
+#include "Renderer/PostProcess/PostProcessRenderer.h"
 #include "Rendering/RenderSystem.h"
 #include "Scene/Lighting/LightSystem.h"
 #include "Physics/PhysicsCore.h"
@@ -33,6 +34,10 @@ namespace Lunex {
 		if (BeginTabBar("SettingsTabs")) {
 			if (BeginTabItem("Render")) {
 				DrawRenderTab();
+				EndTabItem();
+			}
+			if (BeginTabItem("Post-Process")) {
+				DrawPostProcessSection();
 				EndTabItem();
 			}
 			if (BeginTabItem("Environment")) {
@@ -126,12 +131,15 @@ namespace Lunex {
 			Separator();
 			
 			// ========================================
-			// POST-PROCESSING
+			// POST-PROCESSING (basic toggle - details in Post-Process tab)
 			// ========================================
 			Text("Post-Processing");
 			AddSpacing(SpacingValues::XS);
 			
-			if (PropertyCheckbox("Bloom", config.EnableBloom, "Enable bloom effect")) {
+			auto& ppConfig = PostProcessRenderer::GetConfig();
+			
+			if (PropertyCheckbox("Bloom", ppConfig.EnableBloom, "Enable bloom effect (configure in Post-Process tab)")) {
+				config.EnableBloom = ppConfig.EnableBloom;
 			}
 			
 			if (PropertyCheckbox("SSAO", config.EnableSSAO, "Enable Screen-Space Ambient Occlusion")) {
@@ -176,6 +184,144 @@ namespace Lunex {
 			}
 			
 			if (PropertyCheckbox("Parallel Draw Collection", config.EnableParallelDrawCollection, "Enable parallel entity iteration for draw commands")) {
+			}
+			
+			EndSection();
+		}
+	}
+	
+	// ========================================
+	// POST-PROCESS SECTION
+	// ========================================
+	
+	void SettingsPanel::DrawPostProcessSection() {
+		using namespace UI;
+		
+		if (BeginSection("Post-Processing", true)) {
+			auto& ppConfig = PostProcessRenderer::GetConfig();
+			auto& renderConfig = RenderSystem::GetConfig();
+			
+			if (!PostProcessRenderer::IsInitialized()) {
+				TextColored(Colors::Warning(), "Post-processing not initialized (requires Deferred Rendering)");
+				EndSection();
+				return;
+			}
+			
+			// ========================================
+			// BLOOM
+			// ========================================
+			Text("Bloom");
+			AddSpacing(SpacingValues::XS);
+			
+			TextWrapped("Bloom simulates bright light bleeding beyond object boundaries, creating a glow effect.", TextVariant::Muted);
+			AddSpacing(SpacingValues::XS);
+			
+			if (PropertyCheckbox("Enable Bloom", ppConfig.EnableBloom, "Enable bloom post-processing effect")) {
+				renderConfig.EnableBloom = ppConfig.EnableBloom;
+			}
+			
+			if (ppConfig.EnableBloom) {
+				if (PropertyFloat("Threshold", ppConfig.BloomThreshold, 0.05f, 0.0f, 5.0f,
+					"Brightness threshold for bloom extraction (lower = more glow)")) {
+					renderConfig.BloomThreshold = ppConfig.BloomThreshold;
+				}
+				
+				if (PropertyFloat("Intensity", ppConfig.BloomIntensity, 0.01f, 0.0f, 3.0f,
+					"Bloom contribution to the final image")) {
+					renderConfig.BloomIntensity = ppConfig.BloomIntensity;
+				}
+				
+				if (PropertyFloat("Radius", ppConfig.BloomRadius, 0.1f, 0.1f, 5.0f,
+					"Blur kernel spread (higher = wider glow)")) {
+					renderConfig.BloomRadius = ppConfig.BloomRadius;
+				}
+				
+				float mipLevelsF = static_cast<float>(ppConfig.BloomMipLevels);
+				if (PropertyFloat("Quality (Mip Levels)", mipLevelsF, 1.0f, 1.0f, 8.0f,
+					"Number of downsample passes (more = smoother bloom, slightly slower)")) {
+					ppConfig.BloomMipLevels = static_cast<int>(mipLevelsF);
+				}
+			}
+			
+			Separator();
+			
+			// ========================================
+			// VIGNETTE
+			// ========================================
+			Text("Vignette");
+			AddSpacing(SpacingValues::XS);
+			
+			TextWrapped("Darkens the edges of the screen, drawing focus to the center.", TextVariant::Muted);
+			AddSpacing(SpacingValues::XS);
+			
+			if (PropertyCheckbox("Enable Vignette", ppConfig.EnableVignette, "Enable vignette effect")) {
+				renderConfig.EnableVignette = ppConfig.EnableVignette;
+			}
+			
+			if (ppConfig.EnableVignette) {
+				if (PropertySlider("Intensity##Vignette", ppConfig.VignetteIntensity, 0.0f, 1.0f, "%.2f",
+					"How much the edges darken")) {
+					renderConfig.VignetteIntensity = ppConfig.VignetteIntensity;
+				}
+				
+				if (PropertySlider("Roundness", ppConfig.VignetteRoundness, 0.0f, 2.0f, "%.2f",
+					"Shape roundness (1.0 = circular, lower = more rectangular)")) {
+					renderConfig.VignetteRoundness = ppConfig.VignetteRoundness;
+				}
+				
+				if (PropertySlider("Smoothness", ppConfig.VignetteSmoothness, 0.01f, 1.0f, "%.2f",
+					"Transition smoothness from center to edges")) {
+					renderConfig.VignetteSmoothness = ppConfig.VignetteSmoothness;
+				}
+			}
+			
+			Separator();
+			
+			// ========================================
+			// CHROMATIC ABERRATION
+			// ========================================
+			Text("Chromatic Aberration");
+			AddSpacing(SpacingValues::XS);
+			
+			TextWrapped("Simulates lens color fringing by splitting RGB channels at the edges.", TextVariant::Muted);
+			AddSpacing(SpacingValues::XS);
+			
+			if (PropertyCheckbox("Enable Chromatic Aberration", ppConfig.EnableChromaticAberration,
+				"Enable chromatic aberration effect")) {
+				renderConfig.EnableChromaticAberration = ppConfig.EnableChromaticAberration;
+			}
+			
+			if (ppConfig.EnableChromaticAberration) {
+				if (PropertyFloat("Intensity##ChromAb", ppConfig.ChromaticAberrationIntensity, 0.001f, 0.0f, 0.05f,
+					"Amount of color channel separation")) {
+					renderConfig.ChromaticAberrationIntensity = ppConfig.ChromaticAberrationIntensity;
+				}
+			}
+			
+			Separator();
+			
+			// ========================================
+			// TONE MAPPING
+			// ========================================
+			Text("Tone Mapping");
+			AddSpacing(SpacingValues::XS);
+			
+			TextWrapped("Controls how HDR values are mapped to displayable range.", TextVariant::Muted);
+			AddSpacing(SpacingValues::XS);
+			
+			const char* toneMapOptions[] = { "ACES Film", "Reinhard", "Uncharted 2", "None (Linear)" };
+			if (PropertyDropdown("Operator", ppConfig.ToneMapOperator, toneMapOptions, 4,
+				"Tone mapping algorithm")) {
+				renderConfig.ToneMapOperator = ppConfig.ToneMapOperator;
+			}
+			
+			if (PropertyFloat("Exposure##PP", ppConfig.Exposure, 0.01f, 0.01f, 10.0f,
+				"Exposure multiplier before tone mapping")) {
+				renderConfig.Exposure = ppConfig.Exposure;
+			}
+			
+			if (PropertyFloat("Gamma", ppConfig.Gamma, 0.01f, 1.0f, 3.0f,
+				"Gamma correction value (2.2 = standard sRGB)")) {
 			}
 			
 			EndSection();
@@ -558,9 +704,9 @@ namespace Lunex {
 			PhysicsConfig config = physicsCore.GetConfig();
 			bool configChanged = false;
 			
-			// ========================================
+			// ======================================
 			// GRAVITY
-			// ========================================
+			// ======================================
 			Text("World Gravity");
 			AddSpacing(SpacingValues::XS);
 			
@@ -675,7 +821,7 @@ namespace Lunex {
 			// STATISTICS
 			// ========================================
 			Text("Statistics");
-			AddSpacing(SpacingValues::XS);
+		 AddSpacing(SpacingValues::XS);
 			
 			auto* world = physicsCore.GetWorld();
 			if (world) {

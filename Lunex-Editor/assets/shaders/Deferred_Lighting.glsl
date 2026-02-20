@@ -120,6 +120,9 @@ layout(std140, binding = 5) uniform IBLData {
 	float _iblPadding;
 };
 
+// ============ POST-PROCESSING ============
+uniform int u_SkipToneMapGamma;  // 1 = output linear HDR (post-process will handle it)
+
 // ============ CONSTANTS ============
 const float PI = 3.14159265359;
 const float EPSILON = 0.00001;
@@ -579,9 +582,11 @@ void main() {
 		color += skyColor * u_SkyTintStrength * shadowAmount * albedo;
 	}
 	
-	// Tone mapping + gamma
-	color = ACESFilm(color);
-	color = pow(color, vec3(1.0 / 2.2));
+	// Tone mapping + gamma (skip if post-processing will handle it)
+	if (u_SkipToneMapGamma == 0) {
+		color = ACESFilm(color);
+		color = pow(color, vec3(1.0 / 2.2));
+	}
 	
 	FragColor = vec4(color, 1.0);
 }

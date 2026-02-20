@@ -27,6 +27,7 @@ namespace Lunex {
 		
 		// Section drawing helpers
 		void DrawRenderSection();
+		void DrawPostProcessSection();
 		void DrawEnvironmentSection();
 		void DrawShadowsSection();
 		void DrawPhysics2DSection();

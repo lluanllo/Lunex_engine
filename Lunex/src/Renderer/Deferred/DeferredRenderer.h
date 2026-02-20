@@ -83,6 +83,11 @@ namespace Lunex {
 		 */
 		static void ExecuteLightingPass(const Ref<Framebuffer>& targetFramebuffer);
 
+		/**
+		 * @brief Check if post-processing is active (any effect enabled)
+		 */
+		static bool IsPostProcessingActive();
+
 		// ========== ENVIRONMENT ==========
 
 		static void BindEnvironment(const Ref<EnvironmentMap>& environment);

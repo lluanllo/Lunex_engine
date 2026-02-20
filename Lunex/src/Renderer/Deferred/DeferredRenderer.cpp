@@ -9,6 +9,7 @@
 #include "Renderer/Buffer.h"
 #include "Renderer/SkyboxRenderer.h"
 #include "Renderer/Shadows/ShadowSystem.h"
+#include "Renderer/PostProcess/PostProcessRenderer.h"
 #include "Assets/Materials/MaterialRegistry.h"
 #include "Resources/Mesh/Model.h"
 #include "Scene/Components.h"
@@ -157,12 +158,16 @@ namespace Lunex {
 		});
 		s_Data.QuadVAO->AddVertexBuffer(s_Data.QuadVBO);
 
+		// Initialize Post-Processing
+		PostProcessRenderer::Init();
+
 		s_Data.Initialized = true;
 		LNX_LOG_INFO("DeferredRenderer initialized");
 	}
 
 	void DeferredRenderer::Shutdown() {
 		LNX_PROFILE_FUNCTION();
+		PostProcessRenderer::Shutdown();
 		s_Data.Initialized = false;
 		LNX_LOG_INFO("DeferredRenderer shutdown");
 	}
@@ -355,6 +360,12 @@ namespace Lunex {
 	// LIGHTING PASS
 	// ============================================================================
 
+	bool DeferredRenderer::IsPostProcessingActive() {
+		auto& config = PostProcessRenderer::GetConfig();
+		return PostProcessRenderer::IsInitialized() &&
+			   (config.EnableBloom || config.EnableVignette || config.EnableChromaticAberration);
+	}
+
 	void DeferredRenderer::ExecuteLightingPass(const Ref<Framebuffer>& targetFramebuffer) {
 		LNX_PROFILE_FUNCTION();
 
@@ -366,6 +377,8 @@ namespace Lunex {
 		if (!s_Data.GBuffer.IsInitialized()) {
 			return;
 		}
+
+		bool postProcessActive = IsPostProcessingActive();
 
 		// Bind the target framebuffer (scene FB)
 		targetFramebuffer->Bind();
@@ -382,14 +395,13 @@ namespace Lunex {
 		}
 
 		// ? FIX: Disable blending for the lighting pass.
-		// InitializeRenderState() enables GL_BLEND globally, which causes the
-		// lighting quad to be incorrectly alpha-blended with the clear color.
-		// The scene appeared dark/broken until the OutlineRenderer's composite
-		// pass happened to disable blending as a side effect.
 		glDisable(GL_BLEND);
 
 		// Bind the lighting shader
 		s_Data.LightingShader->Bind();
+
+		// Tell shader whether to skip tone mapping (post-process will handle it)
+		s_Data.LightingShader->SetInt("u_SkipToneMapGamma", postProcessActive ? 1 : 0);
 
 		// Bind G-Buffer textures for sampling
 		s_Data.LightingShader->SetInt("gAlbedoMetallic",   0);
@@ -445,6 +457,18 @@ namespace Lunex {
 			}
 		}
 
+		// ========================================
+		// POST-PROCESSING PASS
+		// ========================================
+		if (postProcessActive) {
+			// Get the scene color texture that the lighting pass just wrote to
+			uint32_t sceneColorTexID = targetFramebuffer->GetColorAttachmentRendererID(0);
+			uint32_t width = targetFramebuffer->GetSpecification().Width;
+			uint32_t height = targetFramebuffer->GetSpecification().Height;
+
+			PostProcessRenderer::Execute(sceneColorTexID, targetFramebuffer, width, height);
+		}
+
 		targetFramebuffer->Bind();
 	}
 
@@ -487,6 +511,7 @@ namespace Lunex {
 		} else {
 			s_Data.GBuffer.Resize(width, height);
 		}
+		PostProcessRenderer::OnViewportResize(width, height);
 	}
 
 	int DeferredRenderer::ReadEntityID(int x, int y) {
