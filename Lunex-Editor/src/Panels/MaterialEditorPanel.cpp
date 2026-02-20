@@ -133,9 +133,9 @@ namespace Lunex {
 			// Create local dockspace inside this window
 			ImGuiID dockspaceID = ImGui::GetID("MaterialEditorDockspace");
 
-			if (!m_DockspaceInitialized) {
+			// Only build dockspace layout if ImGui doesn't already have one saved (ini persistence)
+			if (!ImGui::DockBuilderGetNode(dockspaceID)) {
 				SetupDockspace(dockspaceID);
-				m_DockspaceInitialized = true;
 			}
 
 			ImGui::DockSpace(dockspaceID, ImVec2(0, 0), ImGuiDockNodeFlags_NoCloseButton | ImGuiDockNodeFlags_NoWindowMenuButton);

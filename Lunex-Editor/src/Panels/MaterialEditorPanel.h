@@ -75,7 +75,6 @@ namespace Lunex {
 		bool m_IsOpen = false;
 		bool m_AutoSave = false;
 		bool m_HasUnsavedChanges = false;
-		bool m_DockspaceInitialized = false;
 
 		// Preview state
 		uint32_t m_PreviewWidth = 512;

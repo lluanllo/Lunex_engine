@@ -68,6 +68,17 @@ namespace Lunex {
 		void RenderSceneRuntime(Camera& camera, const glm::mat4& cameraTransform);
 		
 		/**
+		 * @brief Render overlays after deferred lighting pass (skybox, grid, sprites, billboards, gizmos)
+		 * Call this AFTER DeferredRenderer::ExecuteLightingPass() when deferred is enabled.
+		 */
+		void RenderPostLighting(EditorCamera& camera);
+		
+		/**
+		 * @brief Render overlays after deferred lighting pass (runtime camera version)
+		 */
+		void RenderPostLightingRuntime(Camera& camera, const glm::mat4& cameraTransform);
+		
+		/**
 		 * @brief Get render settings
 		 */
 		SceneRenderSettings& GetSettings() { return m_Settings; }

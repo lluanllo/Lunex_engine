@@ -6,6 +6,7 @@
 #include "Scene/Scene.h"
 #include "Renderer/Renderer2D.h"
 #include "Renderer/Renderer3D.h"
+#include "Renderer/Deferred/DeferredRenderer.h"
 #include "Renderer/GridRenderer.h"
 #include "Renderer/SkyboxRenderer.h"
 #include "RHI/RHI.h"
@@ -47,24 +48,99 @@ namespace Lunex {
 	void SceneRenderSystem::RenderScene(EditorCamera& camera) {
 		if (!m_Context || !m_Context->Registry) return;
 		
-		// ========== SKYBOX ==========
+		// ========== 3D RENDERING ==========
+		// Update lights first (syncs LightSystem, uploads SSBO)
+		Renderer3D::UpdateLights(m_Context->OwningScene);
+		
+		// Update shadow maps BEFORE BeginScene (BeginScene binds atlas for reading)
+		Renderer3D::UpdateShadows(m_Context->OwningScene, camera);
+		
+		if (DeferredRenderer::IsEnabled()) {
+			// ========================================
+			// DEFERRED PATH: Only geometry pass here.
+			// Skybox, grid, sprites, billboards, gizmos render AFTER
+			// the lighting pass via RenderPostLighting().
+			// ========================================
+			DeferredRenderer::BeginScene(camera);
+			DeferredRenderer::BeginGeometryPass();
+			RenderMeshes(camera, camera.GetViewMatrix());
+			DeferredRenderer::EndGeometryPass();
+			DeferredRenderer::EndScene();
+			// Lighting pass + post-lighting overlays are done by caller (EditorLayer)
+		} else {
+			// Forward path: Skybox first, then grid, then meshes, then overlays
+			if (m_Settings.RenderSkybox) {
+				SkyboxRenderer::RenderGlobalSkybox(camera);
+			}
+			
+			Renderer2D::BeginScene(camera);
+			if (m_Settings.RenderGrid) {
+				GridRenderer::DrawGrid(camera);
+			}
+			RenderSprites(camera, camera.GetViewMatrix());
+			RenderCircles(camera, camera.GetViewMatrix());
+			Renderer2D::EndScene();
+			
+			Renderer3D::BeginScene(camera);
+			RenderMeshes(camera, camera.GetViewMatrix());
+			Renderer3D::EndScene();
+			
+			// Billboards & Gizmos (forward path renders them here)
+			if (m_Settings.RenderBillboards || m_Settings.RenderGizmos) {
+				Renderer2D::BeginScene(camera);
+				
+				if (m_Settings.RenderBillboards) {
+					RenderBillboards(camera, camera.GetPosition());
+				}
+				
+				if (m_Settings.RenderGizmos) {
+					float previousLineWidth = Renderer2D::GetLineWidth();
+					Renderer2D::SetLineWidth(m_Settings.BillboardLineWidth);
+					
+					if (m_Settings.RenderFrustums) {
+						RenderCameraFrustums(camera);
+					}
+					
+					RenderLightGizmos(camera);
+					
+					Renderer2D::SetLineWidth(previousLineWidth);
+				}
+				
+				Renderer2D::EndScene();
+			}
+		}
+	}
+
+	void SceneRenderSystem::RenderPostLighting(EditorCamera& camera) {
+		if (!m_Context || !m_Context->Registry) return;
+		if (!DeferredRenderer::IsEnabled()) return; // Only needed for deferred path
+		
+		// ========================================
+		// POST-LIGHTING OVERLAYS (Deferred path only)
+		// Called AFTER DeferredRenderer::ExecuteLightingPass() + depth blit.
+		// The scene FB now has:
+		//   - Color: lit meshes (sky pixels are transparent/discarded)
+		//   - Depth: G-Buffer depth blitted in
+		// We render skybox/grid/sprites WITH depth test so they appear
+		// behind geometry but fill the sky areas.
+		// ========================================
+		
+		// Skybox renders with depth func LEQUAL, writes at far plane
+		// Sky pixels have depth = 1.0 from the clear, so skybox will fill them
 		if (m_Settings.RenderSkybox) {
 			SkyboxRenderer::RenderGlobalSkybox(camera);
 		}
 		
-		// ========== 2D RENDERING ==========
+		// Grid and 2D overlays
 		Renderer2D::BeginScene(camera);
-		
 		if (m_Settings.RenderGrid) {
 			GridRenderer::DrawGrid(camera);
 		}
-		
 		RenderSprites(camera, camera.GetViewMatrix());
 		RenderCircles(camera, camera.GetViewMatrix());
-		
 		Renderer2D::EndScene();
 		
-		// ========== BILLBOARDS & GIZMOS ==========
+		// Billboards & Gizmos (always on top)
 		if (m_Settings.RenderBillboards || m_Settings.RenderGizmos) {
 			Renderer2D::BeginScene(camera);
 			
@@ -87,49 +163,58 @@ namespace Lunex {
 			
 			Renderer2D::EndScene();
 		}
+	}
+
+	void SceneRenderSystem::RenderPostLightingRuntime(Camera& camera, const glm::mat4& cameraTransform) {
+		if (!m_Context || !m_Context->Registry) return;
+		if (!DeferredRenderer::IsEnabled()) return;
 		
-		// ========== 3D RENDERING ==========
-		// Update lights first (syncs LightSystem, uploads SSBO)
-		Renderer3D::UpdateLights(m_Context->OwningScene);
+		// Skybox
+		if (m_Settings.RenderSkybox) {
+			SkyboxRenderer::RenderGlobalSkybox(camera, cameraTransform);
+		}
 		
-		// Update shadow maps BEFORE BeginScene (BeginScene binds atlas for reading)
-		Renderer3D::UpdateShadows(m_Context->OwningScene, camera);
-		
-		Renderer3D::BeginScene(camera);
-		
-		RenderMeshes(camera, camera.GetViewMatrix());
-		
-		Renderer3D::EndScene();
+		// 2D
+		Renderer2D::BeginScene(camera, cameraTransform);
+		RenderSprites(camera, cameraTransform);
+		RenderCircles(camera, cameraTransform);
+		Renderer2D::EndScene();
 	}
 
 	void SceneRenderSystem::RenderSceneRuntime(Camera& camera, const glm::mat4& cameraTransform) {
 		if (!m_Context || !m_Context->Registry) return;
 		
-		// ========== SKYBOX ==========
-		if (m_Settings.RenderSkybox) {
-			SkyboxRenderer::RenderGlobalSkybox(camera, cameraTransform);
-		}
-		
-		// ========== 2D RENDERING ==========
-		Renderer2D::BeginScene(camera, cameraTransform);
-		
-		RenderSprites(camera, cameraTransform);
-		RenderCircles(camera, cameraTransform);
-		
-		Renderer2D::EndScene();
-		
 		// ========== 3D RENDERING ==========
-		// Update lights first (syncs LightSystem, uploads SSBO)
 		Renderer3D::UpdateLights(m_Context->OwningScene);
 		
 		// Update shadow maps BEFORE BeginScene (BeginScene binds atlas for reading)
 		Renderer3D::UpdateShadows(m_Context->OwningScene, camera, cameraTransform);
 		
-		Renderer3D::BeginScene(camera, cameraTransform);
-		
-		RenderMeshes(camera, cameraTransform);
-		
-		Renderer3D::EndScene();
+		if (DeferredRenderer::IsEnabled()) {
+			// Deferred path: only geometry pass here
+			DeferredRenderer::BeginScene(camera, cameraTransform);
+			DeferredRenderer::BeginGeometryPass();
+			RenderMeshes(camera, cameraTransform);
+			DeferredRenderer::EndGeometryPass();
+			DeferredRenderer::EndScene();
+			// Lighting pass + post-lighting overlays done by caller
+		} else {
+			// Forward path
+			if (m_Settings.RenderSkybox) {
+				SkyboxRenderer::RenderGlobalSkybox(camera, cameraTransform);
+			}
+			
+			Renderer2D::BeginScene(camera, cameraTransform);
+			RenderSprites(camera, cameraTransform);
+			RenderCircles(camera, cameraTransform);
+			Renderer2D::EndScene();
+			
+			Renderer3D::UpdateShadows(m_Context->OwningScene, camera, cameraTransform);
+			
+			Renderer3D::BeginScene(camera, cameraTransform);
+			RenderMeshes(camera, cameraTransform);
+			Renderer3D::EndScene();
+		}
 	}
 
 	// ========================================================================
@@ -169,12 +254,22 @@ namespace Lunex {
 			auto& mesh = view.get<MeshComponent>(entity);
 			glm::mat4 worldTransform = GetWorldTransform(entity);
 			
-			if (e.HasComponent<MaterialComponent>()) {
-				auto& material = e.GetComponent<MaterialComponent>();
-				Renderer3D::DrawMesh(worldTransform, mesh, material, static_cast<int>(entity));
-			}
-			else {
-				Renderer3D::DrawModel(worldTransform, mesh.MeshModel, mesh.Color, static_cast<int>(entity));
+			if (DeferredRenderer::IsEnabled()) {
+				// Deferred path: submit to DeferredRenderer
+				if (e.HasComponent<MaterialComponent>()) {
+					auto& material = e.GetComponent<MaterialComponent>();
+					DeferredRenderer::SubmitMesh(worldTransform, mesh, material, static_cast<int>(entity));
+				} else {
+					DeferredRenderer::SubmitMesh(worldTransform, mesh, static_cast<int>(entity));
+				}
+			} else {
+				// Forward path: submit to Renderer3D
+				if (e.HasComponent<MaterialComponent>()) {
+					auto& material = e.GetComponent<MaterialComponent>();
+					Renderer3D::DrawMesh(worldTransform, mesh, material, static_cast<int>(entity));
+				} else {
+					Renderer3D::DrawModel(worldTransform, mesh.MeshModel, mesh.Color, static_cast<int>(entity));
+				}
 			}
 		}
 	}

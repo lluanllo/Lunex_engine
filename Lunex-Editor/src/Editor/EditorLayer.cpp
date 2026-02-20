@@ -34,6 +34,12 @@
 
 #include "RHI/RHI.h"
 
+// ✅ Deferred Renderer
+#include "Renderer/Deferred/DeferredRenderer.h"
+
+// ✅ SceneRenderSystem for post-lighting overlays
+#include "Scene/Systems/SceneRenderSystem.h"
+
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
 
@@ -747,6 +753,11 @@ namespace Lunex {
 			m_EditorCamera.SetViewportSize(m_ViewportSize.x, m_ViewportSize.y);
 			m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
 			OutlineRenderer::Get().OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
+			
+			// Resize deferred rendering G-Buffer
+			if (DeferredRenderer::IsEnabled()) {
+				DeferredRenderer::OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
+			}
 		}
 
 		// ========================================
@@ -791,27 +802,63 @@ namespace Lunex {
 		m_Framebuffer->ClearAttachment(1, -1);
 
 		switch (m_SceneState) {
-		case SceneState::Edit: {
-			if (m_ViewportPanel.IsViewportFocused())
-				m_CameraController.OnUpdate(ts);
-
-			m_EditorCamera.SetAllowFlyCamera(m_ViewportPanel.IsViewportHovered());
-			m_EditorCamera.OnUpdate(ts);
-
-			m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
-			break;
-		}
-		case SceneState::Simulate: {
-			m_EditorCamera.SetAllowFlyCamera(m_ViewportPanel.IsViewportHovered());
-			m_EditorCamera.OnUpdate(ts);
-
-			m_ActiveScene->OnUpdateSimulation(ts, m_EditorCamera);
-			break;
-		}
-		case SceneState::Play: {
-			m_ActiveScene->OnUpdateRuntime(ts);
-			break;
-		}
+			case SceneState::Edit:
+			{
+				if (m_ViewportPanel.IsViewportFocused())
+					m_CameraController.OnUpdate(ts);
+				
+				m_EditorCamera.SetAllowFlyCamera(m_ViewportPanel.IsViewportHovered());
+				m_EditorCamera.OnUpdate(ts);
+				
+				m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
+				
+				// Execute deferred lighting pass into the scene framebuffer
+				if (DeferredRenderer::IsEnabled()) {
+					DeferredRenderer::ExecuteLightingPass(m_Framebuffer);
+					
+					// Render skybox, grid, sprites, billboards, gizmos AFTER lighting
+					if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+						renderSystem->RenderPostLighting(m_EditorCamera);
+					}
+				}
+				break;
+			}
+			case SceneState::Simulate:
+			{
+				m_EditorCamera.SetAllowFlyCamera(m_ViewportPanel.IsViewportHovered());
+				m_EditorCamera.OnUpdate(ts);
+				
+				m_ActiveScene->OnUpdateSimulation(ts, m_EditorCamera);
+				
+				if (DeferredRenderer::IsEnabled()) {
+					DeferredRenderer::ExecuteLightingPass(m_Framebuffer);
+					
+					// Render skybox, grid, sprites, billboards, gizmos AFTER lighting
+					if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+						renderSystem->RenderPostLighting(m_EditorCamera);
+					}
+				}
+				break;
+			}
+			case SceneState::Play:
+			{
+				m_ActiveScene->OnUpdateRuntime(ts);
+				
+				if (DeferredRenderer::IsEnabled()) {
+					DeferredRenderer::ExecuteLightingPass(m_Framebuffer);
+					
+					// Render skybox, sprites AFTER lighting (runtime)
+					Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
+					if (camera) {
+						auto& cameraComp = camera.GetComponent<CameraComponent>();
+						auto& transformComp = camera.GetComponent<TransformComponent>();
+						if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+							renderSystem->RenderPostLightingRuntime(cameraComp.Camera, transformComp.GetTransform());
+						}
+					}
+				}
+				break;
+			}
 		}
 
 		// ✅ ENTITY PICKING
@@ -824,7 +871,19 @@ namespace Lunex {
 		int mouseY = (int)my;
 
 		if (mouseX >= 0 && mouseY >= 0 && mouseX < (int)viewportSize.x && mouseY < (int)viewportSize.y) {
-			int pixelData = m_Framebuffer->ReadPixel(1, mouseX, mouseY);
+			int pixelData;
+			if (DeferredRenderer::IsEnabled()) {
+				// Read from G-Buffer entity ID attachment first (for 3D meshes)
+				pixelData = DeferredRenderer::ReadEntityID(mouseX, mouseY);
+				
+				// If G-Buffer has no entity at this pixel, check the scene FB
+				// (billboards/sprites write entity IDs to scene FB, not G-Buffer)
+				if (pixelData == -1) {
+					pixelData = m_Framebuffer->ReadPixel(1, mouseX, mouseY);
+				}
+			} else {
+				pixelData = m_Framebuffer->ReadPixel(1, mouseX, mouseY);
+			}
 			m_HoveredEntity = pixelData == -1 ? Entity() : Entity((entt::entity)pixelData, m_ActiveScene.get());
 		}
 
@@ -845,23 +904,6 @@ namespace Lunex {
 		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
 		if (selectedEntity && selectedEntity.HasComponent<CameraComponent>() && m_SceneState == SceneState::Edit) {
 			RenderCameraPreview(selectedEntity);
-		}
-
-		if (m_SceneState == SceneState::Edit || m_SceneState == SceneState::Simulate) {
-			Renderer3D::BeginScene(m_EditorCamera);
-			Renderer3D::UpdateLights(m_ActiveScene.get());
-			Renderer3D::EndScene();
-		}
-		else if (m_SceneState == SceneState::Play) {
-			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
-			if (camera) {
-				auto& cameraComp = camera.GetComponent<CameraComponent>();
-				auto& transformComp = camera.GetComponent<TransformComponent>();
-				glm::mat4 cameraTransform = transformComp.GetTransform();
-				Renderer3D::BeginScene(cameraComp.Camera, cameraTransform);
-				Renderer3D::UpdateLights(m_ActiveScene.get());
-				Renderer3D::EndScene();
-			}
 		}
 	}
 
@@ -1108,7 +1150,7 @@ namespace Lunex {
 			if (!selectedEntities.empty()) {
 				// Multi-selection: different outline colors for active vs non-active
 				if (selectedEntities.size() > 1) {
-					std::set<Entity> nonActiveEntities;
+				 std::set<Entity> nonActiveEntities;
 					for (const auto& e : selectedEntities) {
 						if (e != activeEntity) {
 							nonActiveEntities.insert(e);
@@ -1595,17 +1637,13 @@ namespace Lunex {
 		// ========================================
 		// CALCULATE PREVIEW SIZE WITH CORRECT ASPECT RATIO
 		// ========================================
-		// Use the camera's aspect ratio to avoid distortion
 		float cameraAspect = cameraComp.Camera.GetAspectRatio();
 		if (cameraAspect <= 0.0f) {
-			cameraAspect = 16.0f / 9.0f; // Default fallback
+			cameraAspect = 16.0f / 9.0f;
 		}
 		
-		// Base preview width, calculate height from camera aspect ratio
 		uint32_t previewWidth = 320;
 		uint32_t previewHeight = static_cast<uint32_t>(previewWidth / cameraAspect);
-		
-		// Clamp height to reasonable bounds
 		previewHeight = std::clamp(previewHeight, 100u, 400u);
 
 		auto previewSpec = m_CameraPreviewFramebuffer->GetSpecification();
@@ -1614,7 +1652,7 @@ namespace Lunex {
 		}
 
 		// ========================================
-		// SAVE CURRENT VIEWPORT STATE
+		// SAVE CURRENT STATE
 		// ========================================
 		int currentViewport[4];
 		auto* cmdList = RHI::GetImmediateCommandList();
@@ -1622,8 +1660,13 @@ namespace Lunex {
 			cmdList->GetViewport(currentViewport);
 		}
 
+		// Temporarily disable deferred renderer for this preview pass
+		// Camera preview always uses forward rendering to avoid UBO conflicts
+		bool previousDeferredEnabled = DeferredRenderer::IsEnabled();
+		DeferredRenderer::SetEnabled(false);
+
 		// ========================================
-		// RENDER CAMERA PREVIEW (Isolated)
+		// RENDER CAMERA PREVIEW (Isolated, always forward)
 		// ========================================
 		m_CameraPreviewFramebuffer->Bind();
 		if (cmdList) {
@@ -1632,14 +1675,10 @@ namespace Lunex {
 			cmdList->Clear();
 		}
 
-		// ========================================
-		// RENDER SKYBOX FIRST (before geometry)
-		// ========================================
+		// Render skybox first
 		SkyboxRenderer::RenderGlobalSkybox(cameraComp.Camera, cameraWorldTransform);
 
-		// ========================================
-		// RENDER 3D MESHES (NO GRID, NO BILLBOARDS)
-		// ========================================
+		// Render 3D meshes (forward path)
 		Renderer3D::BeginScene(cameraComp.Camera, cameraWorldTransform);
 		Renderer3D::UpdateLights(m_ActiveScene.get());
 
@@ -1662,9 +1701,7 @@ namespace Lunex {
 
 		Renderer3D::EndScene();
 
-		// ========================================
-		// RENDER 2D SPRITES (NO GRID, NO BILLBOARDS)
-		// ========================================
+		// Render 2D sprites
 		Renderer2D::BeginScene(cameraComp.Camera, cameraWorldTransform);
 
 		{
@@ -1680,9 +1717,13 @@ namespace Lunex {
 		Renderer2D::EndScene();
 
 		// ========================================
-		// RESTORE MAIN VIEWPORT STATE
+		// RESTORE STATE
 		// ========================================
 		m_CameraPreviewFramebuffer->Unbind();
+
+		// Restore deferred renderer state
+		DeferredRenderer::SetEnabled(previousDeferredEnabled);
+
 		if (cmdList) {
 			cmdList->SetViewport(
 				static_cast<float>(currentViewport[0]), 
@@ -1692,34 +1733,14 @@ namespace Lunex {
 			);
 		}
 
-		// ========================================
-		// CRITICAL: RESTORE MAIN CAMERA (Editor or Runtime)
-		// ========================================
-		if (m_SceneState == SceneState::Edit) {
-			Renderer2D::BeginScene(m_EditorCamera);
-			Renderer2D::EndScene();
-
-			Renderer3D::BeginScene(m_EditorCamera);
-			Renderer3D::EndScene();
-		}
-		else if (m_SceneState == SceneState::Play) {
-			Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
-			if (camera) {
-				auto& cameraComponent = camera.GetComponent<CameraComponent>();
-				glm::mat4 cameraTransform = camera.GetComponent<TransformComponent>().GetTransform();
-
-				Renderer2D::BeginScene(cameraComponent.Camera, cameraTransform);
-				Renderer2D::EndScene();
-
-				Renderer3D::BeginScene(cameraComponent.Camera, cameraTransform);
-				Renderer3D::EndScene();
-			}
+		// Restore the main scene camera UBOs so that subsequent rendering
+		// (overlay, etc.) uses the correct camera data.
+		// We need to re-upload the deferred camera UBO if deferred is enabled.
+		if (previousDeferredEnabled) {
+			DeferredRenderer::BeginScene(m_EditorCamera);
+			DeferredRenderer::EndScene();
 		}
 	}
-
-	// ============================================================================
-	// MESH IMPORT HANDLERS
-	// ============================================================================
 
 	void EditorLayer::OnModelDropped(const std::filesystem::path& modelPath) {
 		if (!MeshImporter::IsSupported(modelPath)) {
