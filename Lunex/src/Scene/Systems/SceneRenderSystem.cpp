@@ -116,17 +116,12 @@ namespace Lunex {
 		if (!DeferredRenderer::IsEnabled()) return; // Only needed for deferred path
 		
 		// ========================================
-		// POST-LIGHTING OVERLAYS (Deferred path only)
+		// POST-LIGHTING SCENE ELEMENTS (Deferred path only)
 		// Called AFTER DeferredRenderer::ExecuteLightingPass() + depth blit.
-		// The scene FB now has:
-		//   - Color: lit meshes (sky pixels are transparent/discarded)
-		//   - Depth: G-Buffer depth blitted in
-		// We render skybox/grid/sprites WITH depth test so they appear
-		// behind geometry but fill the sky areas.
+		// These elements are rendered BEFORE post-processing so bloom can sample them.
 		// ========================================
 		
 		// Skybox renders with depth func LEQUAL, writes at far plane
-		// Sky pixels have depth = 1.0 from the clear, so skybox will fill them
 		if (m_Settings.RenderSkybox) {
 			SkyboxRenderer::RenderGlobalSkybox(camera);
 		}
@@ -139,8 +134,18 @@ namespace Lunex {
 		RenderSprites(camera, camera.GetViewMatrix());
 		RenderCircles(camera, camera.GetViewMatrix());
 		Renderer2D::EndScene();
+	}
+
+	void SceneRenderSystem::RenderPostLightingOverlays(EditorCamera& camera) {
+		if (!m_Context || !m_Context->Registry) return;
+		if (!DeferredRenderer::IsEnabled()) return;
 		
-		// Billboards & Gizmos (always on top)
+		// ========================================
+		// EDITOR OVERLAYS (Deferred path only)
+		// Called AFTER post-processing (bloom + tone mapping).
+		// These elements are NOT affected by bloom.
+		// ========================================
+		
 		if (m_Settings.RenderBillboards || m_Settings.RenderGizmos) {
 			Renderer2D::BeginScene(camera);
 			

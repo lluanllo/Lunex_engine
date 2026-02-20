@@ -389,8 +389,6 @@ namespace Lunex {
 			return;
 		}
 
-		bool postProcessActive = IsPostProcessingActive();
-
 		// Bind the target framebuffer (scene FB)
 		targetFramebuffer->Bind();
 
@@ -411,7 +409,9 @@ namespace Lunex {
 		// Bind the lighting shader
 		s_Data.LightingShader->Bind();
 
-		// Tell shader whether to skip tone mapping (post-process will handle it) via UBO
+		// When post-processing is active, output linear HDR (composite pass handles tone mapping)
+		// When inactive, the lighting shader applies tone mapping + gamma itself
+		bool postProcessActive = IsPostProcessingActive();
 		s_Data.PostProcessControlBuffer.SkipToneMapGamma = postProcessActive ? 1 : 0;
 		s_Data.PostProcessControlBuffer._pad1 = 0.0f;
 		s_Data.PostProcessControlBuffer._pad2 = 0.0f;
@@ -472,17 +472,24 @@ namespace Lunex {
 			}
 		}
 
-		// ========================================
-		// POST-PROCESSING PASS
-		// ========================================
-		if (postProcessActive) {
-			// Get the scene color texture that the lighting pass just wrote to
-			uint32_t sceneColorTexID = targetFramebuffer->GetColorAttachmentRendererID(0);
-			uint32_t width = targetFramebuffer->GetSpecification().Width;
-			uint32_t height = targetFramebuffer->GetSpecification().Height;
+		targetFramebuffer->Bind();
+	}
 
-			PostProcessRenderer::Execute(sceneColorTexID, targetFramebuffer, width, height);
-		}
+	// ============================================================================
+	// POST-PROCESSING PASS (called AFTER all overlays are rendered)
+	// ============================================================================
+
+	void DeferredRenderer::ExecutePostProcessing(const Ref<Framebuffer>& targetFramebuffer) {
+		LNX_PROFILE_FUNCTION();
+
+		if (!IsPostProcessingActive()) return;
+
+		// Get the scene color texture that contains the complete scene (lighting + overlays)
+		uint32_t sceneColorTexID = targetFramebuffer->GetColorAttachmentRendererID(0);
+		uint32_t width = targetFramebuffer->GetSpecification().Width;
+		uint32_t height = targetFramebuffer->GetSpecification().Height;
+
+		PostProcessRenderer::Execute(sceneColorTexID, targetFramebuffer, width, height);
 
 		targetFramebuffer->Bind();
 	}

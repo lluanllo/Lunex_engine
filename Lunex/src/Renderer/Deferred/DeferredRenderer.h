@@ -84,6 +84,14 @@ namespace Lunex {
 		static void ExecuteLightingPass(const Ref<Framebuffer>& targetFramebuffer);
 
 		/**
+		 * @brief Execute post-processing (bloom, vignette, chromatic aberration, tone mapping)
+		 * Must be called AFTER all overlays (skybox, grid, sprites, etc.) have been rendered
+		 * into the target framebuffer, so bloom can sample the complete scene.
+		 * @param targetFramebuffer The framebuffer containing the complete HDR scene
+		 */
+		static void ExecutePostProcessing(const Ref<Framebuffer>& targetFramebuffer);
+
+		/**
 		 * @brief Check if post-processing is active (any effect enabled)
 		 */
 		static bool IsPostProcessingActive();

@@ -68,15 +68,28 @@ namespace Lunex {
 		void RenderSceneRuntime(Camera& camera, const glm::mat4& cameraTransform);
 		
 		/**
-		 * @brief Render overlays after deferred lighting pass (skybox, grid, sprites, billboards, gizmos)
+		 * @brief Render overlays after deferred lighting pass (skybox, grid, sprites)
+		 * These are rendered BEFORE post-processing so bloom can sample them.
 		 * Call this AFTER DeferredRenderer::ExecuteLightingPass() when deferred is enabled.
 		 */
 		void RenderPostLighting(EditorCamera& camera);
 		
 		/**
 		 * @brief Render overlays after deferred lighting pass (runtime camera version)
+		 * These are rendered BEFORE post-processing so bloom can sample them.
 		 */
 		void RenderPostLightingRuntime(Camera& camera, const glm::mat4& cameraTransform);
+
+		/**
+		 * @brief Render editor overlays (billboards, gizmos, frustums) AFTER post-processing.
+		 * These should not be affected by bloom/tone mapping.
+		 */
+		void RenderPostLightingOverlays(EditorCamera& camera);
+		
+		/**
+		 * @brief Render editor overlays (billboards, gizmos, frustums) AFTER post-processing (runtime camera version)
+		 */
+		void RenderPostLightingOverlaysRuntime(Camera& camera, const glm::mat4& cameraTransform);
 		
 		/**
 		 * @brief Get render settings

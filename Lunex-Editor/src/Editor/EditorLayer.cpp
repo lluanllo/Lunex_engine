@@ -258,7 +258,7 @@ namespace Lunex {
 		});
 
 		Lunex::FramebufferSpecification fbSpec;
-		fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
+		fbSpec.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
 		fbSpec.Width = 1280;
 		fbSpec.Height = 720;
 		m_Framebuffer = Framebuffer::Create(fbSpec);
@@ -803,9 +803,17 @@ namespace Lunex {
 				if (DeferredRenderer::IsEnabled()) {
 					DeferredRenderer::ExecuteLightingPass(m_Framebuffer);
 					
-					// Render skybox, grid, sprites, billboards, gizmos AFTER lighting
+					// Render skybox, grid, sprites AFTER lighting (affected by bloom)
 					if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
 						renderSystem->RenderPostLighting(m_EditorCamera);
+					}
+
+					// Post-processing (bloom + tone mapping) on complete scene
+					DeferredRenderer::ExecutePostProcessing(m_Framebuffer);
+
+					// Render billboards, gizmos, frustums AFTER post-processing (not affected by bloom)
+					if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+						renderSystem->RenderPostLightingOverlays(m_EditorCamera);
 					}
 				}
 				break;
@@ -820,9 +828,17 @@ namespace Lunex {
 				if (DeferredRenderer::IsEnabled()) {
 					DeferredRenderer::ExecuteLightingPass(m_Framebuffer);
 					
-					// Render skybox, grid, sprites, billboards, gizmos AFTER lighting
+					// Render skybox, grid, sprites AFTER lighting (affected by bloom)
 					if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
 						renderSystem->RenderPostLighting(m_EditorCamera);
+					}
+
+					// Post-processing (bloom + tone mapping) on complete scene
+					DeferredRenderer::ExecutePostProcessing(m_Framebuffer);
+
+					// Render billboards, gizmos, frustums AFTER post-processing (not affected by bloom)
+					if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+						renderSystem->RenderPostLightingOverlays(m_EditorCamera);
 					}
 				}
 				break;
@@ -834,7 +850,7 @@ namespace Lunex {
 				if (DeferredRenderer::IsEnabled()) {
 					DeferredRenderer::ExecuteLightingPass(m_Framebuffer);
 					
-					// Render skybox, sprites AFTER lighting (runtime)
+					// Render skybox, sprites AFTER lighting (runtime, affected by bloom)
 					Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
 					if (camera) {
 						auto& cameraComp = camera.GetComponent<CameraComponent>();
@@ -843,6 +859,9 @@ namespace Lunex {
 							renderSystem->RenderPostLightingRuntime(cameraComp.Camera, transformComp.GetTransform());
 						}
 					}
+
+					// Post-processing (bloom + tone mapping) on complete scene
+					DeferredRenderer::ExecutePostProcessing(m_Framebuffer);
 				}
 				break;
 			}
