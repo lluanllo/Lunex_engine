@@ -326,8 +326,10 @@ namespace Lunex {
 
 		s_Data.CompositeShader->Bind();
 
-		// Bind textures
+		// Bind textures (ensure CLAMP_TO_EDGE to prevent edge sampling artifacts with chromatic aberration)
 		glBindTextureUnit(0, sceneColorTexID);
+		glTextureParameteri(sceneColorTexID, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTextureParameteri(sceneColorTexID, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 		bool hasBloom = s_Data.Config.EnableBloom && !s_Data.BloomMips.empty();
 		if (hasBloom) {

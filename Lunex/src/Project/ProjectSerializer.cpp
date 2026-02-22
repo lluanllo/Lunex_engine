@@ -61,6 +61,28 @@ namespace Lunex {
 			out << YAML::EndMap;
 		}
 		
+		// ? Serialize Post-Processing Preferences
+		{
+			const auto& pp = config.PostProcessPreferences;
+			out << YAML::Key << "PostProcessPreferences" << YAML::Value;
+			out << YAML::BeginMap;
+			out << YAML::Key << "EnableBloom" << YAML::Value << pp.EnableBloom;
+			out << YAML::Key << "BloomThreshold" << YAML::Value << pp.BloomThreshold;
+			out << YAML::Key << "BloomIntensity" << YAML::Value << pp.BloomIntensity;
+			out << YAML::Key << "BloomRadius" << YAML::Value << pp.BloomRadius;
+			out << YAML::Key << "BloomMipLevels" << YAML::Value << pp.BloomMipLevels;
+			out << YAML::Key << "EnableVignette" << YAML::Value << pp.EnableVignette;
+			out << YAML::Key << "VignetteIntensity" << YAML::Value << pp.VignetteIntensity;
+			out << YAML::Key << "VignetteRoundness" << YAML::Value << pp.VignetteRoundness;
+			out << YAML::Key << "VignetteSmoothness" << YAML::Value << pp.VignetteSmoothness;
+			out << YAML::Key << "EnableChromaticAberration" << YAML::Value << pp.EnableChromaticAberration;
+			out << YAML::Key << "ChromaticAberrationIntensity" << YAML::Value << pp.ChromaticAberrationIntensity;
+			out << YAML::Key << "ToneMapOperator" << YAML::Value << pp.ToneMapOperator;
+			out << YAML::Key << "Exposure" << YAML::Value << pp.Exposure;
+			out << YAML::Key << "Gamma" << YAML::Value << pp.Gamma;
+			out << YAML::EndMap;
+		}
+		
 		out << YAML::EndMap;
 		out << YAML::EndMap;
 		
@@ -145,6 +167,43 @@ namespace Lunex {
 				op.GizmoLineWidth = outlineNode["GizmoLineWidth"].as<float>();
 			
 			LNX_LOG_INFO("Loaded outline preferences from project");
+		}
+		
+		// ? NEW: Deserialize Post-Processing Preferences
+		auto ppNode = projectNode["PostProcessPreferences"];
+		if (ppNode) {
+			auto& pp = m_Project->m_Config.PostProcessPreferences;
+			
+			if (ppNode["EnableBloom"])
+				pp.EnableBloom = ppNode["EnableBloom"].as<bool>();
+			if (ppNode["BloomThreshold"])
+				pp.BloomThreshold = ppNode["BloomThreshold"].as<float>();
+			if (ppNode["BloomIntensity"])
+				pp.BloomIntensity = ppNode["BloomIntensity"].as<float>();
+			if (ppNode["BloomRadius"])
+				pp.BloomRadius = ppNode["BloomRadius"].as<float>();
+			if (ppNode["BloomMipLevels"])
+				pp.BloomMipLevels = ppNode["BloomMipLevels"].as<int>();
+			if (ppNode["EnableVignette"])
+				pp.EnableVignette = ppNode["EnableVignette"].as<bool>();
+			if (ppNode["VignetteIntensity"])
+				pp.VignetteIntensity = ppNode["VignetteIntensity"].as<float>();
+			if (ppNode["VignetteRoundness"])
+				pp.VignetteRoundness = ppNode["VignetteRoundness"].as<float>();
+			if (ppNode["VignetteSmoothness"])
+				pp.VignetteSmoothness = ppNode["VignetteSmoothness"].as<float>();
+			if (ppNode["EnableChromaticAberration"])
+				pp.EnableChromaticAberration = ppNode["EnableChromaticAberration"].as<bool>();
+			if (ppNode["ChromaticAberrationIntensity"])
+				pp.ChromaticAberrationIntensity = ppNode["ChromaticAberrationIntensity"].as<float>();
+			if (ppNode["ToneMapOperator"])
+				pp.ToneMapOperator = ppNode["ToneMapOperator"].as<int>();
+			if (ppNode["Exposure"])
+				pp.Exposure = ppNode["Exposure"].as<float>();
+			if (ppNode["Gamma"])
+				pp.Gamma = ppNode["Gamma"].as<float>();
+			
+			LNX_LOG_INFO("Loaded post-processing preferences from project");
 		}
 		
 		LNX_LOG_INFO("Project loaded: {0}", m_Project->m_Config.Name);

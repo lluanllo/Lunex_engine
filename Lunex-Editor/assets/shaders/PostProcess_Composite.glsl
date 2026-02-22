@@ -84,13 +84,36 @@ vec3 Uncharted2(vec3 color) {
 // ============ CHROMATIC ABERRATION ============
 
 vec3 SampleWithChromaticAberration(vec2 uv, float intensity) {
-	vec2 dir = uv - vec2(0.5);
-	float dist = length(dir);
-	vec2 offset = dir * dist * intensity;
-
-	float r = texture(u_SceneColor, uv + offset).r;
-	float g = texture(u_SceneColor, uv).g;
-	float b = texture(u_SceneColor, uv - offset).b;
+	// Barrel distortion-based chromatic aberration
+	// Each color channel is sampled at a slightly different radial distance
+	vec2 center = uv - 0.5;
+	float dist2 = dot(center, center); // squared distance from center
+	
+	// Scale intensity so that even at max values the offset stays reasonable
+	// dist2 at corners ? 0.5, so max offset per channel = 0.5 * intensity * 0.5 ? intensity * 0.02
+	float scaledIntensity = intensity * 0.04;
+	vec2 offset = center * (dist2 * scaledIntensity);
+	
+	// Red shifts outward, blue shifts inward, green stays centered
+	vec2 uvR = uv + offset;
+	vec2 uvB = uv - offset;
+	
+	// Fade out the effect when UVs approach the texture border
+	// This prevents hard color fringe at screen edges
+	vec2 fadeR = smoothstep(vec2(0.0), vec2(0.02), uvR) * smoothstep(vec2(0.0), vec2(0.02), vec2(1.0) - uvR);
+	vec2 fadeB = smoothstep(vec2(0.0), vec2(0.02), uvB) * smoothstep(vec2(0.0), vec2(0.02), vec2(1.0) - uvB);
+	float weightR = fadeR.x * fadeR.y;
+	float weightB = fadeB.x * fadeB.y;
+	
+	// Clamp UVs to valid range
+	uvR = clamp(uvR, vec2(0.001), vec2(0.999));
+	uvB = clamp(uvB, vec2(0.001), vec2(0.999));
+	
+	// Sample with fallback: when near the edge, blend toward the centered (green) sample
+	vec3 centerColor = texture(u_SceneColor, uv).rgb;
+	float r = mix(centerColor.r, texture(u_SceneColor, uvR).r, weightR);
+	float g = centerColor.g;
+	float b = mix(centerColor.b, texture(u_SceneColor, uvB).b, weightB);
 
 	return vec3(r, g, b);
 }

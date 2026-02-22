@@ -37,6 +37,33 @@ namespace Lunex {
 		float     GizmoLineWidth     = 1.5f;
 	};
 	
+	/**
+	 * PostProcessPreferencesConfig - Stores post-processing settings for project serialization
+	 */
+	struct PostProcessPreferencesConfig {
+		// Bloom
+		bool  EnableBloom = false;
+		float BloomThreshold = 1.0f;
+		float BloomIntensity = 0.5f;
+		float BloomRadius = 1.0f;
+		int   BloomMipLevels = 5;
+		
+		// Vignette
+		bool  EnableVignette = false;
+		float VignetteIntensity = 0.3f;
+		float VignetteRoundness = 1.0f;
+		float VignetteSmoothness = 0.4f;
+		
+		// Chromatic Aberration
+		bool  EnableChromaticAberration = false;
+		float ChromaticAberrationIntensity = 3.0f;
+		
+		// Tone Mapping
+		int   ToneMapOperator = 0;
+		float Exposure = 1.0f;
+		float Gamma = 2.2f;
+	};
+	
 	struct ProjectConfig {
 		std::string Name = "Untitled";
 		
@@ -54,6 +81,9 @@ namespace Lunex {
 		
 		// ? Outline & Collider Preferences
 		OutlinePreferencesConfig OutlinePreferences;
+		
+		// ? Post-Processing Preferences
+		PostProcessPreferencesConfig PostProcessPreferences;
 		
 		// Serialization version
 		uint32_t Version = 1;

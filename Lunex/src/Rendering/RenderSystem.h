@@ -74,7 +74,7 @@ namespace Lunex {
 		float VignetteSmoothness = 0.4f;
 
 		bool EnableChromaticAberration = false;
-		float ChromaticAberrationIntensity = 0.005f;
+		float ChromaticAberrationIntensity = 3.0f;
 
 		int ToneMapOperator = 0; // 0=ACES, 1=Reinhard, 2=Uncharted2, 3=None
 		

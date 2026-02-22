@@ -1,7 +1,9 @@
 #pragma once
 
 #include "../UI/LunexUI.h"
+#include "Project/Project.h"
 #include <string>
+#include <functional>
 #include <glm/glm.hpp>
 
 namespace Lunex {
@@ -17,6 +19,13 @@ namespace Lunex {
 
 		bool GetShowPhysics3DColliders() const { return m_ShowPhysics3DColliders; }
 		void SetShowPhysics3DColliders(bool show) { m_ShowPhysics3DColliders = show; }
+
+		// Post-Processing config Load/Save from project
+		void LoadPostProcessFromConfig(const PostProcessPreferencesConfig& config);
+		void SavePostProcessToConfig(PostProcessPreferencesConfig& config) const;
+
+		// Callback invoked whenever any post-process setting changes (for autosave)
+		void SetOnPostProcessChangedCallback(const std::function<void()>& callback) { m_OnPostProcessChanged = callback; }
 
 	private:
 		// Tab drawing helpers
@@ -34,11 +43,16 @@ namespace Lunex {
 		void DrawPhysics3DSection();
 		void DrawPhysicsGeneralSection();
 		
+		void NotifyPostProcessChanged();
+		
 	private:
 		bool m_ShowPhysicsColliders = false;
 		bool m_ShowPhysics3DColliders = false;
 		
 		// Skybox settings cache for UI
 		std::string m_HDRIPath;
+
+		// Autosave callback
+		std::function<void()> m_OnPostProcessChanged;
 	};
 }

@@ -140,6 +140,7 @@ namespace Lunex {
 			
 			if (PropertyCheckbox("Bloom", ppConfig.EnableBloom, "Enable bloom effect (configure in Post-Process tab)")) {
 				config.EnableBloom = ppConfig.EnableBloom;
+				NotifyPostProcessChanged();
 			}
 			
 			if (PropertyCheckbox("SSAO", config.EnableSSAO, "Enable Screen-Space Ambient Occlusion")) {
@@ -218,28 +219,33 @@ namespace Lunex {
 			
 			if (PropertyCheckbox("Enable Bloom", ppConfig.EnableBloom, "Enable bloom post-processing effect")) {
 				renderConfig.EnableBloom = ppConfig.EnableBloom;
+				NotifyPostProcessChanged();
 			}
 			
 			if (ppConfig.EnableBloom) {
 				if (PropertyFloat("Threshold", ppConfig.BloomThreshold, 0.05f, 0.0f, 5.0f,
 					"Brightness threshold for bloom extraction (lower = more glow)")) {
 					renderConfig.BloomThreshold = ppConfig.BloomThreshold;
+					NotifyPostProcessChanged();
 				}
 				
 				if (PropertyFloat("Intensity", ppConfig.BloomIntensity, 0.01f, 0.0f, 3.0f,
 					"Bloom contribution to the final image")) {
 					renderConfig.BloomIntensity = ppConfig.BloomIntensity;
+					NotifyPostProcessChanged();
 				}
 				
 				if (PropertyFloat("Radius", ppConfig.BloomRadius, 0.1f, 0.1f, 5.0f,
 					"Blur kernel spread (higher = wider glow)")) {
 					renderConfig.BloomRadius = ppConfig.BloomRadius;
+					NotifyPostProcessChanged();
 				}
 				
 				float mipLevelsF = static_cast<float>(ppConfig.BloomMipLevels);
 				if (PropertyFloat("Quality (Mip Levels)", mipLevelsF, 1.0f, 1.0f, 8.0f,
 					"Number of downsample passes (more = smoother bloom, slightly slower)")) {
 					ppConfig.BloomMipLevels = static_cast<int>(mipLevelsF);
+					NotifyPostProcessChanged();
 				}
 			}
 			
@@ -256,22 +262,26 @@ namespace Lunex {
 			
 			if (PropertyCheckbox("Enable Vignette", ppConfig.EnableVignette, "Enable vignette effect")) {
 				renderConfig.EnableVignette = ppConfig.EnableVignette;
+				NotifyPostProcessChanged();
 			}
 			
 			if (ppConfig.EnableVignette) {
 				if (PropertySlider("Intensity##Vignette", ppConfig.VignetteIntensity, 0.0f, 1.0f, "%.2f",
 					"How much the edges darken")) {
 					renderConfig.VignetteIntensity = ppConfig.VignetteIntensity;
+					NotifyPostProcessChanged();
 				}
 				
 				if (PropertySlider("Roundness", ppConfig.VignetteRoundness, 0.0f, 2.0f, "%.2f",
 					"Shape roundness (1.0 = circular, lower = more rectangular)")) {
 					renderConfig.VignetteRoundness = ppConfig.VignetteRoundness;
+					NotifyPostProcessChanged();
 				}
 				
 				if (PropertySlider("Smoothness", ppConfig.VignetteSmoothness, 0.01f, 1.0f, "%.2f",
 					"Transition smoothness from center to edges")) {
 					renderConfig.VignetteSmoothness = ppConfig.VignetteSmoothness;
+					NotifyPostProcessChanged();
 				}
 			}
 			
@@ -289,12 +299,14 @@ namespace Lunex {
 			if (PropertyCheckbox("Enable Chromatic Aberration", ppConfig.EnableChromaticAberration,
 				"Enable chromatic aberration effect")) {
 				renderConfig.EnableChromaticAberration = ppConfig.EnableChromaticAberration;
+				NotifyPostProcessChanged();
 			}
 			
 			if (ppConfig.EnableChromaticAberration) {
-				if (PropertyFloat("Intensity##ChromAb", ppConfig.ChromaticAberrationIntensity, 0.001f, 0.0f, 0.05f,
+				if (PropertyFloat("Intensity##ChromAb", ppConfig.ChromaticAberrationIntensity, 0.1f, 0.0f, 20.0f,
 					"Amount of color channel separation")) {
 					renderConfig.ChromaticAberrationIntensity = ppConfig.ChromaticAberrationIntensity;
+					NotifyPostProcessChanged();
 				}
 			}
 			
@@ -313,15 +325,18 @@ namespace Lunex {
 			if (PropertyDropdown("Operator", ppConfig.ToneMapOperator, toneMapOptions, 4,
 				"Tone mapping algorithm")) {
 				renderConfig.ToneMapOperator = ppConfig.ToneMapOperator;
+				NotifyPostProcessChanged();
 			}
 			
 			if (PropertyFloat("Exposure##PP", ppConfig.Exposure, 0.01f, 0.01f, 10.0f,
 				"Exposure multiplier before tone mapping")) {
 				renderConfig.Exposure = ppConfig.Exposure;
+				NotifyPostProcessChanged();
 			}
 			
 			if (PropertyFloat("Gamma", ppConfig.Gamma, 0.01f, 1.0f, 3.0f,
 				"Gamma correction value (2.2 = standard sRGB)")) {
+				NotifyPostProcessChanged();
 			}
 			
 			EndSection();
@@ -862,5 +877,75 @@ namespace Lunex {
 			
 			EndSection();
 		}
+	}
+	
+	// ========================================
+	// POST-PROCESS CONFIG LOAD / SAVE
+	// ========================================
+	
+	void SettingsPanel::LoadPostProcessFromConfig(const PostProcessPreferencesConfig& config) {
+		auto& ppConfig = PostProcessRenderer::GetConfig();
+		auto& renderConfig = RenderSystem::GetConfig();
+		
+		ppConfig.EnableBloom = config.EnableBloom;
+		ppConfig.BloomThreshold = config.BloomThreshold;
+		ppConfig.BloomIntensity = config.BloomIntensity;
+		ppConfig.BloomRadius = config.BloomRadius;
+		ppConfig.BloomMipLevels = config.BloomMipLevels;
+		
+		ppConfig.EnableVignette = config.EnableVignette;
+		ppConfig.VignetteIntensity = config.VignetteIntensity;
+		ppConfig.VignetteRoundness = config.VignetteRoundness;
+		ppConfig.VignetteSmoothness = config.VignetteSmoothness;
+		
+		ppConfig.EnableChromaticAberration = config.EnableChromaticAberration;
+		ppConfig.ChromaticAberrationIntensity = config.ChromaticAberrationIntensity;
+		
+		ppConfig.ToneMapOperator = config.ToneMapOperator;
+		ppConfig.Exposure = config.Exposure;
+		ppConfig.Gamma = config.Gamma;
+		
+		// Sync RenderSystem config
+		renderConfig.EnableBloom = config.EnableBloom;
+		renderConfig.BloomThreshold = config.BloomThreshold;
+		renderConfig.BloomIntensity = config.BloomIntensity;
+		renderConfig.BloomRadius = config.BloomRadius;
+		renderConfig.EnableVignette = config.EnableVignette;
+		renderConfig.VignetteIntensity = config.VignetteIntensity;
+		renderConfig.VignetteRoundness = config.VignetteRoundness;
+		renderConfig.VignetteSmoothness = config.VignetteSmoothness;
+		renderConfig.EnableChromaticAberration = config.EnableChromaticAberration;
+		renderConfig.ChromaticAberrationIntensity = config.ChromaticAberrationIntensity;
+		renderConfig.ToneMapOperator = config.ToneMapOperator;
+		renderConfig.Exposure = config.Exposure;
+		
+		LNX_LOG_INFO("Post-processing preferences loaded from project config");
+	}
+	
+	void SettingsPanel::SavePostProcessToConfig(PostProcessPreferencesConfig& config) const {
+		const auto& ppConfig = PostProcessRenderer::GetConfig();
+		
+		config.EnableBloom = ppConfig.EnableBloom;
+		config.BloomThreshold = ppConfig.BloomThreshold;
+		config.BloomIntensity = ppConfig.BloomIntensity;
+		config.BloomRadius = ppConfig.BloomRadius;
+		config.BloomMipLevels = ppConfig.BloomMipLevels;
+		
+		config.EnableVignette = ppConfig.EnableVignette;
+		config.VignetteIntensity = ppConfig.VignetteIntensity;
+		config.VignetteRoundness = ppConfig.VignetteRoundness;
+		config.VignetteSmoothness = ppConfig.VignetteSmoothness;
+		
+		config.EnableChromaticAberration = ppConfig.EnableChromaticAberration;
+		config.ChromaticAberrationIntensity = ppConfig.ChromaticAberrationIntensity;
+		
+		config.ToneMapOperator = ppConfig.ToneMapOperator;
+		config.Exposure = ppConfig.Exposure;
+		config.Gamma = ppConfig.Gamma;
+	}
+	
+	void SettingsPanel::NotifyPostProcessChanged() {
+		if (m_OnPostProcessChanged)
+			m_OnPostProcessChanged();
 	}
 }

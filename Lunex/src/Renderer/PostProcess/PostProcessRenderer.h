@@ -42,7 +42,7 @@ namespace Lunex {
 
 		// ========== CHROMATIC ABERRATION ==========
 		bool  EnableChromaticAberration = false;
-		float ChromaticAberrationIntensity = 0.005f;
+		float ChromaticAberrationIntensity = 3.0f;
 
 		// ========== TONE MAPPING ==========
 		// 0=ACES, 1=Reinhard, 2=Uncharted2, 3=None

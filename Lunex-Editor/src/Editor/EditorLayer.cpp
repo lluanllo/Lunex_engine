@@ -218,6 +218,17 @@ namespace Lunex {
 			ProjectManager::SaveActive(projectPath);
 		});
 		
+		// ✅ Post-Processing autosave: save to project on every change
+		m_SettingsPanel.SetOnPostProcessChangedCallback([this]() {
+			auto project = ProjectManager::GetActiveProject();
+			if (!project) return;
+			auto projectPath = project->GetProjectPath();
+			if (projectPath.empty()) return;
+			
+			m_SettingsPanel.SavePostProcessToConfig(project->GetConfig().PostProcessPreferences);
+			ProjectManager::SaveActive(projectPath);
+		});
+		
 		// ========================================
 		// MATERIAL EDITOR PANEL CALLBACKS
 		// ========================================
@@ -1541,6 +1552,9 @@ namespace Lunex {
 
 		// ✅ Load outline preferences from project
 		m_OutlinePreferencesPanel.LoadFromConfig(project->GetConfig().OutlinePreferences);
+
+		// ✅ Load post-processing preferences from project
+		m_SettingsPanel.LoadPostProcessFromConfig(project->GetConfig().PostProcessPreferences);
 
 		// Load start scene if specified
 		auto& config = project->GetConfig();
