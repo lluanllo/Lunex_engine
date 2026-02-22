@@ -28,8 +28,11 @@ namespace Lunex {
 	
 	RHI::TextureFormat Framebuffer::ConvertFormat(FramebufferTextureFormat format) {
 		switch (format) {
-			case FramebufferTextureFormat::RGBA8:         return RHI::TextureFormat::RGBA8;
-			case FramebufferTextureFormat::RED_INTEGER:   return RHI::TextureFormat::R32I;
+			case FramebufferTextureFormat::RGBA8:           return RHI::TextureFormat::RGBA8;
+			case FramebufferTextureFormat::RGBA16F:         return RHI::TextureFormat::RGBA16F;
+			case FramebufferTextureFormat::RGBA32F:         return RHI::TextureFormat::RGBA32F;
+			case FramebufferTextureFormat::RG16F:           return RHI::TextureFormat::RG16F;
+			case FramebufferTextureFormat::RED_INTEGER:     return RHI::TextureFormat::R32I;
 			case FramebufferTextureFormat::DEPTH24STENCIL8: return RHI::TextureFormat::Depth24Stencil8;
 			default: return RHI::TextureFormat::None;
 		}

@@ -24,6 +24,10 @@ namespace Lunex {
 	struct Renderer3DData {
 		struct CameraData {
 			glm::mat4 ViewProjection;
+			glm::mat4 View;
+			glm::mat4 Projection;
+			glm::vec3 ViewPos;
+			float _padding = 0.0f;
 		};
 
 		struct TransformData {
@@ -157,6 +161,9 @@ namespace Lunex {
 	void Renderer3D::BeginScene(const OrthographicCamera& camera) {
 		LNX_PROFILE_FUNCTION();
 		s_Data.CameraBuffer.ViewProjection = camera.GetViewProjectionMatrix();
+		s_Data.CameraBuffer.View = glm::mat4(1.0f);
+		s_Data.CameraBuffer.Projection = glm::mat4(1.0f);
+		s_Data.CameraBuffer.ViewPos = glm::vec3(0.0f);
 		s_Data.CameraPosition = glm::vec3(0.0f);
 		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(Renderer3DData::CameraData));
 
@@ -171,7 +178,11 @@ namespace Lunex {
 
 	void Renderer3D::BeginScene(const Camera& camera, const glm::mat4& transform) {
 		LNX_PROFILE_FUNCTION();
-		s_Data.CameraBuffer.ViewProjection = camera.GetProjection() * glm::inverse(transform);
+		glm::mat4 viewMatrix = glm::inverse(transform);
+		s_Data.CameraBuffer.ViewProjection = camera.GetProjection() * viewMatrix;
+		s_Data.CameraBuffer.View = viewMatrix;
+		s_Data.CameraBuffer.Projection = camera.GetProjection();
+		s_Data.CameraBuffer.ViewPos = glm::vec3(transform[3]);
 		s_Data.CameraPosition = glm::vec3(transform[3]);
 		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(Renderer3DData::CameraData));
 
@@ -190,6 +201,9 @@ namespace Lunex {
 	void Renderer3D::BeginScene(const EditorCamera& camera) {
 		LNX_PROFILE_FUNCTION();
 		s_Data.CameraBuffer.ViewProjection = camera.GetViewProjection();
+		s_Data.CameraBuffer.View = camera.GetViewMatrix();
+		s_Data.CameraBuffer.Projection = camera.GetProjection();
+		s_Data.CameraBuffer.ViewPos = camera.GetPosition();
 		s_Data.CameraPosition = camera.GetPosition();
 		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(Renderer3DData::CameraData));
 

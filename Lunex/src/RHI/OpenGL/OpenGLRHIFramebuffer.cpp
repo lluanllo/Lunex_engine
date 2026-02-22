@@ -82,10 +82,12 @@ namespace RHI {
 			glNamedFramebufferReadBuffer(m_FramebufferID, GL_NONE);
 		}
 		
-		// Check framebuffer completeness
-		GLenum status = glCheckNamedFramebufferStatus(m_FramebufferID, GL_FRAMEBUFFER);
-		if (status != GL_FRAMEBUFFER_COMPLETE) {
-			LNX_LOG_ERROR("Framebuffer incomplete! Status: 0x{0:X}", status);
+		// Check framebuffer completeness (skip for FBOs with no attachments - they are completed dynamically)
+		if (!m_ColorAttachments.empty() || m_Desc.HasDepth) {
+			GLenum status = glCheckNamedFramebufferStatus(m_FramebufferID, GL_FRAMEBUFFER);
+			if (status != GL_FRAMEBUFFER_COMPLETE) {
+				LNX_LOG_ERROR("Framebuffer incomplete! Status: 0x{0:X}", status);
+			}
 		}
 	}
 	
@@ -229,11 +231,31 @@ namespace RHI {
 		
 		GLenum glFilter = filter == FilterMode::Linear ? GL_LINEAR : GL_NEAREST;
 		
+		// Determine which bits to blit based on what both FBOs have
+		GLbitfield mask = 0;
+		
+		// Only blit color if both have color attachments with matching count
+		if (!m_ColorAttachments.empty() && glDest->m_ColorAttachments.size() == m_ColorAttachments.size()) {
+			mask |= GL_COLOR_BUFFER_BIT;
+		}
+		
+		// Blit depth if both have depth
+		if (m_DepthAttachment && glDest->m_DepthAttachment) {
+			mask |= GL_DEPTH_BUFFER_BIT;
+		}
+		
+		if (mask == 0) return;
+		
+		// OpenGL requires GL_NEAREST when blitting depth or stencil
+		if (mask & (GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)) {
+			glFilter = GL_NEAREST;
+		}
+		
 		glBlitNamedFramebuffer(
 			m_FramebufferID, glDest->GetFramebufferID(),
 			0, 0, m_Desc.Width, m_Desc.Height,
 			0, 0, dest->GetWidth(), dest->GetHeight(),
-			GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT,
+			mask,
 			glFilter
 		);
 	}

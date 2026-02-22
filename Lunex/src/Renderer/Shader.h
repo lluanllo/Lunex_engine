@@ -58,6 +58,8 @@ namespace Lunex {
 		
 		bool IsComputeShader() const { return m_RHIShader ? m_RHIShader->IsCompute() : false; }
 		
+		bool IsValid() const { return m_RHIShader && m_RHIShader->IsValid(); }
+		
 		// Access underlying RHI shader
 		Ref<RHI::RHIShader> GetRHIShader() const { return m_RHIShader; }
 		

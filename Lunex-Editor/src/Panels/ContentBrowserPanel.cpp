@@ -949,7 +949,7 @@ namespace Lunex {
 		}
 
 		// Image files
-		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp" || extension == ".tga") {
+		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp" || extension == ".TGA" || extension == ".tga") {
 			std::string pathStr = path.string();
 
 			auto it = m_TextureCache.find(pathStr);
@@ -982,8 +982,8 @@ namespace Lunex {
 		if (extension == ".lumesh") return "MESH";
 		if (extension == ".luprefab") return "PREFAB";
 		if (extension == ".lunex") return "SCENE";
-		if (extension == ".hdr" || extension == ".hdri") return "HDRI";
-		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg") return "TEXTURE";
+		if (extension == ".hdr" || extension == ".hdri" || extension == ".exr") return "HDRI";
+		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".TGA" || extension == ".tga") return "TEXTURE";
 		if (extension == ".glsl" || extension == ".shader") return "SHADER";
 		if (extension == ".wav" || extension == ".mp3" || extension == ".ogg") return "AUDIO";
 		if (extension == ".cpp" || extension == ".h" || extension == ".cs") return "SCRIPT";

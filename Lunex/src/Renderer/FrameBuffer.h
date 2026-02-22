@@ -11,6 +11,9 @@ namespace Lunex {
 		
 		// Color
 		RGBA8,
+		RGBA16F,
+		RGBA32F,
+		RG16F,
 		RED_INTEGER,
 		
 		// Depth/stencil

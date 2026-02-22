@@ -5,6 +5,7 @@
 #include "Renderer3D.h"
 #include "SkyboxRenderer.h"
 #include "TextureCompression.h"
+#include "Deferred/DeferredRenderer.h"
 #include "RHI/RHI.h"
 
 namespace Lunex {
@@ -28,6 +29,7 @@ namespace Lunex {
 		Renderer2D::Init();
 		Renderer3D::Init();
 		SkyboxRenderer::Init();
+		DeferredRenderer::Init();
 		
 		// Initialize texture compression system
 		TextureCompressor::Get().Initialize();
@@ -44,6 +46,7 @@ namespace Lunex {
 		Renderer2D::Shutdown();
 		Renderer3D::Shutdown();
 		SkyboxRenderer::Shutdown();
+		DeferredRenderer::Shutdown();
 		TextureCompressor::Get().Shutdown();
 		
 		// ========================================

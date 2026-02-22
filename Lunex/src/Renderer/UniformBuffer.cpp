@@ -18,6 +18,9 @@ namespace Lunex {
 	void UniformBuffer::SetData(const void* data, uint32_t size, uint32_t offset) {
 		if (m_RHIBuffer) {
 			m_RHIBuffer->SetData(data, size, offset);
+			// Re-bind to binding point to ensure this buffer is active
+			// (multiple UBOs may share the same binding point)
+			m_RHIBuffer->BindToPoint(m_Binding);
 		}
 	}
 	

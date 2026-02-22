@@ -1,6 +1,7 @@
 #include "stpch.h"
 #include "MaterialPreviewRenderer.h"
 #include "Renderer/Renderer3D.h"
+#include "Renderer/Deferred/DeferredRenderer.h"
 #include "Renderer/Shadows/ShadowSystem.h"
 #include "RHI/RHI.h"
 #include "Resources/Render/MaterialInstance.h"
@@ -290,11 +291,16 @@ namespace Lunex {
 		uint64_t previousFramebuffer = cmdList->GetBoundFramebuffer();
 
 		// ============================================================
-		// TEMPORARILY DISABLE SHADOW SYSTEM
+		// TEMPORARILY DISABLE SHADOW SYSTEM AND DEFERRED RENDERER
+		// The preview must always use forward rendering to avoid
+		// corrupting the deferred pipeline's UBO state.
 		// ============================================================
 		auto& shadowSystem = ShadowSystem::Get();
 		bool previousShadowEnabled = shadowSystem.IsEnabled();
 		shadowSystem.SetEnabled(false);
+
+		bool previousDeferredEnabled = DeferredRenderer::IsEnabled();
+		DeferredRenderer::SetEnabled(false);
 
 		// ============================================================
 		// RENDER PREVIEW TO ISOLATED FRAMEBUFFER
@@ -337,6 +343,8 @@ namespace Lunex {
 			
 			// Restore state even on error
 			m_Framebuffer->Unbind();
+			DeferredRenderer::SetEnabled(previousDeferredEnabled);
+			shadowSystem.SetEnabled(previousShadowEnabled);
 			cmdList->BindFramebufferByHandle(previousFramebuffer);
 			cmdList->SetViewport(static_cast<float>(previousViewport[0]), static_cast<float>(previousViewport[1]),
 								 static_cast<float>(previousViewport[2]), static_cast<float>(previousViewport[3]));
@@ -369,6 +377,9 @@ namespace Lunex {
 		// RESTORE PREVIOUS STATE
 		// ============================================================
 		
+		// Restore deferred renderer state BEFORE restoring framebuffer
+		DeferredRenderer::SetEnabled(previousDeferredEnabled);
+
 		// Restore previous framebuffer
 		cmdList->BindFramebufferByHandle(previousFramebuffer);
 		
