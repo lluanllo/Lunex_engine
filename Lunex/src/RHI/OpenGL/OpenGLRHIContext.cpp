@@ -4,6 +4,9 @@
 
 #include <GLFW/glfw3.h>
 
+// Vulkan context for factory method
+#include "RHI/Vulkan/VulkanRHIContext.h"
+
 namespace Lunex {
 namespace RHI {
 
@@ -266,6 +269,8 @@ namespace RHI {
 		switch (api) {
 			case GraphicsAPI::OpenGL:
 				return CreateScope<OpenGLRHIContext>(windowHandle);
+			case GraphicsAPI::Vulkan:
+				return CreateScope<VulkanRHIContext>(windowHandle);
 			default:
 				LNX_LOG_ERROR("RHIContext::Create: Unsupported graphics API!");
 				return nullptr;

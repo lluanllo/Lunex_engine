@@ -2,6 +2,7 @@
 #include "RHI.h"
 #include "Log/Log.h"
 
+// Only include glad for OpenGL-specific initialization
 #include <glad/glad.h>
 
 namespace Lunex {
@@ -124,17 +125,23 @@ namespace RHI {
 			return;
 		}
 		
-		// Initialize OpenGL state
-		#ifdef LNX_DEBUG
-			glEnable(GL_DEBUG_OUTPUT);
-			glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-		#endif
-		
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		
-		glEnable(GL_DEPTH_TEST);
-		glEnable(GL_LINE_SMOOTH);
+		if (s_CurrentAPI == GraphicsAPI::OpenGL) {
+			// Initialize OpenGL state
+			#ifdef LNX_DEBUG
+				glEnable(GL_DEBUG_OUTPUT);
+				glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+			#endif
+			
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			
+			glEnable(GL_DEPTH_TEST);
+			glEnable(GL_LINE_SMOOTH);
+		}
+		else if (s_CurrentAPI == GraphicsAPI::Vulkan) {
+			// Vulkan render state is managed through pipeline state objects
+			LNX_LOG_INFO("Vulkan render state initialization (pipeline-based)");
+		}
 	}
 
 	// ============================================================================

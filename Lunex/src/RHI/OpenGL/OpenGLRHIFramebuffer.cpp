@@ -3,6 +3,9 @@
 #include "OpenGLRHITexture.h"
 #include "OpenGLRHIDevice.h"
 #include "Log/Log.h"
+#include "RHI/RHI.h"
+#include "RHI/Vulkan/VulkanRHIFramebuffer.h"
+#include "RHI/Vulkan/VulkanRHIDevice.h"
 
 // Fallback defines for missing GLAD extensions
 #ifndef GLAD_GL_KHR_debug
@@ -298,7 +301,17 @@ namespace RHI {
 	
 	// Factory
 	Ref<RHIFramebuffer> RHIFramebuffer::Create(const FramebufferDesc& desc) {
-		return CreateRef<OpenGLRHIFramebuffer>(desc);
+		switch (RHI::GetCurrentAPI()) {
+			case GraphicsAPI::Vulkan: {
+				auto* device = dynamic_cast<VulkanRHIDevice*>(RHIDevice::Get());
+				if (device) return CreateRef<VulkanRHIFramebuffer>(device, desc);
+				LNX_LOG_ERROR("RHIFramebuffer::Create - Vulkan device not available");
+				return nullptr;
+			}
+			case GraphicsAPI::OpenGL:
+			default:
+				return CreateRef<OpenGLRHIFramebuffer>(desc);
+		}
 	}
 	
 	Ref<RHIFramebuffer> RHIFramebuffer::Create(uint32_t width, uint32_t height, 

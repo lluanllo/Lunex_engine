@@ -3,6 +3,10 @@
 #include "OpenGLRHIDevice.h"
 #include "Log/Log.h"
 
+#include "RHI/RHI.h"
+#include "RHI/Vulkan/VulkanRHITexture.h"
+#include "RHI/Vulkan/VulkanRHIDevice.h"
+
 // Fallback defines for missing GLAD extensions
 #ifndef GLAD_GL_KHR_debug
 #define GLAD_GL_KHR_debug 0
@@ -395,11 +399,31 @@ namespace RHI {
 	// ============================================================================
 	
 	Ref<RHITexture2D> RHITexture2D::Create(const TextureDesc& desc) {
-		return CreateRef<OpenGLRHITexture2D>(desc);
+		switch (RHI::GetCurrentAPI()) {
+			case GraphicsAPI::Vulkan: {
+				auto* device = dynamic_cast<VulkanRHIDevice*>(RHIDevice::Get());
+				if (device) return CreateRef<VulkanRHITexture2D>(device, desc);
+				LNX_LOG_ERROR("RHITexture2D::Create - Vulkan device not available");
+				return nullptr;
+			}
+			case GraphicsAPI::OpenGL:
+			default:
+				return CreateRef<OpenGLRHITexture2D>(desc);
+		}
 	}
 	
 	Ref<RHITexture2D> RHITexture2D::Create(const TextureDesc& desc, const void* data, uint64_t dataSize) {
-		return CreateRef<OpenGLRHITexture2D>(desc, data);
+		switch (RHI::GetCurrentAPI()) {
+			case GraphicsAPI::Vulkan: {
+				auto* device = dynamic_cast<VulkanRHIDevice*>(RHIDevice::Get());
+				if (device) return CreateRef<VulkanRHITexture2D>(device, desc, data);
+				LNX_LOG_ERROR("RHITexture2D::Create - Vulkan device not available");
+				return nullptr;
+			}
+			case GraphicsAPI::OpenGL:
+			default:
+				return CreateRef<OpenGLRHITexture2D>(desc, data);
+		}
 	}
 	
 	Ref<RHITextureCube> RHITextureCube::Create(uint32_t size, TextureFormat format, uint32_t mipLevels) {
@@ -408,11 +432,31 @@ namespace RHI {
 		desc.Height = size;
 		desc.Format = format;
 		desc.MipLevels = mipLevels;
-		return CreateRef<OpenGLRHITextureCube>(desc);
+		switch (RHI::GetCurrentAPI()) {
+			case GraphicsAPI::Vulkan: {
+				auto* device = dynamic_cast<VulkanRHIDevice*>(RHIDevice::Get());
+				if (device) return CreateRef<VulkanRHITextureCube>(device, desc);
+				LNX_LOG_ERROR("RHITextureCube::Create - Vulkan device not available");
+				return nullptr;
+			}
+			case GraphicsAPI::OpenGL:
+			default:
+				return CreateRef<OpenGLRHITextureCube>(desc);
+		}
 	}
 	
 	Ref<RHISampler> RHISampler::Create(const SamplerState& state) {
-		return CreateRef<OpenGLRHISampler>(state);
+		switch (RHI::GetCurrentAPI()) {
+			case GraphicsAPI::Vulkan: {
+				auto* device = dynamic_cast<VulkanRHIDevice*>(RHIDevice::Get());
+				if (device) return CreateRef<VulkanRHISampler>(device, state);
+				LNX_LOG_ERROR("RHISampler::Create - Vulkan device not available");
+				return nullptr;
+			}
+			case GraphicsAPI::OpenGL:
+			default:
+				return CreateRef<OpenGLRHISampler>(state);
+		}
 	}
 	
 	Ref<RHISampler> RHISampler::CreateLinear() {
@@ -556,7 +600,17 @@ namespace RHI {
 		desc.Format = format;
 		desc.MipLevels = mipLevels;
 		desc.IsRenderTarget = true;
-		return CreateRef<OpenGLRHITexture2DArray>(desc);
+		switch (RHI::GetCurrentAPI()) {
+			case GraphicsAPI::Vulkan: {
+				auto* device = dynamic_cast<VulkanRHIDevice*>(RHIDevice::Get());
+				if (device) return CreateRef<VulkanRHITexture2DArray>(device, desc);
+				LNX_LOG_ERROR("RHITexture2DArray::Create - Vulkan device not available");
+				return nullptr;
+			}
+			case GraphicsAPI::OpenGL:
+			default:
+				return CreateRef<OpenGLRHITexture2DArray>(desc);
+		}
 	}
 
 	// ============================================================================

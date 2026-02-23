@@ -11,6 +11,11 @@
 #include <spirv_cross/spirv_cross.hpp>
 #include <spirv_cross/spirv_glsl.hpp>
 
+// Vulkan shader for factory method
+#include "RHI/RHI.h"
+#include "RHI/Vulkan/VulkanRHIShader.h"
+#include "RHI/Vulkan/VulkanRHIDevice.h"
+
 // Fallback defines for missing GLAD extensions
 #ifndef GLAD_GL_KHR_debug
 #define GLAD_GL_KHR_debug 0
@@ -711,23 +716,63 @@ namespace RHI {
 	// ============================================================================
 	
 	Ref<RHIShader> RHIShader::CreateFromFile(const std::string& filePath) {
-		return CreateRef<OpenGLRHIShader>(filePath);
+		switch (RHI::GetCurrentAPI()) {
+			case GraphicsAPI::Vulkan: {
+				auto* device = dynamic_cast<VulkanRHIDevice*>(RHIDevice::Get());
+				if (device) return CreateRef<VulkanRHIShader>(device, filePath);
+				LNX_LOG_ERROR("RHIShader::CreateFromFile - Vulkan device not available");
+				return nullptr;
+			}
+			case GraphicsAPI::OpenGL:
+			default:
+				return CreateRef<OpenGLRHIShader>(filePath);
+		}
 	}
 	
 	Ref<RHIShader> RHIShader::CreateFromSource(const std::string& name, 
 											   const std::string& vertexSource,
 											   const std::string& fragmentSource) {
-		return CreateRef<OpenGLRHIShader>(name, vertexSource, fragmentSource);
+		switch (RHI::GetCurrentAPI()) {
+			case GraphicsAPI::Vulkan: {
+				auto* device = dynamic_cast<VulkanRHIDevice*>(RHIDevice::Get());
+				if (device) return CreateRef<VulkanRHIShader>(device, name, vertexSource, fragmentSource);
+				LNX_LOG_ERROR("RHIShader::CreateFromSource - Vulkan device not available");
+				return nullptr;
+			}
+			case GraphicsAPI::OpenGL:
+			default:
+				return CreateRef<OpenGLRHIShader>(name, vertexSource, fragmentSource);
+		}
 	}
 	
 	Ref<RHIShader> RHIShader::CreateComputeFromFile(const std::string& filePath) {
-		return CreateRef<OpenGLRHIShader>(filePath, true);
+		switch (RHI::GetCurrentAPI()) {
+			case GraphicsAPI::Vulkan: {
+				auto* device = dynamic_cast<VulkanRHIDevice*>(RHIDevice::Get());
+				if (device) return CreateRef<VulkanRHIShader>(device, filePath);
+				LNX_LOG_ERROR("RHIShader::CreateComputeFromFile - Vulkan device not available");
+				return nullptr;
+			}
+			case GraphicsAPI::OpenGL:
+			default:
+				return CreateRef<OpenGLRHIShader>(filePath, true);
+		}
 	}
 	
 	Ref<RHIShader> RHIShader::CreateComputeFromSource(const std::string& name, const std::string& source) {
-		// For compute from source, we need to handle it differently
-		auto shader = CreateRef<OpenGLRHIShader>(name, source, ""); // Empty fragment
-		return shader;
+		switch (RHI::GetCurrentAPI()) {
+			case GraphicsAPI::Vulkan: {
+				auto* device = dynamic_cast<VulkanRHIDevice*>(RHIDevice::Get());
+				if (device) return CreateRef<VulkanRHIShader>(device, name, source, "");
+				LNX_LOG_ERROR("RHIShader::CreateComputeFromSource - Vulkan device not available");
+				return nullptr;
+			}
+			case GraphicsAPI::OpenGL:
+			default: {
+				auto shader = CreateRef<OpenGLRHIShader>(name, source, "");
+				return shader;
+			}
+		}
 	}
 
 } // namespace RHI

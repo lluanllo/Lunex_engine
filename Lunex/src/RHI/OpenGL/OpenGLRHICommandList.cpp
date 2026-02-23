@@ -5,8 +5,11 @@
 #include "OpenGLRHIShader.h"
 #include "OpenGLRHIFramebuffer.h"
 #include "OpenGLRHIDevice.h"
+#include "RHI/RHI.h"
 #include "RHI/RHICommandList.h"
 #include "RHI/RHIContext.h"
+#include "RHI/Vulkan/VulkanRHICommandList.h"
+#include "RHI/Vulkan/VulkanRHIContext.h"
 #include "Log/Log.h"
 
 // Fallback defines for missing GLAD extensions
@@ -416,15 +419,51 @@ namespace Lunex {
 		// ============================================================================
 
 		Ref<RHICommandList> RHICommandList::CreateGraphics() {
-			return CreateRef<OpenGLRHICommandList>();
+			switch (RHI::GetCurrentAPI()) {
+			case GraphicsAPI::Vulkan: {
+				auto* vulkanCtx = dynamic_cast<VulkanRHIContext*>(RHIContext::Get());
+				if (vulkanCtx) {
+					return CreateRef<VulkanRHICommandList>(vulkanCtx);
+				}
+				LNX_LOG_ERROR("RHICommandList::CreateGraphics - Vulkan context not available");
+				return nullptr;
+			}
+			case GraphicsAPI::OpenGL:
+			default:
+				return CreateRef<OpenGLRHICommandList>();
+			}
 		}
 
 		Ref<RHICommandList> RHICommandList::CreateCompute() {
-			return CreateRef<OpenGLRHICommandList>();
+			switch (RHI::GetCurrentAPI()) {
+			case GraphicsAPI::Vulkan: {
+				auto* vulkanCtx = dynamic_cast<VulkanRHIContext*>(RHIContext::Get());
+				if (vulkanCtx) {
+					return CreateRef<VulkanRHICommandList>(vulkanCtx);
+				}
+				LNX_LOG_ERROR("RHICommandList::CreateCompute - Vulkan context not available");
+				return nullptr;
+			}
+			case GraphicsAPI::OpenGL:
+			default:
+				return CreateRef<OpenGLRHICommandList>();
+			}
 		}
 
 		Ref<RHICommandList> RHICommandList::CreateCopy() {
-			return CreateRef<OpenGLRHICommandList>();
+			switch (RHI::GetCurrentAPI()) {
+			case GraphicsAPI::Vulkan: {
+				auto* vulkanCtx = dynamic_cast<VulkanRHIContext*>(RHIContext::Get());
+				if (vulkanCtx) {
+					return CreateRef<VulkanRHICommandList>(vulkanCtx);
+				}
+				LNX_LOG_ERROR("RHICommandList::CreateCopy - Vulkan context not available");
+				return nullptr;
+			}
+			case GraphicsAPI::OpenGL:
+			default:
+				return CreateRef<OpenGLRHICommandList>();
+			}
 		}
 
 	} // namespace RHI

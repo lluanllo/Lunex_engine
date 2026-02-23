@@ -7,6 +7,10 @@
 #include "OpenGLRHICommandList.h"
 #include "Log/Log.h"
 
+// Vulkan device for factory method
+#include "RHI/Vulkan/VulkanRHIDevice.h"
+#include "RHI/Vulkan/VulkanRHIContext.h"
+
 // Fallback defines for missing GLAD extensions
 #ifndef GLAD_GL_KHR_debug
 #define GLAD_GL_KHR_debug 0
@@ -276,6 +280,14 @@ namespace RHI {
 		switch (api) {
 			case GraphicsAPI::OpenGL:
 				return CreateRef<OpenGLRHIDevice>();
+			case GraphicsAPI::Vulkan: {
+				auto* vulkanContext = dynamic_cast<VulkanRHIContext*>(RHIContext::Get());
+				if (!vulkanContext) {
+					LNX_LOG_ERROR("RHIDevice::Create(Vulkan): VulkanRHIContext not initialized!");
+					return nullptr;
+				}
+				return CreateRef<VulkanRHIDevice>(vulkanContext);
+			}
 			default:
 				LNX_LOG_ERROR("RHIDevice::Create: Unsupported graphics API!");
 				return nullptr;

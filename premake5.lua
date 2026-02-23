@@ -504,7 +504,8 @@ project "Lunex"
         "ImGui",
         "yaml-cpp",
         "Lunex-ScriptCore",
-        "opengl32.lib"
+        "opengl32.lib",
+        "%{Library.Vulkan}"
     }
 
     filter "files:vendor/ImGuizmo/**.cpp"
