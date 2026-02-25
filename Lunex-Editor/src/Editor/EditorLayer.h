@@ -49,6 +49,11 @@ namespace Lunex {
 			// ========================================
 			void RegisterEditorActions();
 			
+			// ========================================
+			// Deferred Rendering Helper
+			// ========================================
+			void ExecuteDeferredPostPasses(EditorCamera& camera);
+			
 			// Project management
 			void NewProject();
 			void CreateProjectWithDialog(const std::string& name, const std::filesystem::path& location);

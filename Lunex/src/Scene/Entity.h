@@ -37,7 +37,7 @@ namespace Lunex {
 			}
 			
 			template<typename T>
-			bool HasComponent() {
+			bool HasComponent() const {
 				if (!m_Scene || m_EntityHandle == entt::null)
 					return false;
 				return m_Scene->m_Registry.valid(m_EntityHandle) && m_Scene->m_Registry.all_of<T>(m_EntityHandle);

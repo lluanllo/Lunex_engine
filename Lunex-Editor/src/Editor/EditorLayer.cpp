@@ -777,9 +777,6 @@ namespace Lunex {
 		Renderer2D::ResetStats();
 		Renderer3D::ResetStats();
 
-		// ✅ CRITICAL FIX: Bind framebuffer BEFORE rendering
-		// NOTE: Shadow pass is now handled entirely inside SceneRenderSystem::RenderScene()
-		// to avoid duplicate shadow rendering and GL state corruption.
 		m_Framebuffer->Bind();
 
 		auto* cmdList = RHI::GetImmediateCommandList();
@@ -810,23 +807,7 @@ namespace Lunex {
 				
 				m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
 				
-				// Execute deferred lighting pass into the scene framebuffer
-				if (DeferredRenderer::IsEnabled()) {
-					DeferredRenderer::ExecuteLightingPass(m_Framebuffer);
-					
-					// Render skybox, grid, sprites AFTER lighting (affected by bloom)
-					if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
-						renderSystem->RenderPostLighting(m_EditorCamera);
-					}
-
-					// Post-processing (bloom + tone mapping) on complete scene
-					DeferredRenderer::ExecutePostProcessing(m_Framebuffer);
-
-					// Render billboards, gizmos, frustums AFTER post-processing (not affected by bloom)
-					if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
-						renderSystem->RenderPostLightingOverlays(m_EditorCamera);
-					}
-				}
+				ExecuteDeferredPostPasses(m_EditorCamera);
 				break;
 			}
 			case SceneState::Simulate:
@@ -836,22 +817,7 @@ namespace Lunex {
 				
 				m_ActiveScene->OnUpdateSimulation(ts, m_EditorCamera);
 				
-				if (DeferredRenderer::IsEnabled()) {
-					DeferredRenderer::ExecuteLightingPass(m_Framebuffer);
-					
-					// Render skybox, grid, sprites AFTER lighting (affected by bloom)
-					if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
-						renderSystem->RenderPostLighting(m_EditorCamera);
-					}
-
-					// Post-processing (bloom + tone mapping) on complete scene
-					DeferredRenderer::ExecutePostProcessing(m_Framebuffer);
-
-					// Render billboards, gizmos, frustums AFTER post-processing (not affected by bloom)
-					if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
-						renderSystem->RenderPostLightingOverlays(m_EditorCamera);
-					}
-				}
+				ExecuteDeferredPostPasses(m_EditorCamera);
 				break;
 			}
 			case SceneState::Play:
@@ -861,7 +827,6 @@ namespace Lunex {
 				if (DeferredRenderer::IsEnabled()) {
 					DeferredRenderer::ExecuteLightingPass(m_Framebuffer);
 					
-					// Render skybox, sprites AFTER lighting (runtime, affected by bloom)
 					Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
 					if (camera) {
 						auto& cameraComp = camera.GetComponent<CameraComponent>();
@@ -871,14 +836,13 @@ namespace Lunex {
 						}
 					}
 
-					// Post-processing (bloom + tone mapping) on complete scene
 					DeferredRenderer::ExecutePostProcessing(m_Framebuffer);
 				}
 				break;
 			}
 		}
 
-		// ✅ ENTITY PICKING
+		// ✅ ENTITY PICKING (with stale entity validation)
 		auto [mx, my] = ImGui::GetMousePos();
 		mx -= m_ViewportBounds[0].x;
 		my -= m_ViewportBounds[0].y;
@@ -890,22 +854,28 @@ namespace Lunex {
 		if (mouseX >= 0 && mouseY >= 0 && mouseX < (int)viewportSize.x && mouseY < (int)viewportSize.y) {
 			int pixelData;
 			if (DeferredRenderer::IsEnabled()) {
-				// Read from G-Buffer entity ID attachment first (for 3D meshes)
 				pixelData = DeferredRenderer::ReadEntityID(mouseX, mouseY);
-				
-				// If G-Buffer has no entity at this pixel, check the scene FB
-				// (billboards/sprites write entity IDs to scene FB, not G-Buffer)
 				if (pixelData == -1) {
 					pixelData = m_Framebuffer->ReadPixel(1, mouseX, mouseY);
 				}
 			} else {
 				pixelData = m_Framebuffer->ReadPixel(1, mouseX, mouseY);
 			}
-			m_HoveredEntity = pixelData == -1 ? Entity() : Entity((entt::entity)pixelData, m_ActiveScene.get());
+			
+			if (pixelData == -1) {
+				m_HoveredEntity = Entity();
+			} else {
+				// Validate the entity handle before creating an Entity wrapper
+				entt::entity entityHandle = (entt::entity)pixelData;
+				if (m_ActiveScene->GetAllEntitiesWith<TagComponent>().contains(entityHandle)) {
+					m_HoveredEntity = Entity(entityHandle, m_ActiveScene.get());
+				} else {
+					m_HoveredEntity = Entity();
+				}
+			}
 		}
 
 		m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
-		//m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
 
 		OnOverlayRender();
 
@@ -921,6 +891,27 @@ namespace Lunex {
 		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
 		if (selectedEntity && selectedEntity.HasComponent<CameraComponent>() && m_SceneState == SceneState::Edit) {
 			RenderCameraPreview(selectedEntity);
+		}
+	}
+
+	// ========================================
+	// DEFERRED RENDERING HELPER
+	// ========================================
+
+	void EditorLayer::ExecuteDeferredPostPasses(EditorCamera& camera) {
+		if (!DeferredRenderer::IsEnabled())
+			return;
+
+		DeferredRenderer::ExecuteLightingPass(m_Framebuffer);
+
+		if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+			renderSystem->RenderPostLighting(camera);
+		}
+
+		DeferredRenderer::ExecutePostProcessing(m_Framebuffer);
+
+		if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+			renderSystem->RenderPostLightingOverlays(camera);
 		}
 	}
 
@@ -988,6 +979,11 @@ namespace Lunex {
 		m_ProjectCreationDialog.OnImGuiRender();
 
 		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
+		
+		// Validate selected entity is still valid (could be stale after deletion)
+		if (selectedEntity && !selectedEntity.HasComponent<TagComponent>()) {
+			selectedEntity = Entity();
+		}
 		
 		// Sincronizar la entidad seleccionada con PropertiesPanel
 		m_PropertiesPanel.SetSelectedEntity(selectedEntity);
@@ -1164,18 +1160,24 @@ namespace Lunex {
 			const auto& selectedEntities = m_SceneHierarchyPanel.GetSelectedEntities();
 			Entity activeEntity = m_SceneHierarchyPanel.GetActiveEntity();
 			
-			if (!selectedEntities.empty()) {
-				// Multi-selection: different outline colors for active vs non-active
-				if (selectedEntities.size() > 1) {
-				 std::set<Entity> nonActiveEntities;
-					for (const auto& e : selectedEntities) {
+			// Filter out invalid/stale entities before rendering outlines
+			std::set<Entity> validSelected;
+			for (const auto& e : selectedEntities) {
+				if (e && e.HasComponent<TransformComponent>()) {
+					validSelected.insert(e);
+				}
+			}
+			
+			if (!validSelected.empty()) {
+				if (validSelected.size() > 1) {
+					std::set<Entity> nonActiveEntities;
+					for (const auto& e : validSelected) {
 						if (e != activeEntity) {
 							nonActiveEntities.insert(e);
 						}
 					}
 					
 					if (!nonActiveEntities.empty()) {
-						// Dark orange for non-active selected
 						glm::vec4 darkOrangeOutline(0.80f, 0.45f, 0.10f, 1.0f);
 						outlineRenderer.RenderSelectionOutline(
 							m_ActiveScene.get(),
@@ -1186,8 +1188,7 @@ namespace Lunex {
 						);
 					}
 					
-					// Render active entity with light orange outline
-					if (activeEntity) {
+					if (activeEntity && activeEntity.HasComponent<TransformComponent>()) {
 						std::set<Entity> activeSet;
 						activeSet.insert(activeEntity);
 						glm::vec4 lightOrangeOutline(1.0f, 0.70f, 0.25f, 1.0f);
@@ -1201,10 +1202,9 @@ namespace Lunex {
 					}
 				}
 				else {
-					// Single selection: use the configured outline color
 					outlineRenderer.RenderSelectionOutline(
 						m_ActiveScene.get(),
-						selectedEntities,
+						validSelected,
 						viewProjection,
 						sceneFBOHandle,
 						m_OutlinePreferencesPanel.GetOutlineColor()
@@ -1220,7 +1220,6 @@ namespace Lunex {
 		// COLLIDER VISUALIZATION (Renderer2D wireframe lines)
 		// ========================================
 
-		// Apply collider line width from settings
 		float previousLineWidth = Renderer2D::GetLineWidth();
 		Renderer2D::SetLineWidth(m_OutlinePreferencesPanel.GetColliderLineWidth());
 
@@ -1260,7 +1259,6 @@ namespace Lunex {
 
 		// Draw 3D Physics Colliders
 		if (m_SettingsPanel.GetShowPhysics3DColliders()) {
-			float previousLineWidth = Renderer2D::GetLineWidth();
 			Renderer2D::SetLineWidth(m_OutlinePreferencesPanel.GetColliderLineWidth());
 
 			glm::vec4 collider3DColor = m_OutlinePreferencesPanel.GetCollider3DColor();
@@ -1349,13 +1347,15 @@ namespace Lunex {
 					Renderer2D::DrawWireCapsule(transform, cc3d.Radius, cc3d.Height, collider3DColor);
 				}
 			}
-
-			Renderer2D::SetLineWidth(previousLineWidth);
 		}
+
+		// Restore line width
+		Renderer2D::SetLineWidth(previousLineWidth);
 
 		// Draw selected entity outline (thin wireframe fallback if OutlineRenderer not available)
 		if (!outlineRenderer.IsInitialized()) {
-			if (Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity()) {
+			Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
+			if (selectedEntity && selectedEntity.HasComponent<TransformComponent>()) {
 				const TransformComponent& transform = selectedEntity.GetComponent<TransformComponent>();
 				Renderer2D::DrawRect(transform.GetTransform(), glm::vec4(1.0f, 0.5f, 0.0f, 1.0f));
 			}
@@ -1745,7 +1745,7 @@ namespace Lunex {
 		DeferredRenderer::SetEnabled(previousDeferredEnabled);
 
 		if (cmdList) {
-			cmdList->SetViewport(
+		 cmdList->SetViewport(
 				static_cast<float>(currentViewport[0]), 
 				static_cast<float>(currentViewport[1]),
 				static_cast<float>(currentViewport[2]), 

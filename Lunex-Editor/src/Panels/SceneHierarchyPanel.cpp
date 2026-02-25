@@ -565,15 +565,21 @@ namespace Lunex {
 
 		// Delete entity (after popup closed)
 		if (entityDeleted) {
+			// Clear selection BEFORE destroying to avoid stale entity references
+			if (m_SelectionContext == entity) {
+				ClearSelection();
+			} else {
+				m_SelectedEntities.erase(entity);
+			}
+			
 			auto children = m_Context->GetChildren(entity);
 			for (auto child : children) {
-				UnparentEntity(child);
+				if (child && m_Context->m_Registry.valid((entt::entity)child)) {
+					UnparentEntity(child);
+				}
 			}
 			
 			m_Context->DestroyEntity(entity);
-			if (m_SelectionContext == entity) {
-				ClearSelection();
-			}
 		}
 	}
 	
@@ -637,14 +643,25 @@ namespace Lunex {
 	}
 	
 	void SceneHierarchyPanel::DeleteSelectedEntities() {
-		for (auto entity : m_SelectedEntities) {
+		// Copy to vector first - iterating over the set while modifying the scene is unsafe
+		std::vector<Entity> toDelete(m_SelectedEntities.begin(), m_SelectedEntities.end());
+		
+		// Clear selection BEFORE destroying entities to avoid stale references
+		ClearSelection();
+		
+		for (auto entity : toDelete) {
+			// Validate entity is still alive (a parent deletion may have cascaded)
+			if (!entity || !m_Context->m_Registry.valid((entt::entity)entity))
+				continue;
+			
 			auto children = m_Context->GetChildren(entity);
 			for (auto child : children) {
-				m_Context->RemoveParent(child);
+				if (child && m_Context->m_Registry.valid((entt::entity)child)) {
+					m_Context->RemoveParent(child);
+				}
 			}
 			m_Context->DestroyEntity(entity);
 		}
-		ClearSelection();
 	}
 	
 	void SceneHierarchyPanel::AddEntityToSelection(Entity entity) {

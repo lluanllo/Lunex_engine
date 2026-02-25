@@ -185,6 +185,9 @@ namespace Lunex {
 	}
 
 	void Scene::DestroyEntity(Entity entity) {
+		if (!entity || !m_Registry.valid((entt::entity)entity))
+			return;
+		
 		// Dispatch event before destruction
 		UUID uuid = entity.GetUUID();
 		DispatchEvent(SceneSystemEvent::EntityDestroyed(entity, uuid));
