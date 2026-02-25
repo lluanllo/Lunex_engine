@@ -4,24 +4,25 @@
 
 #include "RHI/RHI.h"
 #include "RHI/OpenGL/OpenGLRHIContext.h"
+#include "RHI/Vulkan/VulkanRHIContext.h"
+
+#include <GLFW/glfw3.h>
 
 namespace Lunex {
 	
 	// ============================================================================
-	// GRAPHICS CONTEXT ADAPTER - Wraps RHIContext for legacy API compatibility
+	// OPENGL GRAPHICS CONTEXT ADAPTER
 	// ============================================================================
 	
-	class GraphicsContextAdapter : public GraphicsContext {
+	class OpenGLGraphicsContextAdapter : public GraphicsContext {
 	public:
-		GraphicsContextAdapter(void* window)
+		OpenGLGraphicsContextAdapter(void* window)
 			: m_Window(window)
 		{
-			// Create OpenGL context directly (doesn't depend on RHI::Initialize)
-			// This allows window creation before RHI initialization
 			m_RHIContext = CreateScope<RHI::OpenGLRHIContext>(window);
 		}
 		
-		virtual ~GraphicsContextAdapter() = default;
+		virtual ~OpenGLGraphicsContextAdapter() = default;
 		
 		void Init() override {
 			if (m_RHIContext) {
@@ -33,9 +34,8 @@ namespace Lunex {
 			if (m_Swapchain) {
 				m_Swapchain->Present();
 			} else if (m_RHIContext) {
-				// Create default swapchain on first use
 				RHI::SwapchainCreateInfo info;
-				info.Width = 1280;  // Will be resized by window
+				info.Width = 1280;
 				info.Height = 720;
 				info.VSync = true;
 				m_Swapchain = m_RHIContext->CreateSwapchain(info);
@@ -50,11 +50,48 @@ namespace Lunex {
 		Scope<RHI::OpenGLRHIContext> m_RHIContext;
 		Ref<RHI::RHISwapchain> m_Swapchain;
 	};
+
+	// ============================================================================
+	// VULKAN GRAPHICS CONTEXT ADAPTER
+	// ============================================================================
 	
-	Scope<GraphicsContext> GraphicsContext::Create(void* window) {
-		// Always create OpenGL context for now (independent of RHI::GetCurrentAPI)
-		// This allows window creation before RHI::Initialize is called
-		// RHI will be initialized later with the window handle
-		return CreateScope<GraphicsContextAdapter>(window);
+	class VulkanGraphicsContextAdapter : public GraphicsContext {
+	public:
+		VulkanGraphicsContextAdapter(void* window)
+			: m_Window(window)
+		{
+		}
+		
+		virtual ~VulkanGraphicsContextAdapter() = default;
+		
+		void Init() override {
+			// Vulkan context initialization is handled by RHI::Initialize
+			// Nothing to do here - the RHI layer manages the Vulkan instance/device
+		}
+		
+		void SwapBuffers() override {
+			// Vulkan presentation is handled by the swapchain in the RHI layer
+			// For now, do nothing - the engine's render loop handles present via RHI
+			if (m_Swapchain) {
+				m_Swapchain->Present();
+			}
+		}
+
+		void SetSwapchain(Ref<RHI::RHISwapchain> swapchain) { m_Swapchain = swapchain; }
+		
+	private:
+		void* m_Window = nullptr;
+		Ref<RHI::RHISwapchain> m_Swapchain;
+	};
+	
+	Scope<GraphicsContext> GraphicsContext::Create(void* window, RHI::GraphicsAPI api) {
+		switch (api) {
+			case RHI::GraphicsAPI::OpenGL:
+				return CreateScope<OpenGLGraphicsContextAdapter>(window);
+			case RHI::GraphicsAPI::Vulkan:
+				return CreateScope<VulkanGraphicsContextAdapter>(window);
+			default:
+				return CreateScope<OpenGLGraphicsContextAdapter>(window);
+		}
 	}
 }

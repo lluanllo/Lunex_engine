@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Core.h"
+#include "RHI/RHITypes.h"
 #include <string>
 #include <filesystem>
 #include <vector>
@@ -75,6 +76,9 @@ namespace Lunex {
 		uint32_t Width = 1280;
 		uint32_t Height = 720;
 		bool VSync = true;
+		
+		// Rendering API
+		RHI::GraphicsAPI RenderAPI = RHI::GraphicsAPI::OpenGL;
 		
 		// ? Input Bindings
 		std::vector<InputBindingEntry> InputBindings;

@@ -3,17 +3,20 @@
 
 #include "Core/Core.h"
 #include "Events/Event.h"
+#include "RHI/RHITypes.h"
 
 namespace Lunex {
 	struct WindowProps {
 		std::string Title;
 		uint32_t Width;
 		uint32_t Height;
+		RHI::GraphicsAPI API = RHI::GraphicsAPI::OpenGL;
 		
 		WindowProps(const std::string& title = "Lunex Engine",
 			uint32_t width = 1920,
-			uint32_t height = 1080)
-			: Title(title), Width(width), Height(height) {
+			uint32_t height = 1080,
+			RHI::GraphicsAPI api = RHI::GraphicsAPI::OpenGL)
+			: Title(title), Width(width), Height(height), API(api) {
 		}
 	};
 	

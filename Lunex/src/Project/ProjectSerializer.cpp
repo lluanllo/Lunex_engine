@@ -30,6 +30,7 @@ namespace Lunex {
 		out << YAML::Key << "Width" << YAML::Value << config.Width;
 		out << YAML::Key << "Height" << YAML::Value << config.Height;
 		out << YAML::Key << "VSync" << YAML::Value << config.VSync;
+		out << YAML::Key << "RenderAPI" << YAML::Value << static_cast<int>(config.RenderAPI);
 		out << YAML::EndMap;
 		
 		// ? NEW: Serialize Input Bindings
@@ -120,6 +121,8 @@ namespace Lunex {
 			m_Project->m_Config.Width = settings["Width"].as<uint32_t>();
 			m_Project->m_Config.Height = settings["Height"].as<uint32_t>();
 			m_Project->m_Config.VSync = settings["VSync"].as<bool>();
+			if (settings["RenderAPI"])
+				m_Project->m_Config.RenderAPI = static_cast<RHI::GraphicsAPI>(settings["RenderAPI"].as<int>());
 		}
 		
 		// ? NEW: Deserialize Input Bindings

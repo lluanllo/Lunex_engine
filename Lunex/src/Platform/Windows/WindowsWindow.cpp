@@ -43,6 +43,12 @@ namespace Lunex {
 			glfwSetErrorCallback(GLFWErrorCallback);
 			s_GLFWInitialized = true;
 		}
+
+		// For Vulkan, tell GLFW not to create an OpenGL context
+		if (props.API == RHI::GraphicsAPI::Vulkan) {
+			glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+		}
+
 		{
 			LNX_PROFILE_SCOPE("glfwCreateWindow");
 			m_Window = glfwCreateWindow((int)m_Data.Width, (int)m_Data.Height, m_Data.Title.c_str(), nullptr, nullptr);
@@ -53,8 +59,15 @@ namespace Lunex {
 		// Set window icon
 		LoadWindowIcon("Lunex-Editor/Resources/Icons/LunexLogo/LunexLogo.png");
 		
-		m_Context = GraphicsContext::Create(m_Window);
-		m_Context->Init();
+		// Only create the legacy GraphicsContext for OpenGL
+		// For Vulkan, context management is handled by the RHI layer
+		if (props.API == RHI::GraphicsAPI::OpenGL) {
+			m_Context = GraphicsContext::Create(m_Window, props.API);
+			m_Context->Init();
+		} else {
+			m_Context = GraphicsContext::Create(m_Window, props.API);
+			m_Context->Init();
+		}
 		
 		glfwSetWindowUserPointer(m_Window, &m_Data);
 		SetVSync(false);

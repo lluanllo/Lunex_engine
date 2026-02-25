@@ -18,8 +18,9 @@ namespace Lunex {
 		// ========================================
 		// Initialize RHI (if not already initialized)
 		// ========================================
-		// NOTE: RHI may already be initialized by Application for window creation
+		// NOTE: RHI should already be initialized by Application
 		if (!RHI::IsInitialized()) {
+			LNX_LOG_WARN("RHI not initialized before Renderer::Init() - initializing with OpenGL as fallback");
 			RHI::Initialize(RHI::GraphicsAPI::OpenGL, nullptr);
 			LNX_LOG_INFO("RHI initialized");
 		}

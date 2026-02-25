@@ -3,7 +3,9 @@
 #include "Log/Log.h"
 
 // Only include glad for OpenGL-specific initialization
+#ifdef LNX_PLATFORM_WINDOWS
 #include <glad/glad.h>
+#endif
 
 namespace Lunex {
 namespace RHI {

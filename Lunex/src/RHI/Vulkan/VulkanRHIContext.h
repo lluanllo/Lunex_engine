@@ -55,7 +55,8 @@ namespace RHI {
 		VulkanSwapchain(VkDevice device, VkPhysicalDevice physicalDevice,
 						VkSurfaceKHR surface, GLFWwindow* window,
 						const SwapchainCreateInfo& info,
-						const QueueFamilyIndices& queueFamilies);
+						const QueueFamilyIndices& queueFamilies,
+						VkQueue presentQueue);
 		virtual ~VulkanSwapchain();
 
 		// RHIResource
@@ -122,6 +123,8 @@ namespace RHI {
 		VkSemaphore m_ImageAvailableSemaphore = VK_NULL_HANDLE;
 		VkSemaphore m_RenderFinishedSemaphore = VK_NULL_HANDLE;
 		VkFence m_InFlightFence = VK_NULL_HANDLE;
+
+		VkQueue m_PresentQueue = VK_NULL_HANDLE;
 	};
 
 	// ============================================================================

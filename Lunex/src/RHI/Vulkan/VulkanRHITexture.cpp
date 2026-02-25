@@ -119,7 +119,7 @@ namespace RHI {
 
 		imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 		if (m_Desc.IsRenderTarget) {
-			if (IsDepthFormat(m_Desc.Format))
+			if (RHI::IsDepthFormat(m_Desc.Format))
 				imageInfo.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 			else
 				imageInfo.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
@@ -487,7 +487,7 @@ namespace RHI {
 		imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 		imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-		if (IsDepthFormat(desc.Format))
+		if (RHI::IsDepthFormat(desc.Format))
 			imageInfo.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
 		if (vkCreateImage(vkDevice, &imageInfo, nullptr, &m_Image) != VK_SUCCESS) {

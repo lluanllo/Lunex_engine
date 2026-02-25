@@ -6,6 +6,7 @@
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <assimp/material.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
@@ -21,11 +22,13 @@ namespace Lunex {
 	{
 		Assimp::Importer importer;
 
-		// Removed aiProcess_FlipUVs - this can cause issues with some formats
 		const aiScene* scene = importer.ReadFile(path,
 			aiProcess_Triangulate |
 			aiProcess_GenSmoothNormals |
-			aiProcess_CalcTangentSpace);
+			aiProcess_CalcTangentSpace |
+			aiProcess_OptimizeMeshes |
+			aiProcess_OptimizeGraph |
+			aiProcess_JoinIdenticalVertices);
 
 		if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
 		{
@@ -66,12 +69,17 @@ namespace Lunex {
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
 		std::vector<MeshTexture> textures;
+		MeshMaterialData materialData;
 
 		bool hasUVs = mesh->HasTextureCoords(0);
 		LNX_LOG_TRACE("Processing mesh: {0} vertices, Has UVs: {1}, Has Normals: {2}",
 			mesh->mNumVertices,
 			hasUVs ? "Yes" : "No",
 			mesh->HasNormals() ? "Yes" : "No");
+
+		// Reserve space to avoid reallocations
+		vertices.reserve(mesh->mNumVertices);
+		indices.reserve(mesh->mNumFaces * 3);
 
 		// Process vertices
 		for (uint32_t i = 0; i < mesh->mNumVertices; i++)
@@ -213,8 +221,56 @@ namespace Lunex {
 		{
 			aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
 
-			// Load diffuse/albedo maps
-			std::vector<MeshTexture> diffuseMaps = LoadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse");
+			// ========== EXTRACT PBR MATERIAL PROPERTIES ==========
+			
+			// Base color / Diffuse color factor
+			aiColor4D baseColor(1.0f, 1.0f, 1.0f, 1.0f);
+			if (material->Get(AI_MATKEY_BASE_COLOR, baseColor) == aiReturn_SUCCESS) {
+				materialData.BaseColor = glm::vec4(baseColor.r, baseColor.g, baseColor.b, baseColor.a);
+			}
+			else if (material->Get(AI_MATKEY_COLOR_DIFFUSE, baseColor) == aiReturn_SUCCESS) {
+				materialData.BaseColor = glm::vec4(baseColor.r, baseColor.g, baseColor.b, baseColor.a);
+			}
+
+			// Metallic factor
+			float metallicFactor = 0.0f;
+			if (material->Get(AI_MATKEY_METALLIC_FACTOR, metallicFactor) == aiReturn_SUCCESS) {
+				materialData.Metallic = metallicFactor;
+			}
+
+			// Roughness factor
+			float roughnessFactor = 0.5f;
+			if (material->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughnessFactor) == aiReturn_SUCCESS) {
+				materialData.Roughness = roughnessFactor;
+			}
+
+			// Emission color
+			aiColor3D emissiveColor(0.0f, 0.0f, 0.0f);
+			if (material->Get(AI_MATKEY_COLOR_EMISSIVE, emissiveColor) == aiReturn_SUCCESS) {
+				materialData.EmissionColor = glm::vec3(emissiveColor.r, emissiveColor.g, emissiveColor.b);
+				float emissionStrength = glm::length(materialData.EmissionColor);
+				if (emissionStrength > 0.001f) {
+					materialData.EmissionIntensity = 1.0f;
+				}
+			}
+
+			// Emission intensity/strength (GLTF KHR_materials_emissive_strength)
+			float emissiveIntensity = 0.0f;
+			if (material->Get(AI_MATKEY_EMISSIVE_INTENSITY, emissiveIntensity) == aiReturn_SUCCESS) {
+				materialData.EmissionIntensity = emissiveIntensity;
+			}
+
+			LNX_LOG_TRACE("Material properties: BaseColor({0},{1},{2},{3}), Metallic={4}, Roughness={5}",
+				materialData.BaseColor.r, materialData.BaseColor.g, materialData.BaseColor.b, materialData.BaseColor.a,
+				materialData.Metallic, materialData.Roughness);
+
+			// ========== LOAD TEXTURES ==========
+
+			// Load diffuse/albedo maps (try PBR base color first, then legacy diffuse)
+			std::vector<MeshTexture> diffuseMaps = LoadMaterialTextures(material, aiTextureType_BASE_COLOR, "texture_diffuse");
+			if (diffuseMaps.empty()) {
+				diffuseMaps = LoadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse");
+			}
 			textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
 
 			// Load specular maps
@@ -224,15 +280,13 @@ namespace Lunex {
 			// Load metallic maps
 			std::vector<MeshTexture> metallicMaps = LoadMaterialTextures(material, aiTextureType_METALNESS, "texture_metallic");
 			if (metallicMaps.empty()) {
-				// Some formats store metallic in specular channel
-				metallicMaps = LoadMaterialTextures(material, aiTextureType_SPECULAR, "texture_metallic");
+				metallicMaps = LoadMaterialTextures(material, aiTextureType_UNKNOWN, "texture_metallic");
 			}
 			textures.insert(textures.end(), metallicMaps.begin(), metallicMaps.end());
 
 			// Load roughness maps
 			std::vector<MeshTexture> roughnessMaps = LoadMaterialTextures(material, aiTextureType_DIFFUSE_ROUGHNESS, "texture_roughness");
 			if (roughnessMaps.empty()) {
-				// Some formats store roughness in shininess channel
 				roughnessMaps = LoadMaterialTextures(material, aiTextureType_SHININESS, "texture_roughness");
 			}
 			textures.insert(textures.end(), roughnessMaps.begin(), roughnessMaps.end());
@@ -247,6 +301,9 @@ namespace Lunex {
 			// Load AO maps
 			std::vector<MeshTexture> aoMaps = LoadMaterialTextures(material, aiTextureType_AMBIENT_OCCLUSION, "texture_ao");
 			if (aoMaps.empty()) {
+				aoMaps = LoadMaterialTextures(material, aiTextureType_LIGHTMAP, "texture_ao");
+			}
+			if (aoMaps.empty()) {
 				aoMaps = LoadMaterialTextures(material, aiTextureType_AMBIENT, "texture_ao");
 			}
 			textures.insert(textures.end(), aoMaps.begin(), aoMaps.end());
@@ -259,7 +316,7 @@ namespace Lunex {
 		LNX_LOG_TRACE("Mesh created with {0} vertices, {1} indices, {2} textures",
 			vertices.size(), indices.size(), textures.size());
 
-		return CreateRef<Mesh>(vertices, indices, textures);
+		return CreateRef<Mesh>(vertices, indices, textures, materialData);
 	}
 
 	std::vector<MeshTexture> Model::LoadMaterialTextures(aiMaterial* mat, aiTextureType type, const std::string& typeName)
@@ -270,6 +327,14 @@ namespace Lunex {
 		{
 			aiString str;
 			mat->GetTexture(type, i, &str);
+
+			std::string texPath = str.C_Str();
+
+			// Skip embedded textures (prefixed with *) - not yet supported
+			if (!texPath.empty() && texPath[0] == '*') {
+				LNX_LOG_WARN("Embedded texture not supported: {0}", texPath);
+				continue;
+			}
 
 			bool skip = false;
 			for (uint32_t j = 0; j < m_TexturesLoaded.size(); j++)
@@ -285,7 +350,19 @@ namespace Lunex {
 			if (!skip)
 			{
 				MeshTexture texture;
-				std::string texturePath = m_Directory + "/" + std::string(str.C_Str());
+
+				// Try directory + filename first
+				std::string texturePath = m_Directory + "/" + texPath;
+
+				// Normalize path separators
+				std::replace(texturePath.begin(), texturePath.end(), '\\', '/');
+
+				// If not found, try just the filename in the model directory
+				if (!std::filesystem::exists(texturePath)) {
+					std::filesystem::path p(texPath);
+					texturePath = m_Directory + "/" + p.filename().string();
+				}
+
 				texture.Texture = Texture2D::Create(texturePath);
 				texture.Type = typeName;
 				texture.Path = str.C_Str();

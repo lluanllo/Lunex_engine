@@ -23,21 +23,38 @@ namespace Lunex{
 		
 		LNX_CORE_ASSERT(s_Instance == nullptr, "Application already exists!");
 		s_Instance = this;
+
+		// ========================================
+		// DETERMINE GRAPHICS API
+		// ========================================
+		RHI::GraphicsAPI selectedAPI = RHI::GraphicsAPI::OpenGL;
+		
+		// Check command-line arguments for API override: --vulkan or --opengl
+		for (int i = 0; i < args.Count; i++) {
+			std::string arg = args.Args[i];
+			if (arg == "--vulkan") {
+				selectedAPI = RHI::GraphicsAPI::Vulkan;
+			} else if (arg == "--opengl") {
+				selectedAPI = RHI::GraphicsAPI::OpenGL;
+			}
+		}
+		
+		LNX_LOG_INFO("Selected Graphics API: {0}", 
+			selectedAPI == RHI::GraphicsAPI::Vulkan ? "Vulkan" : "OpenGL");
 		
 		// ========================================
-		// CREATE WINDOW FIRST (will create OpenGL context via GLFW)
+		// CREATE WINDOW (will create appropriate context based on API)
 		// ========================================
-		// WindowsWindow::Init creates GLFW window and OpenGL context
-		// GraphicsContext wraps the existing context
-		m_Window = Window::Create(WindowProps(name));
+		WindowProps windowProps(name);
+		windowProps.API = selectedAPI;
+		m_Window = Window::Create(windowProps);
 		m_Window->SetEventCallback(LNX_BIND_EVENT_FN(Application::OnEvent));
 		
 		// ========================================
-		// INITIALIZE RHI (uses existing OpenGL context from window)
+		// INITIALIZE RHI
 		// ========================================
-		// Pass the GLFW window handle so RHI can use the existing context
 		auto* glfwWindow = static_cast<GLFWwindow*>(m_Window->GetNativeWindow());
-		if (!RHI::Initialize(RHI::GraphicsAPI::OpenGL, glfwWindow)) {
+		if (!RHI::Initialize(selectedAPI, glfwWindow)) {
 			LNX_LOG_ERROR("Failed to initialize RHI!");
 		}
 		

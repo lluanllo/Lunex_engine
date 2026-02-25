@@ -338,52 +338,115 @@ namespace Lunex {
 		s_Data.TransformBuffer.Transform = transform;
 		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
 
-		// Get material uniform data from MaterialInstance (con overrides aplicados)
+		// Get base material uniform data from MaterialInstance
 		auto uniformData = materialComponent.Instance->GetUniformData();
 
-		// Upload material data
-		s_Data.MaterialBuffer.Color = uniformData.Albedo;
-		s_Data.MaterialBuffer.Metallic = uniformData.Metallic;
-		s_Data.MaterialBuffer.Roughness = uniformData.Roughness;
-		s_Data.MaterialBuffer.Specular = uniformData.Specular;
-		s_Data.MaterialBuffer.EmissionIntensity = uniformData.EmissionIntensity;
-		s_Data.MaterialBuffer.EmissionColor = uniformData.EmissionColor;
-		s_Data.MaterialBuffer.NormalIntensity = uniformData.NormalIntensity;
-		s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
-
-		s_Data.MaterialBuffer.UseAlbedoMap = uniformData.UseAlbedoMap;
-		s_Data.MaterialBuffer.UseNormalMap = uniformData.UseNormalMap;
-		s_Data.MaterialBuffer.UseMetallicMap = uniformData.UseMetallicMap;
-		s_Data.MaterialBuffer.UseRoughnessMap = uniformData.UseRoughnessMap;
-		s_Data.MaterialBuffer.UseSpecularMap = uniformData.UseSpecularMap;
-		s_Data.MaterialBuffer.UseEmissionMap = uniformData.UseEmissionMap;
-		s_Data.MaterialBuffer.UseAOMap = uniformData.UseAOMap;
-
-		s_Data.MaterialBuffer.MetallicMultiplier = uniformData.MetallicMultiplier;
-		s_Data.MaterialBuffer.RoughnessMultiplier = uniformData.RoughnessMultiplier;
-		s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
-		s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
-
-		s_Data.MaterialBuffer.DetailNormalCount = uniformData.DetailNormalCount;
-		s_Data.MaterialBuffer.UseLayeredTexture = uniformData.UseLayeredTexture;
-		s_Data.MaterialBuffer.LayeredMetallicChannel = uniformData.LayeredMetallicChannel;
-		s_Data.MaterialBuffer.LayeredRoughnessChannel = uniformData.LayeredRoughnessChannel;
-		s_Data.MaterialBuffer.LayeredAOChannel = uniformData.LayeredAOChannel;
-		s_Data.MaterialBuffer.LayeredUseMetallic = uniformData.LayeredUseMetallic;
-		s_Data.MaterialBuffer.LayeredUseRoughness = uniformData.LayeredUseRoughness;
-		s_Data.MaterialBuffer.LayeredUseAO = uniformData.LayeredUseAO;
-		s_Data.MaterialBuffer.DetailNormalIntensities = uniformData.DetailNormalIntensities;
-		s_Data.MaterialBuffer.DetailNormalTilingX = uniformData.DetailNormalTilingX;
-		s_Data.MaterialBuffer.DetailNormalTilingY = uniformData.DetailNormalTilingY;
-
-		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
-
-		// Bind shader and textures
 		s_Data.MeshShader->Bind();
-		materialComponent.Instance->BindTextures();
 
-		// Draw the model
-		meshComponent.MeshModel->Draw(s_Data.MeshShader);
+		// Check if any sub-mesh has its own textures (from GLTF/Assimp import)
+		bool hasPerMeshTextures = false;
+		for (const auto& mesh : meshComponent.MeshModel->GetMeshes()) {
+			if (mesh->HasAnyMeshTextures()) {
+				hasPerMeshTextures = true;
+				break;
+			}
+		}
+
+		if (!hasPerMeshTextures) {
+			// Simple path: single material for whole model
+			s_Data.MaterialBuffer.Color = uniformData.Albedo;
+			s_Data.MaterialBuffer.Metallic = uniformData.Metallic;
+			s_Data.MaterialBuffer.Roughness = uniformData.Roughness;
+			s_Data.MaterialBuffer.Specular = uniformData.Specular;
+			s_Data.MaterialBuffer.EmissionIntensity = uniformData.EmissionIntensity;
+			s_Data.MaterialBuffer.EmissionColor = uniformData.EmissionColor;
+			s_Data.MaterialBuffer.NormalIntensity = uniformData.NormalIntensity;
+			s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
+
+			s_Data.MaterialBuffer.UseAlbedoMap = uniformData.UseAlbedoMap;
+			s_Data.MaterialBuffer.UseNormalMap = uniformData.UseNormalMap;
+			s_Data.MaterialBuffer.UseMetallicMap = uniformData.UseMetallicMap;
+			s_Data.MaterialBuffer.UseRoughnessMap = uniformData.UseRoughnessMap;
+			s_Data.MaterialBuffer.UseSpecularMap = uniformData.UseSpecularMap;
+			s_Data.MaterialBuffer.UseEmissionMap = uniformData.UseEmissionMap;
+			s_Data.MaterialBuffer.UseAOMap = uniformData.UseAOMap;
+
+			s_Data.MaterialBuffer.MetallicMultiplier = uniformData.MetallicMultiplier;
+			s_Data.MaterialBuffer.RoughnessMultiplier = uniformData.RoughnessMultiplier;
+			s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
+			s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
+
+			s_Data.MaterialBuffer.DetailNormalCount = uniformData.DetailNormalCount;
+			s_Data.MaterialBuffer.UseLayeredTexture = uniformData.UseLayeredTexture;
+			s_Data.MaterialBuffer.LayeredMetallicChannel = uniformData.LayeredMetallicChannel;
+			s_Data.MaterialBuffer.LayeredRoughnessChannel = uniformData.LayeredRoughnessChannel;
+			s_Data.MaterialBuffer.LayeredAOChannel = uniformData.LayeredAOChannel;
+			s_Data.MaterialBuffer.LayeredUseMetallic = uniformData.LayeredUseMetallic;
+			s_Data.MaterialBuffer.LayeredUseRoughness = uniformData.LayeredUseRoughness;
+			s_Data.MaterialBuffer.LayeredUseAO = uniformData.LayeredUseAO;
+			s_Data.MaterialBuffer.DetailNormalIntensities = uniformData.DetailNormalIntensities;
+			s_Data.MaterialBuffer.DetailNormalTilingX = uniformData.DetailNormalTilingX;
+			s_Data.MaterialBuffer.DetailNormalTilingY = uniformData.DetailNormalTilingY;
+
+			s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
+
+			materialComponent.Instance->BindTextures();
+			meshComponent.MeshModel->Draw(s_Data.MeshShader);
+		}
+		else {
+			// Per-mesh texture path: each sub-mesh may have different textures and material properties
+			for (const auto& mesh : meshComponent.MeshModel->GetMeshes()) {
+				const auto& meshMatData = mesh->GetMaterialData();
+				uint32_t texFlags = mesh->GetTextureFlags();
+
+				// Use per-mesh material data from GLTF as base
+				s_Data.MaterialBuffer.Color = meshMatData.BaseColor;
+				s_Data.MaterialBuffer.Metallic = meshMatData.Metallic;
+				s_Data.MaterialBuffer.Roughness = meshMatData.Roughness;
+				s_Data.MaterialBuffer.Specular = uniformData.Specular;
+				s_Data.MaterialBuffer.EmissionIntensity = meshMatData.EmissionIntensity;
+				s_Data.MaterialBuffer.EmissionColor = meshMatData.EmissionColor;
+				s_Data.MaterialBuffer.NormalIntensity = uniformData.NormalIntensity;
+				s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
+				s_Data.MaterialBuffer.MetallicMultiplier = uniformData.MetallicMultiplier;
+				s_Data.MaterialBuffer.RoughnessMultiplier = uniformData.RoughnessMultiplier;
+				s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
+				s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
+				s_Data.MaterialBuffer.DetailNormalCount = 0;
+				s_Data.MaterialBuffer.UseLayeredTexture = 0;
+				s_Data.MaterialBuffer.LayeredMetallicChannel = 0;
+				s_Data.MaterialBuffer.LayeredRoughnessChannel = 0;
+				s_Data.MaterialBuffer.LayeredAOChannel = 0;
+				s_Data.MaterialBuffer.LayeredUseMetallic = 0;
+				s_Data.MaterialBuffer.LayeredUseRoughness = 0;
+				s_Data.MaterialBuffer.LayeredUseAO = 0;
+
+				// Override texture flags from per-mesh textures
+				s_Data.MaterialBuffer.UseAlbedoMap = ((texFlags & MeshTexFlag_Diffuse) || uniformData.UseAlbedoMap) ? 1 : 0;
+				s_Data.MaterialBuffer.UseNormalMap = ((texFlags & MeshTexFlag_Normal) || uniformData.UseNormalMap) ? 1 : 0;
+				s_Data.MaterialBuffer.UseMetallicMap = ((texFlags & MeshTexFlag_Metallic) || uniformData.UseMetallicMap) ? 1 : 0;
+				s_Data.MaterialBuffer.UseRoughnessMap = ((texFlags & MeshTexFlag_Roughness) || uniformData.UseRoughnessMap) ? 1 : 0;
+				s_Data.MaterialBuffer.UseSpecularMap = ((texFlags & MeshTexFlag_Specular) || uniformData.UseSpecularMap) ? 1 : 0;
+				s_Data.MaterialBuffer.UseEmissionMap = ((texFlags & MeshTexFlag_Emissive) || uniformData.UseEmissionMap) ? 1 : 0;
+				s_Data.MaterialBuffer.UseAOMap = ((texFlags & MeshTexFlag_AO) || uniformData.UseAOMap) ? 1 : 0;
+
+				s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
+
+				// Only unbind slots not provided by this mesh
+				if (!(texFlags & MeshTexFlag_Diffuse) && !uniformData.UseAlbedoMap) glBindTextureUnit(0, 0);
+				if (!(texFlags & MeshTexFlag_Normal) && !uniformData.UseNormalMap) glBindTextureUnit(1, 0);
+				if (!(texFlags & MeshTexFlag_Metallic) && !uniformData.UseMetallicMap) glBindTextureUnit(2, 0);
+				if (!(texFlags & MeshTexFlag_Roughness) && !uniformData.UseRoughnessMap) glBindTextureUnit(3, 0);
+				if (!(texFlags & MeshTexFlag_Specular) && !uniformData.UseSpecularMap) glBindTextureUnit(4, 0);
+				if (!(texFlags & MeshTexFlag_Emissive) && !uniformData.UseEmissionMap) glBindTextureUnit(5, 0);
+				if (!(texFlags & MeshTexFlag_AO) && !uniformData.UseAOMap) glBindTextureUnit(6, 0);
+
+				materialComponent.Instance->BindTextures();
+
+				// Bind per-mesh textures (overrides MaterialComponent textures)
+				mesh->Draw(s_Data.MeshShader);
+			}
+		}
 
 		s_Data.Stats.DrawCalls++;
 		s_Data.Stats.MeshCount += (uint32_t)meshComponent.MeshModel->GetMeshes().size();
@@ -407,50 +470,107 @@ namespace Lunex {
 	void Renderer3D::DrawModel(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& color, int entityID) {
 		LNX_PROFILE_FUNCTION();
 
-		if (!model || model->GetMeshes().empty())
+		if (!model)
 			return;
 
 		const_cast<Model*>(model.get())->SetEntityID(entityID);
 
-		// Update Transform uniform buffer
 		s_Data.TransformBuffer.Transform = transform;
 		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
 
-		// Update Material uniform buffer with default values
-		memset(&s_Data.MaterialBuffer, 0, sizeof(Renderer3DData::MaterialUniformData));
-		s_Data.MaterialBuffer.Color = color;
-		s_Data.MaterialBuffer.Metallic = 0.0f;
-		s_Data.MaterialBuffer.Roughness = 0.5f;
-		s_Data.MaterialBuffer.Specular = 0.5f;
-		s_Data.MaterialBuffer.EmissionIntensity = 0.0f;
-		s_Data.MaterialBuffer.EmissionColor = glm::vec3(0.0f);
-		s_Data.MaterialBuffer.NormalIntensity = 1.0f;
-		s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
-
-		s_Data.MaterialBuffer.MetallicMultiplier = 1.0f;
-		s_Data.MaterialBuffer.RoughnessMultiplier = 1.0f;
-		s_Data.MaterialBuffer.SpecularMultiplier = 1.0f;
-		s_Data.MaterialBuffer.AOMultiplier = 1.0f;
-
-		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
-
-		// Unbind all texture slots to prevent bleeding from previous draws
 		s_Data.MeshShader->Bind();
-		for (uint32_t slot = 0; slot <= 7; ++slot) {
-			glBindTextureUnit(slot, 0);
-		}
-		for (uint32_t slot = 12; slot <= 15; ++slot) {
-			glBindTextureUnit(slot, 0);
+
+		// Check if any sub-mesh has its own textures
+		bool hasPerMeshTextures = false;
+		for (const auto& mesh : model->GetMeshes()) {
+			if (mesh->HasAnyMeshTextures()) {
+				hasPerMeshTextures = true;
+				break;
+			}
 		}
 
-		// Draw the model
-		model->Draw(s_Data.MeshShader);
+		if (!hasPerMeshTextures) {
+			// Single mesh or primitives: use first mesh's material data if available
+			const auto& meshes = model->GetMeshes();
+			if (!meshes.empty()) {
+				const auto& meshMatData = meshes[0]->GetMaterialData();
+				memset(&s_Data.MaterialBuffer, 0, sizeof(Renderer3DData::MaterialUniformData));
+				s_Data.MaterialBuffer.Color = meshMatData.BaseColor * color;
+				s_Data.MaterialBuffer.Metallic = meshMatData.Metallic;
+				s_Data.MaterialBuffer.Roughness = meshMatData.Roughness;
+				s_Data.MaterialBuffer.Specular = 0.5f;
+				s_Data.MaterialBuffer.EmissionIntensity = meshMatData.EmissionIntensity;
+				s_Data.MaterialBuffer.EmissionColor = meshMatData.EmissionColor;
+				s_Data.MaterialBuffer.NormalIntensity = 1.0f;
+				s_Data.MaterialBuffer.MetallicMultiplier = 1.0f;
+				s_Data.MaterialBuffer.RoughnessMultiplier = 1.0f;
+				s_Data.MaterialBuffer.SpecularMultiplier = 1.0f;
+				s_Data.MaterialBuffer.AOMultiplier = 1.0f;
+				s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
+			}
+			else {
+				memset(&s_Data.MaterialBuffer, 0, sizeof(Renderer3DData::MaterialUniformData));
+				s_Data.MaterialBuffer.Color = color;
+				s_Data.MaterialBuffer.Roughness = 0.5f;
+				s_Data.MaterialBuffer.Specular = 0.5f;
+				s_Data.MaterialBuffer.NormalIntensity = 1.0f;
+				s_Data.MaterialBuffer.MetallicMultiplier = 1.0f;
+				s_Data.MaterialBuffer.RoughnessMultiplier = 1.0f;
+				s_Data.MaterialBuffer.SpecularMultiplier = 1.0f;
+				s_Data.MaterialBuffer.AOMultiplier = 1.0f;
+				s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
+			}
+
+			s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
+
+			model->Draw(s_Data.MeshShader);
+		}
+		else {
+			for (const auto& mesh : model->GetMeshes()) {
+				const auto& meshMatData = mesh->GetMaterialData();
+				uint32_t texFlags = mesh->GetTextureFlags();
+
+				memset(&s_Data.MaterialBuffer, 0, sizeof(Renderer3DData::MaterialUniformData));
+				s_Data.MaterialBuffer.Color = meshMatData.BaseColor * color;
+				s_Data.MaterialBuffer.Metallic = meshMatData.Metallic;
+				s_Data.MaterialBuffer.Roughness = meshMatData.Roughness;
+				s_Data.MaterialBuffer.Specular = 0.5f;
+				s_Data.MaterialBuffer.EmissionIntensity = meshMatData.EmissionIntensity;
+				s_Data.MaterialBuffer.EmissionColor = meshMatData.EmissionColor;
+				s_Data.MaterialBuffer.NormalIntensity = 1.0f;
+				s_Data.MaterialBuffer.MetallicMultiplier = 1.0f;
+			 s_Data.MaterialBuffer.RoughnessMultiplier = 1.0f;
+				s_Data.MaterialBuffer.SpecularMultiplier = 1.0f;
+			 s_Data.MaterialBuffer.AOMultiplier = 1.0f;
+				s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
+
+				s_Data.MaterialBuffer.UseAlbedoMap = (texFlags & MeshTexFlag_Diffuse) ? 1 : 0;
+				s_Data.MaterialBuffer.UseNormalMap = (texFlags & MeshTexFlag_Normal) ? 1 : 0;
+				s_Data.MaterialBuffer.UseMetallicMap = (texFlags & MeshTexFlag_Metallic) ? 1 : 0;
+				s_Data.MaterialBuffer.UseRoughnessMap = (texFlags & MeshTexFlag_Roughness) ? 1 : 0;
+				s_Data.MaterialBuffer.UseSpecularMap = (texFlags & MeshTexFlag_Specular) ? 1 : 0;
+				s_Data.MaterialBuffer.UseEmissionMap = (texFlags & MeshTexFlag_Emissive) ? 1 : 0;
+				s_Data.MaterialBuffer.UseAOMap = (texFlags & MeshTexFlag_AO) ? 1 : 0;
+
+				s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
+
+				// Only unbind slots not provided by this mesh
+				if (!(texFlags & MeshTexFlag_Diffuse)) glBindTextureUnit(0, 0);
+				if (!(texFlags & MeshTexFlag_Normal)) glBindTextureUnit(1, 0);
+				if (!(texFlags & MeshTexFlag_Metallic)) glBindTextureUnit(2, 0);
+				if (!(texFlags & MeshTexFlag_Roughness)) glBindTextureUnit(3, 0);
+				if (!(texFlags & MeshTexFlag_Specular)) glBindTextureUnit(4, 0);
+				if (!(texFlags & MeshTexFlag_Emissive)) glBindTextureUnit(5, 0);
+				if (!(texFlags & MeshTexFlag_AO)) glBindTextureUnit(6, 0);
+
+				mesh->Draw(s_Data.MeshShader);
+			}
+		}
 
 		s_Data.Stats.DrawCalls++;
 		s_Data.Stats.MeshCount += (uint32_t)model->GetMeshes().size();
-
 		for (const auto& mesh : model->GetMeshes()) {
-		    s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
+			s_Data.Stats.TriangleCount += (uint32_t)mesh->GetIndices().size() / 3;
 		}
 	}
 

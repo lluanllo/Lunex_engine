@@ -3,6 +3,8 @@
 
 #include "RHI/RHI.h"
 #include "RHI/OpenGL/OpenGLRHIBuffer.h"
+#include "RHI/Vulkan/VulkanRHIBuffer.h"
+#include "RHI/Vulkan/VulkanRHIDevice.h"
 
 namespace Lunex {
 	
@@ -50,7 +52,19 @@ namespace Lunex {
 			desc.Size = size;
 			desc.Usage = RHI::BufferUsage::Dynamic;
 			
-			m_RHIBuffer = CreateRef<RHI::OpenGLRHIVertexBuffer>(desc, RHI::VertexLayout{}, nullptr);
+			switch (RHI::GetCurrentAPI()) {
+				case RHI::GraphicsAPI::Vulkan: {
+					auto* device = dynamic_cast<RHI::VulkanRHIDevice*>(RHI::RHIDevice::Get());
+					if (device) {
+						m_RHIBuffer = CreateRef<RHI::VulkanRHIVertexBuffer>(device, desc, RHI::VertexLayout{}, nullptr);
+					}
+					break;
+				}
+				case RHI::GraphicsAPI::OpenGL:
+				default:
+					m_RHIBuffer = CreateRef<RHI::OpenGLRHIVertexBuffer>(desc, RHI::VertexLayout{}, nullptr);
+					break;
+			}
 		}
 		
 		VertexBufferAdapter(float* vertices, uint32_t size)
@@ -60,21 +74,33 @@ namespace Lunex {
 			desc.Size = size;
 			desc.Usage = RHI::BufferUsage::Static;
 			
-			m_RHIBuffer = CreateRef<RHI::OpenGLRHIVertexBuffer>(desc, RHI::VertexLayout{}, vertices);
+			switch (RHI::GetCurrentAPI()) {
+				case RHI::GraphicsAPI::Vulkan: {
+					auto* device = dynamic_cast<RHI::VulkanRHIDevice*>(RHI::RHIDevice::Get());
+					if (device) {
+						m_RHIBuffer = CreateRef<RHI::VulkanRHIVertexBuffer>(device, desc, RHI::VertexLayout{}, vertices);
+					}
+					break;
+				}
+				case RHI::GraphicsAPI::OpenGL:
+				default:
+					m_RHIBuffer = CreateRef<RHI::OpenGLRHIVertexBuffer>(desc, RHI::VertexLayout{}, vertices);
+					break;
+			}
 		}
 		
 		virtual ~VertexBufferAdapter() = default;
 		
 		void Bind() const override {
-			m_RHIBuffer->Bind();
+			if (m_RHIBuffer) m_RHIBuffer->Bind();
 		}
 		
 		void Unbind() const override {
-			m_RHIBuffer->Unbind();
+			if (m_RHIBuffer) m_RHIBuffer->Unbind();
 		}
 		
 		void SetData(const void* data, uint32_t size) override {
-			m_RHIBuffer->SetData(data, size);
+			if (m_RHIBuffer) m_RHIBuffer->SetData(data, size);
 		}
 		
 		const BufferLayout& GetLayout() const override {
@@ -85,13 +111,13 @@ namespace Lunex {
 			m_Layout = layout;
 			// Convert and set RHI layout
 			auto rhiLayout = ConvertToRHIVertexLayout(layout);
-			m_RHIBuffer->SetLayout(rhiLayout);
+			if (m_RHIBuffer) m_RHIBuffer->SetLayout(rhiLayout);
 		}
 		
 		Ref<RHI::RHIVertexBuffer> GetRHIBuffer() const { return m_RHIBuffer; }
 		
 	private:
-		Ref<RHI::OpenGLRHIVertexBuffer> m_RHIBuffer;
+		Ref<RHI::RHIVertexBuffer> m_RHIBuffer;
 		BufferLayout m_Layout;
 	};
 	
@@ -110,17 +136,29 @@ namespace Lunex {
 			desc.Usage = RHI::BufferUsage::Static;
 			desc.IndexFormat = RHI::IndexType::UInt32;
 			
-			m_RHIBuffer = CreateRef<RHI::OpenGLRHIIndexBuffer>(desc, indices);
+			switch (RHI::GetCurrentAPI()) {
+				case RHI::GraphicsAPI::Vulkan: {
+					auto* device = dynamic_cast<RHI::VulkanRHIDevice*>(RHI::RHIDevice::Get());
+					if (device) {
+						m_RHIBuffer = CreateRef<RHI::VulkanRHIIndexBuffer>(device, desc, indices);
+					}
+					break;
+				}
+				case RHI::GraphicsAPI::OpenGL:
+				default:
+					m_RHIBuffer = CreateRef<RHI::OpenGLRHIIndexBuffer>(desc, indices);
+					break;
+			}
 		}
 		
 		virtual ~IndexBufferAdapter() = default;
 		
 		void Bind() const override {
-			m_RHIBuffer->Bind();
+			if (m_RHIBuffer) m_RHIBuffer->Bind();
 		}
 		
 		void Unbind() const override {
-			m_RHIBuffer->Unbind();
+			if (m_RHIBuffer) m_RHIBuffer->Unbind();
 		}
 		
 		uint32_t GetCount() const override {
@@ -130,7 +168,7 @@ namespace Lunex {
 		Ref<RHI::RHIIndexBuffer> GetRHIBuffer() const { return m_RHIBuffer; }
 		
 	private:
-		Ref<RHI::OpenGLRHIIndexBuffer> m_RHIBuffer;
+		Ref<RHI::RHIIndexBuffer> m_RHIBuffer;
 		uint32_t m_Count;
 	};
 	
@@ -143,7 +181,8 @@ namespace Lunex {
 			case RHI::GraphicsAPI::None:    
 				LNX_CORE_ASSERT(false, "RHI::GraphicsAPI::None is currently not supported!"); 
 				return nullptr;
-			case RHI::GraphicsAPI::OpenGL:  
+			case RHI::GraphicsAPI::OpenGL:
+			case RHI::GraphicsAPI::Vulkan:
 				return CreateRef<VertexBufferAdapter>(size);
 			default:
 				break;
@@ -158,7 +197,8 @@ namespace Lunex {
 			case RHI::GraphicsAPI::None:    
 				LNX_CORE_ASSERT(false, "RHI::GraphicsAPI::None is currently not supported!"); 
 				return nullptr;
-			case RHI::GraphicsAPI::OpenGL:  
+			case RHI::GraphicsAPI::OpenGL:
+			case RHI::GraphicsAPI::Vulkan:
 				return CreateRef<VertexBufferAdapter>(vertices, size);
 			default:
 				break;
@@ -173,7 +213,8 @@ namespace Lunex {
 			case RHI::GraphicsAPI::None:    
 				LNX_CORE_ASSERT(false, "RHI::GraphicsAPI::None is currently not supported!"); 
 				return nullptr;
-			case RHI::GraphicsAPI::OpenGL:  
+			case RHI::GraphicsAPI::OpenGL:
+			case RHI::GraphicsAPI::Vulkan:
 				return CreateRef<IndexBufferAdapter>(indices, count);
 			default:
 				break;

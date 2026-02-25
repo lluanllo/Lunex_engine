@@ -51,7 +51,8 @@ namespace RHI {
 	VulkanSwapchain::VulkanSwapchain(VkDevice device, VkPhysicalDevice physicalDevice,
 									 VkSurfaceKHR surface, GLFWwindow* window,
 									 const SwapchainCreateInfo& info,
-									 const QueueFamilyIndices& queueFamilies)
+									 const QueueFamilyIndices& queueFamilies,
+									 VkQueue presentQueue)
 		: m_Device(device)
 		, m_PhysicalDevice(physicalDevice)
 		, m_Surface(surface)
@@ -60,6 +61,7 @@ namespace RHI {
 		, m_Height(info.Height)
 		, m_VSync(info.VSync)
 		, m_QueueFamilies(queueFamilies)
+		, m_PresentQueue(presentQueue)
 	{
 		CreateSwapchain();
 		CreateImageViews();
@@ -270,8 +272,7 @@ namespace RHI {
 		presentInfo.pSwapchains = swapchains;
 		presentInfo.pImageIndices = &m_CurrentImageIndex;
 
-		// TODO: Get present queue from context
-		// vkQueuePresentKHR(m_PresentQueue, &presentInfo);
+		vkQueuePresentKHR(m_PresentQueue, &presentInfo);
 	}
 
 	void VulkanSwapchain::Resize(uint32_t width, uint32_t height) {
@@ -403,7 +404,7 @@ namespace RHI {
 	Ref<RHISwapchain> VulkanRHIContext::CreateSwapchain(const SwapchainCreateInfo& info) {
 		return CreateRef<VulkanSwapchain>(
 			m_Device, m_PhysicalDevice, m_Surface, m_Window,
-			info, m_QueueFamilies);
+			info, m_QueueFamilies, m_PresentQueue);
 	}
 
 	std::string VulkanRHIContext::GetAPIVersion() const {
