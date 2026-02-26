@@ -20,7 +20,6 @@ layout(location = 1) in vec3 a_Normal;
 layout(location = 2) in vec2 a_TexCoords;
 layout(location = 3) in vec3 a_Tangent;
 layout(location = 4) in vec3 a_Bitangent;
-layout(location = 5) in int a_EntityID;
 
 layout(std140, binding = 0) uniform Camera {
 	mat4 u_ViewProjection;
@@ -32,6 +31,10 @@ layout(std140, binding = 0) uniform Camera {
 
 layout(std140, binding = 1) uniform Transform {
 	mat4 u_Transform;
+	int u_EntityID;
+	float _transformPad0;
+	float _transformPad1;
+	float _transformPad2;
 };
 
 struct VertexOutput {
@@ -58,7 +61,7 @@ void main() {
 	vec3 B = cross(N, T) * sign(dot(cross(a_Normal, a_Tangent), a_Bitangent));
 	Output.TBN = mat3(T, B, N);
 	
-	v_EntityID = a_EntityID;
+	v_EntityID = u_EntityID;
 	
 	gl_Position = u_ViewProjection * worldPos;
 }
@@ -204,7 +207,7 @@ void main() {
 		}
 		if (u_DetailNormalCount > 3) {
 			vec3 d = SampleDetailNormal(u_DetailNormal3, Input.TexCoords, u_DetailNormalTilingX.w, u_DetailNormalTilingY.w);
-			d.xy *= u_DetailNormalIntensities.w;
+		 d.xy *= u_DetailNormalIntensities.w;
 			normalMap = BlendNormals_UDN(normalMap, d);
 		}
 		

@@ -52,6 +52,10 @@ namespace Lunex {
 
 		struct TransformData {
 			glm::mat4 Transform;
+			int EntityID;
+			float _pad0;
+			float _pad1;
+			float _pad2;
 		};
 
 		// Post-process control UBO (binding 6) - matches shader layout
@@ -270,10 +274,9 @@ namespace Lunex {
 		if (!s_Data.GeometryShader || !s_Data.GeometryShader->IsValid() || !s_Data.GBuffer.IsInitialized())
 			return;
 
-		const_cast<Model*>(meshComponent.MeshModel.get())->SetEntityID(entityID);
-
-		// Update Transform UBO
+		// Update Transform UBO (includes EntityID)
 		s_Data.TransformBuffer.Transform = transform;
+		s_Data.TransformBuffer.EntityID = entityID;
 		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(DeferredRendererData::TransformData));
 
 		// Get base material uniform data
@@ -386,7 +389,7 @@ namespace Lunex {
 		s_Data.Stats.GeometryDrawCalls++;
 		s_Data.Stats.MeshCount += static_cast<uint32_t>(meshComponent.MeshModel->GetMeshes().size());
 		for (const auto& mesh : meshComponent.MeshModel->GetMeshes()) {
-			s_Data.Stats.TriangleCount += static_cast<uint32_t>(mesh->GetIndices().size()) / 3;
+			s_Data.Stats.TriangleCount += mesh->GetIndexCount() / 3;
 		}
 	}
 
@@ -397,10 +400,9 @@ namespace Lunex {
 		if (!s_Data.GeometryShader || !s_Data.GeometryShader->IsValid() || !s_Data.GBuffer.IsInitialized())
 			return;
 
-		const_cast<Model*>(meshComponent.MeshModel.get())->SetEntityID(entityID);
-
-		// Update Transform UBO
+		// Update Transform UBO (includes EntityID)
 		s_Data.TransformBuffer.Transform = transform;
+		s_Data.TransformBuffer.EntityID = entityID;
 		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(DeferredRendererData::TransformData));
 
 		s_Data.GeometryShader->Bind();
@@ -504,7 +506,7 @@ namespace Lunex {
 		s_Data.Stats.GeometryDrawCalls++;
 		s_Data.Stats.MeshCount += static_cast<uint32_t>(meshComponent.MeshModel->GetMeshes().size());
 		for (const auto& mesh : meshComponent.MeshModel->GetMeshes()) {
-			s_Data.Stats.TriangleCount += static_cast<uint32_t>(mesh->GetIndices().size()) / 3;
+			s_Data.Stats.TriangleCount += mesh->GetIndexCount() / 3;
 		}
 	}
 
@@ -515,7 +517,7 @@ namespace Lunex {
 	bool DeferredRenderer::IsPostProcessingActive() {
 		auto& config = PostProcessRenderer::GetConfig();
 		return PostProcessRenderer::IsInitialized() &&
-			   (config.EnableBloom || config.EnableVignette || config.EnableChromaticAberration);
+			(config.EnableBloom || config.EnableVignette || config.EnableChromaticAberration);
 	}
 
 	void DeferredRenderer::ExecuteLightingPass(const Ref<Framebuffer>& targetFramebuffer) {
@@ -560,11 +562,11 @@ namespace Lunex {
 		s_Data.PostProcessControlUniformBuffer->SetData(&s_Data.PostProcessControlBuffer, sizeof(DeferredRendererData::PostProcessControlData));
 
 		// Bind G-Buffer textures for sampling
-		s_Data.LightingShader->SetInt("gAlbedoMetallic",   0);
-		s_Data.LightingShader->SetInt("gNormalRoughness",  1);
-		s_Data.LightingShader->SetInt("gEmissionAO",       2);
+		s_Data.LightingShader->SetInt("gAlbedoMetallic", 0);
+		s_Data.LightingShader->SetInt("gNormalRoughness", 1);
+		s_Data.LightingShader->SetInt("gEmissionAO", 2);
 		s_Data.LightingShader->SetInt("gPositionSpecular", 3);
-		s_Data.LightingShader->SetInt("gDepth",            4);
+		s_Data.LightingShader->SetInt("gDepth", 4);
 
 		// Bind G-Buffer textures to sampler units via RHI
 		auto* rhiFB = s_Data.GBuffer.GetFramebuffer()->GetRHIFramebuffer();
@@ -671,7 +673,8 @@ namespace Lunex {
 	void DeferredRenderer::OnViewportResize(uint32_t width, uint32_t height) {
 		if (!s_Data.GBuffer.IsInitialized()) {
 			s_Data.GBuffer.Initialize(width, height);
-		} else {
+		}
+		else {
 			s_Data.GBuffer.Resize(width, height);
 		}
 		PostProcessRenderer::OnViewportResize(width, height);

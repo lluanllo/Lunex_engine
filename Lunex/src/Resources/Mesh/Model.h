@@ -47,7 +47,6 @@ namespace Lunex {
 
 		void LoadModel(const std::string& path);
 		void Draw(const Ref<Shader>& shader);
-		void SetEntityID(int entityID);
 
 		const std::vector<Ref<Mesh>>& GetMeshes() const { return m_Meshes; }
 		const std::string& GetDirectory() const { return m_Directory; }

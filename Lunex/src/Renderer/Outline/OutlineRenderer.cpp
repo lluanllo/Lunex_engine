@@ -332,7 +332,7 @@ namespace Lunex {
 					auto va = submesh->GetVertexArray();
 					if (va) {
 						va->Bind();
-						cmd->DrawIndexed(static_cast<uint32_t>(submesh->GetIndices().size()));
+						cmd->DrawIndexed(submesh->GetIndexCount());
 						m_SilhouetteHasContent = true;
 					}
 				}

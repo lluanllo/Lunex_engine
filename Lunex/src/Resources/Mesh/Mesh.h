@@ -22,7 +22,7 @@ namespace Lunex {
 
 	/**
 	 * @struct Vertex
-	 * @brief Standard vertex format
+	 * @brief Standard vertex format (EntityID moved to Transform UBO for performance)
 	 */
 	struct Vertex {
 		glm::vec3 Position;
@@ -30,7 +30,6 @@ namespace Lunex {
 		glm::vec2 TexCoords;
 		glm::vec3 Tangent;
 		glm::vec3 Bitangent;
-		int EntityID = -1;
 	};
 
 	/**
@@ -82,12 +81,13 @@ namespace Lunex {
 
 		void Draw(const Ref<Shader>& shader);
 		void DrawGeometry(const Ref<Shader>& shader);
-		void SetEntityID(int entityID);
 
 		const std::vector<Vertex>& GetVertices() const { return m_Vertices; }
 		const std::vector<uint32_t>& GetIndices() const { return m_Indices; }
 		const std::vector<MeshTexture>& GetTextures() const { return m_Textures; }
 		const MeshMaterialData& GetMaterialData() const { return m_MaterialData; }
+
+		uint32_t GetIndexCount() const { return m_IndexCount; }
 
 		bool HasMeshTexture(const std::string& type) const;
 		bool HasAnyMeshTextures() const { return m_TextureFlags != MeshTexFlag_None; }
@@ -105,12 +105,11 @@ namespace Lunex {
 		std::vector<MeshTexture> m_Textures;
 		MeshMaterialData m_MaterialData;
 		uint32_t m_TextureFlags = MeshTexFlag_None;
+		uint32_t m_IndexCount = 0;
 
 		Ref<VertexArray> m_VertexArray;
 		Ref<VertexBuffer> m_VertexBuffer;
 		Ref<IndexBuffer> m_IndexBuffer;
-
-		int m_CachedEntityID = -1;
 	};
 
-} // namespace Lunex
+} // namespace Lunex} // namespace Lunex

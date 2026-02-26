@@ -40,6 +40,9 @@
 // ✅ SceneRenderSystem for post-lighting overlays
 #include "Scene/Systems/SceneRenderSystem.h"
 
+// NEW: Include MaterialAssetFactory for GLTF material importing
+#include "Assets/Materials/MaterialAssetFactory.h"
+
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
 
@@ -1798,33 +1801,34 @@ namespace Lunex {
 	}
 
 	void EditorLayer::OnMeshImported(Ref<MeshAsset> meshAsset) {
-		if (!meshAsset || m_SceneState != SceneState::Edit) {
-			return;
-		}
-		
-		// Create a new entity with the mesh
+		if (!meshAsset || !m_ActiveScene) return;
+
+		// Create entity with mesh
 		std::string entityName = meshAsset->GetName();
-		if (entityName.empty()) {
-			entityName = "Mesh";
-		}
-		
-		Entity newEntity = m_ActiveScene->CreateEntity(entityName);
-		
-		// Add MeshComponent and set the MeshAsset
-		auto& meshComp = newEntity.AddComponent<MeshComponent>();
+		if (entityName.empty()) entityName = "Imported Mesh";
+
+		Entity entity = m_ActiveScene->CreateEntity(entityName);
+
+		auto& meshComp = entity.AddComponent<MeshComponent>();
 		meshComp.SetMeshAsset(meshAsset);
-		
-		// MaterialComponent is added automatically by MeshComponent
-		// but we ensure it exists
-		if (!newEntity.HasComponent<MaterialComponent>()) {
-			newEntity.AddComponent<MaterialComponent>();
+
+		// Auto-create MaterialAssets from GLTF per-mesh material data
+		auto model = meshAsset->GetModel();
+		if (model) {
+			auto materials = MaterialAssetFactory::CreateFromModel(model, entityName);
+			if (!materials.empty()) {
+				// Use the first material as the entity's material
+				auto& matComp = entity.AddComponent<MaterialComponent>(materials[0]);
+				LNX_LOG_INFO("Auto-created {0} MaterialAsset(s) from GLTF model '{1}'",
+					materials.size(), entityName);
+			}
 		}
-		
+
 		// Select the new entity
-		m_SceneHierarchyPanel.SetSelectedEntity(newEntity);
-		
-		LNX_LOG_INFO("Created entity '{0}' with MeshAsset", entityName);
-		m_ConsolePanel.AddLog("Created mesh entity: " + entityName, LogLevel::Info, "Scene");
+		m_SceneHierarchyPanel.SetSelectedEntity(entity);
+		m_PropertiesPanel.SetSelectedEntity(entity);
+
+		LNX_LOG_INFO("Mesh imported as entity: {0}", entityName);
 	}
 	
 	void EditorLayer::OnPrefabDropped(const std::filesystem::path& prefabPath) {

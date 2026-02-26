@@ -68,12 +68,7 @@ namespace Lunex {
 			// Use existing Renderer3D
 			if (entity.HasComponent<MaterialComponent>()) {
 				auto& material = entity.GetComponent<MaterialComponent>();
-				if (entity.HasComponent<TextureComponent>()) {
-					auto& texture = entity.GetComponent<TextureComponent>();
-					Renderer3D::DrawMesh(worldTransform, mesh, material, texture, static_cast<int>(entityID));
-				} else {
-					Renderer3D::DrawMesh(worldTransform, mesh, material, static_cast<int>(entityID));
-				}
+				Renderer3D::DrawMesh(worldTransform, mesh, material, static_cast<int>(entityID));
 			} else {
 				Renderer3D::DrawMesh(worldTransform, mesh, static_cast<int>(entityID));
 			}

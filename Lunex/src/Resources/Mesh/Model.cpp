@@ -572,9 +572,4 @@ namespace Lunex {
 		return model;
 	}
 
-	void Model::SetEntityID(int entityID) {
-		for (auto& mesh : m_Meshes) {
-			mesh->SetEntityID(entityID);
-		}
-	}
 }
