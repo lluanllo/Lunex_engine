@@ -15,6 +15,9 @@
 // NEW MESH ASSET SYSTEM - Unified Assets
 #include "Assets/Mesh/MeshAsset.h"
 
+// Material importer for auto-generating materials from models
+#include "Assets/Materials/MaterialImporter.h"
+
 // NEW CAMERA SYSTEM - AAA Architecture
 #include "Scene/Camera/CameraData.h"
 
@@ -117,6 +120,12 @@ namespace Lunex {
 		// Tint color
 		glm::vec4 Color{ 1.0f, 1.0f, 1.0f, 1.0f };
 
+		// Imported material assets (auto-generated from model, one per unique material)
+		std::vector<Ref<MaterialAsset>> ImportedMaterials;
+		
+		// Material output directory for auto-generated .lumat files
+		std::string MaterialOutputDir;
+
 		MeshComponent() {
 			CreatePrimitive(ModelType::Cube);
 		}
@@ -129,6 +138,8 @@ namespace Lunex {
 			, MeshAssetPath(other.MeshAssetPath)
 			, FilePath(other.FilePath)
 			, Color(other.Color)
+			, ImportedMaterials(other.ImportedMaterials)
+			, MaterialOutputDir(other.MaterialOutputDir)
 		{
 		}
 		
@@ -180,6 +191,9 @@ namespace Lunex {
 			
 			// Get the model from the asset
 			MeshModel = meshAsset->GetModel();
+			
+			// Auto-generate materials from model data
+			AutoImportMaterials();
 		}
 		
 		// Set mesh from a .lumesh file path
@@ -198,6 +212,9 @@ namespace Lunex {
 					Type = ModelType::FromFile;
 					FilePath.clear();
 					MeshModel = Asset->GetModel();
+					
+					// Auto-generate materials from model data
+					AutoImportMaterials();
 				}
 			}
 			else {
@@ -263,6 +280,9 @@ namespace Lunex {
 			MeshAssetID = UUID(0);
 			MeshAssetPath.clear();
 			MeshModel = CreateRef<Model>(path);
+			
+			// Auto-generate materials from model data
+			AutoImportMaterials();
 		}
 		
 		// ========== UTILITY ==========
@@ -276,11 +296,80 @@ namespace Lunex {
 			else if (!FilePath.empty()) {
 				MeshModel = CreateRef<Model>(FilePath);
 			}
+			
+			// Re-import materials after reload
+			AutoImportMaterials();
 		}
 		
 		// Check if mesh is valid and loaded
 		bool IsValid() const {
 			return MeshModel != nullptr && !MeshModel->GetMeshes().empty();
+		}
+		
+		// ========== MATERIAL AUTO-IMPORT ==========
+		
+		// Get the material output directory for auto-generated .lumat files
+		std::filesystem::path GetMaterialOutputDirectory() const {
+			if (!MaterialOutputDir.empty()) {
+				return MaterialOutputDir;
+			}
+			
+			// Default: create materials directory next to the model file
+			std::string sourcePath;
+			if (Asset && Asset->HasValidSource()) {
+				sourcePath = Asset->GetSourcePath().string();
+			} else if (!FilePath.empty()) {
+				sourcePath = FilePath;
+			}
+			
+			if (!sourcePath.empty()) {
+				std::filesystem::path modelDir = std::filesystem::path(sourcePath).parent_path();
+				return modelDir / "Materials";
+			}
+			
+			// Fallback to assets/Materials
+			return "assets/Materials";
+		}
+		
+		// Auto-import materials from model data and generate .lumat files
+		void AutoImportMaterials() {
+			if (!MeshModel || !MeshModel->HasMaterialData()) {
+				return;
+			}
+			
+			std::filesystem::path outputDir = GetMaterialOutputDirectory();
+			
+			LNX_LOG_INFO("MeshComponent: Auto-importing materials to {0}", outputDir.string());
+			
+			ImportedMaterials = MaterialImporter::CreateMaterialsFromModel(MeshModel, outputDir);
+			
+			if (!ImportedMaterials.empty()) {
+				LNX_LOG_INFO("MeshComponent: Imported {0} materials from model", ImportedMaterials.size());
+			}
+		}
+		
+		// Get the MaterialAsset for a specific submesh index
+		Ref<MaterialAsset> GetSubmeshMaterial(uint32_t submeshIndex) const {
+			if (ImportedMaterials.empty() || !MeshModel) {
+				return nullptr;
+			}
+			
+			const auto& indices = MeshModel->GetSubmeshMaterialIndices();
+			if (submeshIndex < indices.size()) {
+				uint32_t matIdx = indices[submeshIndex];
+				if (matIdx < ImportedMaterials.size()) {
+					return ImportedMaterials[matIdx];
+				}
+			}
+			
+			// Fallback: return first material if available
+			return ImportedMaterials.empty() ? nullptr : ImportedMaterials[0];
+		}
+		
+		// Check if model has per-submesh materials
+		bool HasPerSubmeshMaterials() const {
+			return !ImportedMaterials.empty() && MeshModel && 
+				   !MeshModel->GetSubmeshMaterialIndices().empty();
 		}
 	};
 

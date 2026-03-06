@@ -12,6 +12,11 @@
 #include "Scene/Components.h"
 #include "Asset/Prefab.h"
 
+// Lunex UI Framework
+#include "../UI/UICore.h"
+#include "../UI/UIComponents.h"
+#include "../UI/UILayout.h"
+
 namespace Lunex {
 	extern const std::filesystem::path g_AssetPath;
 
@@ -48,12 +53,13 @@ namespace Lunex {
 			{ImGuiCol_Text, m_Style.TextPrimary}
 		});
 		
-		ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, m_Style.IndentSpacing);
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 1));
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 3));
+		ScopedStyle indentStyle(ImGuiStyleVar_IndentSpacing, m_Style.IndentSpacing);
+		ScopedStyle spacingStyles({
+			{ImGuiStyleVar_ItemSpacing, ImVec2(4, 1)},
+			{ImGuiStyleVar_FramePadding, ImVec2(6, 3)}
+		});
 		
 		if (!BeginPanel("Scene Hierarchy")) {
-			ImGui::PopStyleVar(3);
 			EndPanel();
 			return;
 		}
@@ -67,7 +73,6 @@ namespace Lunex {
 		RenderEntityList();
 		RenderContextMenu();
 
-		ImGui::PopStyleVar(3);
 		EndPanel();
 	}
 
@@ -85,78 +90,75 @@ namespace Lunex {
 			{ImGuiCol_ButtonActive, Color(0.055f, 0.647f, 0.769f, 0.6f)}
 		});
 		
-		if (ImGui::Button("+ Create")) {
+		if (Button("+ Create")) {
 			m_ShowCreateMenu = true;
-			ImGui::OpenPopup("CreateEntityPopup");
+			OpenPopup("CreateEntityPopup");
 		}
 		
-		if (ImGui::BeginPopup("CreateEntityPopup")) {
-			if (ImGui::MenuItem("Empty Entity"))
+		if (BeginPopup("CreateEntityPopup")) {
+			if (MenuItem("Empty Entity"))
 				m_Context->CreateEntity("Empty Entity");
 			
-			ImGui::Separator();
+			Separator();
 			
-			// 3D Objects submenu
-			if (ImGui::BeginMenu("3D Object")) {
-				if (ImGui::MenuItem("Cube"))
+			if (BeginMenu("3D Object")) {
+				if (MenuItem("Cube"))
 					CreateMeshEntity("Cube", ModelType::Cube);
-				if (ImGui::MenuItem("Sphere"))
+				if (MenuItem("Sphere"))
 					CreateMeshEntity("Sphere", ModelType::Sphere);
-				if (ImGui::MenuItem("Plane"))
+				if (MenuItem("Plane"))
 					CreateMeshEntity("Plane", ModelType::Plane);
-				if (ImGui::MenuItem("Cylinder"))
+				if (MenuItem("Cylinder"))
 					CreateMeshEntity("Cylinder", ModelType::Cylinder);
-				ImGui::EndMenu();
+				EndMenu();
 			}
 			
-			// 2D Objects submenu
-			if (ImGui::BeginMenu("2D Object")) {
-				if (ImGui::MenuItem("Sprite"))
+			if (BeginMenu("2D Object")) {
+				if (MenuItem("Sprite"))
 					CreateEntityWithComponent<SpriteRendererComponent>("Sprite");
-				if (ImGui::MenuItem("Circle"))
+				if (MenuItem("Circle"))
 					CreateEntityWithComponent<CircleRendererComponent>("Circle");
-				ImGui::EndMenu();
+				EndMenu();
 			}
 			
-			// Lights submenu
-			if (ImGui::BeginMenu("Light")) {
-				if (ImGui::MenuItem("Directional Light")) {
+			if (BeginMenu("Light")) {
+				if (MenuItem("Directional Light")) {
 					Entity entity = m_Context->CreateEntity("Directional Light");
 					auto& light = entity.AddComponent<LightComponent>();
 					light.SetType(LightType::Directional);
 					SelectEntity(entity);
 				}
-				if (ImGui::MenuItem("Point Light")) {
+				if (MenuItem("Point Light")) {
 					Entity entity = m_Context->CreateEntity("Point Light");
 					auto& light = entity.AddComponent<LightComponent>();
 					light.SetType(LightType::Point);
 					SelectEntity(entity);
 				}
-				if (ImGui::MenuItem("Spot Light")) {
+				if (MenuItem("Spot Light")) {
 					Entity entity = m_Context->CreateEntity("Spot Light");
 					auto& light = entity.AddComponent<LightComponent>();
 					light.SetType(LightType::Spot);
 					SelectEntity(entity);
 				}
-				ImGui::EndMenu();
+				EndMenu();
 			}
 			
-			if (ImGui::MenuItem("Camera"))
+			if (MenuItem("Camera"))
 				CreateEntityWithComponent<CameraComponent>("Camera");
 			
-			ImGui::EndPopup();
+			EndPopup();
 		}
 		
-		ImGui::SameLine();
+		SameLine();
 		
 		// Entity count display
 		ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 80);
 		{
 			ScopedColor textColor(ImGuiCol_Text, m_Style.TextMuted);
 			if (m_SelectedEntities.size() > 0) {
-				ImGui::Text("%d/%d", (int)m_SelectedEntities.size(), m_TotalEntities);
+				Text("%d/%d", (int)m_SelectedEntities.size(), m_TotalEntities);
 			} else {
-				ImGui::Text("%d", m_TotalEntities);
+				Text("%d", m_TotalEntities);
 			}
 		}
 	}
@@ -165,13 +167,13 @@ namespace Lunex {
 		using namespace UI;
 		
 		ScopedColor frameColors({
-			{ImGuiCol_FrameBg, Color(0.09f, 0.11f, 0.14f, 1.0f).ToImVec4()},
-			{ImGuiCol_FrameBgHovered, Color(0.12f, 0.15f, 0.19f, 1.0f).ToImVec4()},
-			{ImGuiCol_FrameBgActive, Color(0.055f, 0.647f, 0.769f, 0.3f).ToImVec4()}
+			{ImGuiCol_FrameBg, Color(0.09f, 0.11f, 0.14f, 1.0f)},
+			{ImGuiCol_FrameBgHovered, Color(0.12f, 0.15f, 0.19f, 1.0f)},
+			{ImGuiCol_FrameBgActive, Color(0.055f, 0.647f, 0.769f, 0.3f)}
 		});
 		
 		ImGui::SetNextItemWidth(-1);
-		ImGui::InputTextWithHint("##HierarchySearch", "Search entities...", m_SearchFilter, 256);
+		InputText("##HierarchySearch", m_SearchFilter, sizeof(m_SearchFilter), "Search entities...");
 	}
 	
 	void SceneHierarchyPanel::RenderEntityList() {
@@ -186,64 +188,61 @@ namespace Lunex {
 		auto rootEntities = GetSortedRootEntities();
 		m_TotalEntities = (int)m_Context->m_Registry.view<TagComponent>().size();
 		
-		ImGui::BeginChild("##EntityList", ImVec2(0, 0), false);
-		
-		for (auto entity : rootEntities) {
-			DrawEntityNode(entity, 0);
-		}
-
-		// Drop target for root level (unparent)
-		if (ImGui::BeginDragDropTarget()) {
-			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENTITY_NODE")) {
-				Entity droppedEntity = *(Entity*)payload->Data;
-				UnparentEntity(droppedEntity);
+		if (BeginChild("##EntityList", Size(0, 0), false)) {
+			for (auto entity : rootEntities) {
+				DrawEntityNode(entity, 0);
 			}
-			
-			// Accept prefab drops from Content Browser
-			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
-				ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
-				std::string ext = data->Extension;
-				if (ext == ".luprefab") {
-					InstantiatePrefab(data->FilePath);
+
+			// Drop target for root level (unparent)
+			if (ImGui::BeginDragDropTarget()) {
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENTITY_NODE")) {
+					Entity droppedEntity = *(Entity*)payload->Data;
+					UnparentEntity(droppedEntity);
 				}
+				
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+					ContentBrowserPayload* data = (ContentBrowserPayload*)payload->Data;
+					std::string ext = data->Extension;
+					if (ext == ".luprefab") {
+						InstantiatePrefab(data->FilePath);
+					}
+				}
+				
+				ImGui::EndDragDropTarget();
 			}
-			
-			ImGui::EndDragDropTarget();
-		}
 
-		// Click on empty area to deselect
-		if (ImGui::IsMouseClicked(0) && ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered()) {
-			ClearSelection();
+			// Click on empty area to deselect
+			if (ImGui::IsMouseClicked(0) && ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered()) {
+				ClearSelection();
+			}
 		}
-		
-		ImGui::EndChild();
+		EndChild();
 	}
 	
 	void SceneHierarchyPanel::RenderContextMenu() {
-		// Context menu for empty area
+		using namespace UI;
+		
 		if (ImGui::BeginPopupContextWindow(nullptr, ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
-			using namespace UI;
-			
 			SeparatorText("Create Entity");
 			
-			if (ImGui::MenuItem("Empty Entity"))
+			if (MenuItem("Empty Entity"))
 				m_Context->CreateEntity("Empty Entity");
 			
-			ImGui::Separator();
+			Separator();
 			
-			if (ImGui::MenuItem("Camera"))
+			if (MenuItem("Camera"))
 				CreateEntityWithComponent<CameraComponent>("Camera");
 			
-			if (ImGui::MenuItem("Light"))
+			if (MenuItem("Light"))
 				CreateEntityWithComponent<LightComponent>("Light");
 			
-			if (ImGui::MenuItem("Sprite"))
+			if (MenuItem("Sprite"))
 				CreateEntityWithComponent<SpriteRendererComponent>("Sprite");
 			
-			if (ImGui::MenuItem("3D Object"))
+			if (MenuItem("3D Object"))
 				CreateMeshEntity("Cube", ModelType::Cube);
 			
-			ImGui::EndPopup();
+			EndPopup();
 		}
 	}
 	
@@ -283,11 +282,22 @@ namespace Lunex {
 
 		m_VisibleEntities++;
 
-		// Check if has children
+		// Check if has children (relationship or submeshes)
 		bool hasChildren = false;
 		if (entity.HasComponent<RelationshipComponent>()) {
 			hasChildren = entity.GetComponent<RelationshipComponent>().HasChildren();
 		}
+		
+		// Check if has submeshes to display (multiple submeshes = expandable)
+		bool hasSubmeshes = false;
+		if (!hasChildren && entity.HasComponent<MeshComponent>()) {
+			auto& meshComp = entity.GetComponent<MeshComponent>();
+			if (meshComp.MeshModel && meshComp.MeshModel->GetMeshes().size() > 1) {
+				hasSubmeshes = true;
+			}
+		}
+		
+		bool isExpandable = hasChildren || hasSubmeshes;
 
 		// Prepare drawing
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -295,7 +305,6 @@ namespace Lunex {
 		float itemWidth = ImGui::GetContentRegionAvail().x;
 		float itemHeight = m_Style.ItemHeight;
 		
-		// Alternate background colors
 		Color bgColor = (m_EntityIndexCounter % 2 == 0) ? m_Style.ItemEven : m_Style.ItemOdd;
 		m_EntityIndexCounter++;
 		
@@ -303,69 +312,43 @@ namespace Lunex {
 		bool isActive = (entity == m_LastSelectedEntity);
 		bool isRenaming = (m_IsRenaming && m_EntityBeingRenamed == entity);
 
-		// Draw background
 		ImVec2 itemMin = cursorScreenPos;
 		ImVec2 itemMax = ImVec2(cursorScreenPos.x + itemWidth, cursorScreenPos.y + itemHeight);
 		
+		// Draw selection/background
 		if (isSelected) {
 			if (isActive && m_SelectedEntities.size() > 1) {
-				// Active element in multi-selection: light orange (Blender-style)
 				drawList->AddRectFilled(itemMin, itemMax, m_Style.ItemActive.ToImU32());
-				drawList->AddRectFilled(
-					itemMin, 
-					ImVec2(itemMin.x + m_Style.TypeIndicatorWidth, itemMax.y),
-					m_Style.ItemActiveBorder.ToImU32()
-				);
+				drawList->AddRectFilled(itemMin, ImVec2(itemMin.x + m_Style.TypeIndicatorWidth, itemMax.y), m_Style.ItemActiveBorder.ToImU32());
 			}
-			else if (isSelected && m_SelectedEntities.size() > 1) {
-				// Non-active selected in multi-selection: dark orange
+			else if (m_SelectedEntities.size() > 1) {
 				drawList->AddRectFilled(itemMin, itemMax, m_Style.ItemSelectedMulti.ToImU32());
-				drawList->AddRectFilled(
-					itemMin, 
-					ImVec2(itemMin.x + m_Style.TypeIndicatorWidth, itemMax.y),
-					m_Style.ItemSelectedMultiBorder.ToImU32()
-				);
+				drawList->AddRectFilled(itemMin, ImVec2(itemMin.x + m_Style.TypeIndicatorWidth, itemMax.y), m_Style.ItemSelectedMultiBorder.ToImU32());
 			}
 			else {
-				// Single selection: blue highlight
 				drawList->AddRectFilled(itemMin, itemMax, m_Style.ItemSelected.ToImU32());
-				drawList->AddRectFilled(
-					itemMin, 
-					ImVec2(itemMin.x + m_Style.TypeIndicatorWidth, itemMax.y),
-					m_Style.ItemSelectedBorder.ToImU32()
-				);
+				drawList->AddRectFilled(itemMin, ImVec2(itemMin.x + m_Style.TypeIndicatorWidth, itemMax.y), m_Style.ItemSelectedBorder.ToImU32());
 			}
 		} else {
 			drawList->AddRectFilled(itemMin, itemMax, bgColor.ToImU32());
 		}
 
-		// Type indicator bar on left
+		// Type indicator bar
 		if (!isSelected) {
 			Color typeColor = GetEntityTypeColor(entity);
-			drawList->AddRectFilled(
-				itemMin,
-				ImVec2(itemMin.x + m_Style.TypeIndicatorWidth, itemMax.y),
-				typeColor.ToImU32()
-			);
+			drawList->AddRectFilled(itemMin, ImVec2(itemMin.x + m_Style.TypeIndicatorWidth, itemMax.y), typeColor.ToImU32());
 		}
 
-		// Push ID and set cursor for content
-		ImGui::PushID((void*)(uint64_t)(uint32_t)entity);
+		ScopedID entityScope((void*)(uint64_t)(uint32_t)entity);
 		
-		// Indent based on depth
 		float indentOffset = depth * m_Style.IndentSpacing + m_Style.TypeIndicatorWidth + 4.0f;
 		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indentOffset);
 		
-		// Tree node flags
 		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_FramePadding;
-		
-		if (!hasChildren) {
+		if (!isExpandable)
 			flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-		}
-		
-		if (isSelected) {
+		if (isSelected)
 			flags |= ImGuiTreeNodeFlags_Selected;
-		}
 
 		// Draw icon
 		Ref<Texture2D> icon = m_EntityIcon;
@@ -378,22 +361,19 @@ namespace Lunex {
 		if (icon) {
 			drawList->AddImage(
 				(ImTextureID)(intptr_t)icon->GetRendererID(),
-				iconPos,
-				ImVec2(iconPos.x + m_Style.IconSize, iconPos.y + m_Style.IconSize),
+				iconPos, ImVec2(iconPos.x + m_Style.IconSize, iconPos.y + m_Style.IconSize),
 				ImVec2(0, 1), ImVec2(1, 0)
 			);
 		}
 		
-		// Adjust cursor for tree node
 		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + m_Style.IconSize + 4.0f);
 		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (itemHeight - ImGui::GetFrameHeight()) * 0.5f);
 
-		// Rename mode or tree node
 		bool opened = false;
 		
 		if (isRenaming) {
 			ImGui::SetKeyboardFocusHere();
-			ScopedColor frameColor(ImGuiCol_FrameBg, Color(0.055f, 0.647f, 0.769f, 0.2f).ToImVec4());
+			ScopedColor frameColor(ImGuiCol_FrameBg, Color(0.055f, 0.647f, 0.769f, 0.2f));
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 20.0f);
 			
 			if (ImGui::InputText("##RenameEntity", m_RenameBuffer, sizeof(m_RenameBuffer), 
@@ -406,14 +386,12 @@ namespace Lunex {
 				m_IsRenaming = false;
 			}
 		} else {
-			// Use invisible button for the entire row
 			ImGui::SetCursorPosY(ImGui::GetCursorPosY() - (itemHeight - ImGui::GetFrameHeight()) * 0.5f);
 			
-			// Custom tree node rendering
 			ScopedColor treeColors({
-				{ImGuiCol_Header, ImVec4(0, 0, 0, 0)},  // Transparent, we draw our own bg
-				{ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0)},
-				{ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0)}
+				{ImGuiCol_Header, Color(0, 0, 0, 0)},
+				{ImGuiCol_HeaderHovered, Color(0, 0, 0, 0)},
+				{ImGuiCol_HeaderActive, Color(0, 0, 0, 0)}
 			});
 			
 			opened = ImGui::TreeNodeEx(tag.c_str(), flags);
@@ -431,44 +409,34 @@ namespace Lunex {
 				ToggleEntitySelection(entity);
 			}
 			else if (io.KeyShift) {
-				// Shift+Click: Add to selection
-				if (!IsEntitySelected(entity)) {
+				if (!IsEntitySelected(entity))
 					AddEntityToSelection(entity);
-				}
 			}
 			else {
-				// Normal click
-				if (IsEntitySelected(entity) && m_SelectedEntities.size() > 1) {
-					// Already selected in multi-selection: make active
+				if (IsEntitySelected(entity) && m_SelectedEntities.size() > 1)
 					SetActiveEntityInSelection(entity);
-				}
-				else {
+				else
 					SelectEntity(entity, true);
-				}
 			}
 		}
 
-		// Drag & Drop Source
+		// Drag & Drop (low-level ImGui - no abstraction available)
 		if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
 			ImGui::SetDragDropPayload("ENTITY_NODE", &entity, sizeof(Entity));
-			ImGui::Text("%s", tag.c_str());
+			Text("%s", tag.c_str());
 			m_DraggedEntity = entity;
 			ImGui::EndDragDropSource();
 		}
 
-		// Drag & Drop Target (for parenting)
 		if (ImGui::BeginDragDropTarget()) {
 			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENTITY_NODE")) {
 				Entity droppedEntity = *(Entity*)payload->Data;
-				
 				if (droppedEntity != entity) {
 					Entity currentParent = m_Context->GetParent(droppedEntity);
-					if (currentParent == entity) {
+					if (currentParent == entity)
 						UnparentEntity(droppedEntity);
-					}
-					else if (!m_Context->IsAncestorOf(droppedEntity, entity)) {
+					else if (!m_Context->IsAncestorOf(droppedEntity, entity))
 						SetEntityParent(droppedEntity, entity);
-					}
 				}
 			}
 			ImGui::EndDragDropTarget();
@@ -476,23 +444,75 @@ namespace Lunex {
 
 		// Context menu
 		RenderEntityContextMenu(entity);
-
-		ImGui::PopID();
 		
-		// Advance cursor to next row - Need to submit a dummy item to properly extend window bounds
+		// Advance cursor
 		float advanceAmount = itemHeight - ImGui::GetFrameHeight();
 		if (advanceAmount > 0) {
 			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + advanceAmount);
-			ImGui::Dummy(ImVec2(0, 0)); // Dummy item to properly extend window boundaries
+			Dummy(Size(0, 0));
 		}
 
-		// Draw children recursively if opened
+		// Draw children recursively
 		if (opened && hasChildren) {
 			auto children = m_Context->GetChildren(entity);
-			for (auto child : children) {
+			for (auto child : children)
 				DrawEntityNode(child, depth + 1);
+			TreePop();
+		}
+		
+		// Draw submeshes
+		if (opened && hasSubmeshes && !hasChildren) {
+			auto& meshComp = entity.GetComponent<MeshComponent>();
+			const auto& meshes = meshComp.MeshModel->GetMeshes();
+			const auto& materialData = meshComp.MeshModel->GetMaterialData();
+			const auto& matIndices = meshComp.MeshModel->GetSubmeshMaterialIndices();
+			
+			for (size_t si = 0; si < meshes.size(); si++) {
+				float subIndent = (depth + 1) * m_Style.IndentSpacing + m_Style.TypeIndicatorWidth + 4.0f;
+				
+				ImVec2 subCursor = ImGui::GetCursorScreenPos();
+				float subHeight = 20.0f;
+				float subWidth = ImGui::GetContentRegionAvail().x;
+				
+				Color subBg = (si % 2 == 0) 
+					? Color(0.075f, 0.095f, 0.120f, 1.0f)
+					: Color(0.085f, 0.105f, 0.135f, 1.0f);
+				drawList->AddRectFilled(subCursor, ImVec2(subCursor.x + subWidth, subCursor.y + subHeight), subBg.ToImU32());
+				drawList->AddRectFilled(subCursor, ImVec2(subCursor.x + 2.0f, subCursor.y + subHeight), Color(0.30f, 0.60f, 0.35f, 0.6f).ToImU32());
+				
+				std::string subLabel;
+				if (si < matIndices.size() && matIndices[si] < materialData.size()) {
+					const auto& matName = materialData[matIndices[si]].Name;
+					subLabel = "Submesh " + std::to_string(si) + " [" + matName + "]";
+				} else {
+					subLabel = "Submesh " + std::to_string(si);
+				}
+				
+				uint32_t verts = (uint32_t)meshes[si]->GetVertices().size();
+				uint32_t tris = (uint32_t)meshes[si]->GetIndices().size() / 3;
+				
+				ImGui::SetCursorPosX(ImGui::GetCursorPosX() + subIndent);
+				
+				{
+					ScopedColor textColor(ImGuiCol_Text, m_Style.TextMuted);
+					ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (subHeight - ImGui::GetTextLineHeight()) * 0.5f);
+					Text("%s", subLabel.c_str());
+				}
+				
+				{
+					std::string statsStr = std::to_string(verts) + "v / " + std::to_string(tris) + "t";
+					float statsWidth = ImGui::CalcTextSize(statsStr.c_str()).x;
+					ScopedColor statsColor(ImGuiCol_Text, Color(0.45f, 0.50f, 0.55f, 1.0f));
+					SameLine(ImGui::GetWindowWidth() - statsWidth - 12.0f);
+					Text("%s", statsStr.c_str());
+				}
+				
+				float remaining = subHeight - ImGui::GetTextLineHeightWithSpacing();
+				if (remaining > 0)
+					ImGui::SetCursorPosY(ImGui::GetCursorPosY() + remaining);
 			}
-			ImGui::TreePop();
+			
+			TreePop();
 		}
 	}
 	
@@ -503,77 +523,65 @@ namespace Lunex {
 		bool entityDeleted = false;
 		
 		if (ImGui::BeginPopupContextItem()) {
-			// Header
 			{
-				ScopedColor textColor(ImGuiCol_Text, m_Style.TextMuted.ToImVec4());
-				ImGui::Text("%s", tag.c_str());
+				ScopedColor textColor(ImGuiCol_Text, m_Style.TextMuted);
+				Text("%s", tag.c_str());
 			}
-			ImGui::Separator();
+			Separator();
 			
-			if (ImGui::MenuItem("Rename", "F2")) {
+			if (MenuItem("Rename", "F2"))
 				RenameEntity(entity);
-			}
 			
-			if (ImGui::MenuItem("Duplicate", "Ctrl+D")) {
+			if (MenuItem("Duplicate", "Ctrl+D"))
 				DuplicateEntity(entity);
-			}
 			
-			ImGui::Separator();
+			Separator();
 			
-			if (ImGui::MenuItem("Create Prefab")) {
+			if (MenuItem("Create Prefab"))
 				CreatePrefabFromEntity(entity);
-			}
 			
-			ImGui::Separator();
+			Separator();
 			
-			// Hierarchy options
 			Entity parent = m_Context->GetParent(entity);
 			if (parent) {
-				if (ImGui::MenuItem("Unparent")) {
+				if (MenuItem("Unparent"))
 					UnparentEntity(entity);
-				}
 			}
 			
-			if (ImGui::MenuItem("Create Child")) {
+			if (MenuItem("Create Child")) {
 				Entity child = m_Context->CreateEntity("Child");
 				SetEntityParent(child, entity);
 				SelectEntity(child);
 			}
 			
-			ImGui::Separator();
+			Separator();
 			
 			{
-				ScopedColor deleteColor(ImGuiCol_Text, Color(1.0f, 0.3f, 0.3f, 1.0f).ToImVec4());
-				if (ImGui::MenuItem("Delete", "Del")) {
+				ScopedColor deleteColor(ImGuiCol_Text, Color(1.0f, 0.3f, 0.3f, 1.0f));
+				if (MenuItem("Delete", "Del"))
 					entityDeleted = true;
-				}
 			}
 			
-			ImGui::Separator();
+			Separator();
 			
-			// Entity info
 			{
-				ScopedColor infoColor(ImGuiCol_Text, m_Style.TextMuted.ToImVec4());
-				ImGui::Text("UUID: %llu", (uint64_t)entity.GetComponent<IDComponent>().ID);
-				if (parent) {
-					ImGui::Text("Parent: %s", parent.GetComponent<TagComponent>().Tag.c_str());
-				}
+				ScopedColor infoColor(ImGuiCol_Text, m_Style.TextMuted);
+				Text("UUID: %llu", (uint64_t)entity.GetComponent<IDComponent>().ID);
+				if (parent)
+					Text("Parent: %s", parent.GetComponent<TagComponent>().Tag.c_str());
 			}
 
-			ImGui::EndPopup();
+			EndPopup();
 		}
 
-		// Delete entity (after popup closed)
 		if (entityDeleted) {
 			auto children = m_Context->GetChildren(entity);
-			for (auto child : children) {
+			for (auto child : children)
 				UnparentEntity(child);
-			}
 			
 			m_Context->DestroyEntity(entity);
-			if (m_SelectionContext == entity) {
+			if (m_SelectionContext == entity)
 				ClearSelection();
-			}
 		}
 	}
 	

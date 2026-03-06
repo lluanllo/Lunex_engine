@@ -140,11 +140,15 @@ namespace Lunex {
 		ImGui::SetNextWindowSize(ImVec2(950, 700), ImGuiCond_FirstUseEver);
 		CenterNextWindow();
 		
-		// Window styling - push individual style vars
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(15, 15));
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 8));
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 4.0f);
+		// Window styling
+		ScopedStyle windowStyles1({
+			{ImGuiStyleVar_WindowPadding, ImVec2(15, 15)},
+			{ImGuiStyleVar_ItemSpacing, ImVec2(8, 8)}
+		});
+		ScopedStyle windowStyles2({
+			{ImGuiStyleVar_FrameRounding, 4.0f},
+			{ImGuiStyleVar_GrabRounding, 4.0f}
+		});
 		
 		if (BeginPanel("Input Settings", &m_Open, ImGuiWindowFlags_NoCollapse)) {
 			// Header
@@ -170,8 +174,6 @@ namespace Lunex {
 			RenderConfirmDialog();
 		}
 		EndPanel();
-		
-		ImGui::PopStyleVar(4);
 	}
 
 	// ============================================================================
@@ -290,7 +292,7 @@ namespace Lunex {
 					{
 						ScopedColor categoryColor(ImGuiCol_Text, InputSettingsStyle::CategoryText());
 						ImGui::SetWindowFontScale(1.1f);
-						ImGui::Text("%s", category.c_str());
+						Text("%s", category.c_str());
 						ImGui::SetWindowFontScale(1.0f);
 					}
 
@@ -371,14 +373,12 @@ namespace Lunex {
 				{ImGuiCol_Text, textColor}
 			});
 			
-			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12, 6));
-			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+			ScopedStyle btnStylePadding(ImGuiStyleVar_FramePadding, ImVec2(12, 6));
+			ScopedStyle btnStyleRounding(ImGuiStyleVar_FrameRounding, 3.0f);
 			
-			if (ImGui::Button(displayText.c_str(), ImVec2(-1, 0))) {
+			if (Button(displayText, ButtonVariant::Default, ButtonSize::Medium, Size(-1, 0))) {
 				BeginRemap(actionName);
 			}
-			
-			ImGui::PopStyleVar(2);
 			
 			if (IsItemHovered()) {
 				SetTooltip("Click to remap this binding");

@@ -2,6 +2,7 @@
 #include "Texture.h"
 #include "TextureCompression.h"
 #include "RHI/RHIDevice.h"
+#include "RHI/RHI.h"
 #include "Log/Log.h"
 
 #include "stb_image.h"
@@ -257,6 +258,13 @@ namespace Lunex {
 	void Texture2D::Bind(uint32_t slot) const {
 		if (m_RHITexture) {
 			m_RHITexture->Bind(slot);
+		}
+	}
+	
+	void Texture2D::UnbindSlot(uint32_t slot) {
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (cmdList) {
+			cmdList->SetTexture(nullptr, slot);
 		}
 	}
 	

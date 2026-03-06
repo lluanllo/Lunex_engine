@@ -146,7 +146,7 @@ namespace Lunex {
 				strcpy_s(buffer, sizeof(buffer), tag.c_str());
 				
 				ImGui::SetNextItemWidth(-1);
-				if (ImGui::InputText("##Tag", buffer, sizeof(buffer))) {
+				if (InputText("##Tag", buffer, sizeof(buffer))) {
 					tag = std::string(buffer);
 				}
 			}
@@ -162,7 +162,7 @@ namespace Lunex {
 		if (BeginPopup("AddComponent")) {
 			{
 				ScopedColor textColor(ImGuiCol_Text, ComponentStyle::HeaderColor());
-				ImGui::Text("Add Component");
+				Text("Add Component");
 			}
 			Separator();
 
@@ -176,7 +176,7 @@ namespace Lunex {
 			Separator();
 			{
 				ScopedColor textColor(ImGuiCol_Text, ComponentStyle::SubheaderColor());
-				ImGui::Text("Physics 2D");
+				Text("Physics 2D");
 			}
 
 			DisplayAddComponentEntry<Rigidbody2DComponent>("Rigidbody 2D");
@@ -186,7 +186,7 @@ namespace Lunex {
 			Separator();
 			{
 				ScopedColor textColor(ImGuiCol_Text, ComponentStyle::SubheaderColor());
-				ImGui::Text("Physics 3D");
+				Text("Physics 3D");
 			}
 
 			DisplayAddComponentEntry<Rigidbody3DComponent>("Rigidbody 3D");

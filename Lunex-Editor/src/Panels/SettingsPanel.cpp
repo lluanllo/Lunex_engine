@@ -375,7 +375,7 @@ namespace Lunex {
 				});
 				ScopedStyle borderSize(ImGuiStyleVar_FrameBorderSize, 1.5f);
 				
-				ImGui::Button("Drop HDRI Here (.hdr, .exr)", ImVec2(-1, 40));
+				Button("Drop HDRI Here (.hdr, .exr)", ButtonVariant::Default, ButtonSize::Large, Size(-1, 40));
 				
 				if (ImGui::BeginDragDropTarget()) {
 					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
@@ -487,19 +487,10 @@ namespace Lunex {
 				// Background color (when no HDRI) - applies to clear color
 				glm::vec3 bgColor = SkyboxRenderer::GetBackgroundColor();
 				
-				// Use manual column layout for color
-				BeginColumns(2, false);
-				SetColumnWidth(0, SpacingValues::PropertyLabelWidth);
-				Label("Background Color");
-				NextColumn();
-				
-				ImGui::SetNextItemWidth(-1);
-				if (ImGui::ColorEdit3("##BackgroundColor", glm::value_ptr(bgColor), ImGuiColorEditFlags_NoLabel)) {
+				if (PropertyColor("Background Color", bgColor)) {
 					SkyboxRenderer::SetBackgroundColor(bgColor);
 					SkyboxRenderer::ApplyBackgroundClearColor();
 				}
-				
-				EndColumns();
 			}
 			
 			EndSection();
@@ -748,17 +739,17 @@ namespace Lunex {
 				config.Gravity = glm::vec3(0.0f, -9.81f, 0.0f);
 				configChanged = true;
 			}
-			ImGui::SameLine();
+			SameLine();
 			if (Button("Moon", ButtonVariant::Outline)) {
 				config.Gravity = glm::vec3(0.0f, -1.62f, 0.0f);
 				configChanged = true;
 			}
-			ImGui::SameLine();
+			SameLine();
 			if (Button("Mars", ButtonVariant::Outline)) {
 				config.Gravity = glm::vec3(0.0f, -3.72f, 0.0f);
 				configChanged = true;
 			}
-			ImGui::SameLine();
+			SameLine();
 			if (Button("Zero-G", ButtonVariant::Outline)) {
 				config.Gravity = glm::vec3(0.0f, 0.0f, 0.0f);
 				configChanged = true;

@@ -1,9 +1,12 @@
 #include "ConsolePanel.h"
 #include "Project/Project.h"
 #include "Log/Log.h"
+
 #include "../UI/UIComponents.h"
 #include "../UI/UILayout.h"
+
 #include <imgui.h>
+
 #include <algorithm>
 #include <sstream>
 #include <chrono>
@@ -294,47 +297,38 @@ namespace Lunex {
 		using namespace UI;
 
 		// ===== TERMINAL HEADER =====
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 2));
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.10f, 0.12f, 1.0f));
+		{
+			ScopedStyle headerPadding(ImGuiStyleVar_FramePadding, ImVec2(4, 2));
+			ScopedColor headerBg(ImGuiCol_ChildBg, Color(0.10f, 0.10f, 0.12f, 1.0f));
 
-		if (ImGui::BeginChild("##terminal_header", ImVec2(0, 30), true, ImGuiWindowFlags_NoScrollbar)) {
-			// Terminal type indicator
-			const char* typeIcon = (m_TerminalType == TerminalType::PowerShell) ? "PS>" : "CMD>";
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.6f, 1.0f, 1.0f));
-			ImGui::Text("%s", typeIcon);
-			ImGui::PopStyleColor();
+			if (BeginChild("##terminal_header", Size(0, 30), true, ImGuiWindowFlags_NoScrollbar)) {
+				// Terminal type indicator
+				const char* typeIcon = (m_TerminalType == TerminalType::PowerShell) ? "PS>" : "CMD>";
+				TextColored(Color(0.2f, 0.6f, 1.0f, 1.0f), "%s", typeIcon);
 
-			ImGui::SameLine();
+				SameLine();
 
-			// Working directory
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
-			ImGui::Text("%s", m_WorkingDirectory.string().c_str());
-			ImGui::PopStyleColor();
+				// Working directory
+				TextColored(Color(0.7f, 0.7f, 0.7f, 1.0f), "%s", m_WorkingDirectory.string().c_str());
 
-			ImGui::SameLine(ImGui::GetWindowWidth() - 150);
+				SameLine(ImGui::GetWindowWidth() - 150);
 
-			// Status indicator
-			if (m_IsRunning) {
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 0.9f, 0.3f, 1.0f));
-				ImGui::Text("Running");
-				ImGui::PopStyleColor();
+				// Status indicator
+				if (m_IsRunning) {
+					TextColored(Color(0.3f, 0.9f, 0.3f, 1.0f), "Running");
+				}
+				else {
+					TextColored(Color(0.9f, 0.3f, 0.3f, 1.0f), "Stopped");
+				}
+
+				SameLine();
+
+				if (Button("Clear")) {
+					Clear();
+				}
 			}
-			else {
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
-				ImGui::Text("Stopped");
-				ImGui::PopStyleColor();
-			}
-
-			ImGui::SameLine();
-
-			if (ImGui::Button("Clear")) {
-				Clear();
-			}
+			EndChild();
 		}
-		ImGui::EndChild();
-
-		ImGui::PopStyleColor();
-		ImGui::PopStyleVar();
 
 		// ===== TERMINAL OUTPUT =====
 		DrawTerminalOutput();
@@ -344,14 +338,14 @@ namespace Lunex {
 	}
 
 	void TerminalTab::DrawTerminalOutput() {
-		// Terminal-style dark background
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.05f, 0.05f, 0.07f, 1.0f));
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+		using namespace UI;
+		
+		ScopedColor outputBg(ImGuiCol_ChildBg, Color(0.05f, 0.05f, 0.07f, 1.0f));
+		ScopedStyle outputSpacing(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
 		float inputHeight = 30.0f;
-		if (ImGui::BeginChild("##terminal_output", ImVec2(0, -inputHeight), false, ImGuiWindowFlags_HorizontalScrollbar)) {
-			// Use monospace-style rendering
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f));
+		if (BeginChild("##terminal_output", Size(0, -inputHeight), false, ImGuiWindowFlags_HorizontalScrollbar)) {
+			ScopedColor textColor(ImGuiCol_Text, Color(0.9f, 0.9f, 0.9f, 1.0f));
 
 			{
 				std::lock_guard<std::mutex> lock(m_OutputMutex);
@@ -360,24 +354,23 @@ namespace Lunex {
 				}
 			}
 
-			ImGui::PopStyleColor();
-
 			// Auto-scroll
 			if (m_ScrollToBottom) {
 				ImGui::SetScrollHereY(1.0f);
 				m_ScrollToBottom = false;
 			}
 		}
-		ImGui::EndChild();
-
-		ImGui::PopStyleVar();
-		ImGui::PopStyleColor();
+		EndChild();
 	}
 
 	void TerminalTab::DrawTerminalInput() {
-		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.08f, 0.08f, 0.10f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.12f, 0.12f, 0.14f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.15f, 0.15f, 0.18f, 1.0f));
+		using namespace UI;
+		
+		ScopedColor inputColors({
+			{ImGuiCol_FrameBg, Color(0.08f, 0.08f, 0.10f, 1.0f)},
+			{ImGuiCol_FrameBgHovered, Color(0.12f, 0.12f, 0.14f, 1.0f)},
+			{ImGuiCol_FrameBgActive, Color(0.15f, 0.15f, 0.18f, 1.0f)}
+		});
 
 		ImGui::PushItemWidth(-1);
 
@@ -420,17 +413,16 @@ namespace Lunex {
 			return 0;
 			};
 
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.8f, 0.2f, 1.0f));
-		ImGui::Text("%s", prompt);
-		ImGui::PopStyleColor();
-		ImGui::SameLine();
+		TextColored(Color(0.2f, 0.8f, 0.2f, 1.0f), "%s", prompt);
+		SameLine();
 
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f));
-		if (ImGui::InputText("##terminal_input", m_InputBuffer, sizeof(m_InputBuffer), inputFlags, historyCallback, this)) {
-			ProcessTerminalInput();
-			m_ReclaimFocus = true;
+		{
+			ScopedColor cmdTextColor(ImGuiCol_Text, Color(0.9f, 0.9f, 0.9f, 1.0f));
+			if (ImGui::InputText("##terminal_input", m_InputBuffer, sizeof(m_InputBuffer), inputFlags, historyCallback, this)) {
+				ProcessTerminalInput();
+				m_ReclaimFocus = true;
+			}
 		}
-		ImGui::PopStyleColor();
 
 		// Keep focus on input
 		if (m_ReclaimFocus) {
@@ -439,7 +431,6 @@ namespace Lunex {
 		}
 
 		ImGui::PopItemWidth();
-		ImGui::PopStyleColor(3);
 	}
 
 	void TerminalTab::ProcessTerminalInput() {
@@ -595,26 +586,25 @@ namespace Lunex {
 	void ConsolePanel::DrawTabBar() {
 		using namespace UI;
 
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 4));
-		ImGui::PushStyleColor(ImGuiCol_Tab, m_Style.TabBg.ToImVec4());
-		ImGui::PushStyleColor(ImGuiCol_TabActive, m_Style.TabActive.ToImVec4());
-		ImGui::PushStyleColor(ImGuiCol_TabHovered, m_Style.TabHovered.ToImVec4());
+		ScopedStyle tabPadding(ImGuiStyleVar_FramePadding, ImVec2(8, 4));
+		ScopedColor tabColors({
+			{ImGuiCol_Tab, m_Style.TabBg},
+			{ImGuiCol_TabActive, m_Style.TabActive},
+			{ImGuiCol_TabHovered, m_Style.TabHovered}
+		});
 
-		if (ImGui::BeginTabBar("##console_tabs", ImGuiTabBarFlags_Reorderable | ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_FittingPolicyScroll)) {
+		if (BeginTabBar("##console_tabs", ImGuiTabBarFlags_Reorderable | ImGuiTabBarFlags_AutoSelectNewTabs | ImGuiTabBarFlags_FittingPolicyScroll)) {
 			for (int i = 0; i < (int)m_Tabs.size(); i++) {
 				bool open = true;
-				ImGuiTabItemFlags flags = 0;
 
-				// Add icon for terminal tabs
 				std::string tabName = m_Tabs[i]->GetName();
-				if (m_Tabs[i]->IsTerminal()) {
+				if (m_Tabs[i]->IsTerminal())
 					tabName = ">_ " + tabName;
-				}
 
-				if (ImGui::BeginTabItem(tabName.c_str(), &open, flags)) {
+				if (BeginTabItem(tabName, &open)) {
 					m_ActiveTabIndex = i;
 					m_Tabs[i]->SetActive(true);
-					ImGui::EndTabItem();
+					EndTabItem();
 				}
 				else {
 					m_Tabs[i]->SetActive(false);
@@ -628,31 +618,23 @@ namespace Lunex {
 				}
 			}
 
-			// Add tab button
-			if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing)) {
+			if (TabButton("+")) {
 				OpenPopup("AddTabPopup");
 			}
 
-			// Popup for adding new tabs
 			if (BeginPopup("AddTabPopup")) {
-				if (MenuItem("Log Tab")) {
+				if (MenuItem("Log Tab"))
 					AddTab("Tab " + std::to_string(m_Tabs.size() + 1));
-				}
 				Separator();
-				if (MenuItem("PowerShell Terminal")) {
+				if (MenuItem("PowerShell Terminal"))
 					AddTerminalTab("PowerShell", GetTerminalWorkingDirectory(), TerminalType::PowerShell);
-				}
-				if (MenuItem("CMD Terminal")) {
+				if (MenuItem("CMD Terminal"))
 					AddTerminalTab("CMD", GetTerminalWorkingDirectory(), TerminalType::CMD);
-				}
 				EndPopup();
 			}
 
-			ImGui::EndTabBar();
+			EndTabBar();
 		}
-
-		ImGui::PopStyleColor(3);
-		ImGui::PopStyleVar();
 	}
 
 	void ConsolePanel::DrawToolbar() {
@@ -674,7 +656,7 @@ namespace Lunex {
 
 		SameLine();
 
-		ImGui::Checkbox("Help", &m_ShowCommandHelp);
+		Checkbox("Help", m_ShowCommandHelp);
 
 		SameLine(0, 20);
 
@@ -684,13 +666,13 @@ namespace Lunex {
 			{ImGuiCol_ButtonHovered, Color(0.20f, 0.20f, 0.30f, 1.0f)}
 			});
 
-		if (ImGui::Button(">_ PowerShell")) {
+		if (Button(">_ PowerShell")) {
 			AddTerminalTab("PowerShell", GetTerminalWorkingDirectory(), TerminalType::PowerShell);
 		}
 
 		SameLine();
 
-		if (ImGui::Button(">_ CMD")) {
+		if (Button(">_ CMD")) {
 			AddTerminalTab("CMD", GetTerminalWorkingDirectory(), TerminalType::CMD);
 		}
 	}
@@ -724,7 +706,7 @@ namespace Lunex {
 				else if (data->EventKey == ImGuiKey_DownArrow) {
 					if (console->m_HistoryPos != -1) {
 						console->m_HistoryPos++;
-						if (console->m_HistoryPos >= console->m_CommandHistory.size())
+						if (console->m_HistoryPos >= (int)console->m_CommandHistory.size())
 							console->m_HistoryPos = -1;
 					}
 				}
@@ -767,10 +749,10 @@ namespace Lunex {
 		AddSpacing(SpacingValues::SM);
 
 		for (const auto& [name, cmd] : m_Commands) {
-			ImGui::BulletText("%s - %s", name.c_str(), cmd.Description.c_str());
+			BulletText(name + " - " + cmd.Description);
 			if (!cmd.Usage.empty()) {
 				Indent(16.0f);
-				TextStyled(("Usage: " + cmd.Usage).c_str(), TextVariant::Muted);
+				TextStyled(("Usage: " + cmd.Usage), TextVariant::Muted);
 				Unindent(16.0f);
 			}
 		}

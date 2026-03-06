@@ -62,6 +62,9 @@ namespace Lunex {
 		void SetData(void* data, uint32_t size) override;
 		void Bind(uint32_t slot = 0) const override;
 		
+		// Unbind a specific texture slot (RHI-safe)
+		static void UnbindSlot(uint32_t slot);
+		
 		bool IsLoaded() const override { return m_IsLoaded; }
 		
 		bool IsCompressed() const override { return m_IsCompressed; }

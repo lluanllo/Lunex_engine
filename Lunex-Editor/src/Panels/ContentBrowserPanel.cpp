@@ -557,6 +557,19 @@ namespace Lunex {
 			}
 			Separator();
 		}
+
+		// Specific options for .lumat files
+		if (ext == ".lumat" && m_SelectedItems.size() == 1) {
+			if (MenuItem("Open in Material Editor")) {
+				if (m_OnMaterialOpenCallback) {
+					m_OnMaterialOpenCallback(path);
+				}
+				else {
+					LNX_LOG_WARN("Material editor not connected - cannot open {0}", path.filename().string());
+				}
+			}
+			Separator();
+		}
 		
 		if (m_SelectedItems.size() == 1) {
 			if (MenuItem("Rename")) {
@@ -983,7 +996,7 @@ namespace Lunex {
 		if (extension == ".luprefab") return "PREFAB";
 		if (extension == ".lunex") return "SCENE";
 		if (extension == ".hdr" || extension == ".hdri" || extension == ".exr") return "HDRI";
-		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".TGA" || extension == ".tga") return "TEXTURE";
+		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".tga" || extension == ".bmp") return "TEXTURE";
 		if (extension == ".glsl" || extension == ".shader") return "SHADER";
 		if (extension == ".wav" || extension == ".mp3" || extension == ".ogg") return "AUDIO";
 		if (extension == ".cpp" || extension == ".h" || extension == ".cs") return "SCRIPT";
