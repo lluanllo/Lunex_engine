@@ -1,8 +1,7 @@
 #include "stpch.h"
 #include "MaterialInstance.h"
+#include "Renderer/Texture.h"
 #include "Log/Log.h"
-
-#include <glad/glad.h>
 
 namespace Lunex {
 
@@ -267,33 +266,33 @@ namespace Lunex {
 	void MaterialInstance::BindTextures() const {
 		// Bind or unbind each texture slot to prevent texture bleeding between draws
 		if (auto albedoMap = GetAlbedoMap()) albedoMap->Bind(0);
-		else glBindTextureUnit(0, 0);
+		else Texture2D::UnbindSlot(0);
 		
 		if (auto normalMap = GetNormalMap()) normalMap->Bind(1);
-		else glBindTextureUnit(1, 0);
+		else Texture2D::UnbindSlot(1);
 		
 		if (auto metallicMap = GetMetallicMap()) metallicMap->Bind(2);
-		else glBindTextureUnit(2, 0);
+		else Texture2D::UnbindSlot(2);
 		
 		if (auto roughnessMap = GetRoughnessMap()) roughnessMap->Bind(3);
-		else glBindTextureUnit(3, 0);
+		else Texture2D::UnbindSlot(3);
 		
 		if (auto specularMap = GetSpecularMap()) specularMap->Bind(4);
-		else glBindTextureUnit(4, 0);
+		else Texture2D::UnbindSlot(4);
 		
 		if (auto emissionMap = GetEmissionMap()) emissionMap->Bind(5);
-		else glBindTextureUnit(5, 0);
+		else Texture2D::UnbindSlot(5);
 		
 		if (auto aoMap = GetAOMap()) aoMap->Bind(6);
-		else glBindTextureUnit(6, 0);
+		else Texture2D::UnbindSlot(6);
 
 		// Layered texture at slot 7
 		if (HasLayeredTexture()) {
 			auto layeredTex = GetLayeredTextureConfig().Texture;
 			if (layeredTex) layeredTex->Bind(7);
-			else glBindTextureUnit(7, 0);
+			else Texture2D::UnbindSlot(7);
 		} else {
-			glBindTextureUnit(7, 0);
+			Texture2D::UnbindSlot(7);
 		}
 
 		// Detail normals at slots 12-15
@@ -302,7 +301,7 @@ namespace Lunex {
 			if (i < details.size() && details[i].Texture) {
 				details[i].Texture->Bind(12 + i);
 			} else {
-				glBindTextureUnit(12 + i, 0);
+				Texture2D::UnbindSlot(12 + i);
 			}
 		}
 	}

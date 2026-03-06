@@ -260,7 +260,11 @@ namespace Lunex {
 		}
 
 		void OpenGLRHICommandList::SetTexture(const RHITexture* texture, uint32_t slot) {
-			if (texture) texture->Bind(slot);
+			if (texture) {
+				texture->Bind(slot);
+			} else {
+				glBindTextureUnit(slot, 0);
+			}
 		}
 
 		void OpenGLRHICommandList::SetSampler(const RHISampler* sampler, uint32_t slot) {
