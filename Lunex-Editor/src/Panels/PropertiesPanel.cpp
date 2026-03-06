@@ -146,7 +146,7 @@ namespace Lunex {
 				strcpy_s(buffer, sizeof(buffer), tag.c_str());
 				
 				ImGui::SetNextItemWidth(-1);
-				if (ImGui::InputText("##Tag", buffer, sizeof(buffer))) {
+				if (InputText("##Tag", buffer, sizeof(buffer))) {
 					tag = std::string(buffer);
 				}
 			}
@@ -162,7 +162,7 @@ namespace Lunex {
 		if (BeginPopup("AddComponent")) {
 			{
 				ScopedColor textColor(ImGuiCol_Text, ComponentStyle::HeaderColor());
-				ImGui::Text("Add Component");
+				Text("Add Component");
 			}
 			Separator();
 
@@ -176,7 +176,7 @@ namespace Lunex {
 			Separator();
 			{
 				ScopedColor textColor(ImGuiCol_Text, ComponentStyle::SubheaderColor());
-				ImGui::Text("Physics 2D");
+				Text("Physics 2D");
 			}
 
 			DisplayAddComponentEntry<Rigidbody2DComponent>("Rigidbody 2D");
@@ -186,7 +186,7 @@ namespace Lunex {
 			Separator();
 			{
 				ScopedColor textColor(ImGuiCol_Text, ComponentStyle::SubheaderColor());
-				ImGui::Text("Physics 3D");
+				Text("Physics 3D");
 			}
 
 			DisplayAddComponentEntry<Rigidbody3DComponent>("Rigidbody 3D");
@@ -640,70 +640,6 @@ namespace Lunex {
 			}
 
 			ComponentDrawer::EndIndent();
-
-			// ========== SUBMESH & MATERIAL INFO ==========
-			if (component.MeshModel && component.MeshModel->GetMeshes().size() > 1) {
-				ComponentDrawer::DrawSectionHeader("", "Submeshes");
-				ComponentDrawer::BeginIndent();
-
-				const auto& meshes = component.MeshModel->GetMeshes();
-				const auto& materialData = component.MeshModel->GetMaterialData();
-				const auto& submeshIndices = component.MeshModel->GetSubmeshMaterialIndices();
-				bool hasImportedMaterials = component.HasPerSubmeshMaterials();
-
-				for (size_t i = 0; i < meshes.size(); i++) {
-					ScopedID submeshID((int)i);
-					
-					uint32_t vertCount = (uint32_t)meshes[i]->GetVertices().size();
-					uint32_t triCount = (uint32_t)meshes[i]->GetIndices().size() / 3;
-
-					// Get material name for this submesh
-					std::string matName = "Default";
-					if (i < submeshIndices.size() && submeshIndices[i] < materialData.size()) {
-						matName = materialData[submeshIndices[i]].Name;
-					}
-
-					if (ImGui::TreeNodeEx(("Submesh " + std::to_string(i)).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth)) {
-						BeginColumns(2, false);
-						SetColumnWidth(0, 80.0f);
-
-						Label("Vertices"); NextColumn();
-						Text("%d", vertCount); NextColumn();
-
-						Label("Triangles"); NextColumn();
-						Text("%d", triCount); NextColumn();
-
-						Label("Material"); NextColumn();
-						if (hasImportedMaterials) {
-							auto submeshMat = component.GetSubmeshMaterial((uint32_t)i);
-							if (submeshMat) {
-								TextStyled(submeshMat->GetName().c_str(), TextVariant::Success);
-							} else {
-								Text("%s", matName.c_str());
-							}
-						} else {
-							TextStyled(matName.c_str(), TextVariant::Muted);
-						}
-						NextColumn();
-
-						EndColumns();
-						ImGui::TreePop();
-					}
-				}
-
-				if (hasImportedMaterials) {
-					AddSpacing(SpacingValues::XS);
-					TextStyled("Per-submesh materials active", TextVariant::Success);
-				} else if (!materialData.empty()) {
-					AddSpacing(SpacingValues::XS);
-					TextStyled("Material data available (not imported)", TextVariant::Warning);
-					if (Button("Import Materials", ButtonVariant::Primary, ButtonSize::Small, Size(-1, 0))) {
-						component.AutoImportMaterials();
-					}
-				}
-
-				ComponentDrawer::EndIndent();
-			}
 		});
 	}
 

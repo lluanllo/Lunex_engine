@@ -2,6 +2,10 @@
 #include "ProjectCreationDialog.h"
 #include "Utils/PlatformUtils.h"
 
+#include "../UI/UICore.h"
+#include "../UI/UIComponents.h"
+#include "../UI/UILayout.h"
+
 #include <imgui.h>
 #include <imgui_internal.h>
 
@@ -26,109 +30,106 @@ namespace Lunex {
 		if (!m_IsOpen)
 			return;
 		
-		ImGui::OpenPopup("Create New Project");
+		using namespace UI;
+		
+		OpenPopup("Create New Project");
 		
 		ImVec2 center = ImGui::GetMainViewport()->GetCenter();
 		ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 		ImGui::SetNextWindowSize(ImVec2(600, 450), ImGuiCond_Appearing);
 		
-		if (ImGui::BeginPopupModal("Create New Project", &m_IsOpen, ImGuiWindowFlags_NoResize)) {
-			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 6));
-			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 12));
+		if (BeginModal("Create New Project", &m_IsOpen, Size(600, 450), ImGuiWindowFlags_NoResize)) {
+			ScopedStyle dialogStyles(
+				ImGuiStyleVar_FramePadding, ImVec2(8, 6),
+				ImGuiStyleVar_ItemSpacing, ImVec2(8, 12));
 			
 			// Header
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f));
-			ImGui::SetWindowFontScale(1.2f);
-			ImGui::Text("Create New Lunex Project");
-			ImGui::SetWindowFontScale(1.0f);
-			ImGui::PopStyleColor();
+			{
+				ScopedColor headerColor(ImGuiCol_Text, Color(0.9f, 0.9f, 0.9f, 1.0f));
+				Heading("Create New Lunex Project", 1);
+			}
 			
-			ImGui::Separator();
-			ImGui::Spacing();
+			Separator();
+			AddSpacing(SpacingValues::SM);
 			
 			// Project Name
-			ImGui::Text("Project Name");
+			Text("Project Name");
 			ImGui::SetNextItemWidth(-1);
-			ImGui::InputText("##ProjectName", m_ProjectName, sizeof(m_ProjectName));
+			InputText("##ProjectName", m_ProjectName, sizeof(m_ProjectName));
 			
-			ImGui::Spacing();
+			AddSpacing(SpacingValues::SM);
 			
 			// Project Location
-			ImGui::Text("Project Location");
+			Text("Project Location");
 			ImGui::PushItemWidth(-80);
-			ImGui::InputText("##ProjectLocation", m_ProjectLocation, sizeof(m_ProjectLocation));
+			InputText("##ProjectLocation", m_ProjectLocation, sizeof(m_ProjectLocation));
 			ImGui::PopItemWidth();
-			ImGui::SameLine();
-			if (ImGui::Button("Browse...", ImVec2(70, 0))) {
+			SameLine();
+			if (Button("Browse...", ButtonVariant::Default, ButtonSize::Medium, Size(70, 0))) {
 				BrowseProjectLocation();
 			}
 			
 			// Show full path preview
 			std::filesystem::path fullPath = std::filesystem::path(m_ProjectLocation) / m_ProjectName;
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
-			ImGui::TextWrapped("Project will be created at: %s", fullPath.string().c_str());
-			ImGui::PopStyleColor();
+			TextColored(Color(0.6f, 0.6f, 0.6f, 1.0f), "Project will be created at: %s", fullPath.string().c_str());
 			
-			ImGui::Spacing();
-			ImGui::Separator();
-			ImGui::Spacing();
+			AddSpacing(SpacingValues::SM);
+			Separator();
+			AddSpacing(SpacingValues::SM);
 			
 			// Template Selection
-			ImGui::Text("Template");
+			Text("Template");
 			ImGui::SetNextItemWidth(-1);
 			ImGui::Combo("##Template", &m_SelectedTemplate, m_Templates, IM_ARRAYSIZE(m_Templates));
 			
 			// Template description
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
-			switch (m_SelectedTemplate) {
-			case 0:
-				ImGui::TextWrapped("Empty project with basic folder structure");
-				break;
-			case 1:
-				ImGui::TextWrapped("3D project with camera, light, and cube");
-				break;
-			case 2:
-				ImGui::TextWrapped("2D project with orthographic camera and sprite");
-				break;
+			{
+				ScopedColor descColor(ImGuiCol_Text, Color(0.7f, 0.7f, 0.7f, 1.0f));
+				switch (m_SelectedTemplate) {
+				case 0:
+					TextWrapped("Empty project with basic folder structure");
+					break;
+				case 1:
+					TextWrapped("3D project with camera, light, and cube");
+					break;
+				case 2:
+					TextWrapped("2D project with orthographic camera and sprite");
+					break;
+				}
 			}
-			ImGui::PopStyleColor();
 			
-			ImGui::Spacing();
-			ImGui::Separator();
-			ImGui::Spacing();
+			AddSpacing(SpacingValues::SM);
+			Separator();
+			AddSpacing(SpacingValues::SM);
 			
 			// Project Settings
-			if (ImGui::CollapsingHeader("Project Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-				ImGui::Indent();
-				
-				ImGui::Text("Window Size");
+			if (BeginSection("Project Settings", true)) {
+				Text("Window Size");
 				ImGui::SetNextItemWidth(150);
-				ImGui::InputInt("Width##WindowWidth", &m_WindowWidth);
-				ImGui::SameLine();
+				InputInt("##WindowWidth", m_WindowWidth);
+				SameLine();
 				ImGui::SetNextItemWidth(150);
-				ImGui::InputInt("Height##WindowHeight", &m_WindowHeight);
+				InputInt("##WindowHeight", m_WindowHeight);
 				
-				ImGui::Spacing();
-				ImGui::Checkbox("VSync", &m_VSync);
-				ImGui::SameLine();
-				ImGui::Checkbox("Fullscreen", &m_Fullscreen);
+				AddSpacing(SpacingValues::SM);
+				Checkbox("VSync", m_VSync);
+				SameLine();
+				Checkbox("Fullscreen", m_Fullscreen);
 				
-				ImGui::Unindent();
+				EndSection();
 			}
 			
-			ImGui::Spacing();
+			AddSpacing(SpacingValues::SM);
 			
 			// Error message
 			if (!m_ErrorMessage.empty()) {
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
-				ImGui::TextWrapped("%s", m_ErrorMessage.c_str());
-				ImGui::PopStyleColor();
-				ImGui::Spacing();
+				TextColored(Color(1.0f, 0.3f, 0.3f, 1.0f), "%s", m_ErrorMessage.c_str());
+				AddSpacing(SpacingValues::SM);
 			}
 			
 			// Buttons
-			ImGui::Separator();
-			ImGui::Spacing();
+			Separator();
+			AddSpacing(SpacingValues::SM);
 			
 			float buttonWidth = 120.0f;
 			float spacing = 10.0f;
@@ -137,27 +138,20 @@ namespace Lunex {
 			
 			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offsetX);
 			
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.9f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.6f, 1.0f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.4f, 0.8f, 1.0f));
-			
-			if (ImGui::Button("Create", ImVec2(buttonWidth, 35))) {
+			if (Button("Create", ButtonVariant::Primary, ButtonSize::Large, Size(buttonWidth, 35))) {
 				if (ValidateInput()) {
 					CreateProject();
 					Close();
 				}
 			}
 			
-			ImGui::PopStyleColor(3);
+			SameLine(0, spacing);
 			
-			ImGui::SameLine(0, spacing);
-			
-			if (ImGui::Button("Cancel", ImVec2(buttonWidth, 35))) {
+			if (Button("Cancel", ButtonVariant::Default, ButtonSize::Large, Size(buttonWidth, 35))) {
 				Close();
 			}
 			
-			ImGui::PopStyleVar(2);
-			ImGui::EndPopup();
+			EndModal();
 		}
 	}
 	

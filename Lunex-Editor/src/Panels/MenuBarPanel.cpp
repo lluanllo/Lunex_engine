@@ -60,7 +60,7 @@ namespace Lunex {
 		ScopedStyle popupFramePadding(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
 		
 		// Increase menu bar height
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(MenuBarStyle::FramePaddingX, MenuBarStyle::FramePaddingY));
+		ScopedStyle menuBarFramePadding(ImGuiStyleVar_FramePadding, ImVec2(MenuBarStyle::FramePaddingX, MenuBarStyle::FramePaddingY));
 
 		if (BeginMenuBar()) {
 			// Logo
@@ -86,8 +86,6 @@ namespace Lunex {
 
 			EndMenuBar();
 		}
-
-		ImGui::PopStyleVar();
 	}
 
 	// ============================================================================
@@ -100,21 +98,19 @@ namespace Lunex {
 		}
 
 		if (m_LogoTexture && m_LogoTexture->IsLoaded()) {
+			using namespace UI;
+			
 			float menuBarHeight = ImGui::GetFrameHeight();
 			float logoSize = menuBarHeight - MenuBarStyle::LogoPadding;
 
 			// Center vertically
 			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2.0f);
 
-			ImGui::Image(
-				(void*)(intptr_t)m_LogoTexture->GetRendererID(),
-				ImVec2(logoSize, logoSize),
-				ImVec2(0, 1), ImVec2(1, 0)
-			);
+			Image(m_LogoTexture, Size(logoSize, logoSize), true);
 			
-			UI::SameLine();
-			ImGui::Dummy(ImVec2(MenuBarStyle::LogoSpacing, 0.0f));
-			UI::SameLine();
+			SameLine();
+			Dummy(Size(MenuBarStyle::LogoSpacing, 0.0f));
+			SameLine();
 		}
 	}
 
@@ -261,21 +257,18 @@ namespace Lunex {
 		
 		float availWidth = ImGui::GetContentRegionAvail().x;
 
-		// Calculate text widths
 		float sceneTextWidth = ImGui::CalcTextSize(m_SceneName.c_str()).x;
 		float versionTextWidth = ImGui::CalcTextSize(m_ProjectName.c_str()).x;
 
-		// Center position for scene name
 		float centerPos = (availWidth - sceneTextWidth) * 0.5f;
 
-		// Check if there's enough space
 		if (centerPos > 10.0f && centerPos + sceneTextWidth < availWidth - versionTextWidth - 20.0f) {
 			// Scene name (centered)
 			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + centerPos);
 			
 			{
 				ScopedColor sceneColor(ImGuiCol_Text, MenuBarStyle::SceneNameColor());
-				ImGui::Text("%s", m_SceneName.c_str());
+				Text("%s", m_SceneName.c_str());
 			}
 
 			// Project name (right-aligned)
@@ -285,7 +278,7 @@ namespace Lunex {
 				ImGui::SetCursorPosX(ImGui::GetCursorPosX() + rightPos - ImGui::GetCursorPosX());
 				
 				ScopedColor projectColor(ImGuiCol_Text, MenuBarStyle::ProjectNameColor());
-				ImGui::Text("%s", m_ProjectName.c_str());
+				Text("%s", m_ProjectName.c_str());
 			}
 		}
 	}

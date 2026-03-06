@@ -34,13 +34,25 @@ namespace Lunex {
 	{
 		Assimp::Importer importer;
 
-		const aiScene* scene = importer.ReadFile(path,
+		// Determine if we should flip UVs based on file format
+		// GLTF/GLB already use correct UV coordinates (origin top-left)
+		// OBJ/FBX/DAE typically need UV flip
+		std::string ext = path.substr(path.find_last_of('.'));
+		std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+		bool isGLTF = (ext == ".gltf" || ext == ".glb");
+
+		unsigned int flags = 
 			aiProcess_Triangulate |
 			aiProcess_GenSmoothNormals |
 			aiProcess_CalcTangentSpace |
-			aiProcess_FlipUVs |
 			aiProcess_JoinIdenticalVertices |
-			aiProcess_OptimizeMeshes);
+			aiProcess_OptimizeMeshes;
+
+		if (!isGLTF) {
+			flags |= aiProcess_FlipUVs;
+		}
+
+		const aiScene* scene = importer.ReadFile(path, flags);
 
 		if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
 		{
@@ -193,6 +205,20 @@ namespace Lunex {
 		}
 		else if (material->Get(AI_MATKEY_COLOR_DIFFUSE, baseColor) == AI_SUCCESS) {
 			data.AlbedoColor = glm::vec4(baseColor.r, baseColor.g, baseColor.b, baseColor.a);
+		}
+
+		// Ensure alpha is valid (some exporters set it to 0)
+		if (data.AlbedoColor.a <= 0.0f) {
+			data.AlbedoColor.a = 1.0f;
+		}
+
+		// ===== OPACITY =====
+		// Some formats store opacity separately from albedo alpha
+		float opacity = 1.0f;
+		if (material->Get(AI_MATKEY_OPACITY, opacity) == AI_SUCCESS) {
+			if (opacity > 0.0f && opacity < 1.0f) {
+				data.AlbedoColor.a = opacity;
+			}
 		}
 
 		// ===== METALLIC =====

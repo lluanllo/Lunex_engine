@@ -73,53 +73,51 @@ namespace Lunex {
 		// Viewport window with no padding for full framebuffer coverage
 		ScopedStyle viewportPadding(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 		
-		ImGui::Begin("Viewport");
+		if (BeginPanel("Viewport")) {
+			// Calculate viewport bounds
+			auto viewportMinRegion = ImGui::GetWindowContentRegionMin();
+			auto viewportMaxRegion = ImGui::GetWindowContentRegionMax();
+			auto viewportOffset = ImGui::GetWindowPos();
+			
+			m_ViewportBounds[0] = { 
+				viewportMinRegion.x + viewportOffset.x, 
+				viewportMinRegion.y + viewportOffset.y 
+			};
+			m_ViewportBounds[1] = { 
+				viewportMaxRegion.x + viewportOffset.x, 
+				viewportMaxRegion.y + viewportOffset.y 
+			};
 
-		// Calculate viewport bounds
-		auto viewportMinRegion = ImGui::GetWindowContentRegionMin();
-		auto viewportMaxRegion = ImGui::GetWindowContentRegionMax();
-		auto viewportOffset = ImGui::GetWindowPos();
-		
-		m_ViewportBounds[0] = { 
-			viewportMinRegion.x + viewportOffset.x, 
-			viewportMinRegion.y + viewportOffset.y 
-		};
-		m_ViewportBounds[1] = { 
-			viewportMaxRegion.x + viewportOffset.x, 
-			viewportMaxRegion.y + viewportOffset.y 
-		};
+			// Focus & hover state
+			m_ViewportFocused = ImGui::IsWindowFocused();
+			m_ViewportHovered = ImGui::IsWindowHovered();
+			Application::Get().GetImGuiLayer()->BlockEvents(!m_ViewportFocused && !m_ViewportHovered);
 
-		// Focus & hover state
-		m_ViewportFocused = ImGui::IsWindowFocused();
-		m_ViewportHovered = ImGui::IsWindowHovered();
-		Application::Get().GetImGuiLayer()->BlockEvents(!m_ViewportFocused && !m_ViewportHovered);
+			// Viewport size
+			ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
+			m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
 
-		// Viewport size
-		ImVec2 viewportPanelSize = ImGui::GetContentRegionAvail();
-		m_ViewportSize = { viewportPanelSize.x, viewportPanelSize.y };
+			// Render framebuffer image
+			RenderFramebufferImage(framebuffer);
 
-		// Render framebuffer image
-		RenderFramebufferImage(framebuffer);
+			// Handle drag & drop
+			HandleDragDrop();
 
-		// Handle drag & drop
-		HandleDragDrop();
+			// Render gizmos (multi-selection aware)
+			const auto& selectedEntities = hierarchyPanel.GetSelectedEntities();
+			if (!selectedEntities.empty() && gizmoType != -1) {
+				RenderGizmos(hierarchyPanel, editorCamera, gizmoType, gizmoSettings);
+			}
+			else {
+				m_GizmoWasUsing = false;
+			}
 
-		// Render gizmos (multi-selection aware)
-		const auto& selectedEntities = hierarchyPanel.GetSelectedEntities();
-		if (!selectedEntities.empty() && gizmoType != -1) {
-			RenderGizmos(hierarchyPanel, editorCamera, gizmoType, gizmoSettings);
+			// Camera preview overlay
+			if (cameraPreviewFramebuffer && selectedEntity && selectedEntity.HasComponent<CameraComponent>()) {
+				RenderCameraPreview(cameraPreviewFramebuffer, selectedEntity);
+			}
 		}
-		else {
-			// Reset gizmo tracking state when nothing is selected
-			m_GizmoWasUsing = false;
-		}
-
-		// Camera preview overlay
-		if (cameraPreviewFramebuffer && selectedEntity && selectedEntity.HasComponent<CameraComponent>()) {
-			RenderCameraPreview(cameraPreviewFramebuffer, selectedEntity);
-		}
-
-		ImGui::End();
+		EndPanel();
 
 		// Render floating toolbar AFTER viewport (on top)
 		toolbarPanel.OnImGuiRender(sceneState, toolbarEnabled, m_ViewportBounds[0], m_ViewportSize);
@@ -130,14 +128,11 @@ namespace Lunex {
 	// ============================================================================
 
 	void ViewportPanel::RenderFramebufferImage(Ref<Framebuffer> framebuffer) {
+		using namespace UI;
+		
 		uint64_t textureID = framebuffer->GetColorAttachmentRendererID();
 		if (textureID == 0) return;
-		ImGui::Image(
-			reinterpret_cast<void*>(textureID), 
-			ImVec2(m_ViewportSize.x, m_ViewportSize.y), 
-			ImVec2(0, 1), 
-			ImVec2(1, 0)
-		);
+		Image(static_cast<uint32_t>(textureID), Size(m_ViewportSize.x, m_ViewportSize.y), true);
 	}
 
 	// ============================================================================
