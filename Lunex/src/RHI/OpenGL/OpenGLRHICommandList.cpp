@@ -152,6 +152,11 @@ namespace Lunex {
 				glEnable(GL_CULL_FACE);
 				glCullFace(mode == CullMode::Front ? GL_FRONT : GL_BACK);
 			}
+			m_CurrentCullMode = mode;
+		}
+
+		CullMode OpenGLRHICommandList::GetCullMode() const {
+			return m_CurrentCullMode;
 		}
 
 		void OpenGLRHICommandList::ClearDepthOnly(float depth) {
@@ -425,17 +430,43 @@ namespace Lunex {
 
 		void OpenGLRHICommandList::CopyTexture(const RHITexture* src, RHITexture* dst,
 			const TextureRegion& srcRegion, const TextureRegion& dstRegion) {
-			// TODO: Implement texture copy
+			if (src && dst) {
+				glCopyImageSubData(
+					static_cast<GLuint>(src->GetNativeHandle()), GL_TEXTURE_2D, 0, srcRegion.X, srcRegion.Y, 0,
+					static_cast<GLuint>(dst->GetNativeHandle()), GL_TEXTURE_2D, 0, dstRegion.X, dstRegion.Y, 0,
+					srcRegion.Width, srcRegion.Height, 1
+				);
+			}
 		}
 
 		void OpenGLRHICommandList::CopyBufferToTexture(const RHIBuffer* src, RHITexture* dst,
 			uint64_t bufferOffset, const TextureRegion& textureRegion) {
-			// TODO: Implement buffer to texture copy
+			if (dst) {
+				dst->Bind(0);
+				glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+				glTexSubImage2D(GL_TEXTURE_2D, 0,
+					textureRegion.X, textureRegion.Y,
+					textureRegion.Width, textureRegion.Height,
+					GL_RGBA, GL_UNSIGNED_BYTE,
+					reinterpret_cast<const void*>(bufferOffset));
+			}
 		}
 
 		void OpenGLRHICommandList::CopyTextureToBuffer(const RHITexture* src, RHIBuffer* dst,
 			const TextureRegion& textureRegion, uint64_t bufferOffset) {
-			// TODO: Implement texture to buffer copy
+			if (src) {
+				src->Bind(0);
+				glPixelStorei(GL_PACK_ALIGNMENT, 1);
+				glReadPixels(textureRegion.X, textureRegion.Y,
+					textureRegion.Width, textureRegion.Height,
+					GL_RGBA, GL_UNSIGNED_BYTE,
+					reinterpret_cast<void*>(bufferOffset));
+			}
+		}
+
+		void OpenGLRHICommandList::ReadPixels(int x, int y, uint32_t width, uint32_t height, void* data) {
+			glReadPixels(x, y, static_cast<GLsizei>(width), static_cast<GLsizei>(height),
+				GL_RGBA, GL_UNSIGNED_BYTE, data);
 		}
 
 		void OpenGLRHICommandList::ClearRenderTarget(RHITexture2D* texture, const ClearValue& value) {

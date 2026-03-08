@@ -10,7 +10,6 @@
 #include "Log/Log.h"
 #include "RHI/RHI.h"
 
-#include <glad/glad.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <cmath>
@@ -396,18 +395,7 @@ namespace Lunex {
 		uint64_t prevFBO = cmd->GetBoundFramebuffer();
 
 		// Save cull state (RHI)
-		RHI::CullMode prevCullMode = RHI::CullMode::None;
-		{
-			const GLboolean prevCullEnabledGL = glIsEnabled(GL_CULL_FACE);
-			if (!prevCullEnabledGL) {
-				prevCullMode = RHI::CullMode::None;
-			}
-			else {
-				GLint prevCullFaceModeGL = GL_BACK;
-				glGetIntegerv(GL_CULL_FACE_MODE, &prevCullFaceModeGL);
-				prevCullMode = (prevCullFaceModeGL == GL_FRONT) ? RHI::CullMode::Front : RHI::CullMode::Back;
-			}
-		}
+		RHI::CullMode prevCullMode = cmd->GetCullMode();
 
 		// Disable culling for shadow pass (matches reference)
 		cmd->SetCullMode(RHI::CullMode::None);
@@ -631,4 +619,4 @@ namespace Lunex {
 		// Upload
 		m_ShadowUBO->SetData(&m_GPUData, sizeof(ShadowUniformData));
 	}
-} // namespace Lunex
+} // namespace Lunex} // namespace Lunex

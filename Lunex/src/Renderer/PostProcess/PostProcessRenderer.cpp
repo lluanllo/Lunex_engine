@@ -5,7 +5,6 @@
 #include "Renderer/UniformBuffer.h"
 #include "Log/Log.h"
 
-#include <glad/glad.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
 #include <cmath>
@@ -18,7 +17,8 @@ namespace Lunex {
 
 	struct BloomMip {
 		glm::ivec2 Size = { 0, 0 };
-		uint32_t TexID = 0;   // GL texture
+		Ref<RHI::RHITexture2D> Texture;
+		Ref<RHI::RHIFramebuffer> FBO;
 	};
 
 	// UBO data matching shader layout(std140, binding = 0) uniform BloomDownParams
@@ -73,7 +73,6 @@ namespace Lunex {
 
 		// ========== BLOOM RESOURCES ==========
 		std::vector<BloomMip> BloomMips;
-		uint32_t BloomFBO = 0;
 
 		uint32_t CurrentWidth  = 0;
 		uint32_t CurrentHeight = 0;
@@ -137,9 +136,6 @@ namespace Lunex {
 		});
 		s_Data.QuadVAO->AddVertexBuffer(s_Data.QuadVBO);
 
-		// Create bloom FBO (we attach different textures per pass)
-		glCreateFramebuffers(1, &s_Data.BloomFBO);
-
 		s_Data.Initialized = true;
 		LNX_LOG_INFO("PostProcessRenderer initialized");
 	}
@@ -147,19 +143,8 @@ namespace Lunex {
 	void PostProcessRenderer::Shutdown() {
 		LNX_PROFILE_FUNCTION();
 
-		// Destroy bloom mip textures
-		for (auto& mip : s_Data.BloomMips) {
-			if (mip.TexID) {
-				glDeleteTextures(1, &mip.TexID);
-				mip.TexID = 0;
-			}
-		}
+		// Destroy bloom mip textures and FBOs (handled by smart pointers)
 		s_Data.BloomMips.clear();
-
-		if (s_Data.BloomFBO) {
-			glDeleteFramebuffers(1, &s_Data.BloomFBO);
-			s_Data.BloomFBO = 0;
-		}
 
 		s_Data.Initialized = false;
 		LNX_LOG_INFO("PostProcessRenderer shutdown");
@@ -178,10 +163,7 @@ namespace Lunex {
 	// ============================================================================
 
 	void PostProcessRenderer::CreateBloomResources(uint32_t width, uint32_t height) {
-		// Destroy old mips
-		for (auto& mip : s_Data.BloomMips) {
-			if (mip.TexID) glDeleteTextures(1, &mip.TexID);
-		}
+		// Destroy old mips (smart pointers handle cleanup)
 		s_Data.BloomMips.clear();
 
 		int levels = std::clamp(s_Data.Config.BloomMipLevels, 1, 8);
@@ -191,12 +173,28 @@ namespace Lunex {
 			BloomMip mip;
 			mip.Size = { std::max(mipSize.x, 1), std::max(mipSize.y, 1) };
 
-			glCreateTextures(GL_TEXTURE_2D, 1, &mip.TexID);
-			glTextureStorage2D(mip.TexID, 1, GL_R11F_G11F_B10F, mip.Size.x, mip.Size.y);
-			glTextureParameteri(mip.TexID, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTextureParameteri(mip.TexID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTextureParameteri(mip.TexID, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTextureParameteri(mip.TexID, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			// Create RHI texture for this mip level
+			RHI::TextureDesc texDesc;
+			texDesc.Width = mip.Size.x;
+			texDesc.Height = mip.Size.y;
+			texDesc.Format = RHI::TextureFormat::RGB16F;
+			texDesc.IsRenderTarget = true;
+			texDesc.MipLevels = 1;
+			mip.Texture = RHI::RHITexture2D::Create(texDesc);
+			mip.Texture->SetWrapMode(RHI::WrapMode::ClampToEdge, RHI::WrapMode::ClampToEdge);
+
+			// Create FBO for this mip
+			RHI::FramebufferDesc fboDesc;
+			fboDesc.Width = mip.Size.x;
+			fboDesc.Height = mip.Size.y;
+			RHI::RenderTargetDesc rtDesc;
+			rtDesc.ExistingTexture = mip.Texture;
+			rtDesc.Width = mip.Size.x;
+			rtDesc.Height = mip.Size.y;
+			rtDesc.Format = RHI::TextureFormat::RGB16F;
+			fboDesc.ColorAttachments.push_back(rtDesc);
+			fboDesc.DebugName = "BloomMipFBO_" + std::to_string(i);
+			mip.FBO = RHI::RHIFramebuffer::Create(fboDesc);
 
 			s_Data.BloomMips.push_back(mip);
 			mipSize /= 2;
@@ -225,9 +223,10 @@ namespace Lunex {
 		if (!s_Data.BloomUpsampleShader   || !s_Data.BloomUpsampleShader->IsValid()) return;
 		if (s_Data.BloomMips.empty()) return;
 
-		glBindFramebuffer(GL_FRAMEBUFFER, s_Data.BloomFBO);
-		glDisable(GL_DEPTH_TEST);
-		glDisable(GL_BLEND);
+		auto* cmdList = RHI::GetImmediateCommandList();
+
+		cmdList->SetDepthTestEnabled(false);
+		cmdList->SetBlendEnabled(false);
 
 		// ===== DOWNSAMPLE PASS (with threshold on first iteration) =====
 		s_Data.BloomDownsampleShader->Bind();
@@ -237,8 +236,8 @@ namespace Lunex {
 		for (size_t i = 0; i < s_Data.BloomMips.size(); i++) {
 			const auto& mip = s_Data.BloomMips[i];
 
-			glNamedFramebufferTexture(s_Data.BloomFBO, GL_COLOR_ATTACHMENT0, mip.TexID, 0);
-			glViewport(0, 0, mip.Size.x, mip.Size.y);
+			mip.FBO->Bind();
+			cmdList->SetViewport(0.0f, 0.0f, static_cast<float>(mip.Size.x), static_cast<float>(mip.Size.y));
 
 			// Upload UBO data per iteration
 			BloomDownParamsUBO downParams;
@@ -250,10 +249,10 @@ namespace Lunex {
 			downParams.ApplyThreshold = (i == 0) ? 1 : 0;
 			s_Data.BloomDownUBO->SetData(&downParams, sizeof(BloomDownParamsUBO));
 
-			glBindTextureUnit(0, srcTexture);
+			cmdList->BindTextureByHandle(srcTexture, 0);
 			DrawFullScreenQuad();
 
-			srcTexture = mip.TexID;
+			srcTexture = static_cast<uint32_t>(mip.Texture->GetNativeHandle());
 		}
 
 		// ===== UPSAMPLE PASS (additive) =====
@@ -266,21 +265,21 @@ namespace Lunex {
 		upParams._pad3 = 0.0f;
 		s_Data.BloomUpUBO->SetData(&upParams, sizeof(BloomUpParamsUBO));
 
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_ONE, GL_ONE);  // Additive blending
+		cmdList->SetBlendEnabled(true);
+		cmdList->SetBlendFunc(RHI::BlendFactor::One, RHI::BlendFactor::One);
 
 		for (int i = (int)s_Data.BloomMips.size() - 1; i > 0; i--) {
 			const auto& srcMip = s_Data.BloomMips[i];
 			const auto& dstMip = s_Data.BloomMips[i - 1];
 
-			glNamedFramebufferTexture(s_Data.BloomFBO, GL_COLOR_ATTACHMENT0, dstMip.TexID, 0);
-			glViewport(0, 0, dstMip.Size.x, dstMip.Size.y);
+			dstMip.FBO->Bind();
+			cmdList->SetViewport(0.0f, 0.0f, static_cast<float>(dstMip.Size.x), static_cast<float>(dstMip.Size.y));
 
-			glBindTextureUnit(0, srcMip.TexID);
+			cmdList->BindTextureByHandle(static_cast<uint64_t>(srcMip.Texture->GetNativeHandle()), 0);
 			DrawFullScreenQuad();
 		}
 
-		glDisable(GL_BLEND);
+		cmdList->SetBlendEnabled(false);
 	}
 
 	// ============================================================================
@@ -313,27 +312,24 @@ namespace Lunex {
 
 		targetFramebuffer->Bind();
 
-		// Restore viewport to full resolution after bloom mip passes
-		glViewport(0, 0, width, height);
-
 		auto* cmdList = RHI::GetImmediateCommandList();
 		if (cmdList) {
+			// Restore viewport to full resolution after bloom mip passes
+			cmdList->SetViewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
 			cmdList->SetDrawBuffers({ 0 });
 			cmdList->SetDepthTestEnabled(false);
 			cmdList->SetDepthMask(false);
+			cmdList->SetBlendEnabled(false);
 		}
-		glDisable(GL_BLEND);
 
 		s_Data.CompositeShader->Bind();
 
-		// Bind textures (ensure CLAMP_TO_EDGE to prevent edge sampling artifacts with chromatic aberration)
-		glBindTextureUnit(0, sceneColorTexID);
-		glTextureParameteri(sceneColorTexID, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTextureParameteri(sceneColorTexID, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		// Bind textures
+		cmdList->BindTextureByHandle(sceneColorTexID, 0);
 
 		bool hasBloom = s_Data.Config.EnableBloom && !s_Data.BloomMips.empty();
 		if (hasBloom) {
-			glBindTextureUnit(1, s_Data.BloomMips[0].TexID);
+			cmdList->BindTextureByHandle(static_cast<uint64_t>(s_Data.BloomMips[0].Texture->GetNativeHandle()), 1);
 		}
 
 		// Upload composite UBO

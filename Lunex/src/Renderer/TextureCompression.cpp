@@ -12,7 +12,6 @@
 #define KTX_ENABLED 0
 #endif
 
-#include <glad/glad.h>
 #include <fstream>
 #include <chrono>
 
@@ -20,8 +19,18 @@
 #include "stb_image.h"
 
 // ============================================================================
-// GL EXTENSION CONSTANTS (may not be defined in all GLAD versions)
+// GL FORMAT CONSTANTS (used for texture compression format mapping)
+// These constants match OpenGL values and are used when interfacing with
+// the RHI/OpenGL backend. Defined here to avoid depending on glad/glad.h.
 // ============================================================================
+
+#ifndef GL_RGBA8
+#define GL_RGBA8 0x8058
+#endif
+
+#ifndef GL_SRGB8_ALPHA8
+#define GL_SRGB8_ALPHA8 0x8C43
+#endif
 
 // S3TC/DXT compression
 #ifndef GL_COMPRESSED_RGB_S3TC_DXT1_EXT

@@ -48,6 +48,7 @@ namespace Lunex {
 			void SetColorMask(bool r, bool g, bool b, bool a) override;
 			void SetPolygonOffset(bool enabled, float factor = 0.0f, float units = 0.0f) override;
 			void SetCullMode(CullMode mode) override;
+			CullMode GetCullMode() const override;
 			void ClearDepthOnly(float depth = 1.0f) override;
 			void BindFramebufferByHandle(uint64_t handle) override;
 			void SetNoColorOutput() override;
@@ -134,6 +135,7 @@ namespace Lunex {
 			const RHIComputePipeline* m_CurrentComputePipeline = nullptr;
 			IndexType m_CurrentIndexType = IndexType::UInt32;
 			CompareFunc m_CurrentDepthFunc = CompareFunc::Less;
+			CullMode m_CurrentCullMode = CullMode::Back;
 			glm::vec4 m_ClearColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 		};
 

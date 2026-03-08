@@ -17,6 +17,7 @@
 #include "../UI/UICore.h"
 #include "../UI/UIComponents.h"
 #include "../UI/UILayout.h"
+#include "../UI/UIWidgets.h"
 
 #include <chrono>
 #include <thread>

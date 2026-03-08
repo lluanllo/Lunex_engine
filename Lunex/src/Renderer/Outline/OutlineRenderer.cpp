@@ -1,4 +1,4 @@
-﻿#include "stpch.h"
+#include "stpch.h"
 #include "OutlineRenderer.h"
 
 #include "Scene/Scene.h"
@@ -8,7 +8,6 @@
 #include "Log/Log.h"
 #include "RHI/RHI.h"
 
-#include <glad/glad.h>
 #include <glm/gtc/matrix_transform.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
@@ -268,12 +267,7 @@ namespace Lunex {
 		if (!fbo) return;
 		auto colorTex = fbo->GetColorAttachment(0);
 		if (colorTex) {
-			// Use RHI texture's native handle to set wrap mode
-			// Note: This uses OpenGL DSA functions which are appropriate since the
-			// texture wrapping configuration is part of the RHI/OpenGL implementation layer
-			GLuint texID = static_cast<GLuint>(colorTex->GetNativeHandle());
-			glTextureParameteri(texID, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTextureParameteri(texID, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			colorTex->SetWrapMode(RHI::WrapMode::ClampToEdge, RHI::WrapMode::ClampToEdge);
 		}
 	}
 
@@ -342,7 +336,7 @@ namespace Lunex {
 			}
 		}
 
-		// 2D sprite entities — draw a unit quad at the entity transform
+		// 2D sprite entities � draw a unit quad at the entity transform
 		if (entity.HasComponent<SpriteRendererComponent>()) {
 			m_SilhouetteUBOData.Model = worldTransform;
 			m_SilhouetteUBO->SetData(&m_SilhouetteUBOData, sizeof(SilhouetteUBOData));
@@ -369,7 +363,7 @@ namespace Lunex {
 	}
 
 	// ========================================================================
-	// RENDER SELECTION OUTLINE (complete cycle: silhouette → blur → composite)
+	// RENDER SELECTION OUTLINE (complete cycle: silhouette ? blur ? composite)
 	// ========================================================================
 
 	void OutlineRenderer::RenderSelectionOutline(
@@ -429,7 +423,7 @@ namespace Lunex {
 		float texelW = 1.0f / static_cast<float>(m_Width);
 		float texelH = 1.0f / static_cast<float>(m_Height);
 
-		// ---- Horizontal blur: silhouette → ping ----
+		// ---- Horizontal blur: silhouette ? ping ----
 		m_BlurPingFBO->Bind();
 		cmd->SetViewport(0.0f, 0.0f, static_cast<float>(m_Width), static_cast<float>(m_Height));
 		cmd->SetClearColor(glm::vec4(0.0f));
@@ -448,7 +442,7 @@ namespace Lunex {
 		DrawFullscreenQuad();
 		m_BlurPingFBO->Unbind();
 
-		// ---- Vertical blur: ping → pong ----
+		// ---- Vertical blur: ping ? pong ----
 		m_BlurPongFBO->Bind();
 		cmd->SetViewport(0.0f, 0.0f, static_cast<float>(m_Width), static_cast<float>(m_Height));
 		cmd->SetClearColor(glm::vec4(0.0f));

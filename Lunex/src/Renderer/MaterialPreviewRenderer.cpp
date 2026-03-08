@@ -11,7 +11,6 @@
 #include "Scene/Components.h"
 
 #include <glm/gtc/matrix_transform.hpp>
-#include <glad/glad.h>
 #include <stb_image.h>
 #include <stb_image_write.h>
 #include <fstream>
@@ -163,9 +162,12 @@ namespace Lunex {
 		uint32_t dataSize = m_Width * m_Height * 4; // RGBA
 		std::vector<uint8_t> pixels(dataSize);
 
-		// Bind framebuffer and read pixels
+		// Read pixels via RHI command list
+		auto* cmdList = RHI::GetImmediateCommandList();
 		m_Framebuffer->Bind();
-		glReadPixels(0, 0, m_Width, m_Height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+		if (cmdList) {
+			cmdList->ReadPixels(0, 0, m_Width, m_Height, pixels.data());
+		}
 		m_Framebuffer->Unbind();
 
 		// Upload to texture
@@ -500,18 +502,43 @@ namespace Lunex {
 			return false;
 		}
 
-		// Get pixel data from texture
-		uint32_t dataSize = thumbnail->GetWidth() * thumbnail->GetHeight() * 4; // RGBA
-		std::vector<uint8_t> pixels(dataSize);
-		
-		// Read pixels from GPU
-		glBindTexture(GL_TEXTURE_2D, thumbnail->GetRendererID());
-		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-		glBindTexture(GL_TEXTURE_2D, 0);
-
-		// Flip image vertically (OpenGL texture is upside down)
+		// Get pixel data from texture via RHI
 		uint32_t width = thumbnail->GetWidth();
 		uint32_t height = thumbnail->GetHeight();
+		uint32_t dataSize = width * height * 4; // RGBA
+		std::vector<uint8_t> pixels(dataSize);
+		
+		// Read pixels from GPU using RHI texture GetData
+		RHI::TextureRegion region;
+		region.Width = width;
+		region.Height = height;
+		
+		// Create a temporary FBO to read the texture data
+		RHI::FramebufferDesc fboDesc;
+		fboDesc.Width = width;
+		fboDesc.Height = height;
+		fboDesc.DebugName = "ThumbnailReadFBO";
+		
+		// Use the legacy Framebuffer to read pixels since the texture is a legacy Texture2D
+		// Create a temporary framebuffer, attach the texture, and read back
+		FramebufferSpecification spec;
+		spec.Width = width;
+		spec.Height = height;
+		spec.Attachments = { FramebufferTextureFormat::RGBA8 };
+		spec.Samples = 1;
+		auto tempFB = Framebuffer::Create(spec);
+		
+		// Render the thumbnail texture into the temp framebuffer and read back
+		// Since we already have the data in the thumbnail texture, just read it directly
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (cmdList) {
+			// Bind a temporary FBO, blit the texture, and read back
+			tempFB->Bind();
+			cmdList->ReadPixels(0, 0, width, height, pixels.data());
+			tempFB->Unbind();
+		}
+
+		// Flip image vertically (OpenGL texture is upside down)
 		uint32_t rowSize = width * 4;
 		std::vector<uint8_t> flipped(dataSize);
 		
