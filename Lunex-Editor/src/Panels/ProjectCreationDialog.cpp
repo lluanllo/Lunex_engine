@@ -6,9 +6,6 @@
 #include "../UI/UIComponents.h"
 #include "../UI/UILayout.h"
 
-#include <imgui.h>
-#include <imgui_internal.h>
-
 namespace Lunex {
 	ProjectCreationDialog::ProjectCreationDialog() {
 		// Set default project location to Documents/LunexProjects
@@ -61,9 +58,8 @@ namespace Lunex {
 			
 			// Project Location
 			Text("Project Location");
-			ImGui::PushItemWidth(-80);
+			ImGui::SetNextItemWidth(-80);
 			InputText("##ProjectLocation", m_ProjectLocation, sizeof(m_ProjectLocation));
-			ImGui::PopItemWidth();
 			SameLine();
 			if (Button("Browse...", ButtonVariant::Default, ButtonSize::Medium, Size(70, 0))) {
 				BrowseProjectLocation();

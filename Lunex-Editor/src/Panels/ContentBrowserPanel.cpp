@@ -341,7 +341,7 @@ namespace Lunex {
 			ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 170);
 			ImGui::SetCursorPosY(6);
 			ImGui::SetNextItemWidth(160);
-			ImGui::SliderFloat("##Size", &m_ThumbnailSize, 64, 160);
+			Slider("##Size", m_ThumbnailSize, 64.0f, 160.0f);
 		}
 		EndChild();
 	}
@@ -468,7 +468,11 @@ namespace Lunex {
 			AddSpacing(SpacingValues::SM);
 			
 			ImGui::SetNextItemWidth(300);
-			if (ImGui::InputText("##FolderName", m_NewItemName, sizeof(m_NewItemName), ImGuiInputTextFlags_EnterReturnsTrue)) {
+			if (InputText("##FolderName", m_NewItemName, sizeof(m_NewItemName), nullptr, InputVariant::Default)) {
+				// Check enter key manually since UI::InputText doesn't have EnterReturnsTrue
+			}
+			
+			if (ImGui::IsItemDeactivatedAfterEdit() || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
 				std::filesystem::path newFolderPath = m_CurrentDirectory / m_NewItemName;
 				if (!std::filesystem::exists(newFolderPath)) {
 					std::filesystem::create_directory(newFolderPath);
@@ -511,7 +515,9 @@ namespace Lunex {
 			AddSpacing(SpacingValues::SM);
 			
 			ImGui::SetNextItemWidth(300);
-			if (ImGui::InputText("##ItemName", m_NewItemName, sizeof(m_NewItemName), ImGuiInputTextFlags_EnterReturnsTrue)) {
+			InputText("##ItemName", m_NewItemName, sizeof(m_NewItemName));
+			
+			if (ImGui::IsItemDeactivatedAfterEdit() || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
 				RenameItem(m_ItemToRename);
 				ImGui::CloseCurrentPopup();
 			}
@@ -540,9 +546,9 @@ namespace Lunex {
 		bool isDirectory = std::filesystem::is_directory(path);
 		
 		if (m_SelectedItems.size() > 1) {
-			ImGui::Text("%d items selected", (int)m_SelectedItems.size());
+			Text("%d items selected", (int)m_SelectedItems.size());
 		} else {
-			ImGui::Text("%s", filename.c_str());
+			Text("%s", filename.c_str());
 		}
 		
 		Separator();

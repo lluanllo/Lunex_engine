@@ -19,8 +19,6 @@
 #include "../UI/UIComponents.h"
 #include "../UI/UILayout.h"
 
-#include <imgui.h>
-
 namespace Lunex {
 
 	void StatsPanel::OnImGuiRender() {

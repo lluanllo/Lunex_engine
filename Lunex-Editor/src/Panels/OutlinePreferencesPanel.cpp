@@ -9,7 +9,7 @@
 #include "Renderer/Outline/OutlineRenderer.h"
 #include "Log/Log.h"
 
-#include <imgui.h>
+// imgui.h incluido implícitamente vía UICore.h — necesario para ImGuiCond_FirstUseEver
 
 namespace Lunex {
 

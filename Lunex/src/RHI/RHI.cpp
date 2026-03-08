@@ -2,8 +2,6 @@
 #include "RHI.h"
 #include "Log/Log.h"
 
-#include <glad/glad.h>
-
 namespace Lunex {
 namespace RHI {
 
@@ -124,17 +122,18 @@ namespace RHI {
 			return;
 		}
 		
-		// Initialize OpenGL state
-		#ifdef LNX_DEBUG
-			glEnable(GL_DEBUG_OUTPUT);
-			glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-		#endif
+		// Initialize default render state via command list (API-agnostic)
+		auto* cmdList = GetImmediateCommandList();
+		if (!cmdList) {
+			LNX_LOG_ERROR("No immediate command list available for render state initialization!");
+			return;
+		}
 		
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		// Debug output is handled by the OpenGL context during initialization
+		// (see OpenGLRHIContext::Initialize)
 		
-		glEnable(GL_DEPTH_TEST);
-		glEnable(GL_LINE_SMOOTH);
+		cmdList->SetDepthTestEnabled(true);
+		cmdList->SetLineWidth(1.0f);
 	}
 
 	// ============================================================================

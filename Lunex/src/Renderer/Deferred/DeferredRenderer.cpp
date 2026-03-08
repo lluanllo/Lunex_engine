@@ -314,7 +314,7 @@ namespace Lunex {
 					s_Data.MaterialBuffer.LayeredAOChannel = uniformData.LayeredAOChannel;
 					s_Data.MaterialBuffer.LayeredUseMetallic = uniformData.LayeredUseMetallic;
 					s_Data.MaterialBuffer.LayeredUseRoughness = uniformData.LayeredUseRoughness;
-					s_Data.MaterialBuffer.LayeredUseAO = uniformData.LayeredUseAO;
+				 s_Data.MaterialBuffer.LayeredUseAO = uniformData.LayeredUseAO;
 					s_Data.MaterialBuffer.DetailNormalIntensities = uniformData.DetailNormalIntensities;
 					s_Data.MaterialBuffer.DetailNormalTilingX = uniformData.DetailNormalTilingX;
 					s_Data.MaterialBuffer.DetailNormalTilingY = uniformData.DetailNormalTilingY;
@@ -351,7 +351,7 @@ namespace Lunex {
 					s_Data.MaterialBuffer.EmissionIntensity = uniformData.EmissionIntensity;
 					s_Data.MaterialBuffer.EmissionColor = uniformData.EmissionColor;
 					s_Data.MaterialBuffer.NormalIntensity = uniformData.NormalIntensity;
-					s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
+				 s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
 					
 					s_Data.MaterialBuffer.UseAlbedoMap = uniformData.UseAlbedoMap;
 					s_Data.MaterialBuffer.UseNormalMap = uniformData.UseNormalMap;
@@ -366,7 +366,7 @@ namespace Lunex {
 					s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
 					s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
 					
-					s_Data.MaterialBuffer.DetailNormalCount = uniformData.DetailNormalCount;
+				 s_Data.MaterialBuffer.DetailNormalCount = uniformData.DetailNormalCount;
 					s_Data.MaterialBuffer.UseLayeredTexture = uniformData.UseLayeredTexture;
 					s_Data.MaterialBuffer.LayeredMetallicChannel = uniformData.LayeredMetallicChannel;
 					s_Data.MaterialBuffer.LayeredRoughnessChannel = uniformData.LayeredRoughnessChannel;
@@ -504,7 +504,7 @@ namespace Lunex {
 					s_Data.MaterialBuffer.LayeredAOChannel = uniformData.LayeredAOChannel;
 					s_Data.MaterialBuffer.LayeredUseMetallic = uniformData.LayeredUseMetallic;
 					s_Data.MaterialBuffer.LayeredUseRoughness = uniformData.LayeredUseRoughness;
-					s_Data.MaterialBuffer.LayeredUseAO = uniformData.LayeredUseAO;
+				 s_Data.MaterialBuffer.LayeredUseAO = uniformData.LayeredUseAO;
 					s_Data.MaterialBuffer.DetailNormalIntensities = uniformData.DetailNormalIntensities;
 					s_Data.MaterialBuffer.DetailNormalTilingX = uniformData.DetailNormalTilingX;
 					s_Data.MaterialBuffer.DetailNormalTilingY = uniformData.DetailNormalTilingY;
@@ -615,8 +615,11 @@ namespace Lunex {
 			cmdList->SetDepthMask(false);
 		}
 
-		// ? FIX: Disable blending for the lighting pass.
-		glDisable(GL_BLEND);
+		// Disable blending for the lighting pass
+		auto* blendCmdList = RHI::GetImmediateCommandList();
+		if (blendCmdList) {
+			blendCmdList->SetBlendEnabled(false);
+		}
 
 		// Bind the lighting shader
 		s_Data.LightingShader->Bind();
@@ -674,13 +677,15 @@ namespace Lunex {
 			auto* glSrc = dynamic_cast<RHI::OpenGLRHIFramebuffer*>(rhiFB);
 			auto* glDst = dynamic_cast<RHI::OpenGLRHIFramebuffer*>(targetFramebuffer->GetRHIFramebuffer());
 			if (glSrc && glDst) {
-				glBlitNamedFramebuffer(
-					glSrc->GetFramebufferID(), glDst->GetFramebufferID(),
-					0, 0, s_Data.GBuffer.GetWidth(), s_Data.GBuffer.GetHeight(),
-					0, 0, targetFramebuffer->GetSpecification().Width, targetFramebuffer->GetSpecification().Height,
-					GL_DEPTH_BUFFER_BIT,
-					GL_NEAREST
-				);
+				auto* cmdListBlit = RHI::GetImmediateCommandList();
+				if (cmdListBlit) {
+					cmdListBlit->BlitFramebuffer(
+						glSrc->GetFramebufferID(), glDst->GetFramebufferID(),
+						0, 0, s_Data.GBuffer.GetWidth(), s_Data.GBuffer.GetHeight(),
+						0, 0, targetFramebuffer->GetSpecification().Width, targetFramebuffer->GetSpecification().Height,
+						true, false
+					);
+				}
 			}
 		}
 

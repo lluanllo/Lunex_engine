@@ -7,7 +7,6 @@
 #include "Events/MouseEvent.h"
 #include "Events/FileDropEvent.h"
 
-#include <glad/glad.h>
 #include <stb_image.h>
 
 namespace Lunex {
@@ -233,4 +232,4 @@ namespace Lunex {
 		
 		stbi_set_flip_vertically_on_load(1); // Reset to default
 	}
-}
+}}

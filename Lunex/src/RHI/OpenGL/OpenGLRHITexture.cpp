@@ -196,6 +196,21 @@ namespace RHI {
 			glObjectLabel(GL_TEXTURE, m_TextureID, -1, m_DebugName.c_str());
 		}
 	}
+	
+	void OpenGLRHITexture2D::SetWrapMode(WrapMode wrapU, WrapMode wrapV) {
+		if (!m_TextureID) return;
+		auto toGL = [](WrapMode mode) -> GLenum {
+			switch (mode) {
+				case WrapMode::Repeat:         return GL_REPEAT;
+				case WrapMode::MirroredRepeat: return GL_MIRRORED_REPEAT;
+				case WrapMode::ClampToEdge:    return GL_CLAMP_TO_EDGE;
+				case WrapMode::ClampToBorder:  return GL_CLAMP_TO_BORDER;
+				default:                       return GL_REPEAT;
+			}
+		};
+		glTextureParameteri(m_TextureID, GL_TEXTURE_WRAP_S, toGL(wrapU));
+		glTextureParameteri(m_TextureID, GL_TEXTURE_WRAP_T, toGL(wrapV));
+	}
 
 	// ============================================================================
 	// OPENGL RHI TEXTURE CUBE IMPLEMENTATION
@@ -290,6 +305,21 @@ namespace RHI {
 		if (m_TextureID && GLAD_GL_KHR_debug) {
 			glObjectLabel(GL_TEXTURE, m_TextureID, -1, m_DebugName.c_str());
 		}
+	}
+	
+	void OpenGLRHITextureCube::SetWrapMode(WrapMode wrapU, WrapMode wrapV) {
+		if (!m_TextureID) return;
+		auto toGL = [](WrapMode mode) -> GLenum {
+			switch (mode) {
+				case WrapMode::Repeat:         return GL_REPEAT;
+				case WrapMode::MirroredRepeat: return GL_MIRRORED_REPEAT;
+				case WrapMode::ClampToEdge:    return GL_CLAMP_TO_EDGE;
+				case WrapMode::ClampToBorder:  return GL_CLAMP_TO_BORDER;
+				default:                       return GL_REPEAT;
+			}
+		};
+		glTextureParameteri(m_TextureID, GL_TEXTURE_WRAP_S, toGL(wrapU));
+		glTextureParameteri(m_TextureID, GL_TEXTURE_WRAP_T, toGL(wrapV));
 	}
 
 	// ============================================================================
@@ -544,6 +574,21 @@ namespace RHI {
 		if (m_TextureID && GLAD_GL_KHR_debug) {
 			glObjectLabel(GL_TEXTURE, m_TextureID, -1, m_DebugName.c_str());
 		}
+	}
+	
+	void OpenGLRHITexture2DArray::SetWrapMode(WrapMode wrapU, WrapMode wrapV) {
+		if (!m_TextureID) return;
+		auto toGL = [](WrapMode mode) -> GLenum {
+			switch (mode) {
+				case WrapMode::Repeat:         return GL_REPEAT;
+				case WrapMode::MirroredRepeat: return GL_MIRRORED_REPEAT;
+				case WrapMode::ClampToEdge:    return GL_CLAMP_TO_EDGE;
+				case WrapMode::ClampToBorder:  return GL_CLAMP_TO_BORDER;
+				default:                       return GL_REPEAT;
+			}
+		};
+		glTextureParameteri(m_TextureID, GL_TEXTURE_WRAP_S, toGL(wrapU));
+		glTextureParameteri(m_TextureID, GL_TEXTURE_WRAP_T, toGL(wrapV));
 	}
 	
 	// Factory

@@ -18,7 +18,6 @@
 #include "../UI/UIComponents.h"
 #include "../UI/UILayout.h"
 
-#include <imgui.h>
 #include <chrono>
 #include <thread>
 
@@ -81,7 +80,7 @@ namespace Lunex {
 
 			// Progress bar
 			float progress = scheduled > 0 ? (float)completed / (float)scheduled : 1.0f;
-			ImGui::ProgressBar(progress, ImVec2(-1, 0), "");
+			ProgressBar(progress, Size(-1, 0), "");
 
 			AddSpacing(SpacingValues::SM);
 
@@ -136,7 +135,7 @@ namespace Lunex {
 			// Worker utilization bar
 			if (total > 0) {
 				float utilization = (float)active / (float)total;
-				ImGui::ProgressBar(utilization, ImVec2(-1, 0), "");
+				ProgressBar(utilization, Size(-1, 0), "");
 				SameLine();
 				
 				char utilText[32];
@@ -183,12 +182,12 @@ namespace Lunex {
 			// Global queue bar
 			TextStyled("Global Queue:", TextVariant::Secondary);
 			float globalProgress = std::min(1.0f, (float)globalSize / 100.0f);
-			ImGui::ProgressBar(globalProgress, ImVec2(-1, 0), "");
+			ProgressBar(globalProgress, Size(-1, 0), "");
 
 			// Command buffer bar
 			TextStyled("Command Buffer:", TextVariant::Secondary);
 			float commandProgress = std::min(1.0f, (float)commandSize / 50.0f);
-			ImGui::ProgressBar(commandProgress, ImVec2(-1, 0), "");
+			ProgressBar(commandProgress, Size(-1, 0), "");
 
 			Unindent();
 			EndSection();

@@ -6,8 +6,6 @@
 #include "../UI/UIComponents.h"
 #include "../UI/Components/LogOutput.h"
 
-#include "imgui.h"
-
 #include <string>
 #include <vector>
 #include <unordered_map>

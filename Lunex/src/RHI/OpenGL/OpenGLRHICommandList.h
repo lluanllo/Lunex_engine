@@ -52,6 +52,13 @@ namespace Lunex {
 			void BindFramebufferByHandle(uint64_t handle) override;
 			void SetNoColorOutput() override;
 			void AttachDepthTextureLayer(uint64_t framebufferHandle, uint64_t textureHandle, uint32_t layer) override;
+			void SetBlendEnabled(bool enabled) override;
+			void SetBlendFunc(BlendFactor srcFactor, BlendFactor dstFactor) override;
+			void BindTextureByHandle(uint64_t handle, uint32_t slot) override;
+			void BlitFramebuffer(uint64_t srcHandle, uint64_t dstHandle,
+				int srcX0, int srcY0, int srcX1, int srcY1,
+				int dstX0, int dstY0, int dstX1, int dstY1,
+				bool copyDepth, bool copyColor) override;
 
 			// Render pass
 			void BeginRenderPass(const RenderPassBeginInfo& info) override;
@@ -106,6 +113,7 @@ namespace Lunex {
 				uint64_t bufferOffset, const TextureRegion& textureRegion) override;
 			void CopyTextureToBuffer(const RHITexture* src, RHIBuffer* dst,
 				const TextureRegion& textureRegion, uint64_t bufferOffset) override;
+			void ReadPixels(int x, int y, uint32_t width, uint32_t height, void* data) override;
 
 			// Clear
 			void ClearRenderTarget(RHITexture2D* texture, const ClearValue& value) override;

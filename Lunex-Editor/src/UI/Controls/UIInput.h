@@ -29,6 +29,20 @@ namespace Lunex::UI {
 				   InputVariant variant = InputVariant::Default);
 	
 	/**
+	 * @brief Text input with advanced flags and optional callback
+	 * Use for cases requiring EnterReturnsTrue, AutoSelectAll, CallbackHistory, etc.
+	 * @return true if value changed (or enter pressed when using EnterReturnsTrue)
+	 */
+	bool InputTextEx(const std::string& id,
+					 char* buffer,
+					 size_t bufferSize,
+					 ImGuiInputTextFlags flags,
+					 ImGuiInputTextCallback callback = nullptr,
+					 void* userData = nullptr,
+					 const char* placeholder = nullptr,
+					 InputVariant variant = InputVariant::Default);
+	
+	/**
 	 * @brief Multiline text input
 	 */
 	bool InputTextMultiline(const std::string& id,

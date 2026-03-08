@@ -5,7 +5,7 @@
 #include "../UI/UIComponents.h"
 #include "../UI/UILayout.h"
 
-#include <imgui.h>
+// imgui.h incluido implícitamente vía UICore.h — necesario para ImGuiInputTextFlags, ImGuiInputTextCallback, ImGui::SetKeyboardFocusHere, ImGui::SetScrollHereY, ImGui::TextUnformatted
 
 #include <algorithm>
 #include <sstream>
@@ -372,8 +372,6 @@ namespace Lunex {
 			{ImGuiCol_FrameBgActive, Color(0.15f, 0.15f, 0.18f, 1.0f)}
 		});
 
-		ImGui::PushItemWidth(-1);
-
 		// Input prompt
 		const char* prompt = (m_TerminalType == TerminalType::PowerShell) ? "PS> " : "> ";
 
@@ -418,7 +416,7 @@ namespace Lunex {
 
 		{
 			ScopedColor cmdTextColor(ImGuiCol_Text, Color(0.9f, 0.9f, 0.9f, 1.0f));
-			if (ImGui::InputText("##terminal_input", m_InputBuffer, sizeof(m_InputBuffer), inputFlags, historyCallback, this)) {
+			if (InputTextEx("##input", m_InputBuffer, sizeof(m_InputBuffer), inputFlags, historyCallback, this, "Enter command...")) {
 				ProcessTerminalInput();
 				m_ReclaimFocus = true;
 			}
@@ -429,8 +427,6 @@ namespace Lunex {
 			ImGui::SetKeyboardFocusHere(-1);
 			m_ReclaimFocus = false;
 		}
-
-		ImGui::PopItemWidth();
 	}
 
 	void TerminalTab::ProcessTerminalInput() {
@@ -680,7 +676,7 @@ namespace Lunex {
 	void ConsolePanel::DrawCommandInput() {
 		using namespace UI;
 
-		ImGui::PushItemWidth(-1);
+		ImGui::SetNextItemWidth(-1);
 
 		ScopedColor inputColors({
 			{ImGuiCol_FrameBg, m_Style.InputBg},
@@ -726,7 +722,7 @@ namespace Lunex {
 			return 0;
 			};
 
-		if (ImGui::InputTextWithHint("##input", "Enter command...", m_InputBuffer, sizeof(m_InputBuffer), inputFlags, inputCallback, (void*)this)) {
+		if (InputTextEx("##input", m_InputBuffer, sizeof(m_InputBuffer), inputFlags, inputCallback, (void*)this, "Enter command...")) {
 			ProcessInput();
 			m_ReclaimFocus = true;
 		}
@@ -736,8 +732,6 @@ namespace Lunex {
 			ImGui::SetKeyboardFocusHere(-1);
 			m_ReclaimFocus = false;
 		}
-
-		ImGui::PopItemWidth();
 	}
 
 	void ConsolePanel::DrawCommandHelp() {

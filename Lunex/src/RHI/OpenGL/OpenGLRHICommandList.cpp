@@ -177,6 +177,57 @@ namespace Lunex {
 			);
 		}
 
+		void OpenGLRHICommandList::SetBlendEnabled(bool enabled) {
+			if (enabled) {
+				glEnable(GL_BLEND);
+			} else {
+				glDisable(GL_BLEND);
+			}
+		}
+
+		static GLenum BlendFactorToGL(BlendFactor factor) {
+			switch (factor) {
+			case BlendFactor::Zero:                return GL_ZERO;
+			case BlendFactor::One:                 return GL_ONE;
+			case BlendFactor::SrcColor:            return GL_SRC_COLOR;
+			case BlendFactor::OneMinusSrcColor:    return GL_ONE_MINUS_SRC_COLOR;
+			case BlendFactor::DstColor:            return GL_DST_COLOR;
+			case BlendFactor::OneMinusDstColor:    return GL_ONE_MINUS_DST_COLOR;
+			case BlendFactor::SrcAlpha:            return GL_SRC_ALPHA;
+			case BlendFactor::OneMinusSrcAlpha:    return GL_ONE_MINUS_SRC_ALPHA;
+			case BlendFactor::DstAlpha:            return GL_DST_ALPHA;
+			case BlendFactor::OneMinusDstAlpha:    return GL_ONE_MINUS_DST_ALPHA;
+			case BlendFactor::ConstantColor:       return GL_CONSTANT_COLOR;
+			case BlendFactor::OneMinusConstantColor: return GL_ONE_MINUS_CONSTANT_COLOR;
+			case BlendFactor::SrcAlphaSaturate:    return GL_SRC_ALPHA_SATURATE;
+			}
+			return GL_ONE;
+		}
+
+		void OpenGLRHICommandList::SetBlendFunc(BlendFactor srcFactor, BlendFactor dstFactor) {
+			glBlendFunc(BlendFactorToGL(srcFactor), BlendFactorToGL(dstFactor));
+		}
+
+		void OpenGLRHICommandList::BindTextureByHandle(uint64_t handle, uint32_t slot) {
+			glBindTextureUnit(slot, static_cast<GLuint>(handle));
+		}
+
+		void OpenGLRHICommandList::BlitFramebuffer(uint64_t srcHandle, uint64_t dstHandle,
+			int srcX0, int srcY0, int srcX1, int srcY1,
+			int dstX0, int dstY0, int dstX1, int dstY1,
+			bool copyDepth, bool copyColor) {
+			GLbitfield mask = 0;
+			if (copyColor) mask |= GL_COLOR_BUFFER_BIT;
+			if (copyDepth) mask |= GL_DEPTH_BUFFER_BIT;
+			
+			glBlitNamedFramebuffer(
+				static_cast<GLuint>(srcHandle), static_cast<GLuint>(dstHandle),
+				srcX0, srcY0, srcX1, srcY1,
+				dstX0, dstY0, dstX1, dstY1,
+				mask, GL_NEAREST
+			);
+		}
+
 		void OpenGLRHICommandList::BeginRenderPass(const RenderPassBeginInfo& info) {
 			m_CurrentFramebuffer = info.Framebuffer;
 			if (m_CurrentFramebuffer) {

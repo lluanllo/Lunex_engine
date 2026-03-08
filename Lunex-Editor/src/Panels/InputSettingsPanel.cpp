@@ -19,7 +19,8 @@
 #include "../UI/UIComponents.h"
 #include "../UI/UILayout.h"
 
-#include <imgui.h>
+// imgui.h incluido implícitamente vía UICore.h — necesario para ImGuiKey, ImGuiInputTextFlags, ImGui::BeginTable/EndTable, ImGui::IsKeyPressed
+
 #include <algorithm>
 #include <map>
 

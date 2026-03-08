@@ -47,6 +47,34 @@ namespace Lunex::UI {
 		return ImGui::InputText("##input", buffer, bufferSize);
 	}
 	
+	bool InputTextEx(const std::string& id, char* buffer, size_t bufferSize,
+					 ImGuiInputTextFlags flags, ImGuiInputTextCallback callback,
+					 void* userData, const char* placeholder, InputVariant variant) {
+		ScopedID scopedID(id);
+		ScopedStyle rounding(ImGuiStyleVar_FrameRounding, SpacingValues::InputRounding);
+		
+		Color bgColor;
+		switch (variant) {
+			case InputVariant::Filled:  bgColor = Colors::BgDark(); break;
+			case InputVariant::Outline: bgColor = Color(0, 0, 0, 0); break;
+			default:                    bgColor = Colors::BgMedium(); break;
+		}
+		
+		ScopedColor colors({
+			{ImGuiCol_FrameBg, bgColor},
+			{ImGuiCol_FrameBgHovered, Colors::BgHover()},
+			{ImGuiCol_FrameBgActive, Colors::BorderFocus()}
+		});
+		
+		ImGui::SetNextItemWidth(-1);
+		
+		if (placeholder) {
+			return ImGui::InputTextWithHint("##input", placeholder, buffer, bufferSize, flags, callback, userData);
+		}
+		
+		return ImGui::InputText("##input", buffer, bufferSize, flags, callback, userData);
+	}
+	
 	bool InputTextMultiline(const std::string& id, std::string& value, const Size& size) {
 		char buffer[4096];
 		strncpy_s(buffer, value.c_str(), sizeof(buffer) - 1);

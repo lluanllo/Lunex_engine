@@ -1,7 +1,7 @@
 #include "stpch.h"
 #include "PhysicsDebugDrawer.h"
 #include "../PhysicsUtils.h"
-#include <iostream>
+#include "Log/Log.h"
 
 namespace Lunex {
 
@@ -45,7 +45,7 @@ namespace Lunex {
 
     void PhysicsDebugDrawer::reportErrorWarning(const char* warningString)
     {
-        std::cerr << "[Physics Warning] " << warningString << std::endl;
+        LNX_LOG_WARN("[Physics] {0}", warningString);
     }
 
     void PhysicsDebugDrawer::draw3dText(const btVector3& location, const char* textString)

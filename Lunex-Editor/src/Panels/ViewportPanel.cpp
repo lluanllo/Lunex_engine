@@ -27,7 +27,6 @@
 #include "../UI/UIComponents.h"
 #include "../UI/UILayout.h"
 
-#include <imgui.h>
 #include <ImGuizmo.h>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -566,4 +565,4 @@ namespace Lunex {
 		drawList->AddRect(imageMin, imageMax, ViewportStyle::BorderColor().ToImU32(), 0.0f, 0, 1.0f);
 	}
 
-} // namespace Lunex
+} // namespace Lunex} // namespace Lunex

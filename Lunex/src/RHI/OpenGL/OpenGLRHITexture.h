@@ -240,6 +240,9 @@ namespace RHI {
 		void GetData(void* data, uint64_t size, const TextureRegion& region) const override;
 		void GenerateMipmaps() override;
 		
+		// Texture parameters
+		void SetWrapMode(WrapMode wrapU, WrapMode wrapV) override;
+		
 		// Binding
 		void Bind(uint32_t slot = 0) const override;
 		void Unbind(uint32_t slot = 0) const override;
@@ -282,6 +285,9 @@ namespace RHI {
 		void GetData(void* data, uint64_t size, const TextureRegion& region) const override;
 		void GenerateMipmaps() override;
 		void SetFaceData(uint32_t face, const void* data, uint64_t size, uint32_t mipLevel = 0) override;
+		
+		// Texture parameters
+		void SetWrapMode(WrapMode wrapU, WrapMode wrapV) override;
 		
 		// Binding
 		void Bind(uint32_t slot = 0) const override;
@@ -344,6 +350,9 @@ namespace RHI {
 		void GetData(void* data, uint64_t size, const TextureRegion& region) const override;
 		void GenerateMipmaps() override;
 		void SetLayerData(uint32_t layer, const void* data, uint64_t size, uint32_t mipLevel = 0) override;
+		
+		// Texture parameters
+		void SetWrapMode(WrapMode wrapU, WrapMode wrapV) override;
 		
 		// Binding
 		void Bind(uint32_t slot = 0) const override;

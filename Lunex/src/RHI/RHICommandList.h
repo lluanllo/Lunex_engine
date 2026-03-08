@@ -256,6 +256,12 @@ namespace Lunex {
 			virtual void SetCullMode(CullMode mode) = 0;
 
 			/**
+			 * @brief Get the current cull mode
+			 * @return Current cull mode setting
+			 */
+			virtual CullMode GetCullMode() const = 0;
+
+			/**
 			 * @brief Clear only the depth buffer of the currently bound framebuffer
 			 * @param depth Depth clear value (default 1.0)
 			 */
@@ -282,6 +288,42 @@ namespace Lunex {
 			 * @param layer The array layer to attach
 			 */
 			virtual void AttachDepthTextureLayer(uint64_t framebufferHandle, uint64_t textureHandle, uint32_t layer) = 0;
+
+			/**
+			 * @brief Enable or disable blending
+			 * @param enabled Whether blending is enabled
+			 */
+			virtual void SetBlendEnabled(bool enabled) = 0;
+
+			/**
+			 * @brief Set the blend function
+			 * @param srcFactor Source blend factor
+			 * @param dstFactor Destination blend factor
+			 */
+			virtual void SetBlendFunc(BlendFactor srcFactor, BlendFactor dstFactor) = 0;
+
+			/**
+			 * @brief Bind a texture by its native handle to a specific slot
+			 * Used for low-level rendering when texture objects are not wrapped in RHITexture.
+			 * @param handle Native texture handle
+			 * @param slot Texture binding slot
+			 */
+			virtual void BindTextureByHandle(uint64_t handle, uint32_t slot) = 0;
+
+			/**
+			 * @brief Blit (copy) from one framebuffer to another
+			 * Used for copying depth/color between framebuffers.
+			 * @param srcHandle Source framebuffer native handle
+			 * @param dstHandle Destination framebuffer native handle
+			 * @param srcX0, srcY0, srcX1, srcY1 Source rectangle
+			 * @param dstX0, dstY0, dstX1, dstY1 Destination rectangle
+			 * @param copyDepth Whether to copy depth buffer
+			 * @param copyColor Whether to copy color buffer
+			 */
+			virtual void BlitFramebuffer(uint64_t srcHandle, uint64_t dstHandle,
+				int srcX0, int srcY0, int srcX1, int srcY1,
+				int dstX0, dstY0, int dstX1, int dstY1,
+				bool copyDepth, bool copyColor) = 0;
 
 			// ============================================
 			// RENDER PASS
@@ -525,6 +567,16 @@ namespace Lunex {
 			 */
 			virtual void CopyTextureToBuffer(const RHITexture* src, RHIBuffer* dst,
 				const TextureRegion& textureRegion, uint64_t bufferOffset) = 0;
+
+			/**
+			 * @brief Read pixels from the currently bound framebuffer
+			 * @param x X offset
+			 * @param y Y offset
+			 * @param width Width to read
+			 * @param height Height to read
+			 * @param data Destination buffer (must be large enough for width*height*4 bytes RGBA)
+			 */
+			virtual void ReadPixels(int x, int y, uint32_t width, uint32_t height, void* data) = 0;
 
 			// ============================================
 			// CLEAR OPERATIONS

@@ -268,6 +268,9 @@ namespace Lunex {
 		if (!fbo) return;
 		auto colorTex = fbo->GetColorAttachment(0);
 		if (colorTex) {
+			// Use RHI texture's native handle to set wrap mode
+			// Note: This uses OpenGL DSA functions which are appropriate since the
+			// texture wrapping configuration is part of the RHI/OpenGL implementation layer
 			GLuint texID = static_cast<GLuint>(colorTex->GetNativeHandle());
 			glTextureParameteri(texID, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 			glTextureParameteri(texID, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -434,8 +437,7 @@ namespace Lunex {
 
 		auto silhouetteColor = m_SilhouetteFBO->GetColorAttachment(0);
 		if (silhouetteColor) {
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(silhouetteColor->GetNativeHandle()));
+			cmd->BindTextureByHandle(silhouetteColor->GetNativeHandle(), 0);
 		}
 
 		m_BlurUBOData.TexelSize = glm::vec2(texelW, texelH);
@@ -454,8 +456,7 @@ namespace Lunex {
 
 		auto pingColor = m_BlurPingFBO->GetColorAttachment(0);
 		if (pingColor) {
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(pingColor->GetNativeHandle()));
+			cmd->BindTextureByHandle(pingColor->GetNativeHandle(), 0);
 		}
 
 		m_BlurUBOData.Direction = glm::vec2(0.0f, 1.0f);
@@ -480,23 +481,21 @@ namespace Lunex {
 		cmd->SetCullMode(RHI::CullMode::None);
 
 		// Enable alpha blending
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		cmd->SetBlendEnabled(true);
+		cmd->SetBlendFunc(RHI::BlendFactor::SrcAlpha, RHI::BlendFactor::OneMinusSrcAlpha);
 
 		m_CompositeShader->Bind();
 
 		// Bind blurred silhouette (pong)
 		auto pongColor = m_BlurPongFBO->GetColorAttachment(0);
 		if (pongColor) {
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(pongColor->GetNativeHandle()));
+			cmd->BindTextureByHandle(pongColor->GetNativeHandle(), 0);
 		}
 
 		// Bind original silhouette
 		auto silhouetteColor = m_SilhouetteFBO->GetColorAttachment(0);
 		if (silhouetteColor) {
-			glActiveTexture(GL_TEXTURE1);
-			glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(silhouetteColor->GetNativeHandle()));
+			cmd->BindTextureByHandle(silhouetteColor->GetNativeHandle(), 1);
 		}
 
 		m_CompositeUBOData.OutlineColor = outlineColor;
@@ -507,7 +506,7 @@ namespace Lunex {
 		DrawFullscreenQuad();
 
 		// Restore blend state
-		glDisable(GL_BLEND);
+		cmd->SetBlendEnabled(false);
 
 		// Restore depth state
 		cmd->SetDepthTestEnabled(true);

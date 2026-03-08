@@ -114,6 +114,17 @@ namespace RHI {
 		}
 		
 		// ============================================
+		// TEXTURE PARAMETERS
+		// ============================================
+		
+		/**
+		 * @brief Set wrap mode for all texture axes
+		 * @param wrapU Wrap mode for U (S) axis
+		 * @param wrapV Wrap mode for V (T) axis
+		 */
+		virtual void SetWrapMode(WrapMode wrapU, WrapMode wrapV) = 0;
+		
+		// ============================================
 		// BINDING
 		// ============================================
 		

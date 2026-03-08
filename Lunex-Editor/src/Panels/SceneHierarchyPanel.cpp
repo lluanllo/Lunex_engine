@@ -1,8 +1,10 @@
 ﻿#include "SceneHierarchyPanel.h"
 #include "ContentBrowserPanel.h"
 
-#include <imgui.h>
-#include <imgui_internal.h>
+// imgui.h/imgui_internal.h incluidos implícitamente vía UICore.h
+// Necesarios para: ImGuiTreeNodeFlags, ImGuiDragDropFlags, ImGuiPopupFlags,
+// ImGui::TreeNodeEx, ImGui::BeginDragDropSource/Target, ImGui::BeginPopupContextWindow/Item,
+// ImGui::GetWindowDrawList, ImDrawList, ImGui::IsMouseClicked, ImGui::IsAnyItemHovered
 
 #include <glm/gtc/type_ptr.hpp>
 
@@ -376,7 +378,7 @@ namespace Lunex {
 			ScopedColor frameColor(ImGuiCol_FrameBg, Color(0.055f, 0.647f, 0.769f, 0.2f));
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 20.0f);
 			
-			if (ImGui::InputText("##RenameEntity", m_RenameBuffer, sizeof(m_RenameBuffer), 
+			if (InputTextEx("##RenameEntity", m_RenameBuffer, sizeof(m_RenameBuffer), 
 				ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
 				entity.GetComponent<TagComponent>().Tag = m_RenameBuffer;
 				m_IsRenaming = false;
