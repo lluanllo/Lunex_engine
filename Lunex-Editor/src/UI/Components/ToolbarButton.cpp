@@ -6,57 +6,42 @@
 #include "stpch.h"
 #include "ToolbarButton.h"
 #include <imgui.h>
+#include <cmath>
 
 namespace Lunex::UI {
 
 	bool ToolbarButton(const ToolbarButtonProps& props) {
-		bool clicked = false;
-		
 		ScopedID buttonID(props.Id);
-		
-		// Apply selected state colors
-		if (props.IsSelected) {
-			ImGui::PushStyleColor(ImGuiCol_Button, ToolbarButtonColors::ButtonSelected().ToImVec4());
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ToolbarButtonColors::ButtonSelectedHover().ToImVec4());
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ToolbarButtonColors::ButtonSelectedHover().ToImVec4());
-		} else {
-			ImGui::PushStyleColor(ImGuiCol_Button, ToolbarButtonColors::ButtonBg().ToImVec4());
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ToolbarButtonColors::ButtonHover().ToImVec4());
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ToolbarButtonColors::ButtonActive().ToImVec4());
-		}
-		
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, ToolbarButtonSizing::ButtonRounding);
-		
-		// Determine tint based on enabled state
-		Color tint = props.IsEnabled ? props.Tint : props.Tint.WithAlpha(0.4f);
-		
-		// Render icon button or text fallback
+
+		// Every button is exactly Size x Size whether it has an icon or not (ImageButton
+		// adds frame padding, text buttons don't: mixed toolbars used to look uneven)
+		const ImVec2 p = ImGui::GetCursorScreenPos();
+		const ImVec2 size(props.Size, props.Size);
+		bool clicked = ImGui::InvisibleButton("##tb", size);
+		const bool hovered = ImGui::IsItemHovered();
+		const bool held = ImGui::IsItemActive();
+
+		Color bg = props.IsSelected
+			? (hovered ? ToolbarButtonColors::ButtonSelectedHover() : ToolbarButtonColors::ButtonSelected())
+			: (held ? ToolbarButtonColors::ButtonActive() : hovered ? ToolbarButtonColors::ButtonHover() : ToolbarButtonColors::ButtonBg());
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		const ImVec2 q(p.x + size.x, p.y + size.y);
+		dl->AddRectFilled(p, q, ImGui::GetColorU32(bg.ToImVec4()), ToolbarButtonSizing::ButtonRounding);
+
+		const Color tint = props.IsEnabled ? props.Tint : props.Tint.WithAlpha(0.4f);
 		if (props.Icon && props.Icon->GetRendererID() != 0) {
-			clicked = ImGui::ImageButton(
-				("##" + props.Id).c_str(),
-				(ImTextureID)(intptr_t)props.Icon->GetRendererID(),
-				ImVec2(props.Size, props.Size),
-				ImVec2(0, 0), ImVec2(1, 1),
-				ImVec4(0, 0, 0, 0),
-				tint.ToImVec4()
-			);
-		} else if (props.FallbackText) {
-			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-			clicked = ImGui::Button(props.FallbackText, ImVec2(props.Size, props.Size));
-			ImGui::PopStyleVar();
+			const float pad = std::round(props.Size * 0.18f);
+			dl->AddImage((ImTextureID)(intptr_t)props.Icon->GetRendererID(), ImVec2(p.x + pad, p.y + pad), ImVec2(q.x - pad, q.y - pad),
+				ImVec2(0, 0), ImVec2(1, 1), ImGui::GetColorU32(tint.ToImVec4()));
 		}
-		
-		// Only trigger click if enabled
+		else if (props.FallbackText) {
+			const ImVec2 ts = ImGui::CalcTextSize(props.FallbackText);
+			dl->AddText(ImVec2(p.x + (size.x - ts.x) * 0.5f, p.y + (size.y - ts.y) * 0.5f), ImGui::GetColorU32(tint.ToImVec4()), props.FallbackText);
+		}
+
 		clicked = clicked && props.IsEnabled;
-		
-		// Tooltip
-		if (ImGui::IsItemHovered() && (props.TooltipTitle || props.TooltipDescription)) {
+		if (hovered && (props.TooltipTitle || props.TooltipDescription))
 			ToolbarTooltip(props.TooltipTitle, props.TooltipDescription);
-		}
-		
-		ImGui::PopStyleVar();
-		ImGui::PopStyleColor(3);
-		
 		return clicked;
 	}
 

@@ -26,7 +26,7 @@ namespace Lunex {
 	// ============================================================================
 	
 	namespace {
-		constexpr float kButtonSize = 28.0f;
+		constexpr float kButtonSize = 32.0f;
 		constexpr float kSpacing = 6.0f;
 		constexpr float kPadding = 12.0f;
 		constexpr int kPivotButtonCount = 4;
