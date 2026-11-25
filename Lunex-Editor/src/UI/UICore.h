@@ -33,8 +33,6 @@ namespace Lunex::UI {
 	// FORWARD DECLARATIONS
 	// ============================================================================
 	
-	class Theme;
-	class Component;
 	
 	// ============================================================================
 	// COLOR CLASS
@@ -123,50 +121,86 @@ namespace Lunex::UI {
 	// THEME COLORS - Semantic color definitions
 	// ============================================================================
 	
+	// ============================================================================
+	// DESIGN TOKENS (Lunexi themes)
+	// ============================================================================
+
+	/**
+	 * @brief Every color/metric the framework uses. A Theme is a named set of tokens;
+	 * UI::Colors::* read the active theme, so switching themes restyles every
+	 * component without touching them (Astro-style design tokens).
+	 */
+	struct ThemeTokens {
+		Color Primary = Color::FromHex(0xD9822B);
+		Color PrimaryHover = Color::FromHex(0xEB9645);
+		Color PrimaryActive = Color::FromHex(0xB86A1F);
+		Color Success = Color::FromHex(0x4CAF50);
+		Color Warning = Color::FromHex(0xFFA726);
+		Color Danger = Color::FromHex(0xEF5350);
+		Color Info = Color::FromHex(0x42A5F5);
+		Color TextPrimary = Color(0.86f, 0.86f, 0.86f, 1.0f);
+		Color TextSecondary = Color(0.56f, 0.56f, 0.56f, 1.0f);
+		Color TextMuted = Color(0.42f, 0.42f, 0.42f, 1.0f);
+		Color TextDisabled = Color(0.30f, 0.30f, 0.30f, 1.0f);
+		Color BgDark = Color::FromHex(0x151515);
+		Color BgMedium = Color::FromHex(0x1A1A1A);
+		Color BgLight = Color::FromHex(0x242424);
+		Color BgCard = Color::FromHex(0x202020);
+		Color BgHover = Color::FromHex(0x2F2F2F);
+		Color Border = Color::FromHex(0x0E0E0E);
+		Color BorderLight = Color::FromHex(0x383838);
+		Color BorderFocus = Color(0.851f, 0.510f, 0.169f, 0.50f);
+		Color AxisX = Color(0.89f, 0.22f, 0.21f, 1.0f);
+		Color AxisXHover = Color(1.00f, 0.32f, 0.31f, 1.0f);
+		Color AxisY = Color(0.27f, 0.75f, 0.27f, 1.0f);
+		Color AxisYHover = Color(0.37f, 0.85f, 0.37f, 1.0f);
+		Color AxisZ = Color(0.22f, 0.46f, 0.93f, 1.0f);
+		Color AxisZHover = Color(0.32f, 0.56f, 1.00f, 1.0f);
+		Color Selected = Color(0.851f, 0.510f, 0.169f, 0.18f);
+		Color SelectedBorder = Color::FromHex(0xD9822B);
+		Color Shadow = Color(0.0f, 0.0f, 0.0f, 0.50f);
+
+		// Metrics
+		float WindowRounding = 0.0f;
+		float FrameRounding = 3.0f;
+		float TabRounding = 2.0f;
+		float GrabRounding = 3.0f;
+		ImVec2 FramePadding = ImVec2(6.0f, 4.0f);
+		ImVec2 ItemSpacing = ImVec2(8.0f, 5.0f);
+	};
+
+	// Tokens of the active theme (defined in Lunexi/Theme.cpp)
+	const ThemeTokens& CurrentTokens();
+
 	namespace Colors {
-		// Primary palette (Teal/Cyan accent - modern editor style)
-		inline Color Primary()      { return Color::FromHex(0x0EA5C4); }      // Teal/Cyan accent
-		inline Color PrimaryHover() { return Color::FromHex(0x22BDD8); }      // Lighter teal
-		inline Color PrimaryActive(){ return Color::FromHex(0x0990AD); }      // Deeper teal
-		
-		// Semantic colors
-		inline Color Success()      { return Color::FromHex(0x4CAF50); }      // Material green
-		inline Color Warning()      { return Color::FromHex(0xFFA726); }      // Amber
-		inline Color Danger()       { return Color::FromHex(0xEF5350); }      // Material red
-		inline Color Info()         { return Color::FromHex(0x42A5F5); }      // Light blue
-		
-		// Text colors (proper contrast hierarchy)
-		inline Color TextPrimary()  { return Color(0.88f, 0.90f, 0.92f, 1.0f); }  // Near white, cool tint
-		inline Color TextSecondary(){ return Color(0.50f, 0.54f, 0.58f, 1.0f); }  // Medium gray-blue
-		inline Color TextMuted()    { return Color(0.34f, 0.38f, 0.42f, 1.0f); }  // Dark gray-blue
-		inline Color TextDisabled() { return Color(0.26f, 0.28f, 0.32f, 1.0f); }  // Very dark gray-blue
-		
-		// Background colors (Blue-tinted dark theme)
-		inline Color BgDark()       { return Color::FromHex(0x151A21); }      // Darkest background
-		inline Color BgMedium()     { return Color::FromHex(0x1A2028); }      // Main panel background
-		inline Color BgLight()      { return Color::FromHex(0x212830); }      // Elevated panels
-		inline Color BgCard()       { return Color::FromHex(0x1E2530); }      // Card background
-		inline Color BgHover()      { return Color::FromHex(0x252D38); }      // Hover state
-		
-		// Border colors
-		inline Color Border()       { return Color::FromHex(0x1A2028); }      // Dark border
-		inline Color BorderLight()  { return Color::FromHex(0x2A3340); }      // Subtle border
-		inline Color BorderFocus()  { return Color(0.05f, 0.65f, 0.77f, 0.50f); } // Teal focus glow
-		
-		// Axis colors (standard R/G/B)
-		inline Color AxisX()        { return Color(0.89f, 0.22f, 0.21f, 1.0f); }  // Red
-		inline Color AxisXHover()   { return Color(1.00f, 0.32f, 0.31f, 1.0f); }
-		inline Color AxisY()        { return Color(0.27f, 0.75f, 0.27f, 1.0f); }  // Green
-		inline Color AxisYHover()   { return Color(0.37f, 0.85f, 0.37f, 1.0f); }
-		inline Color AxisZ()        { return Color(0.22f, 0.46f, 0.93f, 1.0f); }  // Blue
-		inline Color AxisZHover()   { return Color(0.32f, 0.56f, 1.00f, 1.0f); }
-		
-		// Selection colors (teal tinted)
-		inline Color Selected()     { return Color(0.05f, 0.65f, 0.77f, 0.18f); }
-		inline Color SelectedBorder(){ return Color::FromHex(0x0EA5C4); }
-		
-		// Shadow
-		inline Color Shadow()       { return Color(0.0f, 0.0f, 0.0f, 0.50f); }
+		inline Color Primary() { return CurrentTokens().Primary; }
+		inline Color PrimaryHover() { return CurrentTokens().PrimaryHover; }
+		inline Color PrimaryActive() { return CurrentTokens().PrimaryActive; }
+		inline Color Success() { return CurrentTokens().Success; }
+		inline Color Warning() { return CurrentTokens().Warning; }
+		inline Color Danger() { return CurrentTokens().Danger; }
+		inline Color Info() { return CurrentTokens().Info; }
+		inline Color TextPrimary() { return CurrentTokens().TextPrimary; }
+		inline Color TextSecondary() { return CurrentTokens().TextSecondary; }
+		inline Color TextMuted() { return CurrentTokens().TextMuted; }
+		inline Color TextDisabled() { return CurrentTokens().TextDisabled; }
+		inline Color BgDark() { return CurrentTokens().BgDark; }
+		inline Color BgMedium() { return CurrentTokens().BgMedium; }
+		inline Color BgLight() { return CurrentTokens().BgLight; }
+		inline Color BgCard() { return CurrentTokens().BgCard; }
+		inline Color BgHover() { return CurrentTokens().BgHover; }
+		inline Color Border() { return CurrentTokens().Border; }
+		inline Color BorderLight() { return CurrentTokens().BorderLight; }
+		inline Color BorderFocus() { return CurrentTokens().BorderFocus; }
+		inline Color AxisX() { return CurrentTokens().AxisX; }
+		inline Color AxisXHover() { return CurrentTokens().AxisXHover; }
+		inline Color AxisY() { return CurrentTokens().AxisY; }
+		inline Color AxisYHover() { return CurrentTokens().AxisYHover; }
+		inline Color AxisZ() { return CurrentTokens().AxisZ; }
+		inline Color AxisZHover() { return CurrentTokens().AxisZHover; }
+		inline Color Selected() { return CurrentTokens().Selected; }
+		inline Color SelectedBorder() { return CurrentTokens().SelectedBorder; }
+		inline Color Shadow() { return CurrentTokens().Shadow; }
 	}
 	
 	// ============================================================================

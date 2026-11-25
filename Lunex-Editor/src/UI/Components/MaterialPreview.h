@@ -19,7 +19,7 @@ namespace Lunex::UI {
 	struct MaterialPreviewStyle {
 		Size size = Size(70, 70);
 		float rounding = 3.0f;
-		Color borderColor = Color::FromHex(0x0E1218);
+		Color borderColor = Color::FromHex(0x141414);
 		bool showBorder = true;
 	};
 	

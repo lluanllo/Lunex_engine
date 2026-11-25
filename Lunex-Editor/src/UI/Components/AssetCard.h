@@ -25,7 +25,8 @@ namespace Lunex::UI {
 		inline Color Script()   { return Color(0.50f, 0.80f, 0.50f, 1.0f); }  // Soft Green
 		inline Color Audio()    { return Color(0.85f, 0.45f, 0.55f, 1.0f); }  // Pink
 		inline Color Shader()   { return Color(0.70f, 0.70f, 0.85f, 1.0f); }  // Lavender
-		inline Color Default()  { return Color(0.50f, 0.50f, 0.55f, 1.0f); }  // Gray
+		inline Color Animation(){ return Color(0.30f, 0.80f, 0.85f, 1.0f); }  // Teal
+inline Color Default()  { return Color(0.50f, 0.50f, 0.55f, 1.0f); }  // Gray
 		inline Color Folder()   { return Color(0.0f, 0.0f, 0.0f, 0.0f); }     // Transparent (no border)
 	}
 

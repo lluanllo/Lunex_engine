@@ -21,12 +21,12 @@ namespace Lunex::UI {
 		float buttonSize = 22.0f;
 		float searchWidth = 200.0f;
 		Color backgroundColor = Colors::BgDark();
-		Color buttonColor = Color(0.10f, 0.13f, 0.16f, 1.0f);
+		Color buttonColor = Color(0.134f, 0.134f, 0.134f, 1.0f);
 		Color buttonHoverColor = Color(0.05f, 0.65f, 0.77f, 0.3f);
 		Color buttonActiveColor = Color(0.05f, 0.65f, 0.77f, 0.5f);
-		Color inputBgColor = Color(0.09f, 0.11f, 0.14f, 1.0f);
-		Color searchBgColor = Color(0.09f, 0.11f, 0.14f, 1.0f);
-		Color searchHoverColor = Color(0.12f, 0.15f, 0.19f, 1.0f);
+		Color inputBgColor = Color(0.117f, 0.117f, 0.117f, 1.0f);
+		Color searchBgColor = Color(0.117f, 0.117f, 0.117f, 1.0f);
+		Color searchHoverColor = Color(0.157f, 0.157f, 0.157f, 1.0f);
 		Color textColor = Color(0.78f, 0.80f, 0.84f, 1.0f);
 		Color searchTextColor = Color(0.83f, 0.85f, 0.89f, 1.0f);
 	};

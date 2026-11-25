@@ -100,6 +100,10 @@
 // Complex components (modular)
 #include "Components/Components.h"
 
+// Lunexi: themes (design tokens) + Astro-style components, slots, layouts and islands
+#include "Lunexi/Theme.h"
+#include "Lunexi/Component.h"
+
 namespace Lunex::UI {
 
 	/**

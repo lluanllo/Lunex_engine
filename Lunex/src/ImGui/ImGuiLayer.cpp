@@ -138,39 +138,40 @@ namespace Lunex {
 		style.ButtonTextAlign = ImVec2(0.5f, 0.5f);
 		style.SelectableTextAlign = ImVec2(0.0f, 0.5f);
 		
-		// ===== COLOR PALETTE (BLUE-TINTED DARK + TEAL ACCENT) =====
-		
-		// Dark backgrounds with blue undertone
-		const ImVec4 bgVeryDark    = ImVec4(0.082f, 0.102f, 0.129f, 1.0f);   // #151A21
-		const ImVec4 bgDark        = ImVec4(0.102f, 0.125f, 0.157f, 1.0f);   // #1A2028
-		const ImVec4 bgMedium      = ImVec4(0.129f, 0.157f, 0.188f, 1.0f);   // #212830
-		const ImVec4 bgLight       = ImVec4(0.145f, 0.176f, 0.220f, 1.0f);   // #252D38
-		const ImVec4 bgHeader      = ImVec4(0.094f, 0.114f, 0.145f, 1.0f);   // #181D25
-		
-		// Teal/Cyan accent
-		const ImVec4 accent        = ImVec4(0.055f, 0.647f, 0.769f, 1.0f);   // #0EA5C4
-		const ImVec4 accentHover   = ImVec4(0.133f, 0.741f, 0.847f, 1.0f);   // #22BDD8
-		const ImVec4 accentActive  = ImVec4(0.035f, 0.565f, 0.678f, 1.0f);   // #0990AD
-		const ImVec4 accentDim     = ImVec4(0.055f, 0.647f, 0.769f, 0.50f);
-		const ImVec4 accentSubtle  = ImVec4(0.055f, 0.647f, 0.769f, 0.12f);
-		
-		// Text with proper contrast
-		const ImVec4 text          = ImVec4(0.88f, 0.90f, 0.92f, 1.0f);      // Primary text
+		// ===== COLOR PALETTE (UNREAL-STYLE NEUTRAL GRAYS + WARM ACCENT) =====
+		// Change the accent here; every other color is a neutral gray.
+
+		// Neutral dark backgrounds (no hue)
+		const ImVec4 bgVeryDark    = ImVec4(0.082f, 0.082f, 0.082f, 1.0f);   // #151515
+		const ImVec4 bgDark        = ImVec4(0.102f, 0.102f, 0.102f, 1.0f);   // #1A1A1A
+		const ImVec4 bgMedium      = ImVec4(0.141f, 0.141f, 0.141f, 1.0f);   // #242424
+		const ImVec4 bgLight       = ImVec4(0.184f, 0.184f, 0.184f, 1.0f);   // #2F2F2F
+		const ImVec4 bgHeader      = ImVec4(0.122f, 0.122f, 0.122f, 1.0f);   // #1F1F1F
+
+		// Warm accent (selection / active elements)
+		const ImVec4 accent        = ImVec4(0.851f, 0.510f, 0.169f, 1.0f);   // #D9822B
+		const ImVec4 accentHover   = ImVec4(0.922f, 0.588f, 0.271f, 1.0f);   // #EB9645
+		const ImVec4 accentActive  = ImVec4(0.722f, 0.416f, 0.122f, 1.0f);   // #B86A1F
+		const ImVec4 accentDim     = ImVec4(accent.x, accent.y, accent.z, 0.50f);
+		const ImVec4 accentSubtle  = ImVec4(accent.x, accent.y, accent.z, 0.12f);
+
+		// Text
+		const ImVec4 text          = ImVec4(0.86f, 0.86f, 0.86f, 1.0f);      // Primary text
 		const ImVec4 textBright    = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);         // Highlighted
-		const ImVec4 textDisabled  = ImVec4(0.36f, 0.40f, 0.44f, 1.0f);      // Disabled
-		const ImVec4 textDim       = ImVec4(0.50f, 0.54f, 0.58f, 1.0f);      // Secondary
-		
-		// Subtle borders (blue-tinted)
-		const ImVec4 border        = ImVec4(0.10f, 0.13f, 0.16f, 1.0f);      // #1A2128
-		const ImVec4 borderLight   = ImVec4(0.16f, 0.20f, 0.25f, 1.0f);      // #293340
-		const ImVec4 separator     = ImVec4(0.16f, 0.20f, 0.25f, 0.50f);
-		
+		const ImVec4 textDisabled  = ImVec4(0.40f, 0.40f, 0.40f, 1.0f);      // Disabled
+		const ImVec4 textDim       = ImVec4(0.56f, 0.56f, 0.56f, 1.0f);      // Secondary
+
+		// Borders
+		const ImVec4 border        = ImVec4(0.055f, 0.055f, 0.055f, 1.0f);   // #0E0E0E
+		const ImVec4 borderLight   = ImVec4(0.220f, 0.220f, 0.220f, 1.0f);   // #383838
+		const ImVec4 separator     = ImVec4(0.220f, 0.220f, 0.220f, 0.60f);
+
 		// ===== APPLY COLORS =====
 		
 		// Backgrounds
 		colors[ImGuiCol_WindowBg]               = bgDark;
 		colors[ImGuiCol_ChildBg]                = bgVeryDark;
-		colors[ImGuiCol_PopupBg]                = ImVec4(0.08f, 0.10f, 0.13f, 0.98f);
+		colors[ImGuiCol_PopupBg]                = ImVec4(0.107f, 0.107f, 0.107f, 0.98f);
 		colors[ImGuiCol_MenuBarBg]              = bgHeader;
 		
 		// Borders
@@ -183,37 +184,37 @@ namespace Lunex {
 		colors[ImGuiCol_TextSelectedBg]         = ImVec4(accent.x, accent.y, accent.z, 0.30f);
 		
 		// Headers
-		colors[ImGuiCol_Header]                 = ImVec4(0.11f, 0.14f, 0.17f, 1.0f);
-		colors[ImGuiCol_HeaderHovered]          = ImVec4(0.15f, 0.19f, 0.23f, 1.0f);
+		colors[ImGuiCol_Header]                 = ImVec4(0.144f, 0.144f, 0.144f, 1.0f);
+		colors[ImGuiCol_HeaderHovered]          = ImVec4(0.194f, 0.194f, 0.194f, 1.0f);
 		colors[ImGuiCol_HeaderActive]           = ImVec4(accent.x, accent.y, accent.z, 0.25f);
 		
 		// Buttons (blue-tinted dark)
-		colors[ImGuiCol_Button]                 = ImVec4(0.13f, 0.16f, 0.20f, 1.0f);
-		colors[ImGuiCol_ButtonHovered]          = ImVec4(0.18f, 0.22f, 0.27f, 1.0f);
-		colors[ImGuiCol_ButtonActive]           = ImVec4(0.10f, 0.13f, 0.16f, 1.0f);
+		colors[ImGuiCol_Button]                 = ImVec4(0.167f, 0.167f, 0.167f, 1.0f);
+		colors[ImGuiCol_ButtonHovered]          = ImVec4(0.227f, 0.227f, 0.227f, 1.0f);
+		colors[ImGuiCol_ButtonActive]           = ImVec4(0.134f, 0.134f, 0.134f, 1.0f);
 		
 		// Frame backgrounds (inputs, sliders, etc.)
-		colors[ImGuiCol_FrameBg]                = ImVec4(0.09f, 0.11f, 0.14f, 1.0f);
-		colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.12f, 0.15f, 0.19f, 1.0f);
-		colors[ImGuiCol_FrameBgActive]          = ImVec4(0.14f, 0.18f, 0.22f, 1.0f);
+		colors[ImGuiCol_FrameBg]                = ImVec4(0.117f, 0.117f, 0.117f, 1.0f);
+		colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.157f, 0.157f, 0.157f, 1.0f);
+		colors[ImGuiCol_FrameBgActive]          = ImVec4(0.184f, 0.184f, 0.184f, 1.0f);
 		
 		// Tabs (active tab with teal underline feel)
-		colors[ImGuiCol_Tab]                    = ImVec4(0.08f, 0.10f, 0.13f, 1.0f);
+		colors[ImGuiCol_Tab]                    = ImVec4(0.107f, 0.107f, 0.107f, 1.0f);
 		colors[ImGuiCol_TabHovered]             = ImVec4(accent.x, accent.y, accent.z, 0.30f);
 		colors[ImGuiCol_TabActive]              = ImVec4(accent.x * 0.3f, accent.y * 0.3f, accent.z * 0.3f, 1.0f);
-		colors[ImGuiCol_TabUnfocused]           = ImVec4(0.07f, 0.09f, 0.11f, 1.0f);
-		colors[ImGuiCol_TabUnfocusedActive]     = ImVec4(0.10f, 0.13f, 0.16f, 1.0f);
+		colors[ImGuiCol_TabUnfocused]           = ImVec4(0.094f, 0.094f, 0.094f, 1.0f);
+		colors[ImGuiCol_TabUnfocusedActive]     = ImVec4(0.134f, 0.134f, 0.134f, 1.0f);
 		
 		// Title bar
-		colors[ImGuiCol_TitleBg]                = ImVec4(0.06f, 0.08f, 0.10f, 1.0f);
-		colors[ImGuiCol_TitleBgActive]          = ImVec4(0.08f, 0.10f, 0.13f, 1.0f);
-		colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.06f, 0.08f, 0.10f, 1.0f);
+		colors[ImGuiCol_TitleBg]                = ImVec4(0.084f, 0.084f, 0.084f, 1.0f);
+		colors[ImGuiCol_TitleBgActive]          = ImVec4(0.107f, 0.107f, 0.107f, 1.0f);
+		colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.084f, 0.084f, 0.084f, 1.0f);
 		
 		// Scrollbar
-		colors[ImGuiCol_ScrollbarBg]            = ImVec4(0.06f, 0.08f, 0.10f, 0.50f);
-		colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.20f, 0.24f, 0.30f, 1.0f);
-		colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.28f, 0.33f, 0.40f, 1.0f);
-		colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.36f, 0.42f, 0.50f, 1.0f);
+		colors[ImGuiCol_ScrollbarBg]            = ImVec4(0.084f, 0.084f, 0.084f, 0.5f);
+		colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.251f, 0.251f, 0.251f, 1.0f);
+		colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.341f, 0.341f, 0.341f, 1.0f);
+		colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.431f, 0.431f, 0.431f, 1.0f);
 		
 		// Checkmarks and sliders use teal accent
 		colors[ImGuiCol_CheckMark]              = accent;
@@ -237,14 +238,14 @@ namespace Lunex {
 		// Tables
 		colors[ImGuiCol_TableHeaderBg]          = bgHeader;
 		colors[ImGuiCol_TableBorderStrong]      = border;
-		colors[ImGuiCol_TableBorderLight]       = ImVec4(0.13f, 0.16f, 0.20f, 1.0f);
+		colors[ImGuiCol_TableBorderLight]       = ImVec4(0.167f, 0.167f, 0.167f, 1.0f);
 		colors[ImGuiCol_TableRowBg]             = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 		colors[ImGuiCol_TableRowBgAlt]          = ImVec4(1.0f, 1.0f, 1.0f, 0.02f);
 		
 		// Plots
 		colors[ImGuiCol_PlotLines]              = accent;
 		colors[ImGuiCol_PlotLinesHovered]       = accentHover;
-		colors[ImGuiCol_PlotHistogram]          = ImVec4(0.28f, 0.33f, 0.40f, 1.0f);
+		colors[ImGuiCol_PlotHistogram]          = ImVec4(0.341f, 0.341f, 0.341f, 1.0f);
 		colors[ImGuiCol_PlotHistogramHovered]   = accent;
 		
 		// Drag and drop

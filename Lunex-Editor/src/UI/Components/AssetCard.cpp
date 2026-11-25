@@ -18,7 +18,8 @@ namespace Lunex::UI {
 		if (typeLabel == "SCRIPT" ) return AssetTypeColors::Script();
 		if (typeLabel == "AUDIO"  ) return AssetTypeColors::Audio();
 		if (typeLabel == "SHADER" ) return AssetTypeColors::Shader();
-		if (typeLabel == "FOLDER" ) return AssetTypeColors::Folder();
+		if (typeLabel == "ANIMATION") return AssetTypeColors::Animation();
+if (typeLabel == "FOLDER" ) return AssetTypeColors::Folder();
 		return AssetTypeColors::Default();
 	}
 
@@ -217,7 +218,7 @@ namespace Lunex::UI {
 										   bool isSelected, bool isHovered) {
 		// Hover effect (blue-tinted)
 		if (isHovered && !isSelected) {
-			drawList->AddRect(cardMin, cardMax, IM_COL32(55, 68, 85, 200), m_Style.rounding, 0, 1.0f);
+			drawList->AddRect(cardMin, cardMax, IM_COL32(70, 70, 70, 200), m_Style.rounding, 0, 1.0f);
 		}
 		
 		// Selection effect (teal accent)
