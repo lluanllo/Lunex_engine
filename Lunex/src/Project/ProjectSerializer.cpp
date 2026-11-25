@@ -30,6 +30,7 @@ namespace Lunex {
 		out << YAML::Key << "Width" << YAML::Value << config.Width;
 		out << YAML::Key << "Height" << YAML::Value << config.Height;
 		out << YAML::Key << "VSync" << YAML::Value << config.VSync;
+		out << YAML::Key << "RenderEngine" << YAML::Value << config.RenderEngine;
 		out << YAML::EndMap;
 		
 		// ? NEW: Serialize Input Bindings
@@ -80,7 +81,13 @@ namespace Lunex {
 			out << YAML::Key << "ToneMapOperator" << YAML::Value << pp.ToneMapOperator;
 			out << YAML::Key << "Exposure" << YAML::Value << pp.Exposure;
 			out << YAML::Key << "Gamma" << YAML::Value << pp.Gamma;
-			out << YAML::EndMap;
+			out << YAML::Key << "EnableSSR" << YAML::Value << pp.EnableSSR;
+			out << YAML::Key << "SSRIntensity" << YAML::Value << pp.SSRIntensity;
+			out << YAML::Key << "SSRMaxDistance" << YAML::Value << pp.SSRMaxDistance;
+			out << YAML::Key << "SSRThickness" << YAML::Value << pp.SSRThickness;
+			out << YAML::Key << "SSRMaxSteps" << YAML::Value << pp.SSRMaxSteps;
+			out << YAML::Key << "SSRMaxRoughness" << YAML::Value << pp.SSRMaxRoughness;
+out << YAML::EndMap;
 		}
 		
 		out << YAML::EndMap;
@@ -120,7 +127,8 @@ namespace Lunex {
 			m_Project->m_Config.Width = settings["Width"].as<uint32_t>();
 			m_Project->m_Config.Height = settings["Height"].as<uint32_t>();
 			m_Project->m_Config.VSync = settings["VSync"].as<bool>();
-		}
+			m_Project->m_Config.RenderEngine = settings["RenderEngine"].as<std::string>("Rasterizer");
+}
 		
 		// ? NEW: Deserialize Input Bindings
 		auto inputBindings = projectNode["InputBindings"];
@@ -202,7 +210,19 @@ namespace Lunex {
 				pp.Exposure = ppNode["Exposure"].as<float>();
 			if (ppNode["Gamma"])
 				pp.Gamma = ppNode["Gamma"].as<float>();
-			
+			if (ppNode["EnableSSR"])
+				pp.EnableSSR = ppNode["EnableSSR"].as<bool>();
+			if (ppNode["SSRIntensity"])
+				pp.SSRIntensity = ppNode["SSRIntensity"].as<float>();
+			if (ppNode["SSRMaxDistance"])
+				pp.SSRMaxDistance = ppNode["SSRMaxDistance"].as<float>();
+			if (ppNode["SSRThickness"])
+				pp.SSRThickness = ppNode["SSRThickness"].as<float>();
+			if (ppNode["SSRMaxSteps"])
+				pp.SSRMaxSteps = ppNode["SSRMaxSteps"].as<int>();
+			if (ppNode["SSRMaxRoughness"])
+				pp.SSRMaxRoughness = ppNode["SSRMaxRoughness"].as<float>();
+
 			LNX_LOG_INFO("Loaded post-processing preferences from project");
 		}
 		

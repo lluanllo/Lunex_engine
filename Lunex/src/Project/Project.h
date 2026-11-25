@@ -62,6 +62,14 @@ namespace Lunex {
 		int   ToneMapOperator = 0;
 		float Exposure = 1.0f;
 		float Gamma = 2.2f;
+
+		// Screen-Space Reflections
+		bool  EnableSSR = false;
+		float SSRIntensity = 1.0f;
+		float SSRMaxDistance = 30.0f;
+		float SSRThickness = 0.15f;
+		int   SSRMaxSteps = 64;
+		float SSRMaxRoughness = 0.6f;
 	};
 	
 	struct ProjectConfig {
@@ -75,6 +83,7 @@ namespace Lunex {
 		uint32_t Width = 1280;
 		uint32_t Height = 720;
 		bool VSync = true;
+		std::string RenderEngine = "Rasterizer";   // see Renderer/Pipeline/RenderPipeline.h
 		
 		// ? Input Bindings
 		std::vector<InputBindingEntry> InputBindings;

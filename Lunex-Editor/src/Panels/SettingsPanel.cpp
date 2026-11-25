@@ -13,6 +13,8 @@
 #include "Renderer/GridRenderer.h"
 #include "Renderer/PostProcess/PostProcessRenderer.h"
 #include "Rendering/RenderSystem.h"
+#include "Renderer/Pipeline/RenderPipeline.h"
+#include "Project/ProjectManager.h"
 #include "Scene/Lighting/LightSystem.h"
 #include "Physics/PhysicsCore.h"
 #include "Physics/PhysicsConfig.h"
@@ -93,7 +95,33 @@ namespace Lunex {
 		
 		if (BeginSection("Renderer", true)) {
 			auto& config = RenderSystem::GetConfig();
-			
+
+			// ========================================
+			// RENDER ENGINE (Blender-style)
+			// ========================================
+			{
+				const auto& pipelines = RenderPipelineRegistry::GetAll();
+				std::vector<std::string> names;
+				int current = 0;
+				for (size_t i = 0; i < pipelines.size(); i++) {
+					names.push_back(std::string(pipelines[i]->GetName()) + (pipelines[i]->IsAvailable() ? "" : "  (planned)"));
+					if (pipelines[i]->GetType() == RenderPipelineRegistry::GetRequested()) current = static_cast<int>(i);
+				}
+				if (PropertyDropdown("Render Engine", current, names, "Which renderer draws the viewport and the game")) {
+					RenderEngineType type = pipelines[current]->GetType();
+					RenderPipelineRegistry::SetRequested(type);
+					if (auto project = ProjectManager::GetActiveProject()) {
+						project->GetConfig().RenderEngine = RenderEngineToString(type);
+						if (m_OnPostProcessChanged) m_OnPostProcessChanged();   // saves the project config
+					}
+				}
+				IRenderPipeline* requested = pipelines[current];
+				TextWrapped(requested->GetDescription(), TextVariant::Muted);
+				if (!requested->IsAvailable())
+					TextWrapped(("Rendering with " + std::string(RenderPipelineRegistry::GetActive()->GetName()) + " until it is implemented.").c_str(), TextVariant::Muted);
+				AddSpacing(SpacingValues::SM);
+			}
+
 			// ========================================
 			// QUALITY SETTINGS
 			// ========================================
@@ -312,6 +340,46 @@ namespace Lunex {
 			
 			Separator();
 			
+			// ========================================
+			// SCREEN-SPACE REFLECTIONS
+			// ========================================
+			Text("Screen-Space Reflections");
+			AddSpacing(SpacingValues::XS);
+
+			TextWrapped("Ray-marched reflections of on-screen geometry. Works best on smooth and metallic surfaces.", TextVariant::Muted);
+			AddSpacing(SpacingValues::XS);
+
+			if (PropertyCheckbox("Enable SSR", ppConfig.EnableSSR, "Enable screen-space reflections")) {
+				NotifyPostProcessChanged();
+			}
+
+			if (ppConfig.EnableSSR) {
+				if (PropertySlider("Intensity##SSR", ppConfig.SSRIntensity, 0.0f, 2.0f, "%.2f",
+					"Strength of the reflections")) {
+					NotifyPostProcessChanged();
+				}
+				if (PropertyFloat("Max Distance##SSR", ppConfig.SSRMaxDistance, 0.5f, 1.0f, 200.0f,
+					"Maximum ray length in world units")) {
+					NotifyPostProcessChanged();
+				}
+				if (PropertySlider("Thickness##SSR", ppConfig.SSRThickness, 0.01f, 5.0f, "%.2f",
+					"Depth tolerance for a ray hit (higher = fewer gaps, more false hits)")) {
+					NotifyPostProcessChanged();
+				}
+				float steps = static_cast<float>(ppConfig.SSRMaxSteps);
+				if (PropertySlider("Steps##SSR", steps, 8.0f, 256.0f, "%.0f",
+					"Ray march steps (quality vs. performance)")) {
+					ppConfig.SSRMaxSteps = static_cast<int>(steps);
+					NotifyPostProcessChanged();
+				}
+				if (PropertySlider("Max Roughness##SSR", ppConfig.SSRMaxRoughness, 0.05f, 1.0f, "%.2f",
+					"Surfaces rougher than this receive no SSR")) {
+					NotifyPostProcessChanged();
+				}
+			}
+
+			Separator();
+
 			// ========================================
 			// TONE MAPPING
 			// ========================================
@@ -564,10 +632,10 @@ namespace Lunex {
 			}
 			
 			// Cascade count
-			const char* cascadeOptions[] = { "1", "2", "3", "4" };
+			const char* cascadeOptions[] = { "1", "2", "3", "4", "5", "6" };
 			int cascadeIdx = static_cast<int>(config.CSMCascadeCount) - 1;
-			cascadeIdx = glm::clamp(cascadeIdx, 0, 3);
-			if (PropertyDropdown("Cascade Count", cascadeIdx, cascadeOptions, 4, "Number of shadow cascades (1-4)")) {
+			cascadeIdx = glm::clamp(cascadeIdx, 0, 5);
+			if (PropertyDropdown("Cascade Count", cascadeIdx, cascadeOptions, 6, "Number of shadow cascades (1-6). Far cascades are cheap with the update interval below")) {
 				config.CSMCascadeCount = static_cast<uint32_t>(cascadeIdx + 1);
 				configChanged = true;
 			}
@@ -641,8 +709,28 @@ namespace Lunex {
 			Text("Filtering & Softening");
 			AddSpacing(SpacingValues::XS);
 			
-			// PCF Radius
-			if (PropertyFloat("PCF Radius", config.PCFRadius, 0.1f, 0.0f, 8.0f, "Base radius for Poisson disk PCF sampling")) {
+			// Filter mode (hard shadows for e.g. space games)
+			const char* filterOptions[] = { "Hard", "Soft" };
+			if (PropertyDropdown("Filter", config.FilterMode, filterOptions, 2,
+				"Hard: crisp edges (single filtered tap). Soft: penumbra of constant world size")) {
+				configChanged = true;
+			}
+			if (config.FilterMode == 1) {
+				if (PropertySlider("Softness", config.Softness, 0.005f, 0.5f, "%.3f",
+					"Penumbra radius in world units (same on every cascade)")) {
+					configChanged = true;
+				}
+			}
+
+			float interval = static_cast<float>(config.FarCascadeUpdateInterval);
+			if (PropertySlider("Far Cascade Update", interval, 1.0f, 8.0f, "every %.0f frames",
+				"Cascades 3+ are re-rendered every N frames (performance)")) {
+				config.FarCascadeUpdateInterval = static_cast<uint32_t>(interval);
+				configChanged = true;
+			}
+
+			// PCF Radius (spot / point lights)
+			if (PropertyFloat("PCF Radius", config.PCFRadius, 0.1f, 0.0f, 8.0f, "Filter radius (texels) for spot and point light shadows")) {
 				configChanged = true;
 			}
 			
@@ -904,7 +992,14 @@ namespace Lunex {
 		ppConfig.ToneMapOperator = config.ToneMapOperator;
 		ppConfig.Exposure = config.Exposure;
 		ppConfig.Gamma = config.Gamma;
-		
+
+		ppConfig.EnableSSR = config.EnableSSR;
+		ppConfig.SSRIntensity = config.SSRIntensity;
+		ppConfig.SSRMaxDistance = config.SSRMaxDistance;
+		ppConfig.SSRThickness = config.SSRThickness;
+		ppConfig.SSRMaxSteps = config.SSRMaxSteps;
+		ppConfig.SSRMaxRoughness = config.SSRMaxRoughness;
+
 		// Sync RenderSystem config
 		renderConfig.EnableBloom = config.EnableBloom;
 		renderConfig.BloomThreshold = config.BloomThreshold;
@@ -942,6 +1037,13 @@ namespace Lunex {
 		config.ToneMapOperator = ppConfig.ToneMapOperator;
 		config.Exposure = ppConfig.Exposure;
 		config.Gamma = ppConfig.Gamma;
+
+		config.EnableSSR = ppConfig.EnableSSR;
+		config.SSRIntensity = ppConfig.SSRIntensity;
+		config.SSRMaxDistance = ppConfig.SSRMaxDistance;
+		config.SSRThickness = ppConfig.SSRThickness;
+		config.SSRMaxSteps = ppConfig.SSRMaxSteps;
+		config.SSRMaxRoughness = ppConfig.SSRMaxRoughness;
 	}
 	
 	void SettingsPanel::NotifyPostProcessChanged() {
