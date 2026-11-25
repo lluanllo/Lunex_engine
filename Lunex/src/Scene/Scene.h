@@ -68,6 +68,7 @@ namespace Lunex {
 			bool IsAncestorOf(Entity potentialAncestor, Entity entity);
 			Entity GetEntityByUUID(UUID uuid);
 			glm::mat4 GetWorldTransform(Entity entity);
+			bool IsEntityValid(Entity entity) const;
 			
 			Entity GetPrimaryCameraEntity();
 			

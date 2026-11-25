@@ -20,6 +20,8 @@
 
 // NEW LIGHTING SYSTEM - AAA Architecture
 #include "Scene/Lighting/LightTypes.h"
+#include "Scripting/ScriptReflection.h"
+#include <unordered_map>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -732,6 +734,86 @@ namespace Lunex {
 		}
 	};
 
+	// ========================================================================
+	// GROUP (Blender-style collection / folder in the hierarchy)
+	// ========================================================================
+
+	/**
+	 * @struct GroupComponent
+	 * @brief Marks an entity as a folder-like group. Children are regular parented
+	 *        entities; the group keeps an identity transform so it never moves them.
+	 */
+	struct GroupComponent {
+		bool Expanded = true;
+		GroupComponent() = default;
+		GroupComponent(const GroupComponent&) = default;
+	};
+
+	// ========================================================================
+	// ANIMATION
+	// ========================================================================
+
+	/**
+	 * @struct AnimatorComponent
+	 * @brief Plays skeletal animation clips of the entity's (skinned) MeshComponent model
+	 */
+	struct AnimatorComponent {
+		int   ClipIndex = 0;            // index into Model::GetAnimations()
+		float Speed = 1.0f;
+		bool  Loop = true;
+		bool  PlayOnStart = true;
+		bool  PreviewInEditor = false;  // advance time in Edit mode too
+		float BlendDuration = 0.25f;    // crossfade time when switching clips (seconds)
+
+		// Editor debug views
+		bool  ShowSkeleton = false;     // draw bones in the viewport
+		int   DebugWeightsBone = -1;    // >= 0: show that bone's vertex weights as a heatmap
+
+		// Authored clips (.luanim, paths relative to the asset dir or absolute). They are
+		// listed after the model's own clips: ClipIndex >= modelClipCount selects one.
+		std::vector<std::string> AnimationAssets;
+
+		// Runtime IK: after sampling, each chain bends so EndBone reaches the target entity
+		struct IKChain {
+			std::string EndBone;        // e.g. "mixamorig:LeftHand"
+			int ChainLength = 2;        // joints above the end bone (2 = arm/leg)
+			uint64_t TargetEntity = 0;  // UUID of the entity to reach
+			float Weight = 1.0f;
+			bool Enabled = true;
+		};
+		std::vector<IKChain> IKChains;
+
+		// Animation editor: when set, this pose is shown instead of the sampled clip
+		bool UseEditPose = false;
+		std::vector<NodeTRS> EditPose;
+		int EditorSelectedNode = -1;    // bone highlighted in the skeleton overlay (not serialized)
+
+		// Runtime (not serialized)
+		float Time = 0.0f;
+		bool  Playing = false;
+		int   PreviousClip = -1;        // clip fading out (crossfade), -1 = none
+		float PreviousTime = 0.0f;
+		float BlendElapsed = 0.0f;
+		std::vector<glm::mat4> BoneMatrices;   // skinning palette for this frame
+		std::vector<glm::mat4> NodeTransforms; // model-space node transforms (skeleton view)
+
+		// Start a clip from the beginning (crossfades from the current one if it was playing)
+		void Play(int clip = -1) {
+			if (clip >= 0 && clip != ClipIndex && Playing && BlendDuration > 0.0f) {
+				PreviousClip = ClipIndex;
+				PreviousTime = Time;
+				BlendElapsed = 0.0f;
+			}
+			if (clip >= 0) ClipIndex = clip;
+			Time = 0.0f;
+			Playing = true;
+		}
+		void Stop() { Playing = false; Time = 0.0f; PreviousClip = -1; }
+
+		AnimatorComponent() = default;
+		AnimatorComponent(const AnimatorComponent&) = default;
+	};
+
 	//physics
 	struct Rigidbody2DComponent {
 		enum class BodyType { Static = 0, Dynamic, Kinematic };
@@ -740,6 +822,10 @@ namespace Lunex {
 
 		// Storage for runtime
 		void* RuntimeBody = nullptr;
+
+		// See Rigidbody3DComponent::LastSynced*
+		glm::vec2 LastSyncedTranslation = { 0.0f, 0.0f };
+		float LastSyncedRotation = 0.0f;
 
 		Rigidbody2DComponent() = default;
 		Rigidbody2DComponent(const Rigidbody2DComponent&) = default;
@@ -809,7 +895,13 @@ namespace Lunex {
 		// Runtime data (not serialized)
 		void* RuntimeBody = nullptr;
 		void* RuntimeCollider = nullptr;
-		
+
+		// Transform last exchanged with the physics world. If the TransformComponent differs
+		// at the start of a step, something else (a script, the gizmo) moved the entity and
+		// the change is pushed into the physics body instead of being overwritten.
+		glm::vec3 LastSyncedTranslation = { 0.0f, 0.0f, 0.0f };
+		glm::vec3 LastSyncedRotation = { 0.0f, 0.0f, 0.0f };
+
 		Rigidbody3DComponent() = default;
 		Rigidbody3DComponent(const Rigidbody3DComponent&) = default;
 	};
@@ -905,6 +997,9 @@ namespace Lunex {
 		
 		bool AutoCompile = true;         // Auto-compilar al entrar en Play mode
 		
+		// Public variable values edited in the inspector (one map per script, name -> value)
+		std::vector<std::unordered_map<std::string, ScriptFieldValue>> FieldOverrides;
+
 		// Runtime data (no serializar) - un plugin por script
 		std::vector<void*> ScriptPluginInstances;  // Punteros a ScriptPlugin*
 		
@@ -915,6 +1010,8 @@ namespace Lunex {
 			, CompiledDLLPaths(other.CompiledDLLPaths)
 			, ScriptLoadedStates(other.ScriptPaths.size(), false)
 			, AutoCompile(other.AutoCompile)
+			, FieldOverrides(other.FieldOverrides)
+			, ScriptPluginInstances(other.ScriptPaths.size(), nullptr)
 		{
 		}
 		
@@ -935,6 +1032,7 @@ namespace Lunex {
 			CompiledDLLPaths.push_back("");
 			ScriptLoadedStates.push_back(false);
 			ScriptPluginInstances.push_back(nullptr);
+			FieldOverrides.emplace_back();
 		}
 		
 		void RemoveScript(size_t index) {
@@ -943,6 +1041,8 @@ namespace Lunex {
 				CompiledDLLPaths.erase(CompiledDLLPaths.begin() + index);
 				ScriptLoadedStates.erase(ScriptLoadedStates.begin() + index);
 				ScriptPluginInstances.erase(ScriptPluginInstances.begin() + index);
+				if (index < FieldOverrides.size())
+					FieldOverrides.erase(FieldOverrides.begin() + index);
 			}
 		}
 		
@@ -1160,5 +1260,5 @@ namespace Lunex {
 		CapsuleCollider3DComponent, CylinderCollider3DComponent, ConeCollider3DComponent,
 		MeshCollider3DComponent, CharacterController3DComponent,
 		MeshComponent, MaterialComponent, LightComponent, TextureComponent, ScriptComponent,
-		RelationshipComponent, EnvironmentComponent>;
+		RelationshipComponent, EnvironmentComponent, AnimatorComponent, GroupComponent>;
 }

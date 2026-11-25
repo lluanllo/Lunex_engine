@@ -58,6 +58,7 @@ namespace Lunex {
 		void DrawConeCollider3DComponent(Entity entity);
 		void DrawMeshCollider3DComponent(Entity entity);
 		void DrawCharacterController3DComponent(Entity entity);
+		void DrawAnimatorComponent(Entity entity);
 
 		template<typename T>
 		void DisplayAddComponentEntry(const std::string& entryName);

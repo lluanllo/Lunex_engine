@@ -4,8 +4,14 @@
  */
 
 #include "stpch.h"
+#include "Scripting/ScriptingEngine.h"
+#include "Scripting/ScriptBuild.h"
+#include "Scripting/ScriptReflection.h"
 #include "PropertiesPanel.h"
 #include "ContentBrowserPanel.h"
+#include "AnimationEditorPanel.h"
+#include "Assets/Animation/AnimationAsset.h"
+#include "Project/Project.h"
 
 #include <glm/gtc/type_ptr.hpp>
 #include <filesystem>
@@ -172,6 +178,7 @@ namespace Lunex {
 			DisplayAddComponentEntry<CircleRendererComponent>("Circle Renderer");
 			DisplayAddComponentEntry<MeshComponent>("Mesh Renderer");
 			DisplayAddComponentEntry<LightComponent>("Light");
+			DisplayAddComponentEntry<AnimatorComponent>("Animator");
 
 			Separator();
 			{
@@ -212,6 +219,7 @@ namespace Lunex {
 		DrawSpriteRendererComponent(entity);
 		DrawCircleRendererComponent(entity);
 		DrawMeshComponent(entity);
+		DrawAnimatorComponent(entity);
 		DrawMaterialComponent(entity);
 		DrawLightComponent(entity);
 		DrawRigidbody2DComponent(entity);
@@ -248,6 +256,124 @@ namespace Lunex {
 	// SCRIPT COMPONENT
 	// ============================================================================
 	
+
+	// ============================================================================
+	// SCRIPT PUBLIC VARIABLES (Unity-style inspector)
+	// ============================================================================
+
+	namespace {
+
+		// Edit-mode field: value = inspector override, or the default parsed from the source
+		bool DrawScriptField(const ScriptFieldInfo& field, std::unordered_map<std::string, ScriptFieldValue>& overrides) {
+			using namespace UI;
+			auto it = overrides.find(field.Name);
+			const bool overridden = (it != overrides.end() && it->second.Type == field.Default.Type);
+			ScriptFieldValue value = overridden ? it->second : field.Default;
+			bool changed = false;
+			const char* tip = field.Tooltip.empty() ? nullptr : field.Tooltip.c_str();
+
+			ImGui::PushID(field.Name.c_str());
+			switch (field.Default.Type) {
+				case ScriptFieldType::Float:
+					changed = field.HasRange
+						? PropertySlider(field.Name, value.Number.x, field.Min, field.Max, "%.3f", tip)
+						: PropertyFloat(field.Name, value.Number.x, 0.05f, 0.0f, 0.0f, tip);
+					break;
+				case ScriptFieldType::Int: {
+					int v = static_cast<int>(value.Number.x);
+					BeginPropertyRow(field.Name, tip);
+					ImGui::SetNextItemWidth(-1);
+					if (ImGui::DragInt("##int", &v)) { value.Number.x = static_cast<float>(v); changed = true; }
+					EndPropertyRow();
+					break;
+				}
+				case ScriptFieldType::Bool: {
+					bool b = value.Number.x != 0.0f;
+					if (PropertyCheckbox(field.Name, b, tip)) { value.Number.x = b ? 1.0f : 0.0f; changed = true; }
+					break;
+				}
+				case ScriptFieldType::Vec2: {
+					glm::vec2 v(value.Number.x, value.Number.y);
+					if (PropertyVec2(field.Name, v, 0.05f, tip)) { value.Number.x = v.x; value.Number.y = v.y; changed = true; }
+					break;
+				}
+				case ScriptFieldType::Vec3: {
+					glm::vec3 v(value.Number);
+					if (PropertyVec3(field.Name, v, 0.05f, tip)) { value.Number = glm::vec4(v, 0.0f); changed = true; }
+					break;
+				}
+				case ScriptFieldType::String: {
+					char buf[512];
+					strncpy_s(buf, value.String.c_str(), _TRUNCATE);
+					BeginPropertyRow(field.Name, tip);
+					ImGui::SetNextItemWidth(-1);
+					if (ImGui::InputText("##str", buf, sizeof(buf))) { value.String = buf; changed = true; }
+					EndPropertyRow();
+					break;
+				}
+			}
+
+			// Overridden values are marked and can be reset to the script's default
+			if (overridden) {
+				if (ImGui::BeginPopupContextItem("##fieldctx")) {
+					if (ImGui::MenuItem("Reset to script default")) { overrides.erase(field.Name); ImGui::EndPopup(); ImGui::PopID(); return true; }
+					ImGui::EndPopup();
+				}
+			}
+			ImGui::PopID();
+
+			if (changed) overrides[field.Name] = value;
+			return changed;
+		}
+
+		// Play-mode field: edits the live variable inside the running script
+		void DrawLiveScriptVariable(const VarMetadata& var) {
+			using namespace UI;
+			if (!var.DataPtr) return;
+			const char* tip = var.Tooltip.empty() ? nullptr : var.Tooltip.c_str();
+			ImGui::PushID(var.Name.c_str());
+			switch (var.Type) {
+				case VarType::Float: {
+					float& f = *static_cast<float*>(var.DataPtr);
+					if (var.HasRange) PropertySlider(var.Name, f, var.MinValue, var.MaxValue, "%.3f", tip);
+					else PropertyFloat(var.Name, f, 0.05f, 0.0f, 0.0f, tip);
+					break;
+				}
+				case VarType::Int: {
+					BeginPropertyRow(var.Name, tip);
+					ImGui::SetNextItemWidth(-1);
+					ImGui::DragInt("##int", static_cast<int*>(var.DataPtr));
+					EndPropertyRow();
+					break;
+				}
+				case VarType::Bool: PropertyCheckbox(var.Name, *static_cast<bool*>(var.DataPtr), tip); break;
+				case VarType::Vec2: {
+					auto* v = static_cast<Lunex::Vec2*>(var.DataPtr);
+					glm::vec2 g(v->x, v->y);
+					if (PropertyVec2(var.Name, g, 0.05f, tip)) { v->x = g.x; v->y = g.y; }
+					break;
+				}
+				case VarType::Vec3: {
+					auto* v = static_cast<Lunex::Vec3*>(var.DataPtr);
+					glm::vec3 g(v->x, v->y, v->z);
+					if (PropertyVec3(var.Name, g, 0.05f, tip)) { v->x = g.x; v->y = g.y; v->z = g.z; }
+					break;
+				}
+				case VarType::String: {
+					auto* s = static_cast<std::string*>(var.DataPtr);
+					char buf[512];
+					strncpy_s(buf, s->c_str(), _TRUNCATE);
+					BeginPropertyRow(var.Name, tip);
+					ImGui::SetNextItemWidth(-1);
+					if (ImGui::InputText("##str", buf, sizeof(buf))) *s = buf;
+					EndPropertyRow();
+					break;
+				}
+			}
+			ImGui::PopID();
+		}
+	}
+
 	void PropertiesPanel::DrawScriptComponent(Entity entity) {
 		using namespace UI;
 		
@@ -289,16 +415,70 @@ namespace Lunex {
 					
 					AddSpacing(SpacingValues::XS);
 					
+					const auto resolved = ScriptBuild::ResolveScriptPath(scriptPath);
+					const auto build = ScriptBuild::GetStatus(resolved);
+
 					Text("Status:");
 					SameLine();
 					if (isLoaded) {
-						TextStyled("Loaded", TextVariant::Success);
+						TextStyled("Running", TextVariant::Success);
+					}
+					else if (build.State == ScriptBuildState::Compiling) {
+						TextStyled("Compiling...", TextVariant::Warning);
+					}
+					else if (build.State == ScriptBuildState::Failed) {
+						TextStyled(std::to_string(build.Errors.size()) + " error(s)", TextVariant::Danger);
+					}
+					else if (!ScriptBuild::NeedsCompile(resolved)) {
+						TextStyled(build.Seconds > 0.0f ? "Compiled (" + std::to_string((int)(build.Seconds * 10) / 10.0f).substr(0, 4) + " s)" : "Up to date",
+							TextVariant::Success);
 					}
 					else {
-						TextStyled("Will compile on Play", TextVariant::Warning);
+						TextStyled("Needs compile", TextVariant::Warning);
 					}
+
+					SameLine(ImGui::GetContentRegionAvail().x - 70);
+					ImGui::BeginDisabled(build.State == ScriptBuildState::Compiling);
+					if (Button("Compile", ButtonVariant::Default, ButtonSize::Small, Size(70, 0))) {
+						ScriptBuild::CompileAsync(resolved);
+					}
+					ImGui::EndDisabled();
 				}
 				ComponentDrawer::EndInfoCard();
+
+				// Compiler errors (first few lines; the full output is in the Console)
+				{
+					const auto build = ScriptBuild::GetStatus(ScriptBuild::ResolveScriptPath(scriptPath));
+					if (build.State == ScriptBuildState::Failed) {
+						ScopedColor errColor(ImGuiCol_Text, Colors::Danger());
+						for (size_t e = 0; e < build.Errors.size() && e < 6; e++) {
+							std::string line = build.Errors[e];
+							auto pos = line.find_last_of("\\/");
+							if (pos != std::string::npos && pos < line.find(':', 3)) line = line.substr(pos + 1);
+							TextWrapped(line, TextVariant::Primary);
+						}
+					}
+				}
+
+				// Public variables
+				if (i >= component.FieldOverrides.size()) component.FieldOverrides.resize(component.GetScriptCount());
+				ScriptPlugin* plugin = (i < component.ScriptPluginInstances.size())
+					? static_cast<ScriptPlugin*>(component.ScriptPluginInstances[i]) : nullptr;
+
+				if (plugin && plugin->IsLoaded() && plugin->GetModule()) {
+					auto vars = plugin->GetModule()->GetPublicVariables();
+					if (!vars.empty()) {
+						ComponentDrawer::DrawSectionHeader("", "Variables (live)");
+						for (const auto& var : vars) DrawLiveScriptVariable(var);
+					}
+				}
+				else {
+					const auto& fields = ScriptReflection::GetFields(ScriptBuild::ResolveScriptPath(scriptPath));
+					if (!fields.empty()) {
+						ComponentDrawer::DrawSectionHeader("", "Variables");
+						for (const auto& field : fields) DrawScriptField(field, component.FieldOverrides[i]);
+					}
+				}
 				AddSpacing(SpacingValues::XS);
 			}
 
@@ -332,10 +512,8 @@ namespace Lunex {
 			ComponentDrawer::EndIndent();
 
 			if (component.GetScriptCount() > 0) {
-				ComponentDrawer::DrawSectionHeader("", "Script Properties");
-				ComponentDrawer::BeginIndent();
-				TextWrapped("Public variables will appear here when the reflection system is implemented.", TextVariant::Muted);
-				ComponentDrawer::EndIndent();
+				AddSpacing(SpacingValues::XS);
+				TextWrapped("Expose variables with RegisterVar(\"Name\", &member) in Start(). Right-click an edited value to reset it.", TextVariant::Muted);
 			}
 		});
 	}
@@ -474,6 +652,151 @@ namespace Lunex {
 	// CIRCLE RENDERER COMPONENT
 	// ============================================================================
 	
+	void PropertiesPanel::DrawAnimatorComponent(Entity entity) {
+		using namespace UI;
+
+		ComponentDrawer::Draw<AnimatorComponent>("Animator", entity, [entity](auto& component) mutable {
+			Ref<Model> model;
+			if (entity.HasComponent<MeshComponent>())
+				model = entity.GetComponent<MeshComponent>().MeshModel;
+
+			if (!model || !model->IsSkinned()) {
+				TextWrapped("The Mesh Renderer on this entity has no skeleton. Import a rigged model (FBX/glTF with bones) to animate it.", TextVariant::Muted);
+				return;
+			}
+
+			const auto& clips = model->GetAnimations();
+			ComponentDrawer::DrawSectionHeader("", "Clip");
+			ComponentDrawer::BeginIndent();
+
+			// Combined list: model clips, then authored .luanim clips
+			auto resolveAsset = [](const std::string& stored) {
+				std::filesystem::path p(stored);
+				if (p.is_relative() && Project::GetActive()) p = Project::GetActiveAssetDirectory() / p;
+				return p;
+			};
+			std::vector<std::string> names;
+			std::vector<float> durations;
+			for (const auto& clip : clips) { names.push_back(clip->Name); durations.push_back(clip->GetDurationSeconds()); }
+			for (const auto& stored : component.AnimationAssets) {
+				auto asset = AnimationAsset::GetOrLoad(resolveAsset(stored));
+				names.push_back(std::filesystem::path(stored).stem().string() + " (.luanim)");
+				durations.push_back(asset ? asset->Duration : 0.0f);
+			}
+
+			if (names.empty()) {
+				TextWrapped("No clips yet. Open the Animation Editor to author a .luanim clip.", TextVariant::Muted);
+			}
+			else {
+				int index = glm::clamp(component.ClipIndex, 0, static_cast<int>(names.size()) - 1);
+				if (PropertyDropdown("Animation", index, names, "Clip to play (crossfades while playing)")) {
+					if (component.Playing) component.Play(index);   // smooth transition
+					else { component.ClipIndex = index; component.Time = 0.0f; }
+				}
+
+				const float duration = durations[index];
+				float time = duration > 0.0f ? std::fmod(component.Time, duration) : 0.0f;
+				if (PropertySlider("Time", time, 0.0f, std::max(duration, 0.001f), "%.2f s", "Scrub the animation")) {
+					component.Time = time;
+				}
+				Text("Bones: %d   Duration: %.2f s", model->GetSkeleton()->GetBoneCount(), duration);
+
+				// Remove an authored clip from the list (the file stays on disk)
+				int assetIndex = index - static_cast<int>(clips.size());
+				if (assetIndex >= 0 && Button("Remove Clip From Animator", ButtonVariant::Default, ButtonSize::Small)) {
+					component.AnimationAssets.erase(component.AnimationAssets.begin() + assetIndex);
+					component.ClipIndex = 0;
+				}
+			}
+			if (ButtonBlock("Open Animation Editor", ButtonVariant::Primary)) {
+				AnimationEditorPanel::OpenFor(entity);
+			}
+			ComponentDrawer::EndIndent();
+
+			ComponentDrawer::DrawSectionHeader("", "Playback");
+			ComponentDrawer::BeginIndent();
+			PropertyFloat("Speed", component.Speed, 0.01f, -5.0f, 5.0f, "Playback speed multiplier");
+			PropertyCheckbox("Loop", component.Loop);
+			PropertyCheckbox("Play On Start", component.PlayOnStart, "Start playing when entering Play mode");
+			PropertyCheckbox("Preview In Editor", component.PreviewInEditor, "Animate in Edit mode");
+			PropertyFloat("Blend Time", component.BlendDuration, 0.01f, 0.0f, 2.0f, "Crossfade duration when switching clips (seconds)");
+			ComponentDrawer::EndIndent();
+
+			// ---- Rig debugging ----
+			ComponentDrawer::DrawSectionHeader("", "Rig");
+			ComponentDrawer::BeginIndent();
+			PropertyCheckbox("Show Skeleton", component.ShowSkeleton, "Draw the bones in the viewport");
+
+			auto skeleton = model->GetSkeleton();
+			std::vector<std::string> boneNames(skeleton->GetBoneCount() + 1);
+			boneNames[0] = "None";
+			for (const auto& [name, idx] : skeleton->BoneIndexByName)
+				if (idx >= 0 && idx + 1 < static_cast<int>(boneNames.size())) boneNames[idx + 1] = name;
+			int selected = component.DebugWeightsBone + 1;
+			if (PropertyDropdown("Weights View", selected, boneNames,
+				"Heatmap of the selected bone's vertex weights (blue = 0, red = 1)")) {
+				component.DebugWeightsBone = selected - 1;
+			}
+			ComponentDrawer::EndIndent();
+
+			// ---- Runtime IK ----
+			ComponentDrawer::DrawSectionHeader("", "IK Chains");
+			ComponentDrawer::BeginIndent();
+			TextWrapped("Each chain bends its bones so the end bone reaches the target entity (applied after the animation).", TextVariant::Muted);
+
+			std::vector<std::string> nodeNames;
+			for (const auto& n : skeleton->Nodes)
+				if (n.BoneIndex >= 0) nodeNames.push_back(n.Name);
+
+			// Target candidates: every entity in the scene except this one
+			std::vector<std::string> targetNames{ "None" };
+			std::vector<uint64_t> targetIDs{ 0 };
+			if (Scene* scene = entity.GetScene()) {
+				auto view = scene->GetAllEntitiesWith<IDComponent, TagComponent>();
+				for (auto e : view) {
+					if (e == static_cast<entt::entity>(entity)) continue;
+					targetIDs.push_back(static_cast<uint64_t>(view.template get<IDComponent>(e).ID));
+					targetNames.push_back(view.template get<TagComponent>(e).Tag);
+				}
+			}
+
+			int removeChain = -1;
+			for (size_t i = 0; i < component.IKChains.size(); i++) {
+				auto& chain = component.IKChains[i];
+				ImGui::PushID(static_cast<int>(i));
+				ImGui::Separator();
+				PropertyCheckbox("Enabled", chain.Enabled);
+
+				int boneIdx = 0;
+				for (size_t b = 0; b < nodeNames.size(); b++) if (nodeNames[b] == chain.EndBone) boneIdx = static_cast<int>(b);
+				if (!nodeNames.empty() && PropertyDropdown("End Bone", boneIdx, nodeNames, "Bone that reaches the target (hand, foot...)"))
+					chain.EndBone = nodeNames[boneIdx];
+
+				int targetIdx = 0;
+				for (size_t t = 0; t < targetIDs.size(); t++) if (targetIDs[t] == chain.TargetEntity) targetIdx = static_cast<int>(t);
+				if (PropertyDropdown("Target", targetIdx, targetNames, "Entity whose position the end bone follows"))
+					chain.TargetEntity = targetIDs[targetIdx];
+
+				float chainLen = static_cast<float>(chain.ChainLength);
+				if (PropertyFloat("Chain Length", chainLen, 0.05f, 1.0f, 10.0f, "Joints above the end bone that bend (2 = arm / leg)"))
+					chain.ChainLength = std::max(1, static_cast<int>(chainLen + 0.5f));
+				PropertySlider("Weight", chain.Weight, 0.0f, 1.0f, "%.2f");
+				if (Button("Remove Chain", ButtonVariant::Default, ButtonSize::Small)) removeChain = static_cast<int>(i);
+				ImGui::PopID();
+			}
+			if (removeChain >= 0) component.IKChains.erase(component.IKChains.begin() + removeChain);
+
+			if (ButtonBlock("+ Add IK Chain")) {
+				AnimatorComponent::IKChain chain;
+				auto it = std::find_if(nodeNames.begin(), nodeNames.end(), [](const std::string& n) { return n.find("Hand") != std::string::npos; });
+				if (it != nodeNames.end()) chain.EndBone = *it;
+				else if (!nodeNames.empty()) chain.EndBone = nodeNames.back();
+				component.IKChains.push_back(chain);
+			}
+			ComponentDrawer::EndIndent();
+		});
+	}
+
 	void PropertiesPanel::DrawCircleRendererComponent(Entity entity) {
 		using namespace UI;
 		

@@ -19,6 +19,7 @@
 #include "../UI/UICore.h"
 #include "../UI/UIComponents.h"
 #include "../UI/UILayout.h"
+#include "../UI/Lunexi/Theme.h"
 
 #include <imgui.h>
 
@@ -46,9 +47,9 @@ namespace Lunex {
 		using namespace UI;
 		
 		ScopedColor popupColors({
-			{ImGuiCol_PopupBg, Color(0.16f, 0.16f, 0.18f, 1.0f)},
+			{ImGuiCol_PopupBg, Color(0.171f, 0.171f, 0.171f, 1.0f)},
 			{ImGuiCol_Border, Color(0.08f, 0.08f, 0.09f, 1.0f)},
-			{ImGuiCol_Header, Color(0.20f, 0.22f, 0.26f, 1.0f)},
+			{ImGuiCol_Header, Color(0.231f, 0.231f, 0.231f, 1.0f)},
 			{ImGuiCol_HeaderHovered, Color(0.26f, 0.50f, 0.85f, 0.55f)},
 			{ImGuiCol_HeaderActive, Color(0.26f, 0.50f, 0.85f, 0.75f)},
 			{ImGuiCol_Text, Color(0.92f, 0.92f, 0.94f, 1.0f)},
@@ -230,11 +231,21 @@ namespace Lunex {
 			if (MenuItem("JobSystem Monitor")) {
 				if (m_OnOpenJobSystemPanel) m_OnOpenJobSystemPanel();
 			}
-			
+
+			if (MenuItem("Animation Editor")) {
+				if (m_OnOpenAnimationEditor) m_OnOpenAnimationEditor();
+			}
+
 			Separator();
 			MenuItem("Editor Settings", nullptr, false, false);
-			MenuItem("Theme", nullptr, false, false);
-			EndMenu();
+			if (BeginMenu("Theme")) {
+				for (const auto& theme : UI::Theme::GetPresets()) {
+					if (MenuItem(theme.Name.c_str(), nullptr, theme.Name == UI::Theme::GetCurrent().Name))
+						UI::Theme::SetCurrent(theme.Name);
+				}
+				EndMenu();
+			}
+EndMenu();
 		}
 	}
 

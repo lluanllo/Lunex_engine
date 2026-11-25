@@ -19,6 +19,7 @@
 #include "Scene/Systems/PhysicsSystem3D.h"
 #include "Scene/Systems/ScriptSystem.h"
 #include "Scene/Systems/SceneRenderSystem.h"
+#include "Scene/Systems/AnimationSystem.h"
 
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
@@ -67,6 +68,11 @@ namespace Lunex {
 		physics3D->OnAttach(m_Context);
 		m_Systems.push_back(std::move(physics3D));
 		
+		// Animation System (priority: 300) - after scripts/physics, before rendering
+		auto animationSystem = std::make_unique<AnimationSystem>();
+		animationSystem->OnAttach(m_Context);
+		m_Systems.push_back(std::move(animationSystem));
+
 		// Render System (priority: 1000)
 		auto renderSystem = std::make_unique<SceneRenderSystem>();
 		renderSystem->OnAttach(m_Context);
@@ -499,6 +505,14 @@ namespace Lunex {
 	void Scene::OnComponentAdded<EnvironmentComponent>(Entity entity, EnvironmentComponent& component) {
 	}
 
+	template<>
+	void Scene::OnComponentAdded<AnimatorComponent>(Entity entity, AnimatorComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<GroupComponent>(Entity entity, GroupComponent& component) {
+	}
+
 	// ========================================
 	// ENTITY HIERARCHY (Parent-Child)
 	// ========================================
@@ -629,6 +643,10 @@ namespace Lunex {
 		}
 
 		return false;
+	}
+
+	bool Scene::IsEntityValid(Entity entity) const {
+		return entity && entity.GetScene() == this && m_Registry.valid(static_cast<entt::entity>(entity));
 	}
 
 	glm::mat4 Scene::GetWorldTransform(Entity entity) {

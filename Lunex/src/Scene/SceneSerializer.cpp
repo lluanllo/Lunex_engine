@@ -190,6 +190,44 @@ namespace Lunex {
 			out << YAML::EndMap; // SpriteRendererComponent
 		}
 		
+		if (entity.HasComponent<GroupComponent>()) {
+			out << YAML::Key << "GroupComponent";
+			out << YAML::BeginMap;
+			out << YAML::Key << "Expanded" << YAML::Value << entity.GetComponent<GroupComponent>().Expanded;
+			out << YAML::EndMap;
+		}
+
+		if (entity.HasComponent<AnimatorComponent>()) {
+			out << YAML::Key << "AnimatorComponent";
+			out << YAML::BeginMap;
+			auto& animator = entity.GetComponent<AnimatorComponent>();
+			out << YAML::Key << "ClipIndex" << YAML::Value << animator.ClipIndex;
+			out << YAML::Key << "Speed" << YAML::Value << animator.Speed;
+			out << YAML::Key << "Loop" << YAML::Value << animator.Loop;
+			out << YAML::Key << "PlayOnStart" << YAML::Value << animator.PlayOnStart;
+			out << YAML::Key << "PreviewInEditor" << YAML::Value << animator.PreviewInEditor;
+			out << YAML::Key << "BlendDuration" << YAML::Value << animator.BlendDuration;
+			if (!animator.AnimationAssets.empty()) {
+				out << YAML::Key << "AnimationAssets" << YAML::Value << YAML::BeginSeq;
+				for (const auto& a : animator.AnimationAssets) out << a;
+				out << YAML::EndSeq;
+			}
+			if (!animator.IKChains.empty()) {
+				out << YAML::Key << "IKChains" << YAML::Value << YAML::BeginSeq;
+				for (const auto& c : animator.IKChains) {
+					out << YAML::BeginMap;
+					out << YAML::Key << "EndBone" << YAML::Value << c.EndBone;
+					out << YAML::Key << "ChainLength" << YAML::Value << c.ChainLength;
+					out << YAML::Key << "Target" << YAML::Value << c.TargetEntity;
+					out << YAML::Key << "Weight" << YAML::Value << c.Weight;
+					out << YAML::Key << "Enabled" << YAML::Value << c.Enabled;
+					out << YAML::EndMap;
+				}
+				out << YAML::EndSeq;
+			}
+			out << YAML::EndMap;
+		}
+
 		if (entity.HasComponent<CircleRendererComponent>()) {
 			out << YAML::Key << "CircleRendererComponent";
 			out << YAML::BeginMap; // CircleRendererComponent
@@ -467,6 +505,22 @@ namespace Lunex {
 			for (size_t i = 0; i < scriptComponent.GetScriptCount(); i++) {
 				out << YAML::BeginMap;
 				out << YAML::Key << "ScriptPath" << YAML::Value << scriptComponent.GetScriptPath(i);
+
+				// Inspector-edited public variables
+				if (i < scriptComponent.FieldOverrides.size() && !scriptComponent.FieldOverrides[i].empty()) {
+					out << YAML::Key << "Fields" << YAML::Value << YAML::BeginSeq;
+					for (const auto& [name, value] : scriptComponent.FieldOverrides[i]) {
+						out << YAML::BeginMap;
+						out << YAML::Key << "Name" << YAML::Value << name;
+						out << YAML::Key << "Type" << YAML::Value << ScriptFieldTypeToString(value.Type);
+						if (value.Type == ScriptFieldType::String)
+							out << YAML::Key << "Value" << YAML::Value << value.String;
+						else
+							out << YAML::Key << "Value" << YAML::Value << value.Number;
+						out << YAML::EndMap;
+					}
+					out << YAML::EndSeq;
+				}
 				out << YAML::EndMap;
 			}
 			out << YAML::EndSeq;
@@ -577,6 +631,9 @@ namespace Lunex {
 			// Filtering
 			out << YAML::Key << "EnablePCF" << YAML::Value << config.EnablePCF;
 			out << YAML::Key << "PCFRadius" << YAML::Value << config.PCFRadius;
+			out << YAML::Key << "FilterMode" << YAML::Value << config.FilterMode;
+			out << YAML::Key << "Softness" << YAML::Value << config.Softness;
+			out << YAML::Key << "FarCascadeUpdateInterval" << YAML::Value << config.FarCascadeUpdateInterval;
 			out << YAML::Key << "DistanceSofteningStart" << YAML::Value << config.DistanceSofteningStart;
 			out << YAML::Key << "DistanceSofteningMax" << YAML::Value << config.DistanceSofteningMax;
 			
@@ -718,6 +775,12 @@ namespace Lunex {
 				config.EnablePCF = globalShadows["EnablePCF"].as<bool>();
 			if (globalShadows["PCFRadius"])
 				config.PCFRadius = globalShadows["PCFRadius"].as<float>();
+			if (globalShadows["FilterMode"])
+				config.FilterMode = globalShadows["FilterMode"].as<int>();
+			if (globalShadows["Softness"])
+				config.Softness = globalShadows["Softness"].as<float>();
+			if (globalShadows["FarCascadeUpdateInterval"])
+				config.FarCascadeUpdateInterval = globalShadows["FarCascadeUpdateInterval"].as<uint32_t>();
 			if (globalShadows["DistanceSofteningStart"])
 				config.DistanceSofteningStart = globalShadows["DistanceSofteningStart"].as<float>();
 			if (globalShadows["DistanceSofteningMax"])
@@ -806,6 +869,35 @@ namespace Lunex {
 						src.TilingFactor = spriteRendererComponent["TilingFactor"].as<float>();
 				}
 				
+				if (auto groupComponent = entity["GroupComponent"]) {
+					auto& group = deserializedEntity.AddComponent<GroupComponent>();
+					if (groupComponent["Expanded"]) group.Expanded = groupComponent["Expanded"].as<bool>();
+				}
+
+				auto animatorComponent = entity["AnimatorComponent"];
+				if (animatorComponent) {
+					auto& animator = deserializedEntity.AddComponent<AnimatorComponent>();
+					if (animatorComponent["ClipIndex"]) animator.ClipIndex = animatorComponent["ClipIndex"].as<int>();
+					if (animatorComponent["Speed"]) animator.Speed = animatorComponent["Speed"].as<float>();
+					if (animatorComponent["Loop"]) animator.Loop = animatorComponent["Loop"].as<bool>();
+					if (animatorComponent["PlayOnStart"]) animator.PlayOnStart = animatorComponent["PlayOnStart"].as<bool>();
+					if (animatorComponent["PreviewInEditor"]) animator.PreviewInEditor = animatorComponent["PreviewInEditor"].as<bool>();
+					if (animatorComponent["BlendDuration"]) animator.BlendDuration = animatorComponent["BlendDuration"].as<float>();
+					if (auto assets = animatorComponent["AnimationAssets"]; assets && assets.IsSequence())
+						for (auto a : assets) animator.AnimationAssets.push_back(a.as<std::string>());
+					if (auto chains = animatorComponent["IKChains"]; chains && chains.IsSequence()) {
+						for (auto c : chains) {
+							AnimatorComponent::IKChain chain;
+							chain.EndBone = c["EndBone"].as<std::string>("");
+							chain.ChainLength = c["ChainLength"].as<int>(2);
+							chain.TargetEntity = c["Target"].as<uint64_t>(0);
+							chain.Weight = c["Weight"].as<float>(1.0f);
+							chain.Enabled = c["Enabled"].as<bool>(true);
+							animator.IKChains.push_back(chain);
+						}
+					}
+				}
+
 				auto circleRendererComponent = entity["CircleRendererComponent"];
 				if (circleRendererComponent) {
 					auto& crc = deserializedEntity.AddComponent<CircleRendererComponent>();
@@ -1158,6 +1250,20 @@ namespace Lunex {
 								std::string scriptPath = scriptNode["ScriptPath"].as<std::string>();
 								if (!scriptPath.empty()) {
 									script.AddScript(scriptPath);
+
+									if (scriptNode["Fields"] && scriptNode["Fields"].IsSequence()) {
+										auto& overrides = script.FieldOverrides.back();
+										for (auto field : scriptNode["Fields"]) {
+											ScriptFieldValue value;
+											if (!field["Name"] || !field["Type"] || !field["Value"]) continue;
+											if (!ScriptFieldTypeFromString(field["Type"].as<std::string>(), value.Type)) continue;
+											if (value.Type == ScriptFieldType::String)
+												value.String = field["Value"].as<std::string>();
+											else
+												value.Number = field["Value"].as<glm::vec4>();
+											overrides[field["Name"].as<std::string>()] = value;
+										}
+									}
 								}
 							}
 						}

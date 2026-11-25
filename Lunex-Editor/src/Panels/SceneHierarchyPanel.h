@@ -20,14 +20,14 @@ namespace Lunex {
 	// ============================================================================
 	
 	struct HierarchyPanelStyle {
-		// Colors (Blue-tinted dark theme)
-		UI::Color WindowBg = UI::Color::FromHex(0x151A21);
-		UI::Color ChildBg = UI::Color::FromHex(0x151A21);
-		UI::Color ItemEven = UI::Color(0.082f, 0.102f, 0.129f, 1.0f);
-		UI::Color ItemOdd = UI::Color(0.094f, 0.114f, 0.145f, 1.0f);
-		UI::Color ItemHover = UI::Color(0.145f, 0.176f, 0.220f, 1.0f);
-		UI::Color ItemSelected = UI::Color(0.055f, 0.647f, 0.769f, 0.25f);
-		UI::Color ItemSelectedBorder = UI::Color(0.055f, 0.647f, 0.769f, 0.80f);
+		// Colors (neutral gray theme, warm accent)
+		UI::Color WindowBg = UI::Color::FromHex(0x1C1C1C);
+		UI::Color ChildBg = UI::Color::FromHex(0x1C1C1C);
+		UI::Color ItemEven = UI::Color(0.108f, 0.108f, 0.108f, 1.0f);
+		UI::Color ItemOdd = UI::Color(0.122f, 0.122f, 0.122f, 1.0f);
+		UI::Color ItemHover = UI::Color(0.184f, 0.184f, 0.184f, 1.0f);
+		UI::Color ItemSelected = UI::Color(0.851f, 0.510f, 0.169f, 0.22f);
+		UI::Color ItemSelectedBorder = UI::Color(0.851f, 0.510f, 0.169f, 0.90f);
 		// Active element (last selected) - Light orange (Blender-style)
 		UI::Color ItemActive = UI::Color(0.90f, 0.60f, 0.20f, 0.40f);
 		UI::Color ItemActiveBorder = UI::Color(1.0f, 0.70f, 0.25f, 0.90f);
@@ -36,8 +36,8 @@ namespace Lunex {
 		UI::Color ItemSelectedMultiBorder = UI::Color(0.80f, 0.50f, 0.15f, 0.70f);
 		UI::Color TextPrimary = UI::Colors::TextPrimary();
 		UI::Color TextMuted = UI::Colors::TextSecondary();
-		UI::Color Border = UI::Color(0.06f, 0.08f, 0.10f, 1.0f);
-		UI::Color SeparatorLine = UI::Color(0.16f, 0.20f, 0.25f, 1.0f);
+		UI::Color Border = UI::Color(0.084f, 0.084f, 0.084f, 1.0f);
+		UI::Color SeparatorLine = UI::Color(0.207f, 0.207f, 0.207f, 1.0f);
 		
 		// Entity type indicator colors
 		UI::Color TypeCamera = UI::Color(0.40f, 0.75f, 0.95f, 1.0f);    // Light Blue
@@ -178,6 +178,19 @@ namespace Lunex {
 		Ref<Texture2D> m_LightIcon;
 		Ref<Texture2D> m_MeshIcon;
 		Ref<Texture2D> m_SpriteIcon;
+		Ref<Texture2D> m_GroupIcon;
+
+		// Order in which entities were drawn last frame (for Shift+click range selection)
+		std::vector<Entity> m_DrawOrder;
+		std::vector<Entity> m_DrawOrderBuilding;
+
+	public:
+		// Blender-style groups (Ctrl+G / Alt+G)
+		Entity GroupSelection(const std::string& name = "Group");
+		void UngroupEntity(Entity group);
+		void SelectRange(Entity from, Entity to);
+	private:
+		void HandleHierarchyShortcuts();
 		
 		// Style
 		HierarchyPanelStyle m_Style;

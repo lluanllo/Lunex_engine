@@ -295,7 +295,7 @@ namespace Lunex {
 
 		// ===== TERMINAL HEADER =====
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 2));
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.10f, 0.12f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.111f, 0.111f, 0.111f, 1.0f));
 
 		if (ImGui::BeginChild("##terminal_header", ImVec2(0, 30), true, ImGuiWindowFlags_NoScrollbar)) {
 			// Terminal type indicator
@@ -345,7 +345,7 @@ namespace Lunex {
 
 	void TerminalTab::DrawTerminalOutput() {
 		// Terminal-style dark background
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.05f, 0.05f, 0.07f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.061f, 0.061f, 0.061f, 1.0f));
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 
 		float inputHeight = 30.0f;
@@ -375,9 +375,9 @@ namespace Lunex {
 	}
 
 	void TerminalTab::DrawTerminalInput() {
-		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.08f, 0.08f, 0.10f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.12f, 0.12f, 0.14f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.15f, 0.15f, 0.18f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.091f, 0.091f, 0.091f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.131f, 0.131f, 0.131f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.164f, 0.164f, 0.164f, 1.0f));
 
 		ImGui::PushItemWidth(-1);
 
@@ -680,8 +680,8 @@ namespace Lunex {
 
 		// Quick terminal buttons
 		ScopedColor terminalBtnColors({
-			{ImGuiCol_Button, Color(0.15f, 0.15f, 0.20f, 1.0f)},
-			{ImGuiCol_ButtonHovered, Color(0.20f, 0.20f, 0.30f, 1.0f)}
+			{ImGuiCol_Button, Color(0.171f, 0.171f, 0.171f, 1.0f)},
+			{ImGuiCol_ButtonHovered, Color(0.237f, 0.237f, 0.237f, 1.0f)}
 			});
 
 		if (ImGui::Button(">_ PowerShell")) {

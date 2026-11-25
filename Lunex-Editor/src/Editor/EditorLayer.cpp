@@ -5,11 +5,17 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "Scene/SceneSerializer.h"
+#include "Scripting/ScriptingEngine.h"
+#include "Scripting/ScriptBuild.h"
+#include "Physics/Debug/ColliderWireframe.h"
 #include "Project/Project.h"
 #include "Project/ProjectManager.h"
 #include "Project/ProjectSerializer.h"
 
 #include "Utils/PlatformUtils.h"
+#include "Project/ProjectThumbnail.h"
+#include "../UI/Lunexi/Theme.h"
+#include "Renderer/Pipeline/RenderPipeline.h"
 
 #include "ImGuizmo.h"
 
@@ -205,7 +211,13 @@ namespace Lunex {
 		
 		m_MenuBarPanel.SetOnOpenInputSettingsCallback([this]() { m_InputSettingsPanel.Open(); });
 		m_MenuBarPanel.SetOnOpenJobSystemPanelCallback([this]() { m_JobSystemPanel.Toggle(); });
-		m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferencesPanel.Toggle(); });
+		m_MenuBarPanel.SetOnOpenAnimationEditorCallback([this]() { m_AnimationEditorPanel.Toggle(); });
+		m_ContentBrowserPanel.SetOnAnimationOpenCallback([this](const std::filesystem::path& path) {
+			Entity selected = m_SceneHierarchyPanel.GetSelectedEntity();
+			if (selected) m_AnimationEditorPanel.SetSelectedEntity(selected);
+			m_AnimationEditorPanel.OpenAsset(path);
+		});
+m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferencesPanel.Toggle(); });
 
 		// ✅ Outline Preferences autosave: save to project on every change
 		m_OutlinePreferencesPanel.SetOnChangedCallback([this]() {
@@ -263,10 +275,6 @@ namespace Lunex {
 		
 		LNX_LOG_INFO("✅ Material Editor Panel callbacks configured");
 
-		// Configure project creation dialog
-		m_ProjectCreationDialog.SetOnCreateCallback([this](const std::string& name, const std::filesystem::path& location) {
-			CreateProjectWithDialog(name, location);
-		});
 
 		Lunex::FramebufferSpecification fbSpec;
 		fbSpec.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::RED_INTEGER, FramebufferTextureFormat::Depth };
@@ -287,7 +295,12 @@ namespace Lunex {
 		m_EditorScene = CreateRef<Scene>();
 		m_ActiveScene = m_EditorScene;
 
-		// Cargar escena inicial si se proporcionó en los argumentos
+		// Start above the ground looking at the origin (it used to start at (0,0,0), inside
+		// whatever sits at the origin and with the grid edge-on)
+		m_EditorCamera.SetPosition(glm::vec3(4.0f, 3.0f, 6.0f));
+		m_EditorCamera.LookAt(glm::vec3(0.0f, 0.75f, 0.0f));
+
+		// Cargar escena inicialsi se proporcionó en los argumentos
 		if (!m_InitialScenePath.empty()) {
 			SceneSerializer serializer(m_ActiveScene);
 			serializer.Deserialize(m_InitialScenePath);
@@ -438,6 +451,20 @@ namespace Lunex {
 
 		m_ConsolePanel.AddLog("Lunex Editor initialized", LogLevel::Info, "System");
 		m_ConsolePanel.AddLog("Welcome! Type 'help' to see available commands", LogLevel::Info, "System");
+
+		// ========================================
+		// PROJECT LAUNCHER (startup project browser)
+		// ========================================
+		m_ProjectLauncher.SetOnOpenProject([this](const std::filesystem::path& path) { OpenProject(path); });
+		m_ProjectLauncher.SetOnBrowseProject([this]() { OpenProject(); });
+		m_ProjectLauncher.SetOnCreateProject([this](const std::string& name, const std::filesystem::path& location) {
+			CreateProjectWithDialog(name, location);
+		});
+		// An empty in-memory project always exists, so show the launcher unless the
+		// editor was started with a scene to open (command-line argument)
+		if (m_InitialScenePath.empty()) {
+			m_ProjectLauncher.Open();
+		}
 
 		UI_UpdateWindowTitle();
 	}
@@ -743,7 +770,12 @@ namespace Lunex {
 		// FLUSH MAIN-THREAD COMMANDS (Job System)
 		// ========================================
 		JobSystem::Get().FlushMainThreadCommands(0);
-		
+
+		// Background compile of edited scripts (Edit mode only)
+		if (m_SceneState == SceneState::Edit) {
+			WatchScriptsForChanges(ts);
+		}
+
 		// ✅ NEW: Update Input System
 		InputManager::Get().Update(ts);
 
@@ -808,6 +840,7 @@ namespace Lunex {
 				m_EditorCamera.SetAllowFlyCamera(m_ViewportPanel.IsViewportHovered());
 				m_EditorCamera.OnUpdate(ts);
 				
+				m_AnimationEditorPanel.OnUpdate(ts.GetSeconds());   // pushes the edited pose before skinning
 				m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
 				
 				// Execute deferred lighting pass into the scene framebuffer
@@ -874,6 +907,9 @@ namespace Lunex {
 					// Post-processing (bloom + tone mapping) on complete scene
 					DeferredRenderer::ExecutePostProcessing(m_Framebuffer);
 				}
+
+				// Scene switches requested by scripts are applied after the frame finished
+				ProcessScriptSceneRequests();
 				break;
 			}
 		}
@@ -922,10 +958,17 @@ namespace Lunex {
 		if (selectedEntity && selectedEntity.HasComponent<CameraComponent>() && m_SceneState == SceneState::Edit) {
 			RenderCameraPreview(selectedEntity);
 		}
+
+		if (m_ThumbnailCaptureFrames > 0 && --m_ThumbnailCaptureFrames == 0)
+			CaptureProjectThumbnail();
 	}
 
 	void EditorLayer::OnImGuiRender() {
 		LNX_PROFILE_FUNCTION();
+
+		// Lunexi theme: user's saved preset (overrides the engine's base style once)
+		static bool s_ThemeLoaded = false;
+		if (!s_ThemeLoaded) { UI::Theme::LoadUserPreference(); s_ThemeLoaded = true; }
 
 		static bool dockspaceOpen = true;
 		static bool opt_fullscreen_persistant = true;
@@ -976,6 +1019,13 @@ namespace Lunex {
 		m_PropertiesPanel.OnImGuiRender();
 		m_ContentBrowserPanel.OnImGuiRender();
 		m_MaterialEditorPanel.OnImGuiRender();
+		{
+			// Animation editor follows the selection (only rigged entities retarget it)
+			m_AnimationEditorPanel.SetContext(m_SceneState == SceneState::Edit ? m_ActiveScene : nullptr);
+			Entity sel = m_SceneHierarchyPanel.GetSelectedEntity();
+			if (sel && sel.HasComponent<AnimatorComponent>()) m_AnimationEditorPanel.SetSelectedEntity(sel);
+			m_AnimationEditorPanel.OnImGuiRender();
+		}
 		m_StatsPanel.OnImGuiRender();
 		m_SettingsPanel.OnImGuiRender();
 		m_ConsolePanel.OnImGuiRender();
@@ -984,8 +1034,6 @@ namespace Lunex {
 		m_MeshImportModal.OnImGuiRender();  // NEW: Mesh import modal
 		m_OutlinePreferencesPanel.OnImGuiRender();
 
-		// Render dialogs (on top)
-		m_ProjectCreationDialog.OnImGuiRender();
 
 		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
 		
@@ -1013,6 +1061,9 @@ namespace Lunex {
 		);
 
 		ImGui::End();
+
+		// Startup project browser: rendered last so it covers the editor (incl. floating toolbars)
+		m_ProjectLauncher.OnImGuiRender();
 	}
 
 	void EditorLayer::OnEvent(Lunex::Event& e) {
@@ -1043,10 +1094,40 @@ namespace Lunex {
 		if (Input::IsKeyPressed(Key::LeftAlt) || Input::IsKeyPressed(Key::RightAlt))
 			modifiers |= KeyModifiers::Alt;
 
+		// F = frame the selection (Unreal/Unity style)
+		if (e.GetKeyCode() == Key::F && modifiers == KeyModifiers::None && m_SceneState != SceneState::Play &&
+			m_ViewportPanel.IsViewportFocused() && !ImGui::GetIO().WantTextInput) {
+			FocusSelectedEntity();
+		}
+
 		// Process through InputManager
 		InputManager::Get().OnKeyPressed(static_cast<KeyCode>(e.GetKeyCode()), modifiers);
 
 		return false;
+	}
+
+	void EditorLayer::FocusSelectedEntity() {
+		Entity entity = m_SceneHierarchyPanel.GetSelectedEntity();
+		if (!entity || !m_ActiveScene) return;
+
+		glm::mat4 world = m_ActiveScene->GetWorldTransform(entity);
+		glm::vec3 center = glm::vec3(world[3]);
+		float radius = 1.0f;
+
+		if (entity.HasComponent<MeshComponent>() && entity.GetComponent<MeshComponent>().MeshModel) {
+			glm::vec3 mn(std::numeric_limits<float>::max()), mx(std::numeric_limits<float>::lowest());
+			for (const auto& mesh : entity.GetComponent<MeshComponent>().MeshModel->GetMeshes()) {
+				glm::vec3 a, b;
+				Mesh::TransformAABB(world, mesh->GetAABBMin(), mesh->GetAABBMax(), a, b);
+				mn = glm::min(mn, a);
+				mx = glm::max(mx, b);
+			}
+			if (mn.x <= mx.x) {
+				center = (mn + mx) * 0.5f;
+				radius = glm::length(mx - mn) * 0.5f;
+			}
+		}
+		m_EditorCamera.Focus(center, radius);
 	}
 
 	bool EditorLayer::OnKeyReleased(KeyReleasedEvent& e) {
@@ -1073,7 +1154,8 @@ namespace Lunex {
 
 		// ✅ MULTI-SELECTION RAY PICKING (Blender-style)
 		if (e.GetMouseButton() == Mouse::ButtonLeft) {
-			if (m_ViewportPanel.IsViewportHovered() && !ImGuizmo::IsOver()) {
+			auto* animEditor = AnimationEditorPanel::GetActive();
+			if (m_ViewportPanel.IsViewportHovered() && !ImGuizmo::IsOver() && !(animEditor && animEditor->IsHoveringJoint())) {
 				// ✅ Use Input system for modifier detection
 				bool shiftPressed = Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift);
 				bool ctrlPressed = Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl);
@@ -1259,6 +1341,38 @@ namespace Lunex {
 		}
 
 		// Draw 3D Physics Colliders
+		// Skeletons of animated meshes (Animator > Show Skeleton)
+		{
+			auto view = m_ActiveScene->GetAllEntitiesWith<MeshComponent, AnimatorComponent>();
+			for (auto entityID : view) {
+				auto [mesh, animator] = view.get<MeshComponent, AnimatorComponent>(entityID);
+				if (!animator.ShowSkeleton || !mesh.MeshModel || !mesh.MeshModel->IsSkinned()) continue;
+
+				const auto& nodes = mesh.MeshModel->GetSkeleton()->Nodes;
+				const auto& model = animator.NodeTransforms;
+				if (model.size() != nodes.size()) continue;   // filled by AnimationSystem next frame
+
+				glm::mat4 world = m_ActiveScene->GetWorldTransform(Entity{ entityID, m_ActiveScene.get() });
+				float previousLineWidth = Renderer2D::GetLineWidth();
+				Renderer2D::SetLineWidth(2.0f);
+				for (size_t i = 0; i < nodes.size(); i++) {
+					int parent = nodes[i].Parent;
+					if (parent < 0 || nodes[i].BoneIndex < 0) continue;   // only bone segments
+					bool parentIsBone = nodes[parent].BoneIndex >= 0;
+					if (!parentIsBone) continue;
+					glm::vec3 a = glm::vec3(world * model[parent][3]);
+					glm::vec3 b = glm::vec3(world * model[i][3]);
+					bool highlighted = (nodes[i].BoneIndex == animator.DebugWeightsBone);
+					bool selectedBone = animator.EditorSelectedNode >= 0 &&
+						(static_cast<int>(i) == animator.EditorSelectedNode || parent == animator.EditorSelectedNode);
+					glm::vec4 color = selectedBone ? glm::vec4(0.2f, 0.85f, 1.0f, 1.0f)
+						: highlighted ? glm::vec4(1.0f, 0.35f, 0.1f, 1.0f) : glm::vec4(1.0f, 0.85f, 0.2f, 1.0f);
+					Renderer2D::DrawLine(a, b, color);
+				}
+				Renderer2D::SetLineWidth(previousLineWidth);
+			}
+		}
+
 		if (m_SettingsPanel.GetShowPhysics3DColliders()) {
 			float previousLineWidth = Renderer2D::GetLineWidth();
 			Renderer2D::SetLineWidth(m_OutlinePreferencesPanel.GetColliderLineWidth());
@@ -1335,6 +1449,33 @@ namespace Lunex {
 						* glm::toMat4(glm::quat(tc.Rotation));
 
 					Renderer2D::DrawWireCone(transform, scaledRadius, scaledHeight, collider3DColor);
+				}
+			}
+			{
+				// Mesh colliders: hull (convex) or triangle edges (concave) of the actual collision shape
+				auto view = m_ActiveScene->GetAllEntitiesWith<TransformComponent, MeshCollider3DComponent>();
+				for (auto entityID : view) {
+					auto [tc, mc3d] = view.get<TransformComponent, MeshCollider3DComponent>(entityID);
+					Entity entity{ entityID, m_ActiveScene.get() };
+					const bool convex = (mc3d.Type == MeshCollider3DComponent::CollisionType::Convex);
+
+					const std::vector<glm::vec3>* edges = nullptr;
+					if (mc3d.UseEntityMesh && entity.HasComponent<MeshComponent>())
+						edges = &ColliderWireframe::GetModelEdges(entity.GetComponent<MeshComponent>().MeshModel, convex);
+					else if (!mc3d.Vertices.empty())
+						edges = &ColliderWireframe::GetCustomEdges(mc3d.Vertices, mc3d.Indices, convex);
+					if (!edges || edges->empty()) continue;
+
+					// Same transform the physics body uses (translation/rotation, vertices pre-scaled)
+					glm::mat4 transform = glm::translate(glm::mat4(1.0f), tc.Translation)
+						* glm::toMat4(glm::quat(tc.Rotation))
+						* glm::scale(glm::mat4(1.0f), tc.Scale);
+
+					for (size_t i = 0; i + 1 < edges->size(); i += 2) {
+						glm::vec3 a = glm::vec3(transform * glm::vec4((*edges)[i], 1.0f));
+						glm::vec3 b = glm::vec3(transform * glm::vec4((*edges)[i + 1], 1.0f));
+						Renderer2D::DrawLine(a, b, collider3DColor);
+					}
 				}
 			}
 			{
@@ -1418,6 +1559,28 @@ namespace Lunex {
 	void EditorLayer::SerializeScene(Ref<Scene> scene, const std::filesystem::path& path) {
 		SceneSerializer serializer(scene);
 		serializer.Serialize(path.string());
+		m_ThumbnailCaptureFrames = 2;   // refresh the launcher thumbnail
+	}
+
+	void EditorLayer::CaptureProjectThumbnail() {
+		auto project = ProjectManager::GetActiveProject();
+		if (!project || !m_ActiveScene || m_SceneState != SceneState::Edit) return;
+
+		uint32_t texture = 0, width = 0, height = 0;
+		Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
+		if (camera) {
+			RenderCameraPreview(camera);
+			texture = m_CameraPreviewFramebuffer->GetColorAttachmentRendererID(0);
+			width = m_CameraPreviewFramebuffer->GetSpecification().Width;
+			height = m_CameraPreviewFramebuffer->GetSpecification().Height;
+		}
+		else {
+			// No game camera: use what the editor viewport shows
+			texture = m_Framebuffer->GetColorAttachmentRendererID(0);
+			width = m_Framebuffer->GetSpecification().Width;
+			height = m_Framebuffer->GetSpecification().Height;
+		}
+		ProjectThumbnail::SaveFromTexture(texture, width, height, ProjectThumbnail::GetPath(project->GetProjectDirectory()));
 	}
 
 	void EditorLayer::OnScenePlay() {
@@ -1440,6 +1603,75 @@ namespace Lunex {
 		m_ActiveScene->OnSimulationStart();
 		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
 		m_PropertiesPanel.SetContext(m_ActiveScene);
+	}
+
+	void EditorLayer::WatchScriptsForChanges(float dt) {
+		m_ScriptWatchTimer += dt;
+		if (m_ScriptWatchTimer < 1.0f || !m_ActiveScene) return;
+		m_ScriptWatchTimer = 0.0f;
+
+		auto view = m_ActiveScene->GetAllEntitiesWith<ScriptComponent>();
+		for (auto e : view) {
+			Entity entity{ e, m_ActiveScene.get() };
+			auto& sc = entity.GetComponent<ScriptComponent>();
+			if (!sc.AutoCompile) continue;
+
+			for (size_t i = 0; i < sc.GetScriptCount(); i++) {
+				auto path = ScriptBuild::ResolveScriptPath(sc.GetScriptPath(i));
+				std::error_code ec;
+				auto time = std::filesystem::last_write_time(path, ec);
+				if (ec) continue;
+
+				auto& seen = m_ScriptWatchTimes[path.string()];
+				if (seen == time) continue;          // already compiled/tried this version
+				if (!ScriptBuild::NeedsCompile(path)) { seen = time; continue; }
+				if (ScriptBuild::GetStatus(path).State == ScriptBuildState::Compiling) continue;
+
+				seen = time;
+				ScriptBuild::CompileAsync(path);
+			}
+		}
+	}
+
+	void EditorLayer::ProcessScriptSceneRequests() {
+		std::string requested;
+		if (!ScriptingEngine::ConsumePendingSceneLoad(requested))
+			return;
+
+		if (m_SceneState != SceneState::Play) {
+			LNX_LOG_WARN("LoadScene('{0}') ignored: only available in Play mode", requested);
+			return;
+		}
+
+		std::filesystem::path scenePath = requested;
+		if (scenePath.is_relative()) {
+			if (Project::GetActive())
+				scenePath = Project::GetActiveAssetDirectory() / scenePath;
+			else
+				scenePath = std::filesystem::path("assets") / scenePath;
+		}
+		if (!std::filesystem::exists(scenePath)) {
+			LNX_LOG_ERROR("LoadScene: scene not found: {0}", scenePath.string());
+			return;
+		}
+
+		Ref<Scene> nextScene = CreateRef<Scene>();
+		SceneSerializer serializer(nextScene);
+		if (!serializer.Deserialize(scenePath.string())) {
+			LNX_LOG_ERROR("LoadScene: failed to load {0}", scenePath.string());
+			return;
+		}
+
+		// Swap only the runtime scene; m_EditorScene stays untouched so Stop
+		// returns to the scene that was being edited.
+		m_ActiveScene->OnRuntimeStop();
+		m_ActiveScene = nextScene;
+		m_ActiveScene->OnViewportResize((uint32_t)m_ViewportSize.x, (uint32_t)m_ViewportSize.y);
+		m_ActiveScene->OnRuntimeStart();
+		m_SceneHierarchyPanel.SetContext(m_ActiveScene);
+		m_PropertiesPanel.SetContext(m_ActiveScene);
+
+		LNX_LOG_INFO("LoadScene: switched to {0}", scenePath.filename().string());
 	}
 
 	void EditorLayer::OnSceneStop() {
@@ -1470,8 +1702,8 @@ namespace Lunex {
 	// ===========================================================================
 
 	void EditorLayer::NewProject() {
-		// Open project creation dialog
-		m_ProjectCreationDialog.Open();
+		// Project creation lives in the launcher (no modal)
+		m_ProjectLauncher.OpenCreate();
 	}
 
 	void EditorLayer::CreateProjectWithDialog(const std::string& name, const std::filesystem::path& location) {
@@ -1514,6 +1746,10 @@ namespace Lunex {
 			NewScene();
 		}
 
+		m_ProjectLauncher.AddRecentProject(projectFile);
+		m_ProjectLauncher.Close();
+		m_ThumbnailCaptureFrames = 120;
+
 		UI_UpdateWindowTitle();
 		m_ConsolePanel.AddLog("Project created: " + name, LogLevel::Info, "Project");
 		LNX_LOG_INFO("Project created successfully at: {0}", projectPath.string());
@@ -1540,6 +1776,11 @@ namespace Lunex {
 			m_ConsolePanel.AddLog("Failed to load project: " + path.string(), LogLevel::Error, "Project");
 			return;
 		}
+
+		m_ProjectLauncher.AddRecentProject(path);
+		m_ProjectLauncher.Close();
+		RenderPipelineRegistry::SetRequested(RenderEngineFromString(project->GetConfig().RenderEngine));
+m_ThumbnailCaptureFrames = 120;   // once the start scene has rendered
 
 		// Update Content Browser to show project assets
 		m_ContentBrowserPanel.SetRootDirectory(project->GetAssetDirectory());

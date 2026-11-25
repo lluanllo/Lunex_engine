@@ -5,13 +5,14 @@
 #include "../Panels/PropertiesPanel.h"
 #include "../Panels/ContentBrowserPanel.h"
 #include "../Panels/MaterialEditorPanel.h"
+#include "../Panels/AnimationEditorPanel.h"
 #include "../Panels/StatsPanel.h"
 #include "../Panels/SettingsPanel.h"
 #include "../Panels/ViewportPanel.h"
 #include "../Panels/ToolbarPanel.h"  // This includes SceneMode.h and defines SceneState alias
 #include "../Panels/ConsolePanel.h"
 #include "../Panels/MenuBarPanel.h"
-#include "../Panels/ProjectCreationDialog.h"
+#include "../Panels/ProjectLauncherPanel.h"
 #include "../Panels/InputSettingsPanel.h"
 #include "../Panels/GizmoSettingsPanel.h"
 #include "../Panels/JobSystemPanel.h"
@@ -69,7 +70,14 @@ namespace Lunex {
 			void OnScenePlay();
 			void OnSceneSimulate();  
 			void OnSceneStop();
-			
+		void ProcessScriptSceneRequests();
+		void WatchScriptsForChanges(float dt);
+		void FocusSelectedEntity();
+
+		// Compile-on-save: last modification time we compiled (or tried) per script
+		std::unordered_map<std::string, std::filesystem::file_time_type> m_ScriptWatchTimes;
+		float m_ScriptWatchTimer = 0.0f;
+
 			void OnDuplicateEntity();
 			
 			// UI Refresh
@@ -77,7 +85,12 @@ namespace Lunex {
 			
 			// Camera Preview
 			void RenderCameraPreview(Entity cameraEntity);
-			
+
+			// Launcher thumbnail: captured from the primary camera a few frames after
+			// a project opens / a scene is saved
+			void CaptureProjectThumbnail();
+			int m_ThumbnailCaptureFrames = -1;
+
 			// Mesh Import
 			void OnModelDropped(const std::filesystem::path& modelPath);
 			void OnMeshAssetDropped(const std::filesystem::path& meshAssetPath);
@@ -123,14 +136,15 @@ namespace Lunex {
 			PropertiesPanel m_PropertiesPanel;
 			ContentBrowserPanel m_ContentBrowserPanel;
 			MaterialEditorPanel m_MaterialEditorPanel;
-			StatsPanel m_StatsPanel;
+			AnimationEditorPanel m_AnimationEditorPanel;
+StatsPanel m_StatsPanel;
 			SettingsPanel m_SettingsPanel;
 			ViewportPanel m_ViewportPanel;
 			ToolbarPanel m_ToolbarPanel;
 			ConsolePanel m_ConsolePanel;
 			MenuBarPanel m_MenuBarPanel;
-			ProjectCreationDialog m_ProjectCreationDialog;
-			InputSettingsPanel m_InputSettingsPanel;
+ProjectLauncherPanel m_ProjectLauncher;
+InputSettingsPanel m_InputSettingsPanel;
 			GizmoSettingsPanel m_GizmoSettingsPanel;
 			JobSystemPanel m_JobSystemPanel;
 			MeshImportModal m_MeshImportModal;

@@ -14,6 +14,7 @@
 
 #include "ViewportPanel.h"
 #include "ContentBrowserPanel.h"
+#include "AnimationEditorPanel.h"
 #include "Core/Application.h"
 #include "Core/Input.h"
 #include "Scene/Components.h"
@@ -49,7 +50,7 @@ namespace Lunex {
 		constexpr float ShadowBlur = 8.0f;
 		
 		inline UI::Color ShadowColor()    { return UI::Color(0.0f, 0.0f, 0.0f, 0.40f); }
-		inline UI::Color BorderColor()    { return UI::Color(0.24f, 0.24f, 0.28f, 0.60f); }
+		inline UI::Color BorderColor()    { return UI::Color(0.257f, 0.257f, 0.257f, 0.60f); }
 	}
 
 	// ============================================================================
@@ -104,9 +105,19 @@ namespace Lunex {
 		// Handle drag & drop
 		HandleDragDrop();
 
+		// Animation editor joints (clickable) + bone gizmo
+		auto* boneEditor = AnimationEditorPanel::GetActive();
+		if (boneEditor) {
+			boneEditor->DrawJointOverlay(editorCamera.GetViewMatrix(), editorCamera.GetProjection(),
+				m_ViewportBounds[0], m_ViewportBounds[1]);
+		}
+
 		// Render gizmos (multi-selection aware)
 		const auto& selectedEntities = hierarchyPanel.GetSelectedEntities();
-		if (!selectedEntities.empty() && gizmoType != -1) {
+		if (boneEditor && boneEditor->WantsBoneGizmo()) {
+			RenderGizmos(hierarchyPanel, editorCamera, gizmoType == -1 ? ImGuizmo::ROTATE : gizmoType, gizmoSettings);
+		}
+		else if (!selectedEntities.empty() && gizmoType != -1) {
 			RenderGizmos(hierarchyPanel, editorCamera, gizmoType, gizmoSettings);
 		}
 		else {
@@ -193,6 +204,13 @@ namespace Lunex {
 		int gizmoType,
 		GizmoSettingsPanel& gizmoSettings)
 	{
+		// Animation editor: the gizmo poses the selected bone instead of the entity
+		if (auto* animEditor = AnimationEditorPanel::GetActive(); animEditor && animEditor->WantsBoneGizmo()) {
+			animEditor->DrawBoneGizmo(editorCamera.GetViewMatrix(), editorCamera.GetProjection(), gizmoType,
+				m_ViewportBounds[0], m_ViewportBounds[1]);
+			return;
+		}
+
 		const auto& selectedEntities = hierarchyPanel.GetSelectedEntities();
 		if (selectedEntities.empty()) return;
 
@@ -251,12 +269,18 @@ namespace Lunex {
 						glm::vec3 newTranslation, newRotation, newScale;
 						Math::DecomposeTransform(transform, newTranslation, newRotation, newScale);
 
-						glm::vec3 deltaTranslation = newTranslation - tc.Translation;
-						glm::vec3 deltaRotation = newRotation - tc.Rotation;
-						glm::vec3 deltaScale = newScale - tc.Scale;
+						const glm::vec3 deltaTranslation = newTranslation - tc.Translation;
+						// Rotation delta as a quaternion (adding Euler angles is wrong for
+						// anything but single-axis rotations)
+						const glm::quat oldRot = glm::quat(tc.Rotation);
+						const glm::quat newRot = glm::quat(newRotation);
+						const glm::quat worldDelta = newRot * glm::inverse(oldRot);
+						const glm::quat localDelta = glm::inverse(oldRot) * newRot;
+						// Scale is multiplicative
+						const glm::vec3 scaleRatio = newScale / glm::max(glm::abs(tc.Scale), glm::vec3(1e-6f)) * glm::sign(tc.Scale + glm::vec3(1e-12f));
 
 						tc.Translation = newTranslation;
-						tc.Rotation += deltaRotation;
+						tc.Rotation = newRotation;
 						tc.Scale = newScale;
 
 						for (auto otherEntity : selectedEntities) {
@@ -269,12 +293,28 @@ namespace Lunex {
 								otherTc.Translation += deltaTranslation;
 							}
 							else if (gizmoType == ImGuizmo::OPERATION::ROTATE) {
-								otherTc.Rotation += deltaRotation;
+								// Each object rotates about its OWN origin, in world or local axes
+								glm::quat q = glm::quat(otherTc.Rotation);
+								q = (orientMode == TransformOrientation::Local) ? q * localDelta : worldDelta * q;
+								otherTc.Rotation = glm::eulerAngles(glm::normalize(q));
 							}
 							else if (gizmoType == ImGuizmo::OPERATION::SCALE) {
-								otherTc.Scale += deltaScale;
+								otherTc.Scale *= scaleRatio;
 							}
 						}
+					}
+				}
+				else {
+					// Mark the other pivots so it's visible that each one transforms in place
+					glm::vec4 clip = cameraProjection * cameraView * glm::vec4(tc.Translation, 1.0f);
+					if (clip.w > 0.0f) {
+						glm::vec2 ndc = glm::vec2(clip) / clip.w;
+						ImVec2 p(
+							m_ViewportBounds[0].x + (ndc.x * 0.5f + 0.5f) * (m_ViewportBounds[1].x - m_ViewportBounds[0].x),
+							m_ViewportBounds[0].y + (1.0f - (ndc.y * 0.5f + 0.5f)) * (m_ViewportBounds[1].y - m_ViewportBounds[0].y));
+						ImDrawList* dl = ImGui::GetWindowDrawList();
+						dl->AddCircleFilled(p, 5.0f, IM_COL32(20, 20, 20, 200));
+						dl->AddCircleFilled(p, 3.5f, IM_COL32(217, 130, 43, 255));
 					}
 				}
 			}

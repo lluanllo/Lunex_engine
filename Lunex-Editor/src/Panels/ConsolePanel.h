@@ -160,7 +160,7 @@ namespace Lunex {
 		UI::Color TabBg = UI::Color(0.16f, 0.16f, 0.16f, 1.0f);
 		UI::Color TabActive = UI::Color(0.24f, 0.24f, 0.24f, 1.0f);
 		UI::Color TabHovered = UI::Color(0.26f, 0.59f, 0.98f, 0.40f);
-		UI::Color InputBg = UI::Color(0.08f, 0.08f, 0.10f, 1.0f);
+		UI::Color InputBg = UI::Color(0.091f, 0.091f, 0.091f, 1.0f);
 		UI::Color ToolbarBg = UI::Color(0.12f, 0.12f, 0.13f, 1.0f);
 	};
 	

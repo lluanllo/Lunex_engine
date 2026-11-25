@@ -20,6 +20,7 @@ namespace Lunex {
 
 		m_CameraIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/CameraIcon.png");
 		m_EntityIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/EntityIcon.png");
+		m_GroupIcon = Texture2D::Create("Resources/Icons/ContentBrowser/FolderIcon.png");
 		m_LightIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/LightIcon.png");
 		m_MeshIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/MeshIcon.png");
 		m_SpriteIcon = Texture2D::Create("Resources/Icons/HierarchyPanel/SpriteIcon.png");
@@ -80,9 +81,9 @@ namespace Lunex {
 		
 		ScopedStyle padding(ImGuiStyleVar_FramePadding, ImVec2(8, 4));
 		ScopedColor buttonColors({
-			{ImGuiCol_Button, Color(0.13f, 0.16f, 0.20f, 1.0f)},
-			{ImGuiCol_ButtonHovered, Color(0.18f, 0.22f, 0.27f, 1.0f)},
-			{ImGuiCol_ButtonActive, Color(0.055f, 0.647f, 0.769f, 0.6f)}
+			{ImGuiCol_Button, Color(0.167f, 0.167f, 0.167f, 1.0f)},
+			{ImGuiCol_ButtonHovered, Color(0.227f, 0.227f, 0.227f, 1.0f)},
+			{ImGuiCol_ButtonActive, Color(0.851f, 0.510f, 0.169f, 0.6f)}
 		});
 		
 		if (ImGui::Button("+ Create")) {
@@ -165,9 +166,9 @@ namespace Lunex {
 		using namespace UI;
 		
 		ScopedColor frameColors({
-			{ImGuiCol_FrameBg, Color(0.09f, 0.11f, 0.14f, 1.0f).ToImVec4()},
-			{ImGuiCol_FrameBgHovered, Color(0.12f, 0.15f, 0.19f, 1.0f).ToImVec4()},
-			{ImGuiCol_FrameBgActive, Color(0.055f, 0.647f, 0.769f, 0.3f).ToImVec4()}
+			{ImGuiCol_FrameBg, Color(0.117f, 0.117f, 0.117f, 1.0f).ToImVec4()},
+			{ImGuiCol_FrameBgHovered, Color(0.157f, 0.157f, 0.157f, 1.0f).ToImVec4()},
+			{ImGuiCol_FrameBgActive, Color(0.851f, 0.510f, 0.169f, 0.3f).ToImVec4()}
 		});
 		
 		ImGui::SetNextItemWidth(-1);
@@ -182,7 +183,8 @@ namespace Lunex {
 		m_EntityIndexCounter = 0;
 		m_TotalEntities = 0;
 		m_VisibleEntities = 0;
-		
+		m_DrawOrderBuilding.clear();
+
 		auto rootEntities = GetSortedRootEntities();
 		m_TotalEntities = (int)m_Context->m_Registry.view<TagComponent>().size();
 		
@@ -215,8 +217,11 @@ namespace Lunex {
 		if (ImGui::IsMouseClicked(0) && ImGui::IsWindowHovered() && !ImGui::IsAnyItemHovered()) {
 			ClearSelection();
 		}
-		
+
+		HandleHierarchyShortcuts();
+
 		ImGui::EndChild();
+		m_DrawOrder = m_DrawOrderBuilding;
 	}
 	
 	void SceneHierarchyPanel::RenderContextMenu() {
@@ -228,6 +233,15 @@ namespace Lunex {
 			
 			if (ImGui::MenuItem("Empty Entity"))
 				m_Context->CreateEntity("Empty Entity");
+
+			if (ImGui::MenuItem("Group")) {
+				if (!m_SelectedEntities.empty()) GroupSelection();
+				else {
+					Entity group = m_Context->CreateEntity("Group");
+					group.AddComponent<GroupComponent>();
+					SelectEntity(group, true);
+				}
+			}
 			
 			ImGui::Separator();
 			
@@ -282,6 +296,7 @@ namespace Lunex {
 		}
 
 		m_VisibleEntities++;
+		m_DrawOrderBuilding.push_back(entity);
 
 		// Check if has children
 		bool hasChildren = false;
@@ -339,6 +354,12 @@ namespace Lunex {
 			drawList->AddRectFilled(itemMin, itemMax, bgColor.ToImU32());
 		}
 
+		// Hover highlight goes UNDER the label (drawing it after the tree node covered the text)
+		if (!isRenaming && !isSelected && ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
+			ImGui::IsMouseHoveringRect(itemMin, itemMax)) {
+			drawList->AddRectFilled(itemMin, itemMax, m_Style.ItemHover.ToImU32());
+		}
+
 		// Type indicator bar on left
 		if (!isSelected) {
 			Color typeColor = GetEntityTypeColor(entity);
@@ -369,7 +390,8 @@ namespace Lunex {
 
 		// Draw icon
 		Ref<Texture2D> icon = m_EntityIcon;
-		if (entity.HasComponent<CameraComponent>()) icon = m_CameraIcon ? m_CameraIcon : m_EntityIcon;
+		if (entity.HasComponent<GroupComponent>()) icon = m_GroupIcon ? m_GroupIcon : m_EntityIcon;
+		else if (entity.HasComponent<CameraComponent>()) icon = m_CameraIcon ? m_CameraIcon : m_EntityIcon;
 		else if (entity.HasComponent<LightComponent>()) icon = m_LightIcon ? m_LightIcon : m_EntityIcon;
 		else if (entity.HasComponent<MeshComponent>()) icon = m_MeshIcon ? m_MeshIcon : m_EntityIcon;
 		else if (entity.HasComponent<SpriteRendererComponent>()) icon = m_SpriteIcon ? m_SpriteIcon : m_EntityIcon;
@@ -393,7 +415,7 @@ namespace Lunex {
 		
 		if (isRenaming) {
 			ImGui::SetKeyboardFocusHere();
-			ScopedColor frameColor(ImGuiCol_FrameBg, Color(0.055f, 0.647f, 0.769f, 0.2f).ToImVec4());
+			ScopedColor frameColor(ImGuiCol_FrameBg, Color(0.851f, 0.510f, 0.169f, 0.2f).ToImVec4());
 			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 20.0f);
 			
 			if (ImGui::InputText("##RenameEntity", m_RenameBuffer, sizeof(m_RenameBuffer), 
@@ -419,10 +441,6 @@ namespace Lunex {
 			opened = ImGui::TreeNodeEx(tag.c_str(), flags);
 		}
 
-		// Hover effect
-		if (ImGui::IsItemHovered() && !isRenaming) {
-			drawList->AddRectFilled(itemMin, itemMax, m_Style.ItemHover.ToImU32());
-		}
 
 		// Click handling
 		if (ImGui::IsItemClicked() && !isRenaming) {
@@ -431,8 +449,11 @@ namespace Lunex {
 				ToggleEntitySelection(entity);
 			}
 			else if (io.KeyShift) {
-				// Shift+Click: Add to selection
-				if (!IsEntitySelected(entity)) {
+				// Shift+Click: select the whole range from the last clicked entity
+				if (m_LastSelectedEntity && m_LastSelectedEntity != entity) {
+					SelectRange(m_LastSelectedEntity, entity);
+				}
+				else if (!IsEntitySelected(entity)) {
 					AddEntityToSelection(entity);
 				}
 			}
@@ -539,6 +560,19 @@ namespace Lunex {
 				SetEntityParent(child, entity);
 				SelectEntity(child);
 			}
+
+			ImGui::Separator();
+
+			// Groups (Blender-style collections)
+			if (!IsEntitySelected(entity)) SelectEntity(entity, true);
+			if (ImGui::MenuItem("Group Selection", "Ctrl+G")) {
+				GroupSelection();
+			}
+			if (entity.HasComponent<GroupComponent>() && ImGui::MenuItem("Ungroup", "Alt+G")) {
+				UngroupEntity(entity);
+				ImGui::EndPopup();
+				return;
+			}
 			
 			ImGui::Separator();
 			
@@ -593,6 +627,75 @@ namespace Lunex {
 	// SELECTION OPERATIONS
 	// ============================================================================
 	
+	// ============================================================================
+	// GROUPS & RANGE SELECTION
+	// ============================================================================
+
+	Entity SceneHierarchyPanel::GroupSelection(const std::string& name) {
+		if (!m_Context || m_SelectedEntities.empty()) return {};
+
+		// Only group top-most selected entities (children move with their parents)
+		std::vector<Entity> roots;
+		for (Entity e : m_SelectedEntities) {
+			bool hasSelectedAncestor = false;
+			for (Entity other : m_SelectedEntities) {
+				if (other != e && m_Context->IsAncestorOf(other, e)) { hasSelectedAncestor = true; break; }
+			}
+			if (!hasSelectedAncestor) roots.push_back(e);
+		}
+		if (roots.empty()) return {};
+
+		// Keep the group where its members live if they share a parent
+		Entity commonParent = m_Context->GetParent(roots.front());
+		for (Entity e : roots) {
+			if (m_Context->GetParent(e) != commonParent) { commonParent = {}; break; }
+		}
+
+		Entity group = m_Context->CreateEntity(name);
+		group.AddComponent<GroupComponent>();
+		if (commonParent) m_Context->SetParent(group, commonParent);
+		for (Entity e : roots) m_Context->SetParent(e, group);   // keeps world transforms
+
+		SelectEntity(group, true);
+		return group;
+	}
+
+	void SceneHierarchyPanel::UngroupEntity(Entity group) {
+		if (!m_Context || !group || !group.HasComponent<GroupComponent>()) return;
+		Entity parent = m_Context->GetParent(group);
+		auto children = m_Context->GetChildren(group);
+		ClearSelection();
+		for (Entity child : children) {
+			if (parent) m_Context->SetParent(child, parent);
+			else m_Context->RemoveParent(child);
+			AddEntityToSelection(child);
+		}
+		m_Context->DestroyEntity(group);
+	}
+
+	void SceneHierarchyPanel::SelectRange(Entity from, Entity to) {
+		auto a = std::find(m_DrawOrder.begin(), m_DrawOrder.end(), from);
+		auto b = std::find(m_DrawOrder.begin(), m_DrawOrder.end(), to);
+		if (a == m_DrawOrder.end() || b == m_DrawOrder.end()) { AddEntityToSelection(to); return; }
+		if (a > b) std::swap(a, b);
+		for (auto it = a; it <= b; ++it) {
+			if (!IsEntitySelected(*it)) m_SelectedEntities.insert(*it);
+		}
+		m_SelectionContext = to;
+		m_LastSelectedEntity = to;
+	}
+
+	void SceneHierarchyPanel::HandleHierarchyShortcuts() {
+		if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) || ImGui::GetIO().WantTextInput) return;
+		const ImGuiIO& io = ImGui::GetIO();
+		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_G, false)) GroupSelection();
+		if (io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_G, false)) {
+			Entity active = m_LastSelectedEntity;
+			if (active && active.HasComponent<GroupComponent>()) UngroupEntity(active);
+		}
+		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A, false)) SelectAll();
+	}
+
 	void SceneHierarchyPanel::SelectEntity(Entity entity, bool clearPrevious) {
 		if (clearPrevious) {
 			m_SelectedEntities.clear();

@@ -11,6 +11,8 @@
 #include <set>
 #include <unordered_map>
 #include <functional>
+#include <atomic>
+#include <memory>
 
 namespace Lunex {
 	class Event;
@@ -42,6 +44,9 @@ namespace Lunex {
 		// ========================================
 		// CALLBACKS
 		// ========================================
+		void SetOnAnimationOpenCallback(const std::function<void(const std::filesystem::path&)>& callback) {
+			m_OnAnimationOpenCallback = callback;
+		}
 		void SetOnMaterialOpenCallback(const std::function<void(const std::filesystem::path&)>& callback) {
 			m_OnMaterialOpenCallback = callback;
 		}
@@ -190,7 +195,20 @@ namespace Lunex {
 
 		// Texture preview cache
 		std::unordered_map<std::string, Ref<Texture2D>> m_TextureCache;
-		
+
+		// Async image thumbnails: decoded + downscaled on job workers, uploaded here
+		struct PendingThumbnail {
+			std::atomic<bool> Done{ false };
+			Texture2D::DecodedImage Image;
+		};
+		std::unordered_map<std::string, std::shared_ptr<PendingThumbnail>> m_PendingThumbnails;
+		// Files whose thumbnail failed: don't retry every frame
+		std::set<std::string> m_FailedThumbnails;
+		// Expensive (mesh/material/prefab) thumbnails rendered per frame
+		int m_ThumbnailRenderBudget = 1;
+
+		Ref<Texture2D> GetAsyncImageThumbnail(const std::string& pathStr);
+
 		// Material preview renderer and cache
 		Scope<MaterialPreviewRenderer> m_MaterialPreviewRenderer;
 		std::unordered_map<std::string, Ref<Texture2D>> m_MaterialThumbnailCache;
@@ -205,7 +223,8 @@ namespace Lunex {
 		
 		// Callbacks
 		std::function<void(const std::filesystem::path&)> m_OnMaterialOpenCallback;
-		
+		std::function<void(const std::filesystem::path&)> m_OnAnimationOpenCallback;
+
 		// UI Components
 		UI::FileGrid m_FileGrid;
 		UI::DirectoryTree m_DirectoryTree;

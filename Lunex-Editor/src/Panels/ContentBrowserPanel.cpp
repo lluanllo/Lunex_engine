@@ -13,6 +13,7 @@
 #include "Assets/Core/AssetRegistry.h"
 #include "Assets/Core/AssetDatabase.h"
 #include "Project/ProjectManager.h"
+#include "Core/JobSystem/JobSystem.h"
 #include <sstream>
 
 namespace Lunex {
@@ -22,12 +23,12 @@ namespace Lunex {
 	// PANEL STYLE CONSTANTS
 	// ============================================================================
 	namespace PanelColors {
-		static constexpr UI::Color WindowBg(0.082f, 0.102f, 0.129f, 1.0f);   // #151A21 blue-tinted
-		static constexpr UI::Color ChildBg(0.082f, 0.102f, 0.129f, 1.0f);
-		static constexpr UI::Color Border(0.06f, 0.08f, 0.10f, 1.0f);        // Blue-tinted dark border
-		static constexpr UI::Color SidebarBg(0.071f, 0.090f, 0.114f, 1.0f);  // Slightly darker blue-tinted
-		static constexpr UI::Color FileGridBg(0.102f, 0.125f, 0.157f, 1.0f); // #1A2028 blue-tinted
-		static constexpr UI::Color BottomBarBg(0.06f, 0.08f, 0.10f, 1.0f);   // Blue-tinted very dark
+		static constexpr UI::Color WindowBg(0.108f, 0.108f, 0.108f, 1.0f);
+		static constexpr UI::Color ChildBg(0.108f, 0.108f, 0.108f, 1.0f);
+		static constexpr UI::Color Border(0.084f, 0.084f, 0.084f, 1.0f);
+		static constexpr UI::Color SidebarBg(0.096f, 0.096f, 0.096f, 1.0f);
+		static constexpr UI::Color FileGridBg(0.132f, 0.132f, 0.132f, 1.0f);
+		static constexpr UI::Color BottomBarBg(0.084f, 0.084f, 0.084f, 1.0f);
 	}
 
 	// ============================================================================
@@ -79,6 +80,7 @@ namespace Lunex {
 		m_TextureCache.clear();
 		m_MaterialThumbnailCache.clear();
 		m_MeshThumbnailCache.clear();
+		m_FailedThumbnails.clear();
 
 		ClearSelection();
 	}
@@ -286,11 +288,11 @@ namespace Lunex {
 			
 			if (!m_ContextMenuTargetItem.empty()) {
 				ScopedColor popupColors({
-					{ImGuiCol_PopupBg, Color(0.10f, 0.13f, 0.16f, 0.98f)},
+					{ImGuiCol_PopupBg, Color(0.134f, 0.134f, 0.134f, 0.98f)},
 					{ImGuiCol_Border, PanelColors::Border},
-					{ImGuiCol_Header, Color(0.13f, 0.16f, 0.20f, 1.0f)},
-					{ImGuiCol_HeaderHovered, Color(0.055f, 0.647f, 0.769f, 0.35f)},
-					{ImGuiCol_HeaderActive, Color(0.055f, 0.647f, 0.769f, 0.50f)},
+					{ImGuiCol_Header, Color(0.167f, 0.167f, 0.167f, 1.0f)},
+					{ImGuiCol_HeaderHovered, Color(0.851f, 0.510f, 0.169f, 0.35f)},
+					{ImGuiCol_HeaderActive, Color(0.851f, 0.510f, 0.169f, 0.50f)},
 					{ImGuiCol_Text, Colors::TextPrimary()},
 					{ImGuiCol_Separator, PanelColors::Border}
 				});
@@ -332,8 +334,8 @@ namespace Lunex {
 		
 		ScopedColor barColors({
 			{ImGuiCol_ChildBg, PanelColors::BottomBarBg},
-			{ImGuiCol_FrameBg, Color(0.09f, 0.11f, 0.14f, 1.0f)},
-			{ImGuiCol_SliderGrab, Color(0.20f, 0.24f, 0.30f, 1.0f)},
+			{ImGuiCol_FrameBg, Color(0.117f, 0.117f, 0.117f, 1.0f)},
+			{ImGuiCol_SliderGrab, Color(0.251f, 0.251f, 0.251f, 1.0f)},
 			{ImGuiCol_SliderGrabActive, Colors::Primary()}
 		});
 		
@@ -350,9 +352,75 @@ namespace Lunex {
 	// BUILD FILE GRID ITEMS
 	// ============================================================================
 
+	// Box-filter downscale so large textures look clean at thumbnail size
+	static void DownscaleForThumbnail(Texture2D::DecodedImage& img, int maxSize) {
+		int w = img.Width, h = img.Height, c = img.Channels;
+		int factor = (std::max(w, h) + maxSize - 1) / maxSize;
+		if (factor <= 1) return;
+
+		int nw = std::max(1, w / factor), nh = std::max(1, h / factor);
+		std::vector<uint8_t> out(static_cast<size_t>(nw) * nh * c);
+		for (int y = 0; y < nh; y++) {
+			for (int x = 0; x < nw; x++) {
+				for (int ch = 0; ch < c; ch++) {
+					uint32_t sum = 0;
+					for (int dy = 0; dy < factor; dy++) {
+						const uint8_t* row = img.Pixels.data() + (static_cast<size_t>(y * factor + dy) * w + x * factor) * c;
+						for (int dx = 0; dx < factor; dx++) sum += row[dx * c + ch];
+					}
+					out[(static_cast<size_t>(y) * nw + x) * c + ch] = static_cast<uint8_t>(sum / (factor * factor));
+				}
+			}
+		}
+		img.Width = nw;
+		img.Height = nh;
+		img.Pixels = std::move(out);
+	}
+
+	Ref<Texture2D> ContentBrowserPanel::GetAsyncImageThumbnail(const std::string& pathStr) {
+		auto cached = m_TextureCache.find(pathStr);
+		if (cached != m_TextureCache.end() && cached->second) return cached->second;
+		if (m_FailedThumbnails.count(pathStr)) return nullptr;
+
+		auto pending = m_PendingThumbnails.find(pathStr);
+		if (pending != m_PendingThumbnails.end()) {
+			if (!pending->second->Done.load(std::memory_order_acquire)) return nullptr;
+
+			Ref<Texture2D> texture;
+			if (pending->second->Image.IsValid())
+				texture = Texture2D::CreateFromDecoded(pending->second->Image);
+			m_PendingThumbnails.erase(pending);
+
+			if (texture && texture->IsLoaded()) {
+				m_TextureCache[pathStr] = texture;
+				return texture;
+			}
+			m_FailedThumbnails.insert(pathStr);
+			return nullptr;
+		}
+
+		// Kick off a background decode
+		auto job = std::make_shared<PendingThumbnail>();
+		m_PendingThumbnails[pathStr] = job;
+		if (JobSystem::IsInitialized()) {
+			JobSystem::Get().Schedule([job, pathStr]() {
+				job->Image = Texture2D::DecodeFromFile(pathStr);
+				if (job->Image.IsValid()) DownscaleForThumbnail(job->Image, 256);
+				job->Done.store(true, std::memory_order_release);
+			}, nullptr, nullptr, JobPriority::Low);
+		}
+		else {
+			job->Image = Texture2D::DecodeFromFile(pathStr);
+			if (job->Image.IsValid()) DownscaleForThumbnail(job->Image, 256);
+			job->Done.store(true, std::memory_order_release);
+		}
+		return nullptr;
+	}
+
 	std::vector<UI::FileGridItem> ContentBrowserPanel::BuildFileGridItems() {
 		std::vector<UI::FileGridItem> items;
-		
+		m_ThumbnailRenderBudget = 1;
+
 		for (auto& entry : std::filesystem::directory_iterator(m_CurrentDirectory)) {
 			const auto& path = entry.path();
 			std::string filename = path.filename().string();
@@ -413,11 +481,11 @@ namespace Lunex {
 		using namespace UI;
 		
 		ScopedColor popupColors({
-			{ImGuiCol_PopupBg, Color(0.10f, 0.13f, 0.16f, 0.98f)},
+			{ImGuiCol_PopupBg, Color(0.134f, 0.134f, 0.134f, 0.98f)},
 			{ImGuiCol_Border, PanelColors::Border},
-			{ImGuiCol_Header, Color(0.13f, 0.16f, 0.20f, 1.0f)},
-			{ImGuiCol_HeaderHovered, Color(0.055f, 0.647f, 0.769f, 0.35f)},
-			{ImGuiCol_HeaderActive, Color(0.055f, 0.647f, 0.769f, 0.50f)},
+			{ImGuiCol_Header, Color(0.167f, 0.167f, 0.167f, 1.0f)},
+			{ImGuiCol_HeaderHovered, Color(0.851f, 0.510f, 0.169f, 0.35f)},
+			{ImGuiCol_HeaderActive, Color(0.851f, 0.510f, 0.169f, 0.50f)},
 			{ImGuiCol_Text, Colors::TextPrimary()},
 			{ImGuiCol_Separator, PanelColors::Border}
 		});
@@ -625,7 +693,10 @@ namespace Lunex {
 			std::string ext = path.extension().string();
 			std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 			
-			if (ext == ".lumat") {
+			if (ext == ".luanim") {
+				if (m_OnAnimationOpenCallback) m_OnAnimationOpenCallback(path);
+			}
+			else if (ext == ".lumat") {
 				if (m_OnMaterialOpenCallback) {
 					m_OnMaterialOpenCallback(path);
 				}
@@ -776,26 +847,10 @@ namespace Lunex {
 		std::string extension = path.extension().string();
 		std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 
-		// HDR/HDRI files
+		// HDR/HDRI files (stb converts to LDR; decoded async + downscaled)
 		if (extension == ".hdr" || extension == ".hdri") {
-			std::string pathStr = path.string();
-
-			auto it = m_TextureCache.find(pathStr);
-			if (it != m_TextureCache.end() && it->second) {
-				return it->second;
-			}
-
-			try {
-				Ref<Texture2D> hdrTexture = Texture2D::Create(pathStr);
-				if (hdrTexture && hdrTexture->IsLoaded()) {
-					m_TextureCache[pathStr] = hdrTexture;
-					return hdrTexture;
-				}
-			}
-			catch (...) {
-				LNX_LOG_WARN("Failed to load HDR thumbnail: {0}", path.filename().string());
-			}
-
+			Ref<Texture2D> thumb = GetAsyncImageThumbnail(path.string());
+			if (thumb) return thumb;
 			return m_TextureIcon ? m_TextureIcon : m_FileIcon;
 		}
 
@@ -808,12 +863,19 @@ namespace Lunex {
 				return it->second;
 			}
 
+			if (m_FailedThumbnails.count(pathStr) || m_ThumbnailRenderBudget <= 0) {
+				return m_MaterialIcon ? m_MaterialIcon : m_FileIcon;
+			}
+			m_ThumbnailRenderBudget--;
+			m_FailedThumbnails.insert(pathStr); // removed again below on success
+
 			try {
 				auto material = MaterialRegistry::Get().LoadMaterial(path);
 				if (material && m_MaterialPreviewRenderer) {
 					Ref<Texture2D> thumbnail = m_MaterialPreviewRenderer->GetOrGenerateCachedThumbnail(path, material);
 					if (thumbnail) {
 						m_MaterialThumbnailCache[pathStr] = thumbnail;
+						m_FailedThumbnails.erase(pathStr);
 						return thumbnail;
 					}
 				}
@@ -832,6 +894,12 @@ namespace Lunex {
 				return it->second;
 			}
 
+			if (m_FailedThumbnails.count(pathStr) || m_ThumbnailRenderBudget <= 0) {
+				return m_MeshIcon ? m_MeshIcon : m_FileIcon;
+			}
+			m_ThumbnailRenderBudget--;
+			m_FailedThumbnails.insert(pathStr); // removed again below on success
+
 			try {
 				auto meshAsset = MeshAsset::LoadFromFile(path);
 				if (meshAsset && meshAsset->GetModel() && m_MaterialPreviewRenderer) {
@@ -848,9 +916,8 @@ namespace Lunex {
 					if (glm::length(boundsMax - boundsMin) < 0.001f) {
 						MaterialPreviewRenderer::ComputeModelBounds(meshAsset->GetModel(), boundsMin, boundsMax);
 					}
-					glm::vec3 cameraPos = MaterialPreviewRenderer::ComputeCameraForBounds(boundsMin, boundsMax);
-					m_MaterialPreviewRenderer->SetCameraPosition(cameraPos);
-					m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.447f, 0.592f, 0.761f, 1.0f));
+					m_MaterialPreviewRenderer->FrameBounds(boundsMin, boundsMax);
+					m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.16f, 0.16f, 0.16f, 1.0f));
 
 					auto defaultMaterial = CreateRef<MaterialAsset>("MeshPreview");
 					defaultMaterial->SetAlbedo(glm::vec4(0.7f, 0.7f, 0.7f, 1.0f));
@@ -859,12 +926,13 @@ namespace Lunex {
 
 					Ref<Texture2D> thumbnail = m_MaterialPreviewRenderer->RenderToTexture(defaultMaterial);
 
-					m_MaterialPreviewRenderer->SetCameraPosition(originalCameraPos);
+					m_MaterialPreviewRenderer->ResetFraming();
 					m_MaterialPreviewRenderer->SetBackgroundColor(originalBgColor);
 					m_MaterialPreviewRenderer->SetPreviewModel(originalModel);
 
 					if (thumbnail) {
 						m_MeshThumbnailCache[pathStr] = thumbnail;
+						m_FailedThumbnails.erase(pathStr);
 						return thumbnail;
 					}
 				}
@@ -882,6 +950,12 @@ namespace Lunex {
 			if (it != m_MeshThumbnailCache.end() && it->second) {
 				return it->second;
 			}
+
+			if (m_FailedThumbnails.count(pathStr) || m_ThumbnailRenderBudget <= 0) {
+				return m_PrefabIcon ? m_PrefabIcon : m_FileIcon;
+			}
+			m_ThumbnailRenderBudget--;
+			m_FailedThumbnails.insert(pathStr); // removed again below on success
 
 			try {
 				auto prefab = Prefab::LoadFromFile(path);
@@ -915,9 +989,8 @@ namespace Lunex {
 											if (glm::length(boundsMax - boundsMin) < 0.001f) {
 												MaterialPreviewRenderer::ComputeModelBounds(meshAsset->GetModel(), boundsMin, boundsMax);
 											}
-											glm::vec3 cameraPos = MaterialPreviewRenderer::ComputeCameraForBounds(boundsMin, boundsMax);
-											m_MaterialPreviewRenderer->SetCameraPosition(cameraPos);
-											m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.447f, 0.592f, 0.761f, 1.0f));
+											m_MaterialPreviewRenderer->FrameBounds(boundsMin, boundsMax);
+											m_MaterialPreviewRenderer->SetBackgroundColor(glm::vec4(0.16f, 0.16f, 0.16f, 1.0f));
 
 											auto defaultMaterial = CreateRef<MaterialAsset>("PrefabPreview");
 											defaultMaterial->SetAlbedo(glm::vec4(0.6f, 0.65f, 0.7f, 1.0f));
@@ -926,12 +999,13 @@ namespace Lunex {
 
 											Ref<Texture2D> thumbnail = m_MaterialPreviewRenderer->RenderToTexture(defaultMaterial);
 
-											m_MaterialPreviewRenderer->SetCameraPosition(originalCameraPos);
+											m_MaterialPreviewRenderer->ResetFraming();
 											m_MaterialPreviewRenderer->SetBackgroundColor(originalBgColor);
 											m_MaterialPreviewRenderer->SetPreviewModel(originalModel);
 
 											if (thumbnail) {
 												m_MeshThumbnailCache[pathStr] = thumbnail;
+						m_FailedThumbnails.erase(pathStr);
 												return thumbnail;
 											}
 										}
@@ -948,23 +1022,10 @@ namespace Lunex {
 			return m_PrefabIcon ? m_PrefabIcon : m_FileIcon;
 		}
 
-		// Image files
-		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp" || extension == ".TGA" || extension == ".tga") {
-			std::string pathStr = path.string();
-
-			auto it = m_TextureCache.find(pathStr);
-			if (it != m_TextureCache.end()) {
-				return it->second;
-			}
-
-			try {
-				Ref<Texture2D> texture = Texture2D::Create(pathStr);
-				if (texture) {
-					m_TextureCache[pathStr] = texture;
-					return texture;
-				}
-			}
-			catch (...) {}
+		// Image files (decoded async + downscaled)
+		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp" || extension == ".tga") {
+			Ref<Texture2D> thumb = GetAsyncImageThumbnail(path.string());
+			if (thumb) return thumb;
 		}
 
 		return GetIconForFile(path);
@@ -982,7 +1043,8 @@ namespace Lunex {
 		if (extension == ".lumesh") return "MESH";
 		if (extension == ".luprefab") return "PREFAB";
 		if (extension == ".lunex") return "SCENE";
-		if (extension == ".hdr" || extension == ".hdri" || extension == ".exr") return "HDRI";
+		if (extension == ".luanim") return "ANIMATION";
+		if (extension == ".hdr"|| extension == ".hdri" || extension == ".exr") return "HDRI";
 		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".TGA" || extension == ".tga") return "TEXTURE";
 		if (extension == ".glsl" || extension == ".shader") return "SHADER";
 		if (extension == ".wav" || extension == ".mp3" || extension == ".ogg") return "AUDIO";
@@ -1052,82 +1114,54 @@ Entities:
 		} while (std::filesystem::exists(scriptPath));
 
 		std::string scriptContent = R"(#include "../../Lunex-ScriptCore/src/LunexScriptingAPI.h"
-#include <iostream>
 
-namespace Lunex {
+using namespace Lunex;
 
-    class )" + baseName + R"( : public IScriptModule
-    {
-    public:
-        )" + baseName + R"(() = default;
-        ~)" + baseName + R"(() override = default;
-
-        void OnLoad(EngineContext* context) override
-        {
-            m_Context = context;
-            
-            if (m_Context && m_Context->LogInfo)
-            {
-                m_Context->LogInfo("[)" + baseName + R"(] Script loaded!");
-            }
-        }
-
-        void OnUnload() override
-        {
-            if (m_Context && m_Context->LogInfo)
-            {
-                m_Context->LogInfo("[)" + baseName + R"(] Script unloading...");
-            }
-            m_Context = nullptr;
-        }
-
-        void OnUpdate(float deltaTime) override
-        {
-        }
-
-        void OnRender() override
-        {
-        }
-
-        void OnPlayModeEnter() override
-        {
-            if (m_Context && m_Context->LogInfo)
-            {
-                m_Context->LogInfo("[)" + baseName + R"(] Entering Play Mode!");
-            }
-        }
-
-        void OnPlayModeExit() override
-        {
-            if (m_Context && m_Context->LogInfo)
-            {
-                m_Context->LogInfo("[)" + baseName + R"(] Exiting Play Mode!");
-            }
-        }
-
-    private:
-        EngineContext* m_Context = nullptr;
-    };
-
-} // namespace Lunex
-
-extern "C"
+// Attach this script to an entity with a ScriptComponent.
+// Available helpers: transform, rigidbody (2D), rigidbody3d, input, time, debug, deltaTime
+class )" + baseName + R"( : public Script
 {
-    LUNEX_API uint32_t Lunex_GetScriptingAPIVersion()
+public:
+    // Public variables show up in the inspector once registered in Start()
+    float Speed = 5.0f;
+
+protected:
+    void Start() override
     {
-        return Lunex::SCRIPTING_API_VERSION;
+        RegisterVar("Speed", &Speed);
+        debug.Log(")" + baseName + R"( started");
     }
 
-    LUNEX_API Lunex::IScriptModule* Lunex_CreateModule()
+    void Update() override
     {
-        return new Lunex::)" + baseName + R"(();
+        Vec3 move;
+        if (input.IsKeyDown(LNX_KEY_W)) move.z -= 1.0f;
+        if (input.IsKeyDown(LNX_KEY_S)) move.z += 1.0f;
+        if (input.IsKeyDown(LNX_KEY_A)) move.x -= 1.0f;
+        if (input.IsKeyDown(LNX_KEY_D)) move.x += 1.0f;
+
+        if (move.LengthSquared() > 0.0f)
+        {
+            move = move.Normalized() * Speed;
+            if (rigidbody3d.Exists())
+            {
+                // Physics-driven: keep vertical velocity (gravity), drive XZ
+                Vec3 v = rigidbody3d.GetLinearVelocity();
+                rigidbody3d.SetLinearVelocity(Vec3(move.x, v.y, move.z));
+            }
+            else
+            {
+                transform.Translate(move * deltaTime);
+            }
+        }
     }
 
-    LUNEX_API void Lunex_DestroyModule(Lunex::IScriptModule* module)
+    void OnDestroy() override
     {
-        delete module;
     }
-}
+};
+
+LUNEX_REGISTER_SCRIPT()" + baseName + R"()
 )";
 
 		std::ofstream scriptFile(scriptPath);
@@ -1417,6 +1451,7 @@ extern "C"
 		m_TextureCache.clear();
 		m_MaterialThumbnailCache.clear();
 		m_MeshThumbnailCache.clear();
+		m_FailedThumbnails.clear();
 		LNX_LOG_INFO("Refreshed all Content Browser thumbnails");
 	}
 
