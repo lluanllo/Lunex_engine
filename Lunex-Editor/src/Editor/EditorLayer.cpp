@@ -1040,6 +1040,11 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 			Entity sel = m_SceneHierarchyPanel.GetSelectedEntity();
 			if (sel && sel.HasComponent<AnimatorComponent>()) m_AnimationEditorPanel.SetSelectedEntity(sel);
 			m_AnimationEditorPanel.OnImGuiRender();
+
+			// Permanent playback timeline (docked above the Content Browser)
+			m_TimelinePanel.SetContext(m_ActiveScene, m_SceneState != SceneState::Edit);
+			m_TimelinePanel.SetSelectedEntity(sel);
+			m_TimelinePanel.OnImGuiRender();
 		}
 		m_StatsPanel.OnImGuiRender();
 		m_SettingsPanel.OnImGuiRender();

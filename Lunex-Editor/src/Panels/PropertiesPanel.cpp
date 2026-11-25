@@ -708,7 +708,7 @@ namespace Lunex {
 					component.ClipIndex = 0;
 				}
 			}
-			if (ButtonBlock("Open Animation Editor", ButtonVariant::Primary)) {
+			if (ButtonBlock("Edit Animation", ButtonVariant::Primary)) {
 				AnimationEditorPanel::OpenFor(entity);
 			}
 			ComponentDrawer::EndIndent();

@@ -413,7 +413,8 @@ namespace Lunex {
 		DrawToolbar();
 		ImGui::Separator();
 
-		ImGui::BeginChild("##AnimBones", ImVec2(240, 0), true);
+		// Resizable bone column with horizontal scroll (deep rigs exceed the column width)
+		ImGui::BeginChild("##AnimBones", ImVec2(240, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_HorizontalScrollbar);
 		DrawBoneTree();
 		ImGui::EndChild();
 		ImGui::SameLine();
@@ -554,7 +555,7 @@ namespace Lunex {
 		bool hasTrack = m_Asset && m_Asset->FindTrack(n.Name);
 		if (hasTrack) label = "* " + label;
 
-		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
+		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_DefaultOpen;
 		if (children[node].empty()) flags |= ImGuiTreeNodeFlags_Leaf;
 		if (node == m_SelectedNode) flags |= ImGuiTreeNodeFlags_Selected;
 		if (n.BoneIndex < 0) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));

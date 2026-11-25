@@ -6,6 +6,7 @@
 #include "../Panels/ContentBrowserPanel.h"
 #include "../Panels/MaterialEditorPanel.h"
 #include "../Panels/MaterialGraphPanel.h"
+#include "../Panels/TimelinePanel.h"
 #include "../Panels/AnimationEditorPanel.h"
 #include "../Panels/StatsPanel.h"
 #include "../Panels/SettingsPanel.h"
@@ -138,6 +139,7 @@ namespace Lunex {
 			ContentBrowserPanel m_ContentBrowserPanel;
 			MaterialEditorPanel m_MaterialEditorPanel;
 			MaterialGraphPanel m_MaterialGraphPanel;
+			TimelinePanel m_TimelinePanel;
 			AnimationEditorPanel m_AnimationEditorPanel;
 StatsPanel m_StatsPanel;
 			SettingsPanel m_SettingsPanel;
