@@ -2,12 +2,14 @@
 
 #include "Core/Core.h"
 #include "Application.h"
+#include "CrashHandler.h"
 
 #ifdef LNX_PLATFORM_WINDOWS
 	
 	extern Lunex::Ref<Lunex::Application> Lunex::CreateApplication(ApplicationCommandLineArgs args);
 	
 	int main(int argc, char** argv) {
+		Lunex::CrashHandler::Install();
 		Lunex::Log::Init();
 		
 		LNX_PROFILE_BEGIN_SESSION("Startup", "LunexProfile-Startup.json");
