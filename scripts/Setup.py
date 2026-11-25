@@ -42,6 +42,7 @@ submodules = [
     ("vendor/Box2D", "https://github.com/erincatto/box2d.git", "main"),
     ("vendor/assimp", "https://github.com/assimp/assimp.git", "master"),
     ("vendor/Bullet3", "https://github.com/bulletphysics/bullet3.git", "master"),
+    ("vendor/imgui-node-editor", "https://github.com/thedmd/imgui-node-editor.git", "develop"),
 ]
 
 # Verificar y clonar submódulos faltantes
@@ -80,6 +81,7 @@ required_files = {
     "vendor/Box2D/include/box2d/box2d.h": "Box2D",
     "vendor/assimp/include/assimp/Importer.hpp": "Assimp",
     "vendor/Bullet3/src/btBulletDynamicsCommon.h": "Bullet3",
+    "vendor/imgui-node-editor/imgui_node_editor.h": "imgui-node-editor",
 }
 
 all_ok = True

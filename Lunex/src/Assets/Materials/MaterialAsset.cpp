@@ -1,6 +1,7 @@
 #include "stpch.h"
 #include "MaterialAsset.h"
 #include "Log/Log.h"
+#include "MaterialGraph.h"
 
 #include <yaml-cpp/yaml.h>
 #include <fstream>
@@ -157,7 +158,12 @@ namespace Lunex {
 			<< m_EmissionColor.r << m_EmissionColor.g << m_EmissionColor.b << YAML::EndSeq;
 		out << YAML::Key << "EmissionIntensity" << YAML::Value << m_EmissionIntensity;
 		out << YAML::Key << "NormalIntensity" << YAML::Value << m_NormalIntensity;
-		out << YAML::EndMap;
+		out << YAML::Key << "SubsurfaceColor" << YAML::Value << YAML::Flow << YAML::BeginSeq
+			<< m_SubsurfaceColor.r << m_SubsurfaceColor.g << m_SubsurfaceColor.b << YAML::EndSeq;
+		out << YAML::Key << "SubsurfaceAmount" << YAML::Value << m_SubsurfaceAmount;
+		out << YAML::Key << "UVTiling" << YAML::Value << YAML::Flow << YAML::BeginSeq << m_UVTiling.x << m_UVTiling.y << YAML::EndSeq;
+		out << YAML::Key << "UVOffset" << YAML::Value << YAML::Flow << YAML::BeginSeq << m_UVOffset.x << m_UVOffset.y << YAML::EndSeq;
+out << YAML::EndMap;
 
 		// Textures
 		out << YAML::Key << "Textures" << YAML::Value;
@@ -227,6 +233,12 @@ namespace Lunex {
 			out << YAML::Key << "UseForRoughness" << YAML::Value << m_LayeredConfig.UseForRoughness;
 			out << YAML::Key << "UseForAO" << YAML::Value << m_LayeredConfig.UseForAO;
 			out << YAML::EndMap;
+		}
+
+		if (m_NodeGraph) {
+			out << YAML::Key << "UseNodeGraph" << YAML::Value << m_UseNodeGraph;
+			out << YAML::Key << "NodeGraph" << YAML::Value;
+			m_NodeGraph->Serialize(out);
 		}
 
 		out << YAML::EndMap;
@@ -303,7 +315,15 @@ namespace Lunex {
 
 			material->m_EmissionIntensity = propsNode["EmissionIntensity"].as<float>(0.0f);
 			material->m_NormalIntensity = propsNode["NormalIntensity"].as<float>(1.0f);
-		}
+			if (auto sss = propsNode["SubsurfaceColor"]; sss && sss.IsSequence() && sss.size() >= 3) {
+				material->m_SubsurfaceColor = glm::vec3(sss[0].as<float>(), sss[1].as<float>(), sss[2].as<float>());
+			}
+			material->m_SubsurfaceAmount = propsNode["SubsurfaceAmount"].as<float>(0.0f);
+			if (auto t = propsNode["UVTiling"]; t && t.IsSequence() && t.size() >= 2)
+				material->m_UVTiling = glm::vec2(t[0].as<float>(), t[1].as<float>());
+			if (auto o = propsNode["UVOffset"]; o && o.IsSequence() && o.size() >= 2)
+				material->m_UVOffset = glm::vec2(o[0].as<float>(), o[1].as<float>());
+}
 
 		// Textures
 		auto texturesNode = data["Textures"];
@@ -381,6 +401,19 @@ namespace Lunex {
 			}
 		}
 
+		if (auto graphNode = data["NodeGraph"]) {
+			auto graph = std::make_shared<Graph::NodeGraph>(&MaterialGraph::GetRegistry());
+			if (graph->Deserialize(graphNode)) {
+				material->m_NodeGraph = graph;
+				material->m_UseNodeGraph = data["UseNodeGraph"].as<bool>(true);
+				// The graph is the source of truth: re-bake so hand edits / older bakes stay consistent
+				if (material->m_UseNodeGraph) {
+					for (const auto& w : MaterialGraph::Apply(*graph, *material))
+						LNX_LOG_WARN("Material graph ({0}): {1}", path.filename().string(), w);
+				}
+}
+		}
+
 		material->ClearDirty();
 		material->SetLoaded(true);
 		LNX_LOG_INFO("Material loaded: {0}", path.string());
@@ -397,6 +430,10 @@ namespace Lunex {
 		clone->m_EmissionColor = m_EmissionColor;
 		clone->m_EmissionIntensity = m_EmissionIntensity;
 		clone->m_NormalIntensity = m_NormalIntensity;
+		clone->m_SubsurfaceColor = m_SubsurfaceColor;
+		clone->m_SubsurfaceAmount = m_SubsurfaceAmount;
+		clone->m_UVTiling = m_UVTiling;
+		clone->m_UVOffset = m_UVOffset;
 
 		clone->m_AlbedoMap = m_AlbedoMap;
 		clone->m_AlbedoPath = m_AlbedoPath;
@@ -429,6 +466,8 @@ namespace Lunex {
 
 		clone->m_DetailNormalMaps = m_DetailNormalMaps;
 		clone->m_LayeredConfig = m_LayeredConfig;
+		if (m_NodeGraph) clone->m_NodeGraph = std::make_shared<Graph::NodeGraph>(*m_NodeGraph);
+		clone->m_UseNodeGraph = m_UseNodeGraph;
 
 		clone->MarkDirty();
 		return clone;
@@ -445,6 +484,8 @@ namespace Lunex {
 		data.EmissionIntensity = m_EmissionIntensity;
 		data.EmissionColor = m_EmissionColor;
 		data.NormalIntensity = m_NormalIntensity;
+		data.SubsurfaceColorAmount = glm::vec4(m_SubsurfaceColor, m_SubsurfaceAmount);
+		data.UVTilingOffset = glm::vec4(m_UVTiling, m_UVOffset);
 
 		data.UseAlbedoMap = HasAlbedoMap() ? 1 : 0;
 		data.UseNormalMap = HasNormalMap() ? 1 : 0;

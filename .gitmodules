@@ -45,3 +45,9 @@
 	url = https://github.com/bulletphysics/bullet3.git
 	branch = master
 	ignore = dirty
+
+[submodule "vendor/imgui-node-editor"]
+	path = vendor/imgui-node-editor
+	url = https://github.com/thedmd/imgui-node-editor.git
+	branch = develop
+	ignore = dirty

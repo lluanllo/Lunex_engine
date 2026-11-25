@@ -22,8 +22,10 @@
 #include <string>
 #include <filesystem>
 #include <vector>
+#include <memory>
 
 // Forward declarations
+namespace Lunex::Graph { class NodeGraph; }
 namespace YAML {
 	class Emitter;
 	class Node;
@@ -125,8 +127,28 @@ namespace Lunex {
 		void SetEmissionIntensity(float intensity) { m_EmissionIntensity = glm::max(0.0f, intensity); MarkDirty(); }
 		float GetEmissionIntensity() const { return m_EmissionIntensity; }
 
+		// Subsurface scattering (skin, wax, leaves, marble...)
+		void SetSubsurfaceColor(const glm::vec3& color) { m_SubsurfaceColor = glm::clamp(color, 0.0f, 1.0f); MarkDirty(); }
+		const glm::vec3& GetSubsurfaceColor() const { return m_SubsurfaceColor; }
+		void SetSubsurfaceAmount(float amount) { m_SubsurfaceAmount = glm::clamp(amount, 0.0f, 1.0f); MarkDirty(); }
+		float GetSubsurfaceAmount() const { return m_SubsurfaceAmount; }
+
 		void SetNormalIntensity(float intensity) { m_NormalIntensity = glm::clamp(intensity, 0.0f, 2.0f); MarkDirty(); }
 		float GetNormalIntensity() const { return m_NormalIntensity; }
+
+		// ========== NODE GRAPH ==========
+		// When enabled, the graph is the source of truth and is baked into the
+		// parameters below (see MaterialGraph::Apply).
+		bool UsesNodeGraph() const { return m_UseNodeGraph && m_NodeGraph != nullptr; }
+		void SetUseNodeGraph(bool use) { m_UseNodeGraph = use; MarkDirty(); }
+		std::shared_ptr<Graph::NodeGraph> GetNodeGraph() const { return m_NodeGraph; }
+		void SetNodeGraph(std::shared_ptr<Graph::NodeGraph> graph) { m_NodeGraph = std::move(graph); MarkDirty(); }
+
+		// UV transform shared by every map of the material (uv * Tiling + Offset)
+		void SetUVTiling(const glm::vec2& tiling) { m_UVTiling = tiling; MarkDirty(); }
+		const glm::vec2& GetUVTiling() const { return m_UVTiling; }
+		void SetUVOffset(const glm::vec2& offset) { m_UVOffset = offset; MarkDirty(); }
+		const glm::vec2& GetUVOffset() const { return m_UVOffset; }
 
 		// ========== PBR TEXTURES ==========
 		
@@ -285,6 +307,9 @@ namespace Lunex {
 			glm::vec4 DetailNormalIntensities;  // .x = detail0, .y = detail1, .z = detail2, .w = detail3
 			glm::vec4 DetailNormalTilingX;
 			glm::vec4 DetailNormalTilingY;
+
+			glm::vec4 SubsurfaceColorAmount;   // rgb = scatter color, a = amount (0 = off)
+			glm::vec4 UVTilingOffset;          // xy = tiling, zw = offset
 		};
 
 		MaterialUniformData GetUniformData() const;
@@ -298,6 +323,12 @@ namespace Lunex {
 		glm::vec3 m_EmissionColor = { 0.0f, 0.0f, 0.0f };
 		float m_EmissionIntensity = 0.0f;
 		float m_NormalIntensity = 1.0f;
+		glm::vec3 m_SubsurfaceColor = { 1.0f, 0.35f, 0.25f };   // skin-like default
+		float m_SubsurfaceAmount = 0.0f;
+		glm::vec2 m_UVTiling = { 1.0f, 1.0f };
+		std::shared_ptr<Graph::NodeGraph> m_NodeGraph;
+		bool m_UseNodeGraph = false;
+glm::vec2 m_UVOffset = { 0.0f, 0.0f };
 
 		// Textures
 		Ref<Texture2D> m_AlbedoMap;

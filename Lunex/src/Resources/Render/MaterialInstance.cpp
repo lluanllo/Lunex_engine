@@ -233,6 +233,9 @@ namespace Lunex {
 		data.UseAOMap = HasAOMap() ? 1 : 0;
 		data._padding = 0.0f;
 
+		data.SubsurfaceColorAmount = glm::vec4(m_BaseAsset->GetSubsurfaceColor(), m_BaseAsset->GetSubsurfaceAmount());
+		data.UVTilingOffset = glm::vec4(m_BaseAsset->GetUVTiling(), m_BaseAsset->GetUVOffset());
+
 		data.MetallicMultiplier = GetMetallicMultiplier();
 		data.RoughnessMultiplier = GetRoughnessMultiplier();
 		data.SpecularMultiplier = GetSpecularMultiplier();

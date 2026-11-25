@@ -64,6 +64,7 @@ IncludeDir["Box2D"]     = "vendor/Box2D/include"
 IncludeDir["ImGuizmo"]  = "vendor/ImGuizmo"
 IncludeDir["Assimp"]    = "vendor/assimp/include"
 IncludeDir["Bullet3"]   = "vendor/Bullet3/src"
+IncludeDir["NodeEditor"] = "vendor/imgui-node-editor"
 IncludeDir["Lunex"]     = "Lunex/src"
 IncludeDir["VulkanSDK"] = "%{VULKAN_SDK}/Include"
 
@@ -228,7 +229,18 @@ project "ImGui"
         "vendor/ImGuiLib/imstb_rectpack.h",
         "vendor/ImGuiLib/imstb_textedit.h",
         "vendor/ImGuiLib/imstb_truetype.h",
-        "vendor/ImGuiLib/imgui_demo.cpp"
+        "vendor/ImGuiLib/imgui_demo.cpp",
+
+        -- imgui-node-editor (thedmd): material graphs / future blueprints
+        "vendor/imgui-node-editor/*.h",
+        "vendor/imgui-node-editor/*.inl",
+        "vendor/imgui-node-editor/*.cpp"
+    }
+
+    includedirs
+    {
+        "vendor/ImGuiLib",
+        "vendor/imgui-node-editor"
     }
 
     filter "system:windows"
@@ -717,7 +729,8 @@ project "Lunex-Editor"
         "%{IncludeDir.entt}",
         "%{IncludeDir.Assimp}",
         "%{IncludeDir.ImGuizmo}",
-        "%{IncludeDir.Bullet3}"
+        "%{IncludeDir.Bullet3}",
+        "%{IncludeDir.NodeEditor}"
     }
 
     defines

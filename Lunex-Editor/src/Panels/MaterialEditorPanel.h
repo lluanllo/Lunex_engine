@@ -16,9 +16,13 @@
 #include "Assets/Materials/MaterialAsset.h"
 #include "Resources/Render/MaterialInstance.h"
 #include "Renderer/MaterialPreviewRenderer.h"
+#include "../UI/Graph/NodeGraphEditor.h"
 
 #include <filesystem>
 #include <functional>
+#include <memory>
+#include <unordered_map>
+#include <vector>
 
 namespace Lunex {
 
@@ -92,11 +96,27 @@ namespace Lunex {
 		void DrawTextureMapsPanel();
 		void DrawPBRPropertiesPanel();
 		void DrawAdvancedOptionsPanel();
+		void DrawNodeGraphPanel();
+
+		// ========== NODE GRAPH MODE ==========
+		// Properties mode edits the PBR values directly; Node Graph mode makes the
+		// graph the source of truth and bakes it into those values.
+		void SetNodeMode(bool enabled);
+		void ApplyGraph();
+		bool DrawMaterialNodeBody(Graph::Node& node);
+		Ref<Texture2D> GetGraphThumbnail(const std::string& path);
+		void DrawUVSection();
+
+		std::unique_ptr<UI::NodeGraphEditor> m_GraphEditor;
+		std::vector<std::string> m_GraphWarnings;
+		std::unordered_map<std::string, Ref<Texture2D>> m_GraphThumbnails;
+		bool m_FocusGraphTab = false;
 
 		// ========== SECTION DRAWING ==========
 
 		void DrawPBRSection();
 		void DrawEmissionSection();
+		void DrawSubsurfaceSection();
 		void DrawTextureSlotsSection();
 		void DrawDetailNormalsSection();
 		void DrawLayeredTextureSection();
