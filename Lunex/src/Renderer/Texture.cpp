@@ -65,61 +65,91 @@ namespace Lunex {
 			}
 		}
 		
-		// Standard loading
-		int width, height, channels;
-		stbi_set_flip_vertically_on_load(1);
-		stbi_uc* data = stbi_load(path.c_str(), &width, &height, &channels, 0);
-		
-		if (data) {
-			m_Width = width;
-			m_Height = height;
-			m_IsLoaded = true;
-			
-			// Determine format
-			RHI::TextureFormat format = RHI::TextureFormat::RGBA8;
-			if (channels == 1) format = RHI::TextureFormat::R8;
-			
-			// Convert RGB to RGBA if needed
-			uint8_t* finalData = data;
-			size_t finalSize = width * height * 4;
-			bool needsConversion = (channels == 3);
-			
-			if (needsConversion) {
-				finalData = new uint8_t[finalSize];
-				for (int i = 0; i < width * height; i++) {
-					finalData[i * 4 + 0] = data[i * 3 + 0];
-					finalData[i * 4 + 1] = data[i * 3 + 1];
-					finalData[i * 4 + 2] = data[i * 3 + 2];
-					finalData[i * 4 + 3] = 255;
-				}
-			}
-			
-			// Calculate mip levels
-			m_MipLevels = config.GenerateMipmaps 
-				? static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1 
-				: 1;
-			
-			// Create RHI texture
-			RHI::TextureCreateInfo info;
-			info.Width = width;
-			info.Height = height;
-			info.Format = format;
-			info.MipLevels = m_MipLevels;
-			info.GenerateMipmaps = config.GenerateMipmaps;
-			info.InitialData = finalData;
-			info.InitialDataSize = finalSize;
-			
-			m_RHITexture = RHI::RHIDevice::Get()->CreateTexture2D(info);
-			
-			if (needsConversion) {
-				delete[] finalData;
-			}
-			stbi_image_free(data);
+		// Standard loading: CPU decode + GPU upload
+		DecodedImage image = DecodeFromFile(path);
+		if (image.IsValid()) {
+			UploadDecoded(image);
 		}
 		else {
-			LNX_LOG_ERROR("Failed to load texture: {0} - {1}", path, stbi_failure_reason());
 			m_IsLoaded = false;
 		}
+	}
+
+	Texture2D::DecodedImage Texture2D::DecodeFromFile(const std::string& path) {
+		DecodedImage image;
+		image.Path = path;
+
+		int width = 0, height = 0, channels = 0;
+		// Thread-local flip flag: safe when several workers decode at once
+		stbi_set_flip_vertically_on_load_thread(1);
+		stbi_uc* data = stbi_load(path.c_str(), &width, &height, &channels, 0);
+		if (!data) {
+			LNX_LOG_ERROR("Failed to load texture: {0} - {1}", path, stbi_failure_reason());
+			return image;
+		}
+
+		image.Width = width;
+		image.Height = height;
+		const size_t pixelCount = static_cast<size_t>(width) * height;
+
+		if (channels == 1) {
+			image.Channels = 1;
+			image.Pixels.assign(data, data + pixelCount);
+		}
+		else {
+			// Expand to RGBA (handles 2, 3 and 4 channel sources)
+			image.Channels = 4;
+			image.Pixels.resize(pixelCount * 4);
+			for (size_t i = 0; i < pixelCount; i++) {
+				const stbi_uc* src = data + i * channels;
+				uint8_t* dst = image.Pixels.data() + i * 4;
+				if (channels == 2) {
+					dst[0] = dst[1] = dst[2] = src[0];
+					dst[3] = src[1];
+				}
+				else {
+					dst[0] = src[0];
+					dst[1] = src[1];
+					dst[2] = src[2];
+					dst[3] = (channels == 4) ? src[3] : 255;
+				}
+			}
+		}
+
+		stbi_image_free(data);
+		return image;
+	}
+
+	void Texture2D::UploadDecoded(const DecodedImage& image) {
+		auto& config = TextureCompressionConfig::Get();
+
+		m_Path = image.Path;
+		m_Width = image.Width;
+		m_Height = image.Height;
+		m_IsLoaded = true;
+
+		m_MipLevels = config.GenerateMipmaps
+			? static_cast<uint32_t>(std::floor(std::log2(std::max(image.Width, image.Height)))) + 1
+			: 1;
+
+		RHI::TextureCreateInfo info;
+		info.Width = image.Width;
+		info.Height = image.Height;
+		info.Format = (image.Channels == 1) ? RHI::TextureFormat::R8 : RHI::TextureFormat::RGBA8;
+		info.MipLevels = m_MipLevels;
+		info.GenerateMipmaps = config.GenerateMipmaps;
+		info.InitialData = image.Pixels.data();
+		info.InitialDataSize = image.Pixels.size();
+
+		m_RHITexture = RHI::RHIDevice::Get()->CreateTexture2D(info);
+	}
+
+	Ref<Texture2D> Texture2D::CreateFromDecoded(const DecodedImage& image) {
+		auto texture = CreateRef<Texture2D>();
+		if (image.IsValid()) {
+			texture->UploadDecoded(image);
+		}
+		return texture;
 	}
 	
 	void Texture2D::LoadFromFileWithSettings(const std::string& path, const TextureImportSettings& settings) {

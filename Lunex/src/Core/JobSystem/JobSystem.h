@@ -98,6 +98,8 @@ namespace Lunex {
 		/// <returns>JobSystem instance</returns>
 		static JobSystem& Get();
 
+		static bool IsInitialized() { return s_Instance != nullptr; }
+
 		// ====================================================================
 		// JOB SCHEDULING
 		// ====================================================================
@@ -311,6 +313,12 @@ namespace Lunex {
 		// Runtime state
 		std::atomic<bool> m_Running{ false };
 		std::atomic<uint64_t> m_NextJobHandle{ 1 };
+
+		// Jobs queued (global + all worker deques) but not yet picked up.
+		// Idle workers sleep on m_GlobalQueueCV until this becomes > 0.
+		std::atomic<int64_t> m_PendingJobs{ 0 };
+
+		void NotifyJobAvailable();
 
 		// Metrics
 		JobMetrics m_Metrics;

@@ -6,6 +6,9 @@
 
 namespace Lunex {
 
+	// Index of the worker owning the current thread (-1 = not a worker, e.g. main thread)
+	static thread_local int32_t t_WorkerIndex = -1;
+
 	// Singleton instance
 	Scope<JobSystem> JobSystem::s_Instance = nullptr;
 
@@ -113,49 +116,29 @@ namespace Lunex {
 		// Update metrics
 		m_Metrics.TotalJobsScheduled.fetch_add(1, std::memory_order_relaxed);
 
-		// Schedule based on priority
-		if (priority == JobPriority::High || priority == JobPriority::Critical) {
-			// High-priority jobs go to global queue
-			{
-				std::scoped_lock lock(m_GlobalQueueMutex);
-				m_GlobalQueue.push(std::move(job));
-				m_Metrics.GlobalQueueSize.fetch_add(1, std::memory_order_relaxed);
-			}
-			m_GlobalQueueCV.notify_one();
+		JobHandle handle = job.Handle;
+		m_PendingJobs.fetch_add(1, std::memory_order_acq_rel);
+
+		const bool highPriority = (priority == JobPriority::High || priority == JobPriority::Critical);
+		if (!highPriority && t_WorkerIndex >= 0) {
+			// Normal/Low priority from a worker: push to its own deque (others can steal it)
+			m_Workers[t_WorkerIndex]->Deque.Push(std::move(job));
 		}
 		else {
-			// Normal/Low priority: Try to push to calling thread's deque
-			std::thread::id tid = std::this_thread::get_id();
-
-			// Find worker thread that owns this thread ID
-			uint32_t workerID = 0;
-			bool foundWorker = false;
-
-			for (uint32_t i = 0; i < m_Workers.size(); ++i) {
-				if (m_Workers[i]->Thread.get_id() == tid) {
-					workerID = i;
-					foundWorker = true;
-					break;
-				}
-			}
-
-			if (foundWorker) {
-				// Push to local deque (lock-free)
-				m_Workers[workerID]->Deque.Push(std::move(job));
-			}
-			else {
-				// Called from non-worker thread (e.g., main thread)
-				// Push to global queue
-				{
-					std::scoped_lock lock(m_GlobalQueueMutex);
-					m_GlobalQueue.push(std::move(job));
-					m_Metrics.GlobalQueueSize.fetch_add(1, std::memory_order_relaxed);
-				}
-				m_GlobalQueueCV.notify_one();
-			}
+			// High priority, or scheduled from a non-worker thread (main thread): global queue
+			std::scoped_lock lock(m_GlobalQueueMutex);
+			m_GlobalQueue.push(std::move(job));
+			m_Metrics.GlobalQueueSize.fetch_add(1, std::memory_order_relaxed);
 		}
 
-		return job.Handle;
+		NotifyJobAvailable();
+		return handle;
+	}
+
+	void JobSystem::NotifyJobAvailable() {
+		// Take the lock so a worker that just evaluated the wait predicate cannot miss this wake-up
+		{ std::scoped_lock lock(m_GlobalQueueMutex); }
+		m_GlobalQueueCV.notify_one();
 	}
 
 	// ========================================================================
@@ -164,28 +147,25 @@ namespace Lunex {
 
 	void JobSystem::WorkerLoop(uint32_t workerID) {
 		LNX_LOG_TRACE("Worker {0} started", workerID);
-		m_Workers[workerID]->IsActive.store(true, std::memory_order_release);
+		t_WorkerIndex = static_cast<int32_t>(workerID);
 
 		while (m_Running.load(std::memory_order_acquire)) {
 			Job job;
 
-			// Try to get job (local ? global ? steal)
+			// Try to get job (local -> global -> steal)
 			if (TryGetJob(workerID, job)) {
-				// Execute job
+				m_Workers[workerID]->IsActive.store(true, std::memory_order_relaxed);
 				ExecuteJob(job);
+				m_Workers[workerID]->IsActive.store(false, std::memory_order_relaxed);
 			}
 			else {
-				// No work available, yield CPU
-				std::this_thread::yield();
-
-				// If still no work, wait on condition variable
-				if (m_Config.EnableWorkStealing) {
-					std::unique_lock lock(m_GlobalQueueMutex);
-					m_GlobalQueueCV.wait_for(lock, std::chrono::milliseconds(1), [this]() {
-						return !m_Running.load(std::memory_order_acquire) ||
-							!m_GlobalQueue.empty();
-					});
-				}
+				// Sleep until a job is scheduled anywhere (no more 1ms polling).
+				// The timeout is only a safety net.
+				std::unique_lock lock(m_GlobalQueueMutex);
+				m_GlobalQueueCV.wait_for(lock, std::chrono::milliseconds(50), [this]() {
+					return !m_Running.load(std::memory_order_acquire) ||
+						m_PendingJobs.load(std::memory_order_acquire) > 0;
+				});
 			}
 		}
 
@@ -194,39 +174,44 @@ namespace Lunex {
 	}
 
 	bool JobSystem::TryGetJob(uint32_t workerID, Job& outJob) {
+		// workerID == UINT32_MAX means "caller is not a worker" (main thread helping in Wait)
+		const bool isWorker = workerID < m_Workers.size();
+
 		// 1. Try local deque (LIFO, cache-friendly)
-		{
+		if (isWorker) {
 			auto job = m_Workers[workerID]->Deque.Pop();
 			if (job.has_value()) {
 				outJob = std::move(job.value());
+				m_PendingJobs.fetch_sub(1, std::memory_order_acq_rel);
 				return true;
 			}
 		}
 
-		// 2. Try global queue (high-priority jobs)
+		// 2. Try global queue (high-priority jobs + jobs scheduled from the main thread)
 		{
 			std::scoped_lock lock(m_GlobalQueueMutex);
 			if (!m_GlobalQueue.empty()) {
 				outJob = std::move(m_GlobalQueue.front());
 				m_GlobalQueue.pop();
 				m_Metrics.GlobalQueueSize.fetch_sub(1, std::memory_order_relaxed);
+				m_PendingJobs.fetch_sub(1, std::memory_order_acq_rel);
 				return true;
 			}
 		}
 
 		// 3. Try work-stealing (FIFO from other workers)
-		if (m_Config.EnableWorkStealing) {
-			// Random starting point to distribute load
-			uint32_t startOffset = workerID + 1;
+		if (m_Config.EnableWorkStealing || !isWorker) {
+			const uint32_t numWorkers = static_cast<uint32_t>(m_Workers.size());
+			const uint32_t startOffset = isWorker ? workerID + 1 : 0;
 
-			for (uint32_t i = 0; i < m_Workers.size() - 1; ++i) {
-				uint32_t victimID = (startOffset + i) % m_Workers.size();
-
+			for (uint32_t i = 0; i < numWorkers; ++i) {
+				uint32_t victimID = (startOffset + i) % numWorkers;
 				if (victimID == workerID) continue;
 
 				auto job = m_Workers[victimID]->Deque.Steal();
 				if (job.has_value()) {
 					outJob = std::move(job.value());
+					m_PendingJobs.fetch_sub(1, std::memory_order_acq_rel);
 					m_Metrics.TotalJobsStolen.fetch_add(1, std::memory_order_relaxed);
 					return true;
 				}
@@ -335,14 +320,20 @@ namespace Lunex {
 		uint32_t numElements = end - start;
 		uint32_t numJobs = (numElements + grainSize - 1) / grainSize;
 
+		// Tiny ranges: scheduling overhead would exceed the work, run inline
+		if (numJobs <= 1) {
+			for (uint32_t i = start; i < end; ++i) func(i);
+			return CreateCounter(0);
+		}
+
 		// Create counter for all jobs
 		auto counter = CreateCounter(static_cast<int32_t>(numJobs));
 
 		// Store function in shared_ptr to avoid copy issues with std::function in lambdas
 		auto sharedFunc = std::make_shared<std::function<void(uint32_t)>>(std::move(func));
 
-		// Schedule jobs
-		for (uint32_t jobIndex = 0; jobIndex < numJobs; ++jobIndex) {
+		// Schedule jobs 1..N-1; the calling thread executes chunk 0 itself below
+		for (uint32_t jobIndex = 1; jobIndex < numJobs; ++jobIndex) {
 			uint32_t jobStart = start + jobIndex * grainSize;
 			uint32_t jobEnd = std::min(jobStart + grainSize, end);
 
@@ -359,6 +350,18 @@ namespace Lunex {
 			);
 		}
 
+		// Caller participates instead of idling
+		{
+			uint32_t firstEnd = std::min(start + grainSize, end);
+			try {
+				for (uint32_t i = start; i < firstEnd; ++i) (*sharedFunc)(i);
+			}
+			catch (const std::exception& e) {
+				LNX_LOG_ERROR("ParallelFor chunk failed: {0}", e.what());
+			}
+			counter->Decrement();
+		}
+
 		return counter;
 	}
 
@@ -372,7 +375,20 @@ namespace Lunex {
 
 	void JobSystem::Wait(Ref<JobCounter> counter) {
 		LNX_CORE_ASSERT(counter, "Counter cannot be null!");
-		counter->Wait();
+
+		// Help execute pending jobs while waiting instead of sleeping.
+		// Keeps the main thread productive and prevents deadlocks when a
+		// worker waits on jobs that are still queued.
+		const uint32_t selfID = t_WorkerIndex >= 0 ? static_cast<uint32_t>(t_WorkerIndex) : UINT32_MAX;
+		while (!counter->Poll()) {
+			Job job;
+			if (TryGetJob(selfID, job)) {
+				ExecuteJob(job);
+			}
+			else {
+				std::this_thread::yield();
+			}
+		}
 	}
 
 	bool JobSystem::Poll(Ref<JobCounter> counter) {

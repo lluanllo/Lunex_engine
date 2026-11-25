@@ -96,6 +96,10 @@ namespace Lunex {
 		std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 		
 		try {
+			if (extension == ".luanim") {
+				YAML::Node data = YAML::LoadFile(filePath.string());
+				if (data["Animation"] && data["Animation"]["ID"]) return UUID(data["Animation"]["ID"].as<uint64_t>());
+			}
 			if (extension == ".lumat" || extension == ".lumesh" || extension == ".luprefab") {
 				YAML::Node data = YAML::LoadFile(filePath.string());
 				
@@ -447,7 +451,8 @@ namespace Lunex {
 		if (ext == ".lumesh") return AssetType::Mesh;
 		if (ext == ".luprefab") return AssetType::Prefab;
 		if (ext == ".lunex") return AssetType::Scene;
-		if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".tga" || ext == ".hdr") 
+		if (ext == ".luanim") return AssetType::Animation;
+		if (ext == ".png"|| ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".tga" || ext == ".hdr") 
 			return AssetType::Texture;
 		if (ext == ".glsl" || ext == ".shader") return AssetType::Shader;
 		if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") return AssetType::Audio;
@@ -462,6 +467,7 @@ namespace Lunex {
 			case AssetType::Mesh: return ".lumesh";
 			case AssetType::Prefab: return ".luprefab";
 			case AssetType::Scene: return ".lunex";
+			case AssetType::Animation: return ".luanim";
 			case AssetType::Texture: return ".png";
 			case AssetType::Shader: return ".glsl";
 			case AssetType::Audio: return ".wav";

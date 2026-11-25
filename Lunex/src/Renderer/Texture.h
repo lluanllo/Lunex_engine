@@ -77,11 +77,28 @@ namespace Lunex {
 		static Ref<Texture2D> Create(const std::string& path);
 		static Ref<Texture2D> Create(const std::string& path, const TextureImportSettings& settings);
 		static Ref<Texture2D> CreateCompressed(const CompressedTextureData& compressedData);
+
+		/// CPU-decoded image (no GL calls involved). Produced on any thread.
+		struct DecodedImage {
+			std::string Path;
+			int Width = 0;
+			int Height = 0;
+			int Channels = 0;               // channels of Pixels (1 or 4)
+			std::vector<uint8_t> Pixels;
+			bool IsValid() const { return Width > 0 && Height > 0 && !Pixels.empty(); }
+		};
+
+		/// Decode an image file on the CPU. Thread-safe (no GL), meant to run on job workers.
+		static DecodedImage DecodeFromFile(const std::string& path);
+
+		/// Create the GPU texture from a decoded image. Must run on the render (main) thread.
+		static Ref<Texture2D> CreateFromDecoded(const DecodedImage& image);
 		
 	private:
 		void LoadFromFile(const std::string& path);
 		void LoadFromFileWithSettings(const std::string& path, const TextureImportSettings& settings);
 		void LoadFromCompressedData(const CompressedTextureData& data);
+		void UploadDecoded(const DecodedImage& image);
 		
 		Ref<RHI::RHITexture2D> m_RHITexture;
 		
