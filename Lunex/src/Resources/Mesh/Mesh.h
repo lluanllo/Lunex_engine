@@ -62,6 +62,18 @@ namespace Lunex {
 
 		Ref<VertexArray> GetVertexArray() const { return m_VertexArray; }
 
+		// Local-space bounding box (computed once at creation)
+		const glm::vec3& GetAABBMin() const { return m_AABBMin; }
+		const glm::vec3& GetAABBMax() const { return m_AABBMax; }
+
+		// Skinning data (second vertex buffer, attribute locations 6 = bone ids, 7 = weights)
+		void SetBoneData(const std::vector<glm::ivec4>& boneIDs, const std::vector<glm::vec4>& boneWeights);
+		bool IsSkinned() const { return m_Skinned; }
+
+		// Transforms a local AABB by a matrix, returning the enclosing world AABB (Arvo's method)
+		static void TransformAABB(const glm::mat4& m, const glm::vec3& localMin, const glm::vec3& localMax,
+			glm::vec3& outMin, glm::vec3& outMax);
+
 	private:
 		void SetupMesh();
 
@@ -73,6 +85,15 @@ namespace Lunex {
 		Ref<VertexArray> m_VertexArray;
 		Ref<VertexBuffer> m_VertexBuffer;
 		Ref<IndexBuffer> m_IndexBuffer;
+
+		Ref<VertexBuffer> m_BoneBuffer;
+		bool m_Skinned = false;
+
+		glm::vec3 m_AABBMin = glm::vec3(0.0f);
+		glm::vec3 m_AABBMax = glm::vec3(0.0f);
+
+		// Sampler uniform names ("texture_diffuse1", ...) resolved once instead of every draw
+		std::vector<std::string> m_TextureUniformNames;
 	};
 
 } // namespace Lunex

@@ -10,6 +10,7 @@
 
 #include "Mesh.h"
 #include "Core/Core.h"
+#include "Resources/Animation/Animation.h"
 
 #include <string>
 #include <vector>
@@ -52,6 +53,11 @@ namespace Lunex {
 		const std::vector<Ref<Mesh>>& GetMeshes() const { return m_Meshes; }
 		const std::string& GetDirectory() const { return m_Directory; }
 
+		// Skeletal animation (null / empty for static models)
+		bool IsSkinned() const { return m_Skeleton != nullptr && m_Skeleton->GetBoneCount() > 0; }
+		Ref<Skeleton> GetSkeleton() const { return m_Skeleton; }
+		const std::vector<Ref<AnimationClip>>& GetAnimations() const { return m_Animations; }
+
 		// Factory methods for primitives
 		static Ref<Model> CreateCube();
 		static Ref<Model> CreateSphere(uint32_t segments = 32);
@@ -67,6 +73,16 @@ namespace Lunex {
 		std::vector<Ref<Mesh>> m_Meshes;
 		std::string m_Directory;
 		std::vector<MeshTexture> m_TexturesLoaded;
-	};
+
+		// Textures decoded in parallel before mesh processing, keyed by the material's texture path
+		std::unordered_map<std::string, Ref<Texture2D>> m_PreloadedTextures;
+		void PreloadTexturesParallel(const aiScene* scene);
+
+		void BuildSkeleton(const aiScene* scene);
+		void LoadAnimations(const aiScene* scene);
+
+		Ref<Skeleton> m_Skeleton;
+		std::vector<Ref<AnimationClip>> m_Animations;
+};
 
 } // namespace Lunex

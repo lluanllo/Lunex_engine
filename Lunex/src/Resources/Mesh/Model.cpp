@@ -2,6 +2,11 @@
 #include "Model.h"
 
 #include "Log/Log.h"
+#include "Core/JobSystem/JobSystem.h"
+#include "Renderer/TextureCompression.h"
+
+#include <unordered_set>
+#include <functional>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -25,7 +30,8 @@ namespace Lunex {
 		const aiScene* scene = importer.ReadFile(path,
 			aiProcess_Triangulate |
 			aiProcess_GenSmoothNormals |
-			aiProcess_CalcTangentSpace);
+			aiProcess_CalcTangentSpace |
+			aiProcess_LimitBoneWeights);   // at most 4 bone influences per vertex
 
 		if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
 		{
@@ -40,13 +46,161 @@ namespace Lunex {
 			m_Directory = path.substr(0, path.find_last_of('\\'));
 		}
 
+		PreloadTexturesParallel(scene);
+		BuildSkeleton(scene);              // before meshes: they map bone names -> indices
 		ProcessNode(scene->mRootNode, scene);
+		LoadAnimations(scene);
+		m_PreloadedTextures.clear();
+
+		if (IsSkinned()) {
+			LNX_LOG_INFO("Model is skinned: {0} bones, {1} animation(s)", m_Skeleton->GetBoneCount(), m_Animations.size());
+		}
 
 		LNX_LOG_INFO("Model loaded successfully: {0}, Meshes: {1}", path, m_Meshes.size());
 	}
 
-	void Model::ProcessNode(aiNode* node, const aiScene* scene)
+	void Model::PreloadTexturesParallel(const aiScene* scene)
 	{
+		// Decoding (PNG/JPG/TGA -> pixels) is the slow part of loading big models like Sponza.
+		// Decode every unique texture on the job workers, then upload to the GPU here on
+		// the main thread (GL is not thread-safe).
+		if (!JobSystem::IsInitialized())
+			return;
+
+		// The KTX compression path has its own caching and is not known to be thread-safe
+		auto& compressionConfig = TextureCompressionConfig::Get();
+		if (compressionConfig.EnableAutoCompression && TextureCompressionConfig::IsKTXAvailable())
+			return;
+
+		std::vector<std::string> keys;
+		std::unordered_set<std::string> seen;
+		for (uint32_t m = 0; m < scene->mNumMaterials; m++) {
+			aiMaterial* mat = scene->mMaterials[m];
+			for (int t = aiTextureType_NONE + 1; t <= aiTextureType_UNKNOWN; t++) {
+				aiTextureType type = static_cast<aiTextureType>(t);
+				for (uint32_t i = 0; i < mat->GetTextureCount(type); i++) {
+					aiString str;
+					mat->GetTexture(type, i, &str);
+					std::string key = str.C_Str();
+					if (key.empty() || key[0] == '*') continue; // embedded textures not supported here
+					if (seen.insert(key).second) keys.push_back(key);
+				}
+			}
+		}
+
+		if (keys.size() < 2)
+			return;
+
+		std::vector<Texture2D::DecodedImage> decoded(keys.size());
+		const std::string directory = m_Directory;
+
+		auto counter = JobSystem::Get().ParallelFor(0, static_cast<uint32_t>(keys.size()),
+			[&](uint32_t index) {
+				decoded[index] = Texture2D::DecodeFromFile(directory + "/" + keys[index]);
+			}, 1);
+		JobSystem::Get().Wait(counter);
+
+		for (size_t i = 0; i < keys.size(); i++) {
+			if (decoded[i].IsValid()) {
+				m_PreloadedTextures[keys[i]] = Texture2D::CreateFromDecoded(decoded[i]);
+			}
+		}
+
+		LNX_LOG_INFO("Model: decoded {0} textures in parallel", m_PreloadedTextures.size());
+	}
+
+	static glm::mat4 ToGlm(const aiMatrix4x4& m) {
+		// assimp is row-major, glm is column-major
+		return glm::mat4(
+			m.a1, m.b1, m.c1, m.d1,
+			m.a2, m.b2, m.c2, m.d2,
+			m.a3, m.b3, m.c3, m.d3,
+			m.a4, m.b4, m.c4, m.d4);
+	}
+
+	void Model::BuildSkeleton(const aiScene* scene)
+	{
+		bool hasBones = false;
+		for (uint32_t i = 0; i < scene->mNumMeshes && !hasBones; i++)
+			hasBones = scene->mMeshes[i]->HasBones();
+		if (!hasBones) return;
+
+		m_Skeleton = CreateRef<Skeleton>();
+
+		// Bone palette: every bone referenced by any mesh
+		for (uint32_t i = 0; i < scene->mNumMeshes; i++) {
+			const aiMesh* mesh = scene->mMeshes[i];
+			for (uint32_t b = 0; b < mesh->mNumBones; b++) {
+				const aiBone* bone = mesh->mBones[b];
+				m_Skeleton->AddBone(bone->mName.C_Str(), ToGlm(bone->mOffsetMatrix));
+			}
+		}
+
+		// Node hierarchy, parents first
+		std::function<void(const aiNode*, int)> addNode = [&](const aiNode* node, int parent) {
+			SkeletonNode sn;
+			sn.Name = node->mName.C_Str();
+			sn.Parent = parent;
+			sn.LocalBindTransform = ToGlm(node->mTransformation);
+			auto bone = m_Skeleton->BoneIndexByName.find(sn.Name);
+			sn.BoneIndex = (bone != m_Skeleton->BoneIndexByName.end()) ? bone->second : -1;
+
+			int index = static_cast<int>(m_Skeleton->Nodes.size());
+			m_Skeleton->NodeIndexByName[sn.Name] = index;
+			m_Skeleton->Nodes.push_back(sn);
+
+			for (uint32_t c = 0; c < node->mNumChildren; c++)
+				addNode(node->mChildren[c], index);
+		};
+		addNode(scene->mRootNode, -1);
+
+		m_Skeleton->GlobalInverse = glm::inverse(ToGlm(scene->mRootNode->mTransformation));
+
+		if (m_Skeleton->GetBoneCount() > MAX_BONES) {
+			LNX_LOG_WARN("Model has {0} bones (max {1}); extra bones will be ignored",
+				m_Skeleton->GetBoneCount(), MAX_BONES);
+		}
+	}
+
+	void Model::LoadAnimations(const aiScene* scene)
+	{
+		if (!m_Skeleton) return;
+
+		for (uint32_t a = 0; a < scene->mNumAnimations; a++) {
+			const aiAnimation* anim = scene->mAnimations[a];
+			auto clip = CreateRef<AnimationClip>();
+			clip->Name = anim->mName.length > 0 ? anim->mName.C_Str() : ("Animation " + std::to_string(a));
+			clip->DurationTicks = static_cast<float>(anim->mDuration);
+			clip->TicksPerSecond = anim->mTicksPerSecond > 0.0 ? static_cast<float>(anim->mTicksPerSecond) : 25.0f;
+
+			for (uint32_t c = 0; c < anim->mNumChannels; c++) {
+				const aiNodeAnim* src = anim->mChannels[c];
+				auto node = m_Skeleton->NodeIndexByName.find(src->mNodeName.C_Str());
+				if (node == m_Skeleton->NodeIndexByName.end()) continue;
+
+				AnimationChannel ch;
+				ch.NodeIndex = node->second;
+				for (uint32_t k = 0; k < src->mNumPositionKeys; k++) {
+					const auto& key = src->mPositionKeys[k];
+					ch.Positions.push_back({ static_cast<float>(key.mTime), glm::vec3(key.mValue.x, key.mValue.y, key.mValue.z) });
+				}
+				for (uint32_t k = 0; k < src->mNumRotationKeys; k++) {
+					const auto& key = src->mRotationKeys[k];
+					ch.Rotations.push_back({ static_cast<float>(key.mTime), glm::quat(key.mValue.w, key.mValue.x, key.mValue.y, key.mValue.z) });
+				}
+				for (uint32_t k = 0; k < src->mNumScalingKeys; k++) {
+					const auto& key = src->mScalingKeys[k];
+					ch.Scales.push_back({ static_cast<float>(key.mTime), glm::vec3(key.mValue.x, key.mValue.y, key.mValue.z) });
+				}
+				clip->Channels.push_back(std::move(ch));
+			}
+
+			m_Animations.push_back(clip);
+		}
+	}
+
+	void Model::ProcessNode(aiNode* node, const aiScene* scene)
+{
 		// Process all the node's meshes
 		for (uint32_t i = 0; i < node->mNumMeshes; i++)
 		{
@@ -259,7 +413,44 @@ namespace Lunex {
 		LNX_LOG_TRACE("Mesh created with {0} vertices, {1} indices, {2} textures",
 			vertices.size(), indices.size(), textures.size());
 
-		return CreateRef<Mesh>(vertices, indices, textures);
+		Ref<Mesh> result = CreateRef<Mesh>(vertices, indices, textures);
+
+		// Skinning weights: keep the 4 strongest influences per vertex, normalized
+		if (mesh->HasBones() && m_Skeleton) {
+			std::vector<glm::ivec4> boneIDs(vertices.size(), glm::ivec4(0));
+			std::vector<glm::vec4> boneWeights(vertices.size(), glm::vec4(0.0f));
+
+			for (uint32_t b = 0; b < mesh->mNumBones; b++) {
+				const aiBone* bone = mesh->mBones[b];
+				auto it = m_Skeleton->BoneIndexByName.find(bone->mName.C_Str());
+				if (it == m_Skeleton->BoneIndexByName.end() || it->second >= MAX_BONES) continue;
+				int boneIndex = it->second;
+
+				for (uint32_t w = 0; w < bone->mNumWeights; w++) {
+					uint32_t v = bone->mWeights[w].mVertexId;
+					float weight = bone->mWeights[w].mWeight;
+					if (v >= vertices.size() || weight <= 0.0f) continue;
+
+					// replace the weakest slot if this influence is stronger
+					int slot = 0;
+					for (int s = 1; s < MAX_BONE_INFLUENCES; s++)
+						if (boneWeights[v][s] < boneWeights[v][slot]) slot = s;
+					if (weight > boneWeights[v][slot]) {
+						boneWeights[v][slot] = weight;
+						boneIDs[v][slot] = boneIndex;
+					}
+				}
+			}
+
+			for (auto& w : boneWeights) {
+				float sum = w.x + w.y + w.z + w.w;
+				w = (sum > 0.0f) ? w / sum : glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+			}
+
+			result->SetBoneData(boneIDs, boneWeights);
+		}
+
+		return result;
 	}
 
 	std::vector<MeshTexture> Model::LoadMaterialTextures(aiMaterial* mat, aiTextureType type, const std::string& typeName)
@@ -286,7 +477,10 @@ namespace Lunex {
 			{
 				MeshTexture texture;
 				std::string texturePath = m_Directory + "/" + std::string(str.C_Str());
-				texture.Texture = Texture2D::Create(texturePath);
+				auto preloaded = m_PreloadedTextures.find(str.C_Str());
+				texture.Texture = (preloaded != m_PreloadedTextures.end())
+					? preloaded->second
+					: Texture2D::Create(texturePath);
 				texture.Type = typeName;
 				texture.Path = str.C_Str();
 
