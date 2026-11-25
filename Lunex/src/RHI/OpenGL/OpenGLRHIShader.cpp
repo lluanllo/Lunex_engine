@@ -315,7 +315,25 @@ namespace RHI {
 				glslOptions.es = false;
 				glslOptions.vulkan_semantics = false;
 				glslCompiler.set_common_options(glslOptions);
-				
+
+				// Optimized SPIR-V has no debug names: spirv-cross then names blocks after their
+				// SPIR-V ids (_274_276), which can collide between stages with different blocks and
+				// break linking. Name every block after its stage + binding: distinct names per stage are
+				// legal in GL and still read the buffer bound to that binding.
+				{
+					spirv_cross::ShaderResources res = glslCompiler.get_shader_resources();
+					auto rename = [&](const spirv_cross::SmallVector<spirv_cross::Resource>& list, const char* prefix) {
+						for (const auto& r : list) {
+							const uint32_t binding = glslCompiler.get_decoration(r.id, spv::DecorationBinding);
+							const std::string stageTag = StageToString(stage);
+							glslCompiler.set_name(r.base_type_id, std::string(prefix) + "Block_" + stageTag + "_" + std::to_string(binding));
+							glslCompiler.set_name(r.id, std::string(prefix) + "_" + stageTag + "_" + std::to_string(binding));
+						}
+					};
+					rename(res.uniform_buffers, "lnx_ubo");
+					rename(res.storage_buffers, "lnx_ssbo");
+				}
+
 				m_OpenGLSourceCode[stage] = glslCompiler.compile();
 			}
 			catch (const std::exception& e) {
