@@ -2,6 +2,7 @@
 #include "MaterialAsset.h"
 #include "Log/Log.h"
 #include "MaterialGraph.h"
+#include "MaterialGraphCompiler.h"
 
 #include <yaml-cpp/yaml.h>
 #include <fstream>
@@ -408,8 +409,8 @@ out << YAML::EndMap;
 				material->m_UseNodeGraph = data["UseNodeGraph"].as<bool>(true);
 				// The graph is the source of truth: re-bake so hand edits / older bakes stay consistent
 				if (material->m_UseNodeGraph) {
-					for (const auto& w : MaterialGraph::Apply(*graph, *material))
-						LNX_LOG_WARN("Material graph ({0}): {1}", path.filename().string(), w);
+					for (const auto& e : material->RebuildGraph())
+						LNX_LOG_TRACE("Material graph ({0}): {1}", path.filename().string(), e);
 				}
 }
 		}
@@ -468,6 +469,10 @@ out << YAML::EndMap;
 		clone->m_LayeredConfig = m_LayeredConfig;
 		if (m_NodeGraph) clone->m_NodeGraph = std::make_shared<Graph::NodeGraph>(*m_NodeGraph);
 		clone->m_UseNodeGraph = m_UseNodeGraph;
+		if (clone->m_NodeGraph) {
+			clone->m_GraphRuntime = std::make_shared<MaterialGraph::GraphRuntime>();
+			clone->m_GraphRuntime->Update(*clone->m_NodeGraph);
+		}
 
 		clone->MarkDirty();
 		return clone;
@@ -542,6 +547,17 @@ out << YAML::EndMap;
 				}
 			}
 		}
+	}
+
+	std::vector<std::string> MaterialAsset::RebuildGraph() {
+		std::vector<std::string> messages;
+		if (!m_NodeGraph) return messages;
+		if (!m_GraphRuntime) m_GraphRuntime = std::make_shared<MaterialGraph::GraphRuntime>();
+		m_GraphRuntime->Update(*m_NodeGraph);
+		messages = m_GraphRuntime->GetCompiled().Errors;
+		// Fallback parameters (thumbnails of other tools, shader compile failure)
+		MaterialGraph::Apply(*m_NodeGraph, *this);
+		return messages;
 	}
 
 } // namespace Lunex

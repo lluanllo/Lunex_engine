@@ -55,6 +55,7 @@ namespace Lunex {
 
 	void MaterialInstance::ResetOverrides() {
 		m_HasLocalOverrides = false;
+		m_GraphParams.clear();
 		m_AlbedoOverride.reset();
 		m_MetallicOverride.reset();
 		m_RoughnessOverride.reset();

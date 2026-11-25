@@ -98,6 +98,12 @@ namespace Lunex {
 		outMax = worldCenter + worldExtents;
 	}
 
+	void Mesh::DrawGeometry() {
+		m_VertexArray->Bind();
+		if (auto* cmdList = RHI::GetImmediateCommandList())
+			cmdList->DrawIndexed((uint32_t)m_Indices.size());
+	}
+
 	void Mesh::Draw(const Ref<Shader>& shader) {
 		for (uint32_t i = 0; i < m_Textures.size(); i++) {
 			if (shader) shader->SetInt(m_TextureUniformNames[i], i);

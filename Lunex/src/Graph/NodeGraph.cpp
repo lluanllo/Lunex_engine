@@ -19,6 +19,11 @@ namespace Lunex::Graph {
 			case PinType::Color:   return "Color";
 			case PinType::Texture: return "Texture";
 			case PinType::Flow:    return "Flow";
+			case PinType::Shader:  return "Shader";
+			case PinType::Bool:    return "Bool";
+			case PinType::Int:     return "Int";
+			case PinType::String:  return "String";
+			case PinType::Entity:  return "Entity";
 			default:               return "Any";
 		}
 	}
@@ -30,6 +35,11 @@ namespace Lunex::Graph {
 		if (s == "Color") return PinType::Color;
 		if (s == "Texture") return PinType::Texture;
 		if (s == "Flow") return PinType::Flow;
+		if (s == "Shader") return PinType::Shader;
+		if (s == "Bool") return PinType::Bool;
+		if (s == "Int") return PinType::Int;
+		if (s == "String") return PinType::String;
+		if (s == "Entity") return PinType::Entity;
 		return PinType::Any;
 	}
 
@@ -37,11 +47,16 @@ namespace Lunex::Graph {
 		if (from == PinType::Flow || to == PinType::Flow) return from == to;
 		if (from == PinType::Any || to == PinType::Any) return true;
 		if (from == to) return true;
+		// Closures only connect to closures; strings/entities only to themselves
+		if (from == PinType::Shader || to == PinType::Shader) return false;
+		if (from == PinType::String || to == PinType::String || from == PinType::Entity || to == PinType::Entity) return false;
 		// A sampled texture can feed color/vector inputs
-		if (from == PinType::Texture) return to == PinType::Color || to == PinType::Vec3;
-		if (to == PinType::Texture) return false;
-// Numeric values convert implicitly (float splats, vectors truncate/extend)
-		auto numeric = [](PinType t) { return t == PinType::Float || t == PinType::Vec2 || t == PinType::Vec3 || t == PinType::Color; };
+		if (from == PinType::Texture) return to == PinType::Color || to == PinType::Vec3 || to == PinType::Float;
+		if (to == PinType::Texture) return from == PinType::Color || from == PinType::Vec3;
+		// Numeric values convert implicitly (float splats, vectors truncate/extend, bool/int <-> float)
+		auto numeric = [](PinType t) {
+			return t == PinType::Float || t == PinType::Vec2 || t == PinType::Vec3 || t == PinType::Color || t == PinType::Bool || t == PinType::Int;
+		};
 		return numeric(from) && numeric(to);
 	}
 
@@ -107,6 +122,22 @@ namespace Lunex::Graph {
 		m_Nodes.erase(it);
 		Touch();
 		return true;
+	}
+
+	Node* NodeGraph::DuplicateNode(ID nodeID, const glm::vec2& offset) {
+		const Node* src = FindNode(nodeID);
+		if (!src) return nullptr;
+		const NodeTypeInfo* info = m_Registry ? m_Registry->Get(src->TypeName) : nullptr;
+		if (info && info->Unique) return nullptr;
+		Node copy = *src;
+		copy.NodeID = NextID();
+		copy.Position += offset;
+		for (auto& p : copy.Inputs) p.PinID = 0;
+		for (auto& p : copy.Outputs) p.PinID = 0;
+		AssignPinIDs(copy);
+		m_Nodes.push_back(std::move(copy));
+		Touch();
+		return &m_Nodes.back();
 	}
 
 	Node* NodeGraph::FindNode(ID nodeID) {
@@ -221,6 +252,7 @@ namespace Lunex::Graph {
 					out << YAML::Key << "Kind" << YAML::Value << kind;
 					out << YAML::Key << "ID" << YAML::Value << p.PinID;
 					if (p.Kind == PinKind::Input) { out << YAML::Key << "Default" << YAML::Value; EmitVec4(out, p.DefaultValue); }
+					if (p.Kind == PinKind::Input && !p.StringValue.empty()) out << YAML::Key << "String" << YAML::Value << p.StringValue;
 					out << YAML::EndMap;
 				}
 			};
@@ -270,6 +302,7 @@ namespace Lunex::Graph {
 						if (!pin) continue;
 						pin->PinID = pd["ID"].as<uint64_t>(0);
 						if (isInput) pin->DefaultValue = ReadVec4(pd["Default"], pin->DefaultValue);
+						if (isInput && pd["String"]) pin->StringValue = pd["String"].as<std::string>("");
 					}
 				}
 				if (node.NodeID == 0) node.NodeID = NextID();

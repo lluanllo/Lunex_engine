@@ -26,6 +26,7 @@
 
 // Forward declarations
 namespace Lunex::Graph { class NodeGraph; }
+namespace Lunex::MaterialGraph { class GraphRuntime; }
 namespace YAML {
 	class Emitter;
 	class Node;
@@ -137,12 +138,18 @@ namespace Lunex {
 		float GetNormalIntensity() const { return m_NormalIntensity; }
 
 		// ========== NODE GRAPH ==========
-		// When enabled, the graph is the source of truth and is baked into the
-		// parameters below (see MaterialGraph::Apply).
+		// When enabled, the graph is the source of truth: it is compiled to GLSL
+		// (MaterialGraphCompiler) and also baked into the parameters below as a fallback.
 		bool UsesNodeGraph() const { return m_UseNodeGraph && m_NodeGraph != nullptr; }
 		void SetUseNodeGraph(bool use) { m_UseNodeGraph = use; MarkDirty(); }
 		std::shared_ptr<Graph::NodeGraph> GetNodeGraph() const { return m_NodeGraph; }
 		void SetNodeGraph(std::shared_ptr<Graph::NodeGraph> graph) { m_NodeGraph = std::move(graph); MarkDirty(); }
+
+		// Regenerate the graph shader code (keeps the GL program when only values changed)
+		// and re-bake the fallback parameters. Returns compile errors + bake notes.
+		std::vector<std::string> RebuildGraph();
+		// Compiled graph used by the renderers (null when the material has no graph)
+		MaterialGraph::GraphRuntime* GetGraphRuntime() const { return UsesNodeGraph() ? m_GraphRuntime.get() : nullptr; }
 
 		// UV transform shared by every map of the material (uv * Tiling + Offset)
 		void SetUVTiling(const glm::vec2& tiling) { m_UVTiling = tiling; MarkDirty(); }
@@ -328,6 +335,7 @@ namespace Lunex {
 		glm::vec2 m_UVTiling = { 1.0f, 1.0f };
 		std::shared_ptr<Graph::NodeGraph> m_NodeGraph;
 		bool m_UseNodeGraph = false;
+		std::shared_ptr<MaterialGraph::GraphRuntime> m_GraphRuntime;
 glm::vec2 m_UVOffset = { 0.0f, 0.0f };
 
 		// Textures

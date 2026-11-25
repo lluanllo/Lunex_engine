@@ -54,6 +54,8 @@ namespace Lunex {
 		~Mesh() = default;
 
 		void Draw(const Ref<Shader>& shader);
+		// Draw without binding the imported textures (graph materials bind their own)
+		void DrawGeometry();
 		void SetEntityID(int entityID);
 
 		const std::vector<Vertex>& GetVertices() const { return m_Vertices; }

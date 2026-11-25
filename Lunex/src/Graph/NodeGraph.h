@@ -35,9 +35,14 @@ namespace Lunex::Graph {
 		Vec2,
 		Vec3,
 		Color,      // vec4
-		Texture,    // sampled texture (RGBA)
+		Texture,    // sampled texture (RGBA) - legacy material graphs
 		Flow,       // execution flow (blueprints)
-		Any
+		Any,
+		Shader,     // BSDF closure (material graphs)
+		Bool,       // blueprints
+		Int,
+		String,
+		Entity
 	};
 
 	enum class PinKind : uint8_t { Input = 0, Output };
@@ -52,6 +57,12 @@ namespace Lunex::Graph {
 		PinType Type = PinType::Float;
 		PinKind Kind = PinKind::Input;
 		glm::vec4 DefaultValue{ 0.0f };   // used by unconnected inputs
+		glm::vec2 Range{ 0.0f };          // slider range for unconnected Float inputs (0,0 = free drag)
+		bool HideValue = false;           // no inline editor (e.g. Normal: implicit geometry normal)
+		std::string StringValue;          // String inputs (blueprints)
+		std::string Label;                // display name when it differs from Name (unique key)
+
+		const std::string& DisplayName() const { return Label.empty() ? Name : Label; }
 	};
 
 	struct Node {
@@ -81,12 +92,26 @@ namespace Lunex::Graph {
 	/**
 	 * @brief Describes a node type: how to build its pins and where it appears in menus
 	 */
+	// Drop-down stored in Node::Properties[Key] (e.g. Math operation, Mix blend mode)
+	struct NodeEnumProperty {
+		std::string Key;
+		std::vector<std::string> Options;
+	};
+
 	struct NodeTypeInfo {
 		std::string TypeName;
 		std::string Title;
 		std::string Category;
 		bool Unique = false;                         // e.g. the material output node
 		std::function<void(Node&)> Build;            // adds pins + default values
+		glm::vec4 HeaderColor{ 0.0f };               // 0 = category default of the editor
+		float Width = 0.0f;                          // fixed node width (0 = auto)
+		bool HiddenInMenu = false;                   // legacy types kept only for loading old files
+		std::vector<NodeEnumProperty> Enums;
+		std::vector<std::string> Toggles;            // checkboxes stored as "1"/"0" in Properties
+		std::string Description;
+		// Optional: hide sockets that the current operation does not use (Blender-style)
+		std::function<bool(const Node&, const Pin&)> PinVisible;
 	};
 
 	class NodeRegistry {
@@ -110,6 +135,8 @@ namespace Lunex::Graph {
 		// ---- Nodes ----
 		Node* AddNode(const std::string& typeName, const glm::vec2& position = glm::vec2(0.0f));
 		bool RemoveNode(ID nodeID);
+		// Copy of a node (values, properties, input defaults) with fresh IDs; links are not copied
+		Node* DuplicateNode(ID nodeID, const glm::vec2& offset = glm::vec2(40.0f));
 		Node* FindNode(ID nodeID);
 		const Node* FindNode(ID nodeID) const;
 		Node* FindNodeByType(const std::string& typeName);

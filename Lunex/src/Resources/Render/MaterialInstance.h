@@ -1,5 +1,8 @@
 #pragma once
 
+#include <unordered_map>
+#include <string>
+
 /**
  * @file MaterialInstance.h
  * @brief Runtime material instance with override support
@@ -104,6 +107,19 @@ namespace Lunex {
 		MaterialAsset::MaterialUniformData GetUniformData() const;
 		void BindTextures() const;
 
+		// ========== NODE GRAPH PARAMETERS ==========
+		// Per-instance values for named Value/RGB nodes of a graph material (scripts use this
+		// for procedural effects, e.g. a "Wetness" value raised when a character enters water)
+		void SetGraphParameter(const std::string& name, const glm::vec4& value) { m_GraphParams[name] = value; m_HasLocalOverrides = true; }
+		bool GetGraphParameter(const std::string& name, glm::vec4& out) const {
+			auto it = m_GraphParams.find(name);
+			if (it == m_GraphParams.end()) return false;
+			out = it->second;
+			return true;
+		}
+		void ClearGraphParameter(const std::string& name) { m_GraphParams.erase(name); }
+		const std::unordered_map<std::string, glm::vec4>& GetGraphParameters() const { return m_GraphParams; }
+
 		// ========== INFO ==========
 		
 		const std::string& GetName() const { return m_BaseAsset->GetName(); }
@@ -114,6 +130,7 @@ namespace Lunex {
 		Ref<MaterialAsset> m_BaseAsset;
 		bool m_HasLocalOverrides = false;
 
+		std::unordered_map<std::string, glm::vec4> m_GraphParams;
 		std::optional<glm::vec4> m_AlbedoOverride;
 		std::optional<float> m_MetallicOverride;
 		std::optional<float> m_RoughnessOverride;

@@ -13,6 +13,8 @@
 #include "Renderer/Shadows/ShadowSystem.h"
 #include "Renderer/PostProcess/PostProcessRenderer.h"
 #include "Assets/Materials/MaterialRegistry.h"
+#include "Assets/Materials/MaterialGraphCompiler.h"
+#include "Resources/Render/MaterialInstance.h"
 #include "Resources/Mesh/Model.h"
 #include "Scene/Components.h"
 #include "Scene/Lighting/LightTypes.h"
@@ -253,7 +255,7 @@ namespace Lunex {
 	// ============================================================================
 
 	// Draws every submesh of a model whose world AABB intersects the camera frustum.
-	static void DrawModelCulled(Model& model, const glm::mat4& transform, const Ref<Shader>& shader) {
+	static void DrawModelCulled(Model& model, const glm::mat4& transform, const Ref<Shader>& shader, bool bindMeshTextures = true) {
 		for (const auto& mesh : model.GetMeshes()) {
 			// Skinned meshes deform beyond their bind-pose bounds: never cull them
 			if (s_Data.FrustumCullingEnabled && !mesh->IsSkinned()) {
@@ -264,7 +266,8 @@ namespace Lunex {
 					continue;
 				}
 			}
-			mesh->Draw(shader);
+			if (bindMeshTextures) mesh->Draw(shader);
+			else mesh->DrawGeometry();
 			s_Data.Stats.GeometryDrawCalls++;
 			s_Data.Stats.MeshCount++;
 			s_Data.Stats.TriangleCount += static_cast<uint32_t>(mesh->GetIndices().size()) / 3;
@@ -366,6 +369,15 @@ namespace Lunex {
 		if (mat->HasLayeredTexture()) mat->GetLayeredTextureConfig().Texture->Bind(7); else Texture2D::UnbindSlot(7);
 	}
 
+	// Node-graph materials render with their own generated program. Returns null when the
+	// material has no (working) graph: the caller then uses the shared geometry shader.
+	static Ref<Shader> BindGraphMaterial(const Ref<MaterialAsset>& asset, const MaterialInstance* instance) {
+		if (!asset) return nullptr;
+		MaterialGraph::GraphRuntime* runtime = asset->GetGraphRuntime();
+		if (!runtime) return nullptr;
+		return runtime->Bind(true, *asset->GetNodeGraph(), instance ? &instance->GetGraphParameters() : nullptr);
+	}
+
 	static bool IsSubmeshCulled(const Ref<Mesh>& mesh, const glm::mat4& transform) {
 		// Skinned meshes deform beyond their bind-pose bounds: never cull them
 		if (!s_Data.FrustumCullingEnabled || mesh->IsSkinned()) return false;
@@ -386,6 +398,12 @@ namespace Lunex {
 			Ref<MaterialAsset> submeshMaterial = meshComponent.GetSubmeshMaterial(static_cast<uint32_t>(i));
 			if (submeshMaterial) {
 				FillMaterialBuffer(submeshMaterial->GetUniformData());
+				if (Ref<Shader> graphShader = BindGraphMaterial(submeshMaterial, nullptr)) {
+					meshes[i]->DrawGeometry();
+					s_Data.Stats.GeometryDrawCalls++;
+					s_Data.Stats.MeshCount++;
+					continue;
+				}
 				s_Data.GeometryShader->Bind();
 				BindMaterialAssetTextures(submeshMaterial);
 			}
@@ -422,6 +440,11 @@ namespace Lunex {
 		}
 
 		FillMaterialBuffer(materialComponent.Instance->GetUniformData());
+		if (Ref<Shader> graphShader = BindGraphMaterial(materialComponent.Instance->GetBaseAsset(), materialComponent.Instance.get())) {
+			DrawModelCulled(*meshComponent.MeshModel, transform, graphShader, false);
+			s_Data.GeometryShader->Bind();   // later draws expect the shared program
+			return;
+		}
 		s_Data.GeometryShader->Bind();
 		materialComponent.Instance->BindTextures();
 		DrawModelCulled(*meshComponent.MeshModel, transform, s_Data.GeometryShader);

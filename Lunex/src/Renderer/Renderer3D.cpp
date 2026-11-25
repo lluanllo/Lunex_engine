@@ -14,6 +14,7 @@
 #include "Scene/Lighting/LightTypes.h"
 #include "Scene/Lighting/LightSystem.h"
 #include "Renderer/SkinningBuffer.h"
+#include "Assets/Materials/MaterialGraphCompiler.h"
 #include "Log/Log.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -648,12 +649,25 @@ namespace Lunex {
 
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
 
-		// Bind shader and textures
-		s_Data.MeshShader->Bind();
-		materialComponent.Instance->BindTextures();
+		// Node-graph material: generated forward program (falls back to Mesh3D on failure)
+		Ref<Shader> graphShader;
+		if (auto base = materialComponent.Instance->GetBaseAsset()) {
+			if (auto* runtime = base->GetGraphRuntime())
+				graphShader = runtime->Bind(false, *base->GetNodeGraph(), &materialComponent.Instance->GetGraphParameters());
+		}
 
-		// Draw the model
-		meshComponent.MeshModel->Draw(s_Data.MeshShader);
+		if (graphShader) {
+			for (const auto& mesh : meshComponent.MeshModel->GetMeshes()) mesh->DrawGeometry();
+			s_Data.MeshShader->Bind();
+		}
+		else {
+			// Bind shader and textures
+			s_Data.MeshShader->Bind();
+			materialComponent.Instance->BindTextures();
+
+			// Draw the model
+			meshComponent.MeshModel->Draw(s_Data.MeshShader);
+		}
 
 		s_Data.Stats.DrawCalls++;
 		s_Data.Stats.MeshCount += (uint32_t)meshComponent.MeshModel->GetMeshes().size();
