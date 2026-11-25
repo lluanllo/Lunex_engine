@@ -19,6 +19,9 @@ namespace Lunex::UI {
 		if (typeLabel == "AUDIO"  ) return AssetTypeColors::Audio();
 		if (typeLabel == "SHADER" ) return AssetTypeColors::Shader();
 		if (typeLabel == "ANIMATION") return AssetTypeColors::Animation();
+		if (typeLabel == "SKELETON") return AssetTypeColors::Skeleton();
+		if (typeLabel == "BLUEPRINT") return AssetTypeColors::Blueprint();
+		if (typeLabel == "PARTICLES") return AssetTypeColors::Particle();
 if (typeLabel == "FOLDER" ) return AssetTypeColors::Folder();
 		return AssetTypeColors::Default();
 	}

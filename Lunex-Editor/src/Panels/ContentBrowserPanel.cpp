@@ -52,6 +52,10 @@ namespace Lunex {
 		m_MaterialIcon = Texture2D::Create("Resources/Icons/ContentBrowser/MaterialIcon.png");
 		m_MeshIcon = Texture2D::Create("Resources/Icons/ContentBrowser/MeshIcon.png");
 		m_PrefabIcon = Texture2D::Create("Resources/Icons/ContentBrowser/PrefabIcon.png");
+		m_SkeletonIcon = Texture2D::Create("Resources/Icons/ContentBrowser/SkeletonIcon.png");
+		m_AnimationIcon = Texture2D::Create("Resources/Icons/ContentBrowser/AnimationIcon.png");
+		m_BlueprintIcon = Texture2D::Create("Resources/Icons/ContentBrowser/BlueprintIcon.png");
+		m_ParticleIcon = Texture2D::Create("Resources/Icons/ContentBrowser/ParticleIcon.png");
 
 		// Initialize history
 		m_DirectoryHistory.push_back(m_CurrentDirectory);
@@ -844,6 +848,10 @@ namespace Lunex {
 		if (extension == ".lumat") return m_MaterialIcon ? m_MaterialIcon : m_FileIcon;
 		if (extension == ".lumesh") return m_MeshIcon ? m_MeshIcon : m_FileIcon;
 		if (extension == ".luprefab") return m_PrefabIcon ? m_PrefabIcon : m_FileIcon;
+		if (extension == ".luskel") return m_SkeletonIcon ? m_SkeletonIcon : m_FileIcon;
+		if (extension == ".luanim") return m_AnimationIcon ? m_AnimationIcon : m_FileIcon;
+		if (extension == ".lublueprint") return m_BlueprintIcon ? m_BlueprintIcon : m_FileIcon;
+		if (extension == ".luparticle") return m_ParticleIcon ? m_ParticleIcon : m_FileIcon;
 		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg")
 			return m_TextureIcon ? m_TextureIcon : m_FileIcon;
 		if (extension == ".glsl" || extension == ".shader")
@@ -1057,6 +1065,9 @@ namespace Lunex {
 		if (extension == ".luprefab") return "PREFAB";
 		if (extension == ".lunex") return "SCENE";
 		if (extension == ".luanim") return "ANIMATION";
+		if (extension == ".luskel") return "SKELETON";
+		if (extension == ".lublueprint") return "BLUEPRINT";
+		if (extension == ".luparticle") return "PARTICLES";
 		if (extension == ".hdr" || extension == ".hdri" || extension == ".exr") return "HDRI";
 		if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".tga" || extension == ".bmp") return "TEXTURE";
 		if (extension == ".glsl" || extension == ".shader") return "SHADER";

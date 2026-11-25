@@ -15,18 +15,21 @@ namespace Lunex::UI {
 	// ============================================================================
 	
 	namespace AssetTypeColors {
-		// Border colors for different asset types
-		inline Color Mesh()     { return Color(0.30f, 0.85f, 0.40f, 1.0f); }  // Green
-		inline Color Prefab()   { return Color(0.40f, 0.75f, 0.95f, 1.0f); }  // Light Blue
-		inline Color Material() { return Color(0.95f, 0.60f, 0.20f, 1.0f); }  // Orange
-		inline Color HDR()      { return Color(0.25f, 0.45f, 0.85f, 1.0f); }  // Dark Blue
-		inline Color Texture()  { return Color(0.80f, 0.50f, 0.80f, 1.0f); }  // Purple
-		inline Color Scene()    { return Color(0.95f, 0.85f, 0.30f, 1.0f); }  // Yellow
-		inline Color Script()   { return Color(0.50f, 0.80f, 0.50f, 1.0f); }  // Soft Green
-		inline Color Audio()    { return Color(0.85f, 0.45f, 0.55f, 1.0f); }  // Pink
-		inline Color Shader()   { return Color(0.70f, 0.70f, 0.85f, 1.0f); }  // Lavender
-		inline Color Animation(){ return Color(0.30f, 0.80f, 0.85f, 1.0f); }  // Teal
-inline Color Default()  { return Color(0.50f, 0.50f, 0.55f, 1.0f); }  // Gray
+		// Border colors per asset type: one distinct hue each, matching the icon color
+		inline Color Scene()     { return Color(0.95f, 0.82f, 0.28f, 1.0f); }  // Yellow
+		inline Color Material()  { return Color(0.95f, 0.58f, 0.20f, 1.0f); }  // Orange
+		inline Color Texture()   { return Color(0.92f, 0.42f, 0.36f, 1.0f); }  // Coral
+		inline Color Audio()     { return Color(0.88f, 0.36f, 0.62f, 1.0f); }  // Pink
+		inline Color Particle()  { return Color(0.76f, 0.34f, 0.80f, 1.0f); }  // Magenta
+		inline Color Skeleton()  { return Color(0.58f, 0.36f, 0.88f, 1.0f); }  // Purple
+		inline Color Shader()    { return Color(0.60f, 0.56f, 0.92f, 1.0f); }  // Lavender
+		inline Color Script()    { return Color(0.26f, 0.52f, 0.90f, 1.0f); }  // Blue
+		inline Color Blueprint() { return Color(0.22f, 0.40f, 0.76f, 1.0f); }  // Navy
+		inline Color HDR()       { return Color(0.30f, 0.36f, 0.80f, 1.0f); }  // Indigo
+		inline Color Prefab()    { return Color(0.25f, 0.74f, 0.92f, 1.0f); }  // Cyan
+		inline Color Animation() { return Color(0.16f, 0.72f, 0.64f, 1.0f); }  // Teal
+		inline Color Mesh()      { return Color(0.30f, 0.78f, 0.40f, 1.0f); }  // Green
+		inline Color Default()   { return Color(0.50f, 0.50f, 0.55f, 1.0f); }  // Gray
 		inline Color Folder()   { return Color(0.0f, 0.0f, 0.0f, 0.0f); }     // Transparent (no border)
 	}
 
