@@ -42,12 +42,18 @@ namespace Lunex {
 		void DrawPhysics2DSection();
 		void DrawPhysics3DSection();
 		void DrawPhysicsGeneralSection();
+		void DrawViewportSection();
+
+		// Blender-style collapsible panel (call EndSettingsPanel only when Begin returned true)
+		static bool BeginSettingsPanel(const char* title, bool defaultOpen = true);
+		static void EndSettingsPanel();
 		
 		void NotifyPostProcessChanged();
 		
 	private:
 		bool m_ShowPhysicsColliders = false;
 		bool m_ShowPhysics3DColliders = false;
+		int m_ActiveTab = 0;
 		
 		// Skybox settings cache for UI
 		std::string m_HDRIPath;

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file SettingsPanel.cpp
  * @brief Settings Panel Implementation using Lunex UI Framework
  */
@@ -20,205 +20,264 @@
 #include "Physics/PhysicsConfig.h"
 #include "Log/Log.h"
 
+#include <imgui.h>
 #include <filesystem>
 #include <algorithm>
 
 namespace Lunex {
 
+	// ========================================
+	// BLENDER-STYLE PROPERTIES LAYOUT
+	// ========================================
+
+	namespace {
+		// Collapsible panel with a header bar and a boxed body (Blender properties editor).
+		// The body box uses last frame's height so it can be drawn behind the content.
+		struct PanelFrame { ImGuiID ID; ImVec2 Min; float Width; };
+		std::vector<PanelFrame> s_PanelStack;
+
+		ImU32 C32(const UI::Color& c) { return ImGui::GetColorU32(c.ToImVec4()); }
+
+		enum class SettingsTab { Render = 0, World, Physics, Viewport, Count };
+
+		// Small vector icons for the tab column (no image assets needed)
+		void DrawTabIcon(ImDrawList* dl, SettingsTab tab, ImVec2 c, ImU32 col) {
+			switch (tab) {
+				case SettingsTab::Render:     // camera back
+					dl->AddRect(ImVec2(c.x - 8, c.y - 5), ImVec2(c.x + 5, c.y + 6), col, 2.0f, 0, 1.6f);
+					dl->AddTriangleFilled(ImVec2(c.x + 5, c.y), ImVec2(c.x + 10, c.y - 4), ImVec2(c.x + 10, c.y + 5), col);
+					dl->AddCircleFilled(ImVec2(c.x - 1.5f, c.y + 0.5f), 2.2f, col);
+					break;
+				case SettingsTab::World:      // globe
+					dl->AddCircle(c, 8.0f, col, 0, 1.6f);
+					dl->AddEllipse(c, ImVec2(3.5f, 8.0f), col, 0.0f, 0, 1.3f);
+					dl->AddLine(ImVec2(c.x - 8, c.y), ImVec2(c.x + 8, c.y), col, 1.3f);
+					break;
+				case SettingsTab::Physics:    // orbit
+					dl->AddCircle(c, 3.5f, col, 0, 1.6f);
+					dl->AddEllipse(c, ImVec2(9.0f, 4.0f), col, -0.5f, 0, 1.3f);
+					dl->AddCircleFilled(ImVec2(c.x + 7.0f, c.y - 3.5f), 2.0f, col);
+					break;
+				case SettingsTab::Viewport:   // grid
+					for (int i = -1; i <= 1; i++) {
+						dl->AddLine(ImVec2(c.x - 8, c.y + i * 5.0f), ImVec2(c.x + 8, c.y + i * 5.0f), col, 1.3f);
+						dl->AddLine(ImVec2(c.x + i * 5.0f, c.y - 8), ImVec2(c.x + i * 5.0f, c.y + 8), col, 1.3f);
+					}
+					break;
+				default: break;
+			}
+		}
+	}
+
+	bool SettingsPanel::BeginSettingsPanel(const char* title, bool defaultOpen) {
+		ImGuiStorage* storage = ImGui::GetStateStorage();
+		const ImGuiID id = ImGui::GetID(title);
+		bool open = storage->GetBool(id, defaultOpen);
+
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		const ImVec2 p = ImGui::GetCursorScreenPos();
+		const float w = std::max(ImGui::GetContentRegionAvail().x, 1.0f);
+		const float h = ImGui::GetFrameHeight() + 4.0f;
+
+		// Body box first (height measured last frame), so the content draws on top
+		if (open) {
+			const float bodyH = storage->GetFloat(id + 1, 0.0f);
+			if (bodyH > 0.0f)
+				dl->AddRectFilled(ImVec2(p.x, p.y + h - 4.0f), ImVec2(p.x + w, p.y + h + bodyH), C32(UI::Colors::BgCard()), 5.0f, ImDrawFlags_RoundCornersBottom);
+		}
+
+		ImGui::PushID(title);
+		const bool clicked = ImGui::InvisibleButton("##hdr", ImVec2(w, h));
+		const bool hovered = ImGui::IsItemHovered();
+		ImGui::PopID();
+		if (clicked) { open = !open; storage->SetBool(id, open); }
+
+		dl->AddRectFilled(p, ImVec2(p.x + w, p.y + h), C32(hovered ? UI::Colors::BgHover() : UI::Colors::BgLight()), 5.0f,
+			open ? ImDrawFlags_RoundCornersTop : ImDrawFlags_RoundCornersAll);
+		const float ax = p.x + 12.0f, ay = p.y + h * 0.5f;
+		const ImU32 arrowCol = C32(UI::Colors::TextSecondary());
+		if (open) dl->AddTriangleFilled(ImVec2(ax - 4, ay - 2), ImVec2(ax + 4, ay - 2), ImVec2(ax, ay + 3), arrowCol);
+		else dl->AddTriangleFilled(ImVec2(ax - 2, ay - 4), ImVec2(ax + 3, ay), ImVec2(ax - 2, ay + 4), arrowCol);
+		dl->AddText(ImVec2(p.x + 24.0f, p.y + (h - ImGui::GetTextLineHeight()) * 0.5f), C32(UI::Colors::TextPrimary()), title);
+
+		if (!open) {
+			ImGui::Dummy(ImVec2(0, 2));
+			return false;
+		}
+		s_PanelStack.push_back({ id, ImVec2(p.x, p.y + h), w });
+		ImGui::Indent(10.0f);
+		ImGui::Dummy(ImVec2(0, 4));
+		ImGui::PushItemWidth(-10.0f);
+		return true;
+	}
+
+	void SettingsPanel::EndSettingsPanel() {
+		if (s_PanelStack.empty()) return;
+		const PanelFrame frame = s_PanelStack.back();
+		s_PanelStack.pop_back();
+		ImGui::PopItemWidth();
+		ImGui::Dummy(ImVec2(0, 4));
+		ImGui::Unindent(10.0f);
+		ImGui::GetStateStorage()->SetFloat(frame.ID + 1, ImGui::GetCursorScreenPos().y - frame.Min.y);
+		ImGui::Dummy(ImVec2(0, 4));
+	}
+
 	void SettingsPanel::OnImGuiRender() {
 		using namespace UI;
-		
-		if (!BeginPanel("Settings")) {
+
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+		const bool visible = BeginPanel("Settings");
+		ImGui::PopStyleVar();
+		if (!visible) {
 			EndPanel();
 			return;
 		}
-		
-		if (BeginTabBar("SettingsTabs")) {
-			if (BeginTabItem("Render")) {
-				DrawRenderTab();
-				EndTabItem();
-			}
-			if (BeginTabItem("Post-Process")) {
-				DrawPostProcessSection();
-				EndTabItem();
-			}
-			if (BeginTabItem("Environment")) {
-				DrawEnvironmentTab();
-				EndTabItem();
-			}
-			if (BeginTabItem("Shadows")) {
-				DrawShadowsTab();
-				EndTabItem();
-			}
-			if (BeginTabItem("Physics")) {
-				DrawPhysicsTab();
-				EndTabItem();
-			}
-			EndTabBar();
+
+		static const char* tabNames[] = { "Render", "World", "Physics", "Viewport" };
+		static const char* tabTips[] = { "Render: engine, quality, effects, shadows, color management",
+			"World: sky, HDRI and sun", "Physics: gravity and simulation", "Viewport: editor grid and overlays" };
+
+		// ---- Vertical tab column (Blender properties editor) ----
+		const float stripW = 34.0f;
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, Colors::BgDark().ToImVec4());
+		ImGui::BeginChild("##SettingsTabs", ImVec2(stripW, 0), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		ImGui::Dummy(ImVec2(0, 4));
+		for (int t = 0; t < static_cast<int>(SettingsTab::Count); t++) {
+			ImGui::SetCursorPosX(3.0f);
+			const ImVec2 p = ImGui::GetCursorScreenPos();
+			ImGui::PushID(t);
+			if (ImGui::InvisibleButton("##tab", ImVec2(28, 28))) m_ActiveTab = t;
+			const bool hovered = ImGui::IsItemHovered();
+			ImGui::PopID();
+			if (hovered) ImGui::SetTooltip("%s", tabTips[t]);
+			const bool active = m_ActiveTab == t;
+			if (active || hovered)
+				dl->AddRectFilled(p, ImVec2(p.x + 28, p.y + 28), C32(active ? Colors::Primary().WithAlpha(0.85f) : Colors::BgHover()), 5.0f);
+			DrawTabIcon(dl, static_cast<SettingsTab>(t), ImVec2(p.x + 14, p.y + 14), C32(active ? Color(1, 1, 1, 1) : Colors::TextSecondary()));
+			ImGui::Dummy(ImVec2(0, 2));
 		}
-		
+		ImGui::EndChild();
+		ImGui::PopStyleColor();
+		ImGui::SameLine(0, 0);
+
+		// ---- Category content ----
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
+		ImGui::BeginChild("##SettingsContent", ImVec2(0, 0), ImGuiChildFlags_AlwaysUseWindowPadding);
+		SetPropertySplitLayout(true);
+		ImGui::TextColored(Colors::TextSecondary().ToImVec4(), "%s", tabNames[m_ActiveTab]);
+		ImGui::Dummy(ImVec2(0, 2));
+		switch (static_cast<SettingsTab>(m_ActiveTab)) {
+			case SettingsTab::Render:
+				DrawRenderSection();
+				DrawPostProcessSection();
+				DrawShadowsSection();
+				break;
+			case SettingsTab::World:
+				DrawEnvironmentSection();
+				break;
+			case SettingsTab::Physics:
+				DrawPhysicsTab();
+				break;
+			case SettingsTab::Viewport:
+				DrawViewportSection();
+				break;
+			default: break;
+		}
+		SetPropertySplitLayout(false);
+		ImGui::EndChild();
+		ImGui::PopStyleVar();
+
 		EndPanel();
 	}
-	
+
+	void SettingsPanel::DrawRenderTab() { DrawRenderSection(); }
+	void SettingsPanel::DrawEnvironmentTab() { DrawEnvironmentSection(); }
+	void SettingsPanel::DrawShadowsTab() { DrawShadowsSection(); }
+
 	// ========================================
-	// RENDER TAB
+	// RENDER (engine, quality, AO, performance)
 	// ========================================
-	
-	void SettingsPanel::DrawRenderTab() {
-		using namespace UI;
-		
-		DrawRenderSection();
-	}
-	
-	// ========================================
-	// ENVIRONMENT TAB
-	// ========================================
-	
-	void SettingsPanel::DrawEnvironmentTab() {
-		DrawEnvironmentSection();
-	}
-	
-	// ========================================
-	// SHADOWS TAB
-	// ========================================
-	
-	void SettingsPanel::DrawShadowsTab() {
-		DrawShadowsSection();
-	}
-	
-	// ========================================
-	// RENDER SECTION
-	// ========================================
-	
+
 	void SettingsPanel::DrawRenderSection() {
 		using namespace UI;
-		
-		if (BeginSection("Renderer", true)) {
-			auto& config = RenderSystem::GetConfig();
+		auto& config = RenderSystem::GetConfig();
 
-			// ========================================
-			// RENDER ENGINE (Blender-style)
-			// ========================================
-			{
-				const auto& pipelines = RenderPipelineRegistry::GetAll();
-				std::vector<std::string> names;
-				int current = 0;
-				for (size_t i = 0; i < pipelines.size(); i++) {
-					names.push_back(std::string(pipelines[i]->GetName()) + (pipelines[i]->IsAvailable() ? "" : "  (planned)"));
-					if (pipelines[i]->GetType() == RenderPipelineRegistry::GetRequested()) current = static_cast<int>(i);
-				}
-				if (PropertyDropdown("Render Engine", current, names, "Which renderer draws the viewport and the game")) {
-					RenderEngineType type = pipelines[current]->GetType();
-					RenderPipelineRegistry::SetRequested(type);
-					if (auto project = ProjectManager::GetActiveProject()) {
-						project->GetConfig().RenderEngine = RenderEngineToString(type);
-						if (m_OnPostProcessChanged) m_OnPostProcessChanged();   // saves the project config
-					}
-				}
-				IRenderPipeline* requested = pipelines[current];
-				TextWrapped(requested->GetDescription(), TextVariant::Muted);
-				if (!requested->IsAvailable())
-					TextWrapped(("Rendering with " + std::string(RenderPipelineRegistry::GetActive()->GetName()) + " until it is implemented.").c_str(), TextVariant::Muted);
-				AddSpacing(SpacingValues::SM);
+		// Render engine sits above the panels, like Blender
+		{
+			const auto& pipelines = RenderPipelineRegistry::GetAll();
+			std::vector<std::string> names;
+			int current = 0;
+			for (size_t i = 0; i < pipelines.size(); i++) {
+				names.push_back(std::string(pipelines[i]->GetName()) + (pipelines[i]->IsAvailable() ? "" : "  (planned)"));
+				if (pipelines[i]->GetType() == RenderPipelineRegistry::GetRequested()) current = static_cast<int>(i);
 			}
+			if (PropertyDropdown("Render Engine", current, names, "Which renderer draws the viewport and the game")) {
+				RenderEngineType type = pipelines[current]->GetType();
+				RenderPipelineRegistry::SetRequested(type);
+				if (auto project = ProjectManager::GetActiveProject()) {
+					project->GetConfig().RenderEngine = RenderEngineToString(type);
+					if (m_OnPostProcessChanged) m_OnPostProcessChanged();   // saves the project config
+				}
+			}
+			IRenderPipeline* requested = pipelines[current];
+			if (!requested->IsAvailable())
+				TextWrapped(("Rendering with " + std::string(RenderPipelineRegistry::GetActive()->GetName()) + " until it is implemented.").c_str(), TextVariant::Muted);
+			AddSpacing(SpacingValues::SM);
+		}
 
-			// ========================================
-			// QUALITY SETTINGS
-			// ========================================
-			Text("Quality");
-			AddSpacing(SpacingValues::XS);
-			
-			if (PropertyCheckbox("VSync", config.EnableVSync, "Enable vertical synchronization")) {
-				auto& window = Application::Get().GetWindow();
-				window.SetVSync(config.EnableVSync);
-			}
-			
-			if (PropertyCheckbox("HDR Rendering", config.EnableHDR, "Enable High Dynamic Range rendering")) {
-			}
-			
-			if (config.EnableHDR) {
-				if (PropertyFloat("Exposure", config.Exposure, 0.01f, 0.01f, 10.0f, "Tone mapping exposure")) {
-				}
-			}
-			
-			if (PropertyCheckbox("MSAA", config.EnableMSAA, "Enable Multi-Sample Anti-Aliasing")) {
-			}
-			
+		if (BeginSettingsPanel("Quality")) {
+			if (PropertyCheckbox("VSync", config.EnableVSync, "Enable vertical synchronization"))
+				Application::Get().GetWindow().SetVSync(config.EnableVSync);
+			PropertyCheckbox("HDR Rendering", config.EnableHDR, "Enable High Dynamic Range rendering");
+			PropertyCheckbox("MSAA", config.EnableMSAA, "Enable Multi-Sample Anti-Aliasing");
 			if (config.EnableMSAA) {
 				int msaaIdx = 0;
 				const char* msaaOptions[] = { "2x", "4x", "8x" };
 				int msaaValues[] = { 2, 4, 8 };
-				for (int i = 0; i < 3; i++) {
-					if (msaaValues[i] == (int)config.MSAASamples) { msaaIdx = i; break; }
-				}
-				if (PropertyDropdown("MSAA Samples", msaaIdx, msaaOptions, 3, "Number of MSAA samples")) {
+				for (int i = 0; i < 3; i++) if (msaaValues[i] == (int)config.MSAASamples) { msaaIdx = i; break; }
+				if (PropertyDropdown("Samples", msaaIdx, msaaOptions, 3, "Number of MSAA samples"))
 					config.MSAASamples = msaaValues[msaaIdx];
-				}
 			}
-			
-			Separator();
-			
-			// ========================================
-			// POST-PROCESSING (basic toggle - details in Post-Process tab)
-			// ========================================
-			Text("Post-Processing");
-			AddSpacing(SpacingValues::XS);
-			
-			auto& ppConfig = PostProcessRenderer::GetConfig();
-			
-			if (PropertyCheckbox("Bloom", ppConfig.EnableBloom, "Enable bloom effect (configure in Post-Process tab)")) {
-				config.EnableBloom = ppConfig.EnableBloom;
-				NotifyPostProcessChanged();
-			}
-			
-			if (PropertyCheckbox("SSAO", config.EnableSSAO, "Enable Screen-Space Ambient Occlusion")) {
-			}
-			
-			Separator();
-			
-			// ========================================
-			// GRID SETTINGS
-			// ========================================
-			Text("Editor Grid");
-			AddSpacing(SpacingValues::XS);
-			
-			auto& gridSettings = GridRenderer::GetSettings();
-			
-			if (PropertyColor("Grid Color", gridSettings.GridColor)) {
-			}
-			
-			if (PropertyFloat("Grid Scale", gridSettings.GridScale, 0.1f, 0.1f, 100.0f, "Size of each grid cell in units")) {
-			}
-			
-			if (PropertyFloat("Grid Extent", gridSettings.FadeDistance, 1.0f, 5.0f, 500.0f, "How far the grid extends")) {
-			}
-			
-			if (PropertyFloat("Minor Thickness", gridSettings.MinorLineThickness, 0.1f, 0.1f, 5.0f, "Minor grid line thickness")) {
-			}
-			
-			if (PropertyFloat("Major Thickness", gridSettings.MajorLineThickness, 0.1f, 0.1f, 5.0f, "Major grid line thickness (every 10 lines)")) {
-			}
-			
-			Separator();
-			
-			// ========================================
-			// PERFORMANCE
-			// ========================================
-			Text("Performance");
-			AddSpacing(SpacingValues::XS);
-			
+			EndSettingsPanel();
+		}
+
+		if (BeginSettingsPanel("Ambient Occlusion", false)) {
+			PropertyCheckbox("Enable SSAO", config.EnableSSAO, "Screen-Space Ambient Occlusion");
+			EndSettingsPanel();
+		}
+
+		if (BeginSettingsPanel("Performance", false)) {
 			bool parallelPasses = RenderSystem::IsParallelPassesEnabled();
-			if (PropertyCheckbox("Parallel Passes", parallelPasses, "Enable parallel render pass execution")) {
+			if (PropertyCheckbox("Parallel Passes", parallelPasses, "Enable parallel render pass execution"))
 				RenderSystem::SetParallelPassesEnabled(parallelPasses);
-			}
-			
-			if (PropertyCheckbox("Parallel Draw Collection", config.EnableParallelDrawCollection, "Enable parallel entity iteration for draw commands")) {
-			}
-			
-			EndSection();
+			PropertyCheckbox("Parallel Draw Collection", config.EnableParallelDrawCollection, "Enable parallel entity iteration for draw commands");
+			EndSettingsPanel();
 		}
 	}
-	
+
+	// ========================================
+	// VIEWPORT (editor-only drawing)
+	// ========================================
+
+	void SettingsPanel::DrawViewportSection() {
+		using namespace UI;
+		if (BeginSettingsPanel("Grid")) {
+			auto& gridSettings = GridRenderer::GetSettings();
+			PropertyColor("Color", gridSettings.GridColor);
+			PropertyFloat("Scale", gridSettings.GridScale, 0.1f, 0.1f, 100.0f, "Size of each grid cell in units");
+			PropertyFloat("Extent", gridSettings.FadeDistance, 1.0f, 5.0f, 500.0f, "How far the grid extends");
+			PropertyFloat("Minor Thickness", gridSettings.MinorLineThickness, 0.1f, 0.1f, 5.0f, "Minor grid line thickness");
+			PropertyFloat("Major Thickness", gridSettings.MajorLineThickness, 0.1f, 0.1f, 5.0f, "Major grid line thickness (every 10 lines)");
+			EndSettingsPanel();
+		}
+		if (BeginSettingsPanel("Physics Overlays")) {
+			PropertyCheckbox("2D Colliders", m_ShowPhysicsColliders, "Display Box2D colliders");
+			PropertyCheckbox("3D Colliders", m_ShowPhysics3DColliders, "Display Bullet colliders");
+			EndSettingsPanel();
+		}
+	}
+
 	// ========================================
 	// POST-PROCESS SECTION
 	// ========================================
@@ -226,24 +285,19 @@ namespace Lunex {
 	void SettingsPanel::DrawPostProcessSection() {
 		using namespace UI;
 		
-		if (BeginSection("Post-Processing", true)) {
+		{
 			auto& ppConfig = PostProcessRenderer::GetConfig();
 			auto& renderConfig = RenderSystem::GetConfig();
 			
 			if (!PostProcessRenderer::IsInitialized()) {
 				TextColored(Colors::Warning(), "Post-processing not initialized (requires Deferred Rendering)");
-				EndSection();
 				return;
 			}
 			
 			// ========================================
 			// BLOOM
 			// ========================================
-			Text("Bloom");
-			AddSpacing(SpacingValues::XS);
-			
-			TextWrapped("Bloom simulates bright light bleeding beyond object boundaries, creating a glow effect.", TextVariant::Muted);
-			AddSpacing(SpacingValues::XS);
+			if (BeginSettingsPanel("Bloom")) {
 			
 			if (PropertyCheckbox("Enable Bloom", ppConfig.EnableBloom, "Enable bloom post-processing effect")) {
 				renderConfig.EnableBloom = ppConfig.EnableBloom;
@@ -282,11 +336,9 @@ namespace Lunex {
 			// ========================================
 			// VIGNETTE
 			// ========================================
-			Text("Vignette");
-			AddSpacing(SpacingValues::XS);
-			
-			TextWrapped("Darkens the edges of the screen, drawing focus to the center.", TextVariant::Muted);
-			AddSpacing(SpacingValues::XS);
+				EndSettingsPanel();
+			}
+			if (BeginSettingsPanel("Vignette")) {
 			
 			if (PropertyCheckbox("Enable Vignette", ppConfig.EnableVignette, "Enable vignette effect")) {
 				renderConfig.EnableVignette = ppConfig.EnableVignette;
@@ -318,11 +370,9 @@ namespace Lunex {
 			// ========================================
 			// CHROMATIC ABERRATION
 			// ========================================
-			Text("Chromatic Aberration");
-			AddSpacing(SpacingValues::XS);
-			
-			TextWrapped("Simulates lens color fringing by splitting RGB channels at the edges.", TextVariant::Muted);
-			AddSpacing(SpacingValues::XS);
+				EndSettingsPanel();
+			}
+			if (BeginSettingsPanel("Chromatic Aberration")) {
 			
 			if (PropertyCheckbox("Enable Chromatic Aberration", ppConfig.EnableChromaticAberration,
 				"Enable chromatic aberration effect")) {
@@ -343,11 +393,9 @@ namespace Lunex {
 			// ========================================
 			// SCREEN-SPACE REFLECTIONS
 			// ========================================
-			Text("Screen-Space Reflections");
-			AddSpacing(SpacingValues::XS);
-
-			TextWrapped("Ray-marched reflections of on-screen geometry. Works best on smooth and metallic surfaces.", TextVariant::Muted);
-			AddSpacing(SpacingValues::XS);
+				EndSettingsPanel();
+			}
+			if (BeginSettingsPanel("Screen-Space Reflections")) {
 
 			if (PropertyCheckbox("Enable SSR", ppConfig.EnableSSR, "Enable screen-space reflections")) {
 				NotifyPostProcessChanged();
@@ -383,11 +431,9 @@ namespace Lunex {
 			// ========================================
 			// TONE MAPPING
 			// ========================================
-			Text("Tone Mapping");
-			AddSpacing(SpacingValues::XS);
-			
-			TextWrapped("Controls how HDR values are mapped to displayable range.", TextVariant::Muted);
-			AddSpacing(SpacingValues::XS);
+				EndSettingsPanel();
+			}
+			if (BeginSettingsPanel("Color Management")) {
 			
 			const char* toneMapOptions[] = { "ACES Film", "Reinhard", "Uncharted 2", "None (Linear)" };
 			if (PropertyDropdown("Operator", ppConfig.ToneMapOperator, toneMapOptions, 4,
@@ -406,15 +452,16 @@ namespace Lunex {
 				"Gamma correction value (2.2 = standard sRGB)")) {
 				NotifyPostProcessChanged();
 			}
-			
-			EndSection();
+			EndSettingsPanel();
+			}
 		}
 	}
 	
 	void SettingsPanel::DrawEnvironmentSection() {
 		using namespace UI;
 		
-		if (BeginSection("Environment", true)) {
+		{
+			if (BeginSettingsPanel("Environment", true)) {
 			// Enable/Disable skybox
 			bool skyboxEnabled = SkyboxRenderer::IsEnabled();
 			if (PropertyCheckbox("Enable Skybox", skyboxEnabled)) {
@@ -482,8 +529,9 @@ namespace Lunex {
 			// ========================================
 			// SUN LIGHT SYNCHRONIZATION
 			// ========================================
-			Text("Sun Light Synchronization");
-			AddSpacing(SpacingValues::XS);
+				EndSettingsPanel();
+			}
+			if (BeginSettingsPanel("Sun Light Synchronization")) {
 			
 			bool hasSunLight = LightSystem::Get().HasSunLight();
 			bool syncWithSun = SkyboxRenderer::IsSyncWithSunLight();
@@ -515,7 +563,7 @@ namespace Lunex {
 			Separator();
 			
 			// Environment settings (only if HDRI is loaded)
-			if (hasHDRI) {
+			if (SkyboxRenderer::HasEnvironmentLoaded()) {
 				// Intensity
 				float intensity = SkyboxRenderer::GetIntensity();
 				if (PropertyFloat("Intensity", intensity, 0.01f, 0.0f, 10.0f)) {
@@ -560,18 +608,21 @@ namespace Lunex {
 					SkyboxRenderer::ApplyBackgroundClearColor();
 				}
 			}
-			
-			EndSection();
+			EndSettingsPanel();
+			}
 		}
 	}
 	
 	void SettingsPanel::DrawShadowsSection() {
 		using namespace UI;
 		
-		if (BeginSection("Shadows", true)) {
+		{
 			auto& shadowSystem = ShadowSystem::Get();
 			ShadowConfig config = shadowSystem.GetConfig();
 			bool configChanged = false;
+			const char* resOptions[] = { "512", "1024", "2048", "4096" };
+			int resValues[] = { 512, 1024, 2048, 4096 };
+			if (BeginSettingsPanel("Shadows", true)) {
 			
 			// ========================================
 			// GLOBAL SHADOW SETTINGS
@@ -583,7 +634,7 @@ namespace Lunex {
 			
 			if (!shadowsEnabled) {
 				TextWrapped("Shadows are disabled globally.", TextVariant::Muted);
-				EndSection();
+				EndSettingsPanel();
 				return;
 			}
 			
@@ -592,8 +643,9 @@ namespace Lunex {
 			// ========================================
 			// DIRECTIONAL / SUN LIGHT SHADOWS (CSM)
 			// ========================================
-			Text("Directional Light (CSM)");
-			AddSpacing(SpacingValues::XS);
+				EndSettingsPanel();
+			}
+			if (BeginSettingsPanel("Directional Light (CSM)")) {
 			
 			bool hasSunLight = LightSystem::Get().HasSunLight();
 			if (hasSunLight) {
@@ -611,8 +663,6 @@ namespace Lunex {
 			
 			// CSM Resolution
 			int dirRes = static_cast<int>(config.DirectionalResolution);
-			const char* resOptions[] = { "512", "1024", "2048", "4096" };
-			int resValues[] = { 512, 1024, 2048, 4096 };
 			int resIdx = 2; // default 2048
 			for (int i = 0; i < 4; i++) {
 				if (resValues[i] == dirRes) { resIdx = i; break; }
@@ -651,8 +701,9 @@ namespace Lunex {
 			// ========================================
 			// SPOT & POINT LIGHT SHADOWS
 			// ========================================
-			Text("Spot & Point Light Shadows");
-			AddSpacing(SpacingValues::XS);
+				EndSettingsPanel();
+			}
+			if (BeginSettingsPanel("Spot & Point Light Shadows")) {
 			
 			uint32_t spotCount = LightSystem::Get().GetSpotLightCount();
 			uint32_t pointCount = LightSystem::Get().GetPointLightCount();
@@ -697,8 +748,9 @@ namespace Lunex {
 			// ========================================
 			// FILTERING & SOFTENING
 			// ========================================
-			Text("Filtering & Softening");
-			AddSpacing(SpacingValues::XS);
+				EndSettingsPanel();
+			}
+			if (BeginSettingsPanel("Filtering & Softening")) {
 			
 			// Filter mode (hard shadows for e.g. space games)
 			const char* filterOptions[] = { "Hard", "Soft" };
@@ -741,11 +793,9 @@ namespace Lunex {
 			// ========================================
 			// SKY COLOR TINTING
 			// ========================================
-			Text("Shadow Color Tinting");
-			AddSpacing(SpacingValues::XS);
-			
-			TextWrapped("Shadows in the real world receive indirect light from the sky, giving them a subtle color tint.", TextVariant::Muted);
-			AddSpacing(SpacingValues::XS);
+				EndSettingsPanel();
+			}
+			if (BeginSettingsPanel("Shadow Color Tinting")) {
 			
 			if (PropertyCheckbox("Enable Sky Tint", config.EnableSkyColorTint, "Tint shadows with sky/environment color")) {
 				configChanged = true;
@@ -763,8 +813,9 @@ namespace Lunex {
 			// ========================================
 			// SHADOW STATISTICS
 			// ========================================
-			Text("Shadow Statistics");
-			AddSpacing(SpacingValues::XS);
+				EndSettingsPanel();
+			}
+			if (BeginSettingsPanel("Shadow Statistics")) {
 			
 			auto stats = shadowSystem.GetStatistics();
 			TextColored(Colors::TextSecondary(), "  Maps Rendered: %d", stats.ShadowMapsRendered);
@@ -772,13 +823,13 @@ namespace Lunex {
 			TextColored(Colors::TextSecondary(), "  Spot Maps: %d", stats.SpotMapsRendered);
 			TextColored(Colors::TextSecondary(), "  Point Faces: %d", stats.PointFacesRendered);
 			TextColored(Colors::TextSecondary(), "  Draw Calls: %d", stats.ShadowDrawCalls);
-			
+			EndSettingsPanel();
+			}
+
 			// Apply config changes
 			if (configChanged) {
 				shadowSystem.SetConfig(config);
 			}
-			
-			EndSection();
 		}
 	}
 	
@@ -793,16 +844,11 @@ namespace Lunex {
 	void SettingsPanel::DrawPhysicsGeneralSection() {
 		using namespace UI;
 		
-		if (BeginSection("General Physics", true)) {
+		{
 			auto& physicsCore = PhysicsCore::Get();
 			PhysicsConfig config = physicsCore.GetConfig();
 			bool configChanged = false;
-			
-			// ======================================
-			// GRAVITY
-			// ======================================
-			Text("World Gravity");
-			AddSpacing(SpacingValues::XS);
+			if (BeginSettingsPanel("World Gravity")) {
 			
 			glm::vec3 gravity = config.Gravity;
 			if (PropertyFloat("Gravity X", gravity.x, 0.1f, -100.0f, 100.0f, "Horizontal gravity (m/s^2)")) {
@@ -848,8 +894,9 @@ namespace Lunex {
 			// ========================================
 			// SIMULATION SETTINGS
 			// ========================================
-			Text("Simulation");
-			AddSpacing(SpacingValues::XS);
+				EndSettingsPanel();
+			}
+			if (BeginSettingsPanel("Simulation")) {
 			
 			const char* timestepOptions[] = { "30 Hz", "60 Hz", "120 Hz", "240 Hz" };
 			float timestepValues[] = { 1.0f / 30.0f, 1.0f / 60.0f, 1.0f / 120.0f, 1.0f / 240.0f };
@@ -879,11 +926,9 @@ namespace Lunex {
 			// ========================================
 			// CCD (Continuous Collision Detection)
 			// ========================================
-			Text("Continuous Collision Detection");
-			AddSpacing(SpacingValues::XS);
-			
-			TextWrapped("CCD prevents fast-moving objects from tunneling through thin surfaces.", TextVariant::Muted);
-			AddSpacing(SpacingValues::XS);
+				EndSettingsPanel();
+			}
+			if (BeginSettingsPanel("Continuous Collision Detection")) {
 			
 			if (PropertyFloat("Motion Threshold", config.DefaultCcdMotionThreshold, 0.01f, 0.0f, 10.0f,
 				"Objects moving faster than this (m/frame) use CCD")) {
@@ -900,8 +945,9 @@ namespace Lunex {
 			// ========================================
 			// DEBUG
 			// ========================================
-			Text("Debug");
-			AddSpacing(SpacingValues::XS);
+				EndSettingsPanel();
+			}
+			if (BeginSettingsPanel("Debug")) {
 			
 			bool debugDraw = config.EnableDebugDraw;
 			if (PropertyCheckbox("Debug Draw", debugDraw, "Render physics debug wireframes")) {
@@ -914,8 +960,9 @@ namespace Lunex {
 			// ========================================
 			// STATISTICS
 			// ========================================
-			Text("Statistics");
-		 AddSpacing(SpacingValues::XS);
+				EndSettingsPanel();
+			}
+			if (BeginSettingsPanel("Statistics")) {
 			
 			auto* world = physicsCore.GetWorld();
 			if (world) {
@@ -925,36 +972,38 @@ namespace Lunex {
 			} else {
 				TextColored(Colors::TextMuted(), "  Physics not initialized");
 			}
-			
+			EndSettingsPanel();
+			}
+
 			if (configChanged) {
 				physicsCore.SetConfig(config);
 			}
-			
-			EndSection();
 		}
 	}
 	
 	void SettingsPanel::DrawPhysics2DSection() {
 		using namespace UI;
 		
-		if (BeginSection("Physics 2D", false)) {
+		{
+			if (BeginSettingsPanel("Physics 2D", false)) {
 			if (PropertyCheckbox("Show 2D colliders", m_ShowPhysicsColliders, "Display Box2D colliders")) {
 				// Value updated by reference
 			}
-			
-			EndSection();
+			EndSettingsPanel();
+			}
 		}
 	}
 	
 	void SettingsPanel::DrawPhysics3DSection() {
 		using namespace UI;
 		
-		if (BeginSection("Physics 3D", false)) {
+		{
+			if (BeginSettingsPanel("Physics 3D", false)) {
 			if (PropertyCheckbox("Show 3D colliders", m_ShowPhysics3DColliders, "Display Bullet3D colliders")) {
 				// Value updated by reference
 			}
-			
-			EndSection();
+			EndSettingsPanel();
+			}
 		}
 	}
 	

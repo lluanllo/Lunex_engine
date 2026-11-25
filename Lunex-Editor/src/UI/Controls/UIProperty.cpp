@@ -145,10 +145,27 @@ namespace Lunex::UI {
 		return changed;
 	}
 	
+	namespace { bool s_SplitLayout = false; }
+
+	void SetPropertySplitLayout(bool enabled) { s_SplitLayout = enabled; }
+
 	void BeginPropertyRow(const std::string& label, const char* tooltip) {
+		// "Name##id" -> show only "Name"
+		const size_t hidden = label.find("##");
+		const std::string shown = hidden == std::string::npos ? label : label.substr(0, hidden);
 		ImGui::Columns(2, nullptr, false);
-		ImGui::SetColumnWidth(0, SpacingValues::PropertyLabelWidth);
-		Label(label, tooltip);
+		if (s_SplitLayout) {
+			// Blender property split: label right-aligned in the left 40%
+			const float colW = std::max(80.0f, ImGui::GetContentRegionAvail().x * 0.4f);
+			ImGui::SetColumnWidth(0, colW);
+			const float textW = ImGui::CalcTextSize(shown.c_str()).x;
+			const float x = ImGui::GetCursorPosX() + std::max(0.0f, colW - textW - 12.0f);
+			ImGui::SetCursorPosX(x);
+		}
+		else {
+			ImGui::SetColumnWidth(0, SpacingValues::PropertyLabelWidth);
+		}
+		Label(shown, tooltip);
 		ImGui::NextColumn();
 	}
 	

@@ -34,6 +34,8 @@ namespace Lunex::UI {
 	 * @brief Property row with label and control
 	 */
 	void BeginPropertyRow(const std::string& label, const char* tooltip = nullptr);
+	// Blender-style rows: labels right-aligned in the left 40% (used by the Settings panel)
+	void SetPropertySplitLayout(bool enabled);
 	void EndPropertyRow();
 	
 	/**
