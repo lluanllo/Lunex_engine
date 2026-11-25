@@ -1,5 +1,7 @@
 #include "stpch.h"
 #include "ScriptingEngine.h"
+#include "ScriptBuild.h"
+#include "ScriptReflection.h"
 #include "Core/Input.h"
 #include "Scene/Entity.h"
 #include "Physics/Physics.h"
@@ -27,6 +29,13 @@ namespace Lunex {
 	// Variables globales para el sistema de scripting (lambdas sin captura)
 	static float g_CurrentDeltaTime = 0.016f;
 	static Scene* g_CurrentScene = nullptr;
+
+	// Script being loaded right now (its RegisterVar calls pick up inspector overrides)
+	static size_t g_LoadingScriptIndex = 0;
+
+	// Scene change requested from a script, consumed by the host (editor/runtime) at frame end
+	static std::string s_PendingSceneLoad;
+	static std::mutex s_PendingSceneMutex;
 
 	ScriptingEngine::ScriptingEngine() {
 	}
@@ -780,15 +789,74 @@ namespace Lunex {
 			}
 		};
 
+		// === SCENE ACCESS ===
+		m_EngineContext->FindEntityByName = [](const char* name) -> void* {
+			if (!name || !g_CurrentScene) return nullptr;
+			auto view = g_CurrentScene->GetAllEntitiesWith<TagComponent>();
+			for (auto e : view) {
+				Entity ent{ e, g_CurrentScene };
+				if (ent.GetComponent<TagComponent>().Tag == name) {
+					return reinterpret_cast<void*>(static_cast<uintptr_t>(e));
+				}
+			}
+			return nullptr;
+		};
+
+		// === INSPECTOR OVERRIDES FOR PUBLIC VARIABLES ===
+		m_EngineContext->GetFieldOverride = [](void* entity, const char* name, int type, float* outNumbers,
+			char* outString, int outStringSize) -> bool {
+			if (!entity || !g_CurrentScene || !name) return false;
+			Entity ent{ static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity)), g_CurrentScene };
+			if (!ent.HasComponent<ScriptComponent>()) return false;
+			auto& sc = ent.GetComponent<ScriptComponent>();
+			if (g_LoadingScriptIndex >= sc.FieldOverrides.size()) return false;
+			auto& overrides = sc.FieldOverrides[g_LoadingScriptIndex];
+			auto it = overrides.find(name);
+			if (it == overrides.end() || static_cast<int>(it->second.Type) != type) return false;
+			for (int i = 0; i < 4; i++) outNumbers[i] = it->second.Number[i];
+			if (outString && outStringSize > 0) {
+				strncpy_s(outString, static_cast<size_t>(outStringSize), it->second.String.c_str(), _TRUNCATE);
+			}
+			return true;
+		};
+
+		m_EngineContext->PlayAnimation = [](void* entity, int clipIndex) {
+			if (!entity || !g_CurrentScene) return;
+			Entity ent{ static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity)), g_CurrentScene };
+			if (ent.HasComponent<AnimatorComponent>()) ent.GetComponent<AnimatorComponent>().Play(clipIndex);
+		};
+
+		m_EngineContext->StopAnimation = [](void* entity) {
+			if (!entity || !g_CurrentScene) return;
+			Entity ent{ static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity)), g_CurrentScene };
+			if (ent.HasComponent<AnimatorComponent>()) ent.GetComponent<AnimatorComponent>().Stop();
+		};
+
+		m_EngineContext->RequestLoadScene = [](const char* scenePath) {
+			if (!scenePath) return;
+			std::scoped_lock lock(s_PendingSceneMutex);
+			s_PendingSceneLoad = scenePath;
+		};
+
 		// CurrentEntity se establecerá cuando se cargue el script
 
-		for (int i = 0; i < 16; ++i) {
+		for (int i = 0; i < 11; ++i) {
 			m_EngineContext->reserved[i] = nullptr;
 		}
 	}
 
+	bool ScriptingEngine::ConsumePendingSceneLoad(std::string& outScenePath) {
+		std::scoped_lock lock(s_PendingSceneMutex);
+		if (s_PendingSceneLoad.empty()) return false;
+		outScenePath = std::move(s_PendingSceneLoad);
+		s_PendingSceneLoad.clear();
+		return true;
+	}
+
 	void ScriptingEngine::OnScriptsStart(entt::registry& registry) {
-		// ===== PARALLELIZED SCRIPT COMPILATION =====
+		// Script callbacks resolve entities through g_CurrentScene: bind it to *this* engine's scene
+		g_CurrentScene = m_CurrentScene;
+// ===== PARALLELIZED SCRIPT COMPILATION =====
 		// Collect all scripts that need compilation
 		struct ScriptCompileTask {
 			uint32_t EntityRaw;  // Store as uint32_t instead of entt::entity
@@ -900,8 +968,11 @@ namespace Lunex {
 
 				// Establecer CurrentEntity antes de cargar el script
 				m_EngineContext->CurrentEntity = reinterpret_cast<void*>(static_cast<uintptr_t>(entityHandle));
+				g_LoadingScriptIndex = i;
 
-				if (plugin->Load(scriptComp.CompiledDLLPaths[i], m_EngineContext.get())) {
+				// Load a private copy so the original DLL can be recompiled while playing
+				std::string loadPath = ScriptBuild::MakeLoadableCopy(scriptComp.CompiledDLLPaths[i]);
+				if (plugin->Load(loadPath, m_EngineContext.get())) {
 					plugin->OnPlayModeEnter();
 					
 					// Actualizar estado en el componente
@@ -926,7 +997,8 @@ namespace Lunex {
 	}
 
 	void ScriptingEngine::OnScriptsStop(entt::registry& registry) {
-		// Detener todos los scripts
+		g_CurrentScene = m_CurrentScene;
+// Detener todos los scripts
 		for (auto& [uuid, plugin] : m_ScriptInstances) {
 			if (plugin) {
 				plugin->OnPlayModeExit();
@@ -936,6 +1008,13 @@ namespace Lunex {
 
 		// Limpiar el mapa
 		m_ScriptInstances.clear();
+
+		// Remove the private DLL copies loaded this session (FreeLibrary already happened)
+		registry.view<ScriptComponent>().each([](auto, auto& sc) {
+			for (const auto& dll : sc.CompiledDLLPaths) {
+				if (!dll.empty()) ScriptBuild::CleanupLoadableCopies(dll);
+			}
+		});
 
 		// Marcar todos los componentes como descargados
 		auto view = registry.view<ScriptComponent>();
@@ -953,6 +1032,7 @@ namespace Lunex {
 	void ScriptingEngine::OnScriptsUpdate(float deltaTime) {
 		// Actualizar deltaTime global
 		g_CurrentDeltaTime = deltaTime;
+		g_CurrentScene = m_CurrentScene;
 
 		if (m_ScriptInstances.empty()) {
 			return;
@@ -982,320 +1062,8 @@ namespace Lunex {
 	}
 
 	bool ScriptingEngine::CompileScript(const std::string& scriptPath, std::string& outDLLPath) {
-		std::filesystem::path fullScriptPath = std::filesystem::path("assets") / scriptPath;
-		std::filesystem::path scriptDir = fullScriptPath.parent_path();
-		std::filesystem::path scriptName = fullScriptPath.stem();
-
-		// Detectar configuración actual
-		std::string configuration;
-#ifdef LN_DEBUG
-		configuration = "Debug";
-#elif defined(LN_RELEASE)
-		configuration = "Release";
-#elif defined(LN_DIST)
-		configuration = "Dist";
-#else
-		configuration = "Debug";
-#endif
-
-		// IMPORTANTE: La DLL debe estar en el directorio del script
-		std::filesystem::path dllPath = scriptDir / "bin" / configuration / (scriptName.string() + ".dll");
-		std::filesystem::path expPath = scriptDir / "bin" / configuration / (scriptName.string() + ".exp");
-		std::filesystem::path libPath = scriptDir / "bin" / configuration / (scriptName.string() + ".lib");
-		std::filesystem::path pdbPath = scriptDir / "bin" / configuration / (scriptName.string() + ".pdb");
-
-		// === DESCARGAR DLL ANTIGUA SI EXISTE ===
-		if (std::filesystem::exists(dllPath)) {
-			auto dllTime = std::filesystem::last_write_time(dllPath);
-			auto scriptTime = std::filesystem::last_write_time(fullScriptPath);
-
-			if (dllTime >= scriptTime) {
-				outDLLPath = dllPath.string();
-				LNX_LOG_INFO("Found up-to-date compiled DLL: {0}", outDLLPath);
-				return true;
-			}
-
-			LNX_LOG_INFO("Script has been modified, recompiling...");
-			LNX_LOG_WARN("IMPORTANT: Unloading old DLL before recompilation...");
-
-			// Descargar la DLL del plugin si está cargada
-			for (auto it = m_ScriptInstances.begin(); it != m_ScriptInstances.end();) {
-				// Buscar en el registry cuál entidad usa esta DLL
-				bool found = false;
-				auto view = m_CurrentScene->m_Registry.view<ScriptComponent, IDComponent>();
-				
-				view.each([&](auto entity, auto& scriptComp, auto& idComp) {
-					// Buscar en todos los scripts del componente
-					for (size_t i = 0; i < scriptComp.CompiledDLLPaths.size(); i++) {
-						if (scriptComp.CompiledDLLPaths[i] == dllPath.string() && 
-							i < scriptComp.ScriptLoadedStates.size() && 
-							scriptComp.ScriptLoadedStates[i]) {
-							
-							// Construir clave única (UUID + índice)
-							uint64_t uniqueKey = ((uint64_t)idComp.ID << 32) | i;
-							
-							if (it->first == uniqueKey) {
-								LNX_LOG_INFO("Unloading script #{0} for entity: {1}", i + 1, (uint64_t)idComp.ID);
-								it->second->OnPlayModeExit();
-								it->second->Unload();
-								it = m_ScriptInstances.erase(it);
-								
-								// Actualizar estado en el componente
-								scriptComp.ScriptLoadedStates[i] = false;
-								if (i < scriptComp.ScriptPluginInstances.size()) {
-									scriptComp.ScriptPluginInstances[i] = nullptr;
-								}
-								
-								found = true;
-								return;  // Exit each() early
-							}
-						}
-					}
-				});
-				
-				if (!found) ++it;
-			}
-
-			// Intentar borrar DLL antigua y archivos relacionados
-			std::error_code ec;
-			std::filesystem::remove(dllPath, ec);
-			if (ec) {
-				LNX_LOG_ERROR("Failed to delete old DLL: {0} (Error: {1})", dllPath.string(), ec.message());
-				LNX_LOG_ERROR("The DLL might still be in use. Try stopping Play mode first.");
-				return false;
-			}
-
-			// Borrar archivos auxiliares
-			std::filesystem::remove(expPath, ec);
-			std::filesystem::remove(libPath, ec);
-			std::filesystem::remove(pdbPath, ec);
-
-			LNX_LOG_INFO("Old DLL and related files removed successfully");
-		}
-
-		// === DETECTAR VISUAL STUDIO AUTOMÁTICAMENTE ===
-		LNX_LOG_INFO("=== Auto-detecting Visual Studio installation ===");
-
-		std::vector<std::string> vsBasePaths = {
-			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community",
-			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional",
-			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise",
-			"C:\\Program Files\\Microsoft Visual Studio\\2022\\BuildTools",
-			"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\Community",
-			"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\Professional",
-			"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\Enterprise",
-			"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools",
-			"C:\\Program Files\\Microsoft Visual Studio\\2019\\Community",
-			"C:\\Program Files\\Microsoft Visual Studio\\2019\\Professional",
-			"C:\\Program Files\\Microsoft Visual Studio\\2019\\Enterprise",
-			"C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community",
-		};
-
-		std::filesystem::path vsPath;
-		std::filesystem::path vcvarsPath;
-		std::filesystem::path clPath;
-
-		for (const auto& basePath : vsBasePaths) {
-			std::filesystem::path candidate(basePath);
-			std::filesystem::path vcvarsCandidate = candidate / "VC" / "Auxiliary" / "Build" / "vcvars64.bat";
-
-			if (std::filesystem::exists(vcvarsCandidate)) {
-				vsPath = candidate;
-				vcvarsPath = vcvarsCandidate;
-
-				std::filesystem::path clCandidate = candidate / "VC" / "Tools" / "MSVC";
-				if (std::filesystem::exists(clCandidate)) {
-					for (auto& entry : std::filesystem::directory_iterator(clCandidate)) {
-						if (entry.is_directory()) {
-							std::filesystem::path clExe = entry.path() / "bin" / "Hostx64" / "x64" / "cl.exe";
-							if (std::filesystem::exists(clExe)) {
-								clPath = clExe;
-								break;
-							}
-						}
-					}
-				}
-
-				if (!clPath.empty()) {
-					LNX_LOG_INFO("Found Visual Studio at: {0}", vsPath.string());
-					LNX_LOG_INFO("Found cl.exe at: {0}", clPath.string());
-					break;
-				}
-			}
-		}
-
-		if (clPath.empty()) {
-			LNX_LOG_ERROR("Could not auto-detect Visual Studio installation!");
-			LNX_LOG_ERROR("Please install Visual Studio 2022 or 2019 with C++ tools");
-			LNX_LOG_ERROR("Download from: https://visualstudio.microsoft.com/downloads/");
-			return false;
-		}
-
-		// === PREPARAR COMPILACIÓN ===
-		LNX_LOG_INFO("=== Compiling script: {0} ===", scriptName.string());
-
-		std::filesystem::path binDir = scriptDir / "bin" / configuration;
-		std::filesystem::path objDir = scriptDir / "bin-int" / configuration;
-
-		std::filesystem::create_directories(binDir);
-		std::filesystem::create_directories(objDir);
-
-		std::filesystem::path scriptCoreInclude;
-		std::filesystem::path lunexInclude;
-		std::filesystem::path spdlogInclude;
-		std::filesystem::path glmInclude;
-
-		std::filesystem::path searchDir = scriptDir;
-		for (int i = 0; i < 10; i++) {
-			std::filesystem::path candidate = searchDir / "Lunex-ScriptCore" / "src";
-			if (std::filesystem::exists(candidate)) {
-				scriptCoreInclude = candidate;
-				lunexInclude = searchDir / "Lunex" / "src";
-				spdlogInclude = searchDir / "vendor" / "spdlog" / "include";
-				glmInclude = searchDir / "vendor" / "glm"; // ? FIX: Buscar el directorio glm, no glm.hpp
-				break;
-			}
-			searchDir = searchDir.parent_path();
-		}
-
-		if (scriptCoreInclude.empty()) {
-			LNX_LOG_ERROR("Could not find Lunex-ScriptCore!");
-			LNX_LOG_ERROR("Make sure your script is inside the Lunex project structure");
-			return false;
-		}
-
-		// === CONSTRUIR COMANDO DE COMPILACIÓN ===
-		std::filesystem::path tempBatPath = scriptDir / "temp_compile.bat";
-
-		std::ofstream batFile(tempBatPath);
-		if (!batFile.is_open()) {
-			LNX_LOG_ERROR("Failed to create temporary batch file");
-			return false;
-		}
-
-		batFile << "@echo off\n";
-		batFile << "REM Auto-generated compile script\n";
-		batFile << "call \"" << vcvarsPath.string() << "\" >nul 2>&1\n";
-		batFile << "if errorlevel 1 (\n";
-		batFile << "    echo ERROR: Failed to setup Visual Studio environment\n";
-		batFile << "    exit /b 1\n";
-		batFile << ")\n\n";
-
-		std::string compilerFlags = "/LD /EHsc /std:c++20 /utf-8 /nologo";
-		if (configuration == "Debug") {
-			compilerFlags += " /MDd /Zi /Od /DLUNEX_SCRIPT_EXPORT /DLN_DEBUG";
-		}
-		else {
-			compilerFlags += " /MD /O2 /DLUNEX_SCRIPT_EXPORT /DLN_RELEASE";
-		}
-
-		std::string includes =
-			" /I\"" + scriptCoreInclude.string() + "\"" +
-			" /I\"" + lunexInclude.string() + "\"" +
-			" /I\"" + spdlogInclude.string() + "\"" +
-			" /I\"" + glmInclude.string() + "\"";
-
-		// Verificar que GLM existe
-		if (!std::filesystem::exists(glmInclude)) {
-			LNX_LOG_ERROR("GLM not found at: {0}", glmInclude.string());
-			LNX_LOG_ERROR("Searching for GLM in parent directories...");
-			
-			// Buscar GLM más arriba
-			std::filesystem::path searchGlm = scriptDir;
-			bool foundGlm = false;
-			for (int i = 0; i < 10; i++) {
-				std::filesystem::path glmCandidate = searchGlm / "vendor" / "glm";
-				if (std::filesystem::exists(glmCandidate)) {
-					glmInclude = glmCandidate;
-					LNX_LOG_INFO("Found GLM at: {0}", glmInclude.string());
-					foundGlm = true;
-					break;
-				}
-				searchGlm = searchGlm.parent_path();
-			}
-			
-			if (!foundGlm) {
-				LNX_LOG_ERROR("Could not find GLM library!");
-				return false;
-			}
-			
-			// Reconstruir includes con el nuevo path de GLM
-			includes =
-				" /I\"" + scriptCoreInclude.string() + "\"" +
-				" /I\"" + lunexInclude.string() + "\"" +
-				" /I\"" + spdlogInclude.string() + "\"" +
-				" /I\"" + glmInclude.string() + "\"";
-		}
-
-		std::string outputDll = "/Fe:\"" + dllPath.string() + "\"";
-		std::string outputObj = "/Fo:\"" + objDir.string() + "\\\\\"";
-		
-		// Include LunexScriptingAPI.cpp for helper class implementations
-		std::filesystem::path apiCppPath = scriptCoreInclude / "LunexScriptingAPI.cpp";
-
-		batFile << "cl.exe " << compilerFlags << includes;
-		batFile << " \"" << fullScriptPath.string() + "\"";
-		// Add LunexScriptingAPI.cpp to compile and link
-		if (std::filesystem::exists(apiCppPath)) {
-			batFile << " \"" << apiCppPath.string() << "\"";
-		}
-		batFile << " " << outputDll << " " << outputObj << " 2>&1\n";
-		batFile << "exit /b %errorlevel%\n";
-
-		batFile.close();
-
-		LNX_LOG_INFO("Compiling: {0}", scriptName.string());
-		LNX_LOG_INFO("Output: {0}", dllPath.string());
-
-		std::string batCommand = "\"" + tempBatPath.string() + "\" 2>&1";
-		FILE* pipe = _popen(batCommand.c_str(), "r");
-		if (!pipe) {
-			LNX_LOG_ERROR("Failed to execute compile script");
-			std::filesystem::remove(tempBatPath);
-			return false;
-		}
-
-		char buffer[512];
-		bool hadErrors = false;
-		while (fgets(buffer, sizeof(buffer), pipe)) {
-			std::string line = buffer;
-			if (!line.empty() && line.back() == '\n') line.pop_back();
-			if (!line.empty()) {
-				if (line.find("error") != std::string::npos ||
-					line.find("Error") != std::string::npos ||
-					line.find("ERROR") != std::string::npos) {
-					LNX_LOG_ERROR("[Compiler] {0}", line);
-					hadErrors = true;
-				}
-				else if (line.find("warning") != std::string::npos ||
-					line.find("Warning") != std::string::npos) {
-					LNX_LOG_WARN("[Compiler] {0}", line);
-				}
-				else if (line.find("Creating library") == std::string::npos &&
-					line.find(".exp") == std::string::npos) {
-					LNX_LOG_INFO("[Compiler] {0}", line);
-				}
-			}
-		}
-
-		int result = _pclose(pipe);
-		std::filesystem::remove(tempBatPath);
-
-		if (result != 0 || hadErrors) {
-			LNX_LOG_ERROR("Compilation failed with error code: {0}", result);
-			return false;
-		}
-
-		if (std::filesystem::exists(dllPath)) {
-			outDLLPath = dllPath.string();
-			LNX_LOG_INFO("=== Script compiled successfully! ===");
-			LNX_LOG_INFO("DLL created at: {0}", outDLLPath);
-			return true;
-		}
-		else {
-			LNX_LOG_ERROR("Compilation succeeded but DLL not found at: {0}", dllPath.string());
-			return false;
-		}
+		// Robust pipeline: path resolution, MSVC discovery, per-script temp dirs, status for the UI
+		return ScriptBuild::Compile(ScriptBuild::ResolveScriptPath(scriptPath), outDLLPath);
 	}
 
 }

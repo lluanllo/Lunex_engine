@@ -33,6 +33,9 @@ namespace Lunex {
 		// Obtener el contexto del engine
 		EngineContext* GetEngineContext() { return m_EngineContext.get(); }
 
+		// Scene change requested by a script (LoadScene). Returns true once per request.
+		static bool ConsumePendingSceneLoad(std::string& outScenePath);
+
 	private:
 		// Contexto del engine para scripts
 		std::unique_ptr<EngineContext> m_EngineContext;

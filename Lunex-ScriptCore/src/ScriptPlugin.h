@@ -41,6 +41,7 @@ namespace Lunex {
 
         // Verifica si el plugin está cargado
         bool IsLoaded() const { return m_Module != nullptr; }
+        IScriptModule* GetModule() const { return m_Module; }
 
         // Obtiene la ruta del plugin cargado
         const std::string& GetPath() const { return m_Path; }

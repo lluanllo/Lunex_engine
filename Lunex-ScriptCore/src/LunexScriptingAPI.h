@@ -597,8 +597,26 @@ namespace Lunex {
         // === ENTITY HANDLE ===
         void* CurrentEntity;
 
+        // === SCENE ACCESS ===
+        // (These took two of the reserved slots, so the struct layout is unchanged.)
+        // Returns the first entity whose Tag matches 'name', or nullptr.
+        void* (*FindEntityByName)(const char* name);
+        // Requests a scene change. Applied at the end of the frame. Path is relative
+        // to the project's asset directory (e.g. "Scenes/Level2.lunex").
+        void (*RequestLoadScene)(const char* scenePath);
+
+        // === INSPECTOR OVERRIDES ===
+        // Fills outNumbers[4] (and outString) with the value set in the editor for 'name'.
+        // Returns false if the inspector has no override (keep the script's default).
+        bool (*GetFieldOverride)(void* entity, const char* name, int type, float* outNumbers,
+                                 char* outString, int outStringSize);
+
+        // === ANIMATION (AnimatorComponent) ===
+        void (*PlayAnimation)(void* entity, int clipIndex);   // clipIndex < 0 = keep current clip
+        void (*StopAnimation)(void* entity);
+
         // Reservado para expansion futura sin romper ABI
-        void* reserved[16];
+        void* reserved[11];
     };
 
     // ========================================================================
@@ -633,6 +651,7 @@ namespace Lunex {
         // Internal engine callbacks (don't override these)
         void OnLoad(EngineContext* ctx) final {
             m_Context = ctx;
+            m_Self = ctx->CurrentEntity;
 
             // Initialize helper objects
             transform = TransformAPI(ctx, ctx->CurrentEntity);
@@ -642,24 +661,28 @@ namespace Lunex {
             time = TimeAPI(ctx);
             debug = DebugAPI(ctx);
 
-            // Call user Start
-            Start();
+            // Start runs at load so RegisterVar() calls are visible in the inspector.
+            // The m_Started guard makes sure it runs only once per play session
+            // (the engine calls OnLoad and OnPlayModeEnter back to back).
+            CallStart();
         }
 
         void OnUnload() final {
-            OnDestroy();
+            CallDestroy();
         }
 
-        void OnUpdate(float deltaTime) final {
+        void OnUpdate(float dt) final {
+            deltaTime = dt;
+            CallStart(); // no-op unless the script was stopped and resumed
             Update();
         }
 
         void OnPlayModeEnter() final {
-            Start();
+            CallStart();
         }
 
         void OnPlayModeExit() final {
-            OnDestroy();
+            CallDestroy();
         }
 
         std::vector<VarMetadata> GetPublicVariables() final {
@@ -675,34 +698,65 @@ namespace Lunex {
         TimeAPI time;
         DebugAPI debug;
 
+        // Seconds since last frame (valid inside Update)
+        float deltaTime = 0.0f;
+
         // Override these in your script
         virtual void Start() {}
         virtual void Update() {}
         virtual void OnDestroy() {}
 
+        // ---------------- Scene helpers ----------------
+
+        // Find another entity by its name (Tag). Returns nullptr if not found.
+        void* FindEntity(const std::string& name) {
+            return (m_Context && m_Context->FindEntityByName) ? m_Context->FindEntityByName(name.c_str()) : nullptr;
+        }
+
+        // Access components of any entity (e.g. one returned by FindEntity)
+        TransformAPI TransformOf(void* entity) { return TransformAPI(m_Context, entity); }
+        Rigidbody2DAPI RigidbodyOf(void* entity) { return Rigidbody2DAPI(m_Context, entity); }
+        Rigidbody3DAPI Rigidbody3DOf(void* entity) { return Rigidbody3DAPI(m_Context, entity); }
+
+        // The entity this script is attached to
+        void* Self() const { return m_Self; }
+
+        // Skeletal animation on this entity (needs an Animator + rigged Mesh Renderer)
+        void PlayAnimation(int clipIndex = -1) {
+            if (m_Context && m_Context->PlayAnimation) m_Context->PlayAnimation(m_Self, clipIndex);
+        }
+        void StopAnimation() {
+            if (m_Context && m_Context->StopAnimation) m_Context->StopAnimation(m_Self);
+        }
+
+        // Switch to another scene at the end of this frame (path relative to the asset folder)
+        void LoadScene(const std::string& scenePath) {
+            if (m_Context && m_Context->RequestLoadScene) m_Context->RequestLoadScene(scenePath.c_str());
+        }
+
         // Variable registration helpers
         void RegisterVar(const std::string& name, float* var) {
-            m_PublicVariables.push_back(VarMetadata(name, VarType::Float, var));
+            AddVar(VarMetadata(name, VarType::Float, var));
         }
 
         void RegisterVar(const std::string& name, int* var) {
-            m_PublicVariables.push_back(VarMetadata(name, VarType::Int, var));
+            AddVar(VarMetadata(name, VarType::Int, var));
         }
 
         void RegisterVar(const std::string& name, bool* var) {
-            m_PublicVariables.push_back(VarMetadata(name, VarType::Bool, var));
+            AddVar(VarMetadata(name, VarType::Bool, var));
         }
 
         void RegisterVar(const std::string& name, Vec2* var) {
-            m_PublicVariables.push_back(VarMetadata(name, VarType::Vec2, var));
+            AddVar(VarMetadata(name, VarType::Vec2, var));
         }
 
         void RegisterVar(const std::string& name, Vec3* var) {
-            m_PublicVariables.push_back(VarMetadata(name, VarType::Vec3, var));
+            AddVar(VarMetadata(name, VarType::Vec3, var));
         }
 
         void RegisterVar(const std::string& name, std::string* var) {
-            m_PublicVariables.push_back(VarMetadata(name, VarType::String, var));
+            AddVar(VarMetadata(name, VarType::String, var));
         }
 
         // Range-constrained registration
@@ -711,19 +765,61 @@ namespace Lunex {
             meta.HasRange = true;
             meta.MinValue = min;
             meta.MaxValue = max;
-            m_PublicVariables.push_back(meta);
+            AddVar(meta);
         }
 
         // With tooltip
         void RegisterVarTooltip(const std::string& name, float* var, const std::string& tooltip) {
             VarMetadata meta(name, VarType::Float, var);
             meta.Tooltip = tooltip;
-            m_PublicVariables.push_back(meta);
+            AddVar(meta);
         }
 
     private:
+        void CallStart() {
+            if (m_Started) return;
+            m_Started = true;
+            Start();
+        }
+
+        void CallDestroy() {
+            if (!m_Started) return;
+            m_Started = false;
+            OnDestroy();
+        }
+
+        // Re-registering a name (Start runs again on every Play) replaces the entry
+        void AddVar(const VarMetadata& meta) {
+            ApplyInspectorOverride(meta);
+            for (auto& existing : m_PublicVariables) {
+                if (existing.Name == meta.Name) { existing = meta; return; }
+            }
+            m_PublicVariables.push_back(meta);
+        }
+
+        // Value edited in the inspector wins over the default in code (applied at registration,
+        // so the rest of Start() already sees it)
+        void ApplyInspectorOverride(const VarMetadata& meta) {
+            if (!m_Context || !m_Context->GetFieldOverride || !meta.DataPtr || !m_Self) return;
+            float n[4] = { 0, 0, 0, 0 };
+            char text[512] = { 0 };
+            if (!m_Context->GetFieldOverride(m_Self, meta.Name.c_str(), static_cast<int>(meta.Type), n, text, sizeof(text)))
+                return;
+            switch (meta.Type) {
+                case VarType::Float:  *static_cast<float*>(meta.DataPtr) = n[0]; break;
+                case VarType::Int:    *static_cast<int*>(meta.DataPtr) = static_cast<int>(n[0]); break;
+                case VarType::Bool:   *static_cast<bool*>(meta.DataPtr) = n[0] != 0.0f; break;
+                case VarType::Vec2:   *static_cast<Vec2*>(meta.DataPtr) = Vec2(n[0], n[1]); break;
+                case VarType::Vec3:   *static_cast<Vec3*>(meta.DataPtr) = Vec3(n[0], n[1], n[2]); break;
+                case VarType::String: *static_cast<std::string*>(meta.DataPtr) = text; break;
+            }
+        }
+
+        void* m_Self = nullptr;
+
         EngineContext* m_Context = nullptr;
         std::vector<VarMetadata> m_PublicVariables;
+        bool m_Started = false;
     };
 
 } // namespace Lunex
@@ -735,3 +831,25 @@ extern "C"
     LUNEX_API Lunex::IScriptModule* Lunex_CreateModule();
     LUNEX_API void Lunex_DestroyModule(Lunex::IScriptModule* module);
 }
+
+// ============================================================================
+// SCRIPT REGISTRATION
+// ============================================================================
+// Put this once at the end of a script file instead of writing the three
+// exported functions by hand:
+//
+//     class PlayerController : public Lunex::Script { ... };
+//     LUNEX_REGISTER_SCRIPT(PlayerController)
+//
+#define LUNEX_REGISTER_SCRIPT(ClassName)                                              \
+    extern "C" {                                                                      \
+        LUNEX_API uint32_t Lunex_GetScriptingAPIVersion() {                           \
+            return Lunex::SCRIPTING_API_VERSION;                                      \
+        }                                                                             \
+        LUNEX_API Lunex::IScriptModule* Lunex_CreateModule() {                        \
+            return new ClassName();                                                   \
+        }                                                                             \
+        LUNEX_API void Lunex_DestroyModule(Lunex::IScriptModule* module) {            \
+            delete module;                                                            \
+        }                                                                             \
+    }
