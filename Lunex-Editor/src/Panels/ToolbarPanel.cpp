@@ -55,13 +55,15 @@ namespace Lunex {
 		ImGui::SetNextWindowSize(ImVec2(totalWidth, totalHeight), ImGuiCond_Always);
 		
 		// Transparent container style
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(kPadding, kPadding));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(kSpacing, 0));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+		ScopedStyle windowPadding(ImGuiStyleVar_WindowPadding, ImVec2(kPadding, kPadding));
+		ScopedStyle windowRounding(ImGuiStyleVar_WindowRounding, 0.0f);
+		ScopedStyle windowItemSpacing(ImGuiStyleVar_ItemSpacing, ImVec2(kSpacing, 0));
+		ScopedStyle windowBorder(ImGuiStyleVar_WindowBorderSize, 0.0f);
 		
-		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));
-		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0, 0, 0, 0));
+		ScopedColor windowColors({
+			{ImGuiCol_WindowBg, Color(0, 0, 0, 0)},
+			{ImGuiCol_Border, Color(0, 0, 0, 0)}
+		});
 		
 		ImGuiWindowFlags windowFlags = 
 			ImGuiWindowFlags_NoDecoration | 
@@ -83,9 +85,6 @@ namespace Lunex {
 		RenderSimulateButton(sceneState, toolbarEnabled);
 		
 		ImGui::End();
-		
-		ImGui::PopStyleColor(2);
-		ImGui::PopStyleVar(4);
 	}
 
 	// ============================================================================

@@ -304,6 +304,108 @@ namespace Lunex {
 		s_Data.GBuffer.Unbind();
 	}
 
+	template<typename TUniformData>
+	static void FillMaterialBuffer(const TUniformData& u) {
+		auto& m = s_Data.MaterialBuffer;
+		m.Color = u.Albedo;
+		m.Metallic = u.Metallic;
+		m.Roughness = u.Roughness;
+		m.Specular = u.Specular;
+		m.EmissionIntensity = u.EmissionIntensity;
+		m.EmissionColor = u.EmissionColor;
+		m.NormalIntensity = u.NormalIntensity;
+		m.ViewPos = s_Data.CameraPosition;
+
+		m.UseAlbedoMap = u.UseAlbedoMap;
+		m.UseNormalMap = u.UseNormalMap;
+		m.UseMetallicMap = u.UseMetallicMap;
+		m.UseRoughnessMap = u.UseRoughnessMap;
+		m.UseSpecularMap = u.UseSpecularMap;
+		m.UseEmissionMap = u.UseEmissionMap;
+		m.UseAOMap = u.UseAOMap;
+
+		m.MetallicMultiplier = u.MetallicMultiplier;
+		m.RoughnessMultiplier = u.RoughnessMultiplier;
+		m.SpecularMultiplier = u.SpecularMultiplier;
+		m.AOMultiplier = u.AOMultiplier;
+
+		m.DetailNormalCount = u.DetailNormalCount;
+		m.UseLayeredTexture = u.UseLayeredTexture;
+		m.LayeredMetallicChannel = u.LayeredMetallicChannel;
+		m.LayeredRoughnessChannel = u.LayeredRoughnessChannel;
+		m.LayeredAOChannel = u.LayeredAOChannel;
+		m.LayeredUseMetallic = u.LayeredUseMetallic;
+		m.LayeredUseRoughness = u.LayeredUseRoughness;
+		m.LayeredUseAO = u.LayeredUseAO;
+		m.DetailNormalIntensities = u.DetailNormalIntensities;
+		m.DetailNormalTilingX = u.DetailNormalTilingX;
+		m.DetailNormalTilingY = u.DetailNormalTilingY;
+		m.SubsurfaceColorAmount = u.SubsurfaceColorAmount;
+		m.UVTilingOffset = u.UVTilingOffset;
+
+		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(DeferredRendererData::MaterialUniformData));
+	}
+
+	static void UploadTransform(const glm::mat4& transform, const Model& model, int entityID, const std::vector<glm::mat4>* bones) {
+		s_Data.TransformBuffer.Transform = transform;
+		s_Data.TransformBuffer.NormalMatrix = glm::transpose(glm::inverse(transform));
+		s_Data.TransformBuffer.EntityID = entityID;
+		s_Data.TransformBuffer.Skinned = model.IsSkinned() ? SkinningBuffer::Upload(bones) : 0;
+		s_Data.TransformBuffer.DebugBone = s_Data.TransformBuffer.Skinned ? SkinningBuffer::GetDebugBone() : -1;
+		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(DeferredRendererData::TransformData));
+	}
+
+	static void BindMaterialAssetTextures(const Ref<MaterialAsset>& mat) {
+		if (mat->HasAlbedoMap()) mat->GetAlbedoMap()->Bind(0); else Texture2D::UnbindSlot(0);
+		if (mat->HasNormalMap()) mat->GetNormalMap()->Bind(1); else Texture2D::UnbindSlot(1);
+		if (mat->HasMetallicMap()) mat->GetMetallicMap()->Bind(2); else Texture2D::UnbindSlot(2);
+		if (mat->HasRoughnessMap()) mat->GetRoughnessMap()->Bind(3); else Texture2D::UnbindSlot(3);
+		if (mat->HasSpecularMap()) mat->GetSpecularMap()->Bind(4); else Texture2D::UnbindSlot(4);
+		if (mat->HasEmissionMap()) mat->GetEmissionMap()->Bind(5); else Texture2D::UnbindSlot(5);
+		if (mat->HasAOMap()) mat->GetAOMap()->Bind(6); else Texture2D::UnbindSlot(6);
+		if (mat->HasLayeredTexture()) mat->GetLayeredTextureConfig().Texture->Bind(7); else Texture2D::UnbindSlot(7);
+	}
+
+	static bool IsSubmeshCulled(const Ref<Mesh>& mesh, const glm::mat4& transform) {
+		// Skinned meshes deform beyond their bind-pose bounds: never cull them
+		if (!s_Data.FrustumCullingEnabled || mesh->IsSkinned()) return false;
+		glm::vec3 wMin, wMax;
+		Mesh::TransformAABB(transform, mesh->GetAABBMin(), mesh->GetAABBMax(), wMin, wMax);
+		if (s_Data.CameraFrustum.IntersectsAABB(wMin, wMax)) return false;
+		s_Data.Stats.CulledMeshes++;
+		return true;
+	}
+
+	// Imported models: one material per submesh. `fallback` binds the entity material when a
+	// submesh has none (may be null -> default material).
+	static void DrawPerSubmeshMaterials(const glm::mat4& transform, MeshComponent& meshComponent, MaterialInstance* fallback) {
+		const auto& meshes = meshComponent.MeshModel->GetMeshes();
+		for (size_t i = 0; i < meshes.size(); i++) {
+			if (IsSubmeshCulled(meshes[i], transform)) continue;
+
+			Ref<MaterialAsset> submeshMaterial = meshComponent.GetSubmeshMaterial(static_cast<uint32_t>(i));
+			if (submeshMaterial) {
+				FillMaterialBuffer(submeshMaterial->GetUniformData());
+				s_Data.GeometryShader->Bind();
+				BindMaterialAssetTextures(submeshMaterial);
+			}
+			else if (fallback) {
+				FillMaterialBuffer(fallback->GetUniformData());
+				s_Data.GeometryShader->Bind();
+				fallback->BindTextures();
+			}
+			else {
+				s_Data.GeometryShader->Bind();
+				for (int slot = 0; slot < 8; slot++) Texture2D::UnbindSlot(slot);
+			}
+
+			meshes[i]->Draw(s_Data.GeometryShader);
+			s_Data.Stats.GeometryDrawCalls++;
+			s_Data.Stats.MeshCount++;
+			s_Data.Stats.TriangleCount += static_cast<uint32_t>(meshes[i]->GetIndices().size()) / 3;
+		}
+	}
+
 	void DeferredRenderer::SubmitMesh(const glm::mat4& transform, MeshComponent& meshComponent,
 									  MaterialComponent& materialComponent, int entityID, const std::vector<glm::mat4>* bones) {
 		if (!meshComponent.MeshModel || !materialComponent.Instance)
@@ -312,61 +414,16 @@ namespace Lunex {
 		if (!s_Data.GeometryShader || !s_Data.GeometryShader->IsValid() || !s_Data.GBuffer.IsInitialized())
 			return;
 
+		UploadTransform(transform, *meshComponent.MeshModel, entityID, bones);
 
-		// Update Transform UBO
-		s_Data.TransformBuffer.Transform = transform;
-		s_Data.TransformBuffer.NormalMatrix = glm::transpose(glm::inverse(transform));
-		s_Data.TransformBuffer.EntityID = entityID;
-		s_Data.TransformBuffer.Skinned = meshComponent.MeshModel->IsSkinned() ? SkinningBuffer::Upload(bones) : 0;
-		s_Data.TransformBuffer.DebugBone = s_Data.TransformBuffer.Skinned ? SkinningBuffer::GetDebugBone() : -1;
-		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(DeferredRendererData::TransformData));
+		if (meshComponent.HasPerSubmeshMaterials()) {
+			DrawPerSubmeshMaterials(transform, meshComponent, materialComponent.Instance.get());
+			return;
+		}
 
-		// Get material uniform data
-		auto uniformData = materialComponent.Instance->GetUniformData();
-
-		// Fill material buffer
-		s_Data.MaterialBuffer.Color = uniformData.Albedo;
-		s_Data.MaterialBuffer.Metallic = uniformData.Metallic;
-		s_Data.MaterialBuffer.Roughness = uniformData.Roughness;
-		s_Data.MaterialBuffer.Specular = uniformData.Specular;
-		s_Data.MaterialBuffer.EmissionIntensity = uniformData.EmissionIntensity;
-		s_Data.MaterialBuffer.EmissionColor = uniformData.EmissionColor;
-		s_Data.MaterialBuffer.NormalIntensity = uniformData.NormalIntensity;
-		s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
-
-		s_Data.MaterialBuffer.UseAlbedoMap = uniformData.UseAlbedoMap;
-		s_Data.MaterialBuffer.UseNormalMap = uniformData.UseNormalMap;
-		s_Data.MaterialBuffer.UseMetallicMap = uniformData.UseMetallicMap;
-		s_Data.MaterialBuffer.UseRoughnessMap = uniformData.UseRoughnessMap;
-		s_Data.MaterialBuffer.UseSpecularMap = uniformData.UseSpecularMap;
-		s_Data.MaterialBuffer.UseEmissionMap = uniformData.UseEmissionMap;
-		s_Data.MaterialBuffer.UseAOMap = uniformData.UseAOMap;
-
-		s_Data.MaterialBuffer.MetallicMultiplier = uniformData.MetallicMultiplier;
-		s_Data.MaterialBuffer.RoughnessMultiplier = uniformData.RoughnessMultiplier;
-		s_Data.MaterialBuffer.SpecularMultiplier = uniformData.SpecularMultiplier;
-		s_Data.MaterialBuffer.AOMultiplier = uniformData.AOMultiplier;
-
-		s_Data.MaterialBuffer.DetailNormalCount = uniformData.DetailNormalCount;
-		s_Data.MaterialBuffer.UseLayeredTexture = uniformData.UseLayeredTexture;
-		s_Data.MaterialBuffer.LayeredMetallicChannel = uniformData.LayeredMetallicChannel;
-		s_Data.MaterialBuffer.LayeredRoughnessChannel = uniformData.LayeredRoughnessChannel;
-		s_Data.MaterialBuffer.LayeredAOChannel = uniformData.LayeredAOChannel;
-		s_Data.MaterialBuffer.LayeredUseMetallic = uniformData.LayeredUseMetallic;
-		s_Data.MaterialBuffer.LayeredUseRoughness = uniformData.LayeredUseRoughness;
-		s_Data.MaterialBuffer.LayeredUseAO = uniformData.LayeredUseAO;
-		s_Data.MaterialBuffer.DetailNormalIntensities = uniformData.DetailNormalIntensities;
-		s_Data.MaterialBuffer.DetailNormalTilingX = uniformData.DetailNormalTilingX;
-		s_Data.MaterialBuffer.DetailNormalTilingY = uniformData.DetailNormalTilingY;
-		s_Data.MaterialBuffer.SubsurfaceColorAmount = uniformData.SubsurfaceColorAmount;
-		s_Data.MaterialBuffer.UVTilingOffset = uniformData.UVTilingOffset;
-
-		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(DeferredRendererData::MaterialUniformData));
-
-		// Bind geometry shader and material textures
+		FillMaterialBuffer(materialComponent.Instance->GetUniformData());
 		s_Data.GeometryShader->Bind();
 		materialComponent.Instance->BindTextures();
-
 		DrawModelCulled(*meshComponent.MeshModel, transform, s_Data.GeometryShader);
 	}
 
@@ -377,16 +434,9 @@ namespace Lunex {
 		if (!s_Data.GeometryShader || !s_Data.GeometryShader->IsValid() || !s_Data.GBuffer.IsInitialized())
 			return;
 
+		UploadTransform(transform, *meshComponent.MeshModel, entityID, bones);
 
-		// Update Transform UBO
-		s_Data.TransformBuffer.Transform = transform;
-		s_Data.TransformBuffer.NormalMatrix = glm::transpose(glm::inverse(transform));
-		s_Data.TransformBuffer.EntityID = entityID;
-		s_Data.TransformBuffer.Skinned = meshComponent.MeshModel->IsSkinned() ? SkinningBuffer::Upload(bones) : 0;
-		s_Data.TransformBuffer.DebugBone = s_Data.TransformBuffer.Skinned ? SkinningBuffer::GetDebugBone() : -1;
-		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(DeferredRendererData::TransformData));
-
-		// Default material
+		// Default material (also the fallback for submeshes without an imported material)
 		memset(&s_Data.MaterialBuffer, 0, sizeof(DeferredRendererData::MaterialUniformData));
 		s_Data.MaterialBuffer.Color = glm::vec4(1.0f);
 		s_Data.MaterialBuffer.Roughness = 0.5f;
@@ -396,9 +446,14 @@ namespace Lunex {
 		s_Data.MaterialBuffer.RoughnessMultiplier = 1.0f;
 		s_Data.MaterialBuffer.SpecularMultiplier = 1.0f;
 		s_Data.MaterialBuffer.AOMultiplier = 1.0f;
+		s_Data.MaterialBuffer.UVTilingOffset = glm::vec4(1.0f, 1.0f, 0.0f, 0.0f);
 		s_Data.MaterialBuffer.ViewPos = s_Data.CameraPosition;
-
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(DeferredRendererData::MaterialUniformData));
+
+		if (meshComponent.HasPerSubmeshMaterials()) {
+			DrawPerSubmeshMaterials(transform, meshComponent, nullptr);
+			return;
+		}
 
 		s_Data.GeometryShader->Bind();
 		DrawModelCulled(*meshComponent.MeshModel, transform, s_Data.GeometryShader);

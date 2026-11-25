@@ -20,14 +20,14 @@ namespace Lunex {
 
 		ImGui::SetNextWindowSize(ImVec2(420, 520), ImGuiCond_FirstUseEver);
 
-		if (ImGui::Begin("Outline Preferences", &m_Open)) {
+		if (BeginPanel("Outline Preferences", &m_Open)) {
 			DrawSelectionOutlineSection();
 
 			Separator();
 
 			DrawColliderAppearanceSection();
 		}
-		ImGui::End();
+		EndPanel();
 	}
 
 	// ========================================================================
@@ -51,7 +51,7 @@ namespace Lunex {
 			int kernelSize = outlineConfig.KernelSize;
 			BeginPropertyRow("Thickness", "Blur radius that controls outline width (1-10)");
 			ImGui::SetNextItemWidth(-1);
-			if (ImGui::SliderInt("##OutlineKernelSize", &kernelSize, 1, 10)) {
+			if (SliderInt("##OutlineKernelSize", kernelSize, 1, 10)) {
 				outlineConfig.KernelSize = kernelSize;
 				m_OutlineKernelSize = kernelSize;
 				NotifyChanged();

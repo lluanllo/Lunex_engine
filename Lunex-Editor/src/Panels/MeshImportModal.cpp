@@ -76,7 +76,7 @@ namespace Lunex {
 			// Header
 			{
 				ScopedColor headerColor(ImGuiCol_Text, Color(0.85f, 0.85f, 0.85f, 1.0f));
-				ImGui::Text("Import: %s", m_SourcePath.filename().string().c_str());
+				Text("Import: %s", m_SourcePath.filename().string().c_str());
 			}
 			
 			Separator();
@@ -171,53 +171,41 @@ namespace Lunex {
 		using namespace UI;
 
 		// Transform Settings
-		if (ImGui::CollapsingHeader("Transform Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-			Indent();
-			
-			ImGui::DragFloat("Scale", &m_ImportSettings.Scale, 0.01f, 0.001f, 100.0f, "%.3f");
-			ImGui::DragFloat3("Rotation", &m_ImportSettings.Rotation.x, 1.0f, -360.0f, 360.0f, "%.1f°");
-			ImGui::DragFloat3("Translation", &m_ImportSettings.Translation.x, 0.1f);
-			
-			Unindent();
+		if (BeginSection("Transform Settings", true)) {
+			PropertyFloat("Scale", m_ImportSettings.Scale, 0.01f, 0.001f, 100.0f);
+			PropertyVec3("Rotation", m_ImportSettings.Rotation, 1.0f);
+			PropertyVec3("Translation", m_ImportSettings.Translation, 0.1f);
+			EndSection();
 		}
 
 		// Processing Settings
-		if (ImGui::CollapsingHeader("Processing Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-			Indent();
-			
-			Checkbox("Flip UVs", m_ImportSettings.FlipUVs);
-			Checkbox("Generate Normals", m_ImportSettings.GenerateNormals);
-			Checkbox("Generate Tangents", m_ImportSettings.GenerateTangents);
-			Checkbox("Optimize Mesh", m_ImportSettings.OptimizeMesh);
-			
-			Unindent();
+		if (BeginSection("Processing Settings", true)) {
+			PropertyCheckbox("Flip UVs", m_ImportSettings.FlipUVs);
+			PropertyCheckbox("Generate Normals", m_ImportSettings.GenerateNormals);
+			PropertyCheckbox("Generate Tangents", m_ImportSettings.GenerateTangents);
+			PropertyCheckbox("Optimize Mesh", m_ImportSettings.OptimizeMesh);
+			EndSection();
 		}
 
 		// LOD Settings
-		if (ImGui::CollapsingHeader("LOD Settings")) {
-			Indent();
-			
-			Checkbox("Generate LODs", m_ImportSettings.GenerateLODs);
+		if (BeginSection("LOD Settings", false)) {
+			PropertyCheckbox("Generate LODs", m_ImportSettings.GenerateLODs);
 			
 			if (m_ImportSettings.GenerateLODs) {
-				ImGui::SliderInt("LOD Levels", &m_ImportSettings.LODLevels, 1, 6);
-				ImGui::SliderFloat("Reduction Factor", &m_ImportSettings.LODReductionFactor, 0.1f, 0.9f, "%.2f");
+				SliderInt("##LODLevels", m_ImportSettings.LODLevels, 1, 6);
+				PropertySlider("Reduction Factor", m_ImportSettings.LODReductionFactor, 0.1f, 0.9f, "%.2f");
 			}
-			
-			Unindent();
+			EndSection();
 		}
 
 		// Collision Settings
-		if (ImGui::CollapsingHeader("Collision Settings")) {
-			Indent();
-			
-			Checkbox("Generate Collision", m_ImportSettings.GenerateCollision);
+		if (BeginSection("Collision Settings", false)) {
+			PropertyCheckbox("Generate Collision", m_ImportSettings.GenerateCollision);
 			
 			if (m_ImportSettings.GenerateCollision) {
-				Checkbox("Use Convex Hull", m_ImportSettings.UseConvexCollision);
+				PropertyCheckbox("Use Convex Hull", m_ImportSettings.UseConvexCollision);
 			}
-			
-			Unindent();
+			EndSection();
 		}
 	}
 

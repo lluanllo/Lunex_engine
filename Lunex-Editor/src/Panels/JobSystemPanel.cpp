@@ -67,7 +67,7 @@ namespace Lunex {
 	void JobSystemPanel::DrawOverview(const JobMetricsSnapshot& metrics) {
 		using namespace UI;
 
-		if (ImGui::CollapsingHeader("Overview", ImGuiTreeNodeFlags_DefaultOpen)) {
+		if (BeginSection("Overview", true)) {
 			Indent();
 
 			// Job counts
@@ -112,6 +112,7 @@ namespace Lunex {
 			}
 
 			Unindent();
+			EndSection();
 		}
 	}
 
@@ -122,7 +123,7 @@ namespace Lunex {
 	void JobSystemPanel::DrawWorkerStatus(const JobMetricsSnapshot& metrics) {
 		using namespace UI;
 
-		if (ImGui::CollapsingHeader("Worker Threads", ImGuiTreeNodeFlags_DefaultOpen)) {
+		if (BeginSection("Worker Threads", true)) {
 			Indent();
 
 			uint32_t active = metrics.ActiveWorkers;
@@ -157,6 +158,7 @@ namespace Lunex {
 			}
 
 			Unindent();
+			EndSection();
 		}
 	}
 
@@ -167,7 +169,7 @@ namespace Lunex {
 	void JobSystemPanel::DrawQueueStatus(const JobMetricsSnapshot& metrics) {
 		using namespace UI;
 
-		if (ImGui::CollapsingHeader("Queues", ImGuiTreeNodeFlags_DefaultOpen)) {
+		if (BeginSection("Queues", true)) {
 			Indent();
 
 			uint32_t globalSize = metrics.GlobalQueueSize;
@@ -189,6 +191,7 @@ namespace Lunex {
 			ImGui::ProgressBar(commandProgress, ImVec2(-1, 0), "");
 
 			Unindent();
+			EndSection();
 		}
 	}
 
@@ -199,7 +202,7 @@ namespace Lunex {
 	void JobSystemPanel::DrawPerformanceGraphs() {
 		using namespace UI;
 
-		if (ImGui::CollapsingHeader("Performance History", ImGuiTreeNodeFlags_DefaultOpen)) {
+		if (BeginSection("Performance History", true)) {
 			Indent();
 
 			// Throughput graph
@@ -235,6 +238,7 @@ namespace Lunex {
 			}
 
 			Unindent();
+			EndSection();
 		}
 	}
 
@@ -245,12 +249,12 @@ namespace Lunex {
 	void JobSystemPanel::DrawTestControls() {
 		using namespace UI;
 
-		if (ImGui::CollapsingHeader("Test Controls")) {
+		if (BeginSection("Test Controls", false)) {
 			Indent();
 
 			TextStyled("Stress Test:", TextVariant::Secondary);
-			ImGui::SliderInt("Job Count", &m_TestJobCount, 10, 10000);
-			ImGui::SliderInt("Job Duration (ms)", &m_TestJobDuration, 0, 100);
+			SliderInt("##TestJobCount", m_TestJobCount, 10, 10000);
+			SliderInt("##TestJobDuration", m_TestJobDuration, 0, 100);
 
 			AddSpacing(SpacingValues::SM);
 
@@ -294,6 +298,7 @@ namespace Lunex {
 			}
 
 			Unindent();
+			EndSection();
 		}
 	}
 

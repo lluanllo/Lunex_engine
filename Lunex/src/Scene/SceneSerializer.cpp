@@ -399,6 +399,11 @@ namespace Lunex {
 			out << YAML::Key << "Type" << YAML::Value << (int)meshComponent.Type;
 			out << YAML::Key << "Color" << YAML::Value << meshComponent.Color;
 			
+			// Material output directory
+			if (!meshComponent.MaterialOutputDir.empty()) {
+				out << YAML::Key << "MaterialOutputDir" << YAML::Value << meshComponent.MaterialOutputDir;
+			}
+			
 			// ===== NEW: MeshAsset serialization =====
 			if (meshComponent.HasMeshAsset()) {
 				out << YAML::Key << "MeshAssetID" << YAML::Value << (uint64_t)meshComponent.MeshAssetID;
@@ -407,6 +412,19 @@ namespace Lunex {
 			
 			// Legacy: Direct file path (for backwards compatibility)
 			out << YAML::Key << "FilePath" << YAML::Value << meshComponent.FilePath;
+			
+			// Imported material asset paths
+			if (!meshComponent.ImportedMaterials.empty()) {
+				out << YAML::Key << "ImportedMaterialPaths" << YAML::Value << YAML::BeginSeq;
+				for (const auto& mat : meshComponent.ImportedMaterials) {
+					if (mat && !mat->GetPath().empty()) {
+						out << mat->GetPath().string();
+					} else {
+						out << "";
+					}
+				}
+				out << YAML::EndSeq;
+			}
 			
 			out << YAML::EndMap; // MeshComponent
 		}
@@ -772,7 +790,7 @@ namespace Lunex {
 			
 			// Filtering
 			if (globalShadows["EnablePCF"])
-				config.EnablePCF = globalShadows["EnablePCF"].as<bool>();
+			 config.EnablePCF = globalShadows["EnablePCF"].as<bool>();
 			if (globalShadows["PCFRadius"])
 				config.PCFRadius = globalShadows["PCFRadius"].as<float>();
 			if (globalShadows["FilterMode"])
@@ -1019,6 +1037,11 @@ namespace Lunex {
 					mc.Type = (ModelType)meshComponent["Type"].as<int>();
 					mc.Color = meshComponent["Color"].as<glm::vec4>();
 					
+					// Material output directory
+					if (meshComponent["MaterialOutputDir"]) {
+						mc.MaterialOutputDir = meshComponent["MaterialOutputDir"].as<std::string>();
+					}
+					
 					// ===== NEW: MeshAsset deserialization =====
 					if (meshComponent["MeshAssetID"] && meshComponent["MeshAssetPath"]) {
 						uint64_t assetID = meshComponent["MeshAssetID"].as<uint64_t>();
@@ -1043,6 +1066,34 @@ namespace Lunex {
 						mc.FilePath = meshComponent["FilePath"].as<std::string>();
 						if (!mc.FilePath.empty() && mc.Type == ModelType::FromFile) {
 							mc.LoadFromFile(mc.FilePath);
+						}
+					}
+					
+					// Load pre-existing imported material paths (avoids re-importing)
+					if (meshComponent["ImportedMaterialPaths"] && meshComponent["ImportedMaterialPaths"].IsSequence()) {
+						mc.ImportedMaterials.clear();
+						bool allLoaded = true;
+						for (auto pathNode : meshComponent["ImportedMaterialPaths"]) {
+							std::string matPath = pathNode.as<std::string>();
+							if (!matPath.empty() && std::filesystem::exists(matPath)) {
+								auto mat = MaterialAsset::LoadFromFile(matPath);
+								if (mat) {
+									MaterialRegistry::Get().RegisterMaterial(mat);
+									mc.ImportedMaterials.push_back(mat);
+								} else {
+									allLoaded = false;
+									mc.ImportedMaterials.push_back(nullptr);
+								}
+							} else {
+								allLoaded = false;
+								mc.ImportedMaterials.push_back(nullptr);
+							}
+						}
+						
+						// If some materials failed to load, re-import from model
+						if (!allLoaded && mc.MeshModel && mc.MeshModel->HasMaterialData()) {
+							LNX_LOG_INFO("Some imported materials missing, re-importing from model");
+							mc.AutoImportMaterials();
 						}
 					}
 					

@@ -286,7 +286,8 @@ namespace Lunex {
 					auto& material = e.GetComponent<MaterialComponent>();
 					Renderer3D::DrawMesh(worldTransform, mesh, material, static_cast<int>(entity), bones);
 				} else {
-					Renderer3D::DrawModel(worldTransform, mesh.MeshModel, mesh.Color, static_cast<int>(entity), bones);
+					// No MaterialComponent: use per-submesh imported materials if available
+					Renderer3D::DrawMesh(worldTransform, mesh, static_cast<int>(entity), bones);
 				}
 			}
 		}

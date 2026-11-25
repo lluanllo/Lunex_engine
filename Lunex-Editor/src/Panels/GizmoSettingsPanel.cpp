@@ -60,13 +60,15 @@ namespace Lunex {
 		ImGui::SetNextWindowSize(ImVec2(totalWidth, totalHeight), ImGuiCond_Always);
 		
 		// Transparent container style
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(kPadding, kPadding));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
-		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, kSpacing));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+		ScopedStyle windowStyles(ImGuiStyleVar_WindowPadding, ImVec2(kPadding, kPadding));
+		ScopedStyle windowStyles2(ImGuiStyleVar_WindowRounding, 8.0f);
+		ScopedStyle windowStyles3(ImGuiStyleVar_ItemSpacing, ImVec2(0, kSpacing));
+		ScopedStyle windowStyles4(ImGuiStyleVar_WindowBorderSize, 0.0f);
 		
-		ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));
-		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0, 0, 0, 0));
+		ScopedColor windowColors({
+			{ImGuiCol_WindowBg, Color(0, 0, 0, 0)},
+			{ImGuiCol_Border, Color(0, 0, 0, 0)}
+		});
 		
 		ImGuiWindowFlags windowFlags = 
 			ImGuiWindowFlags_NoDecoration |
@@ -83,15 +85,12 @@ namespace Lunex {
 		RenderPivotPointButtons(kButtonSize, toolbarEnabled);
 		
 		// Section gap
-		ImGui::Dummy(ImVec2(0, kSectionGap));
+		Dummy(Size(0, kSectionGap));
 		
 		// Orientation Buttons
 		RenderOrientationButtons(kButtonSize, toolbarEnabled);
 		
 		ImGui::End();
-		
-		ImGui::PopStyleColor(2);
-		ImGui::PopStyleVar(4);
 	}
 
 	// ============================================================================
