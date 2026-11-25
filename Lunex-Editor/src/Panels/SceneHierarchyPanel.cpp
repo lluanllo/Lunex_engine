@@ -99,7 +99,17 @@ namespace Lunex {
 		if (BeginPopup("CreateEntityPopup")) {
 			if (MenuItem("Empty Entity"))
 				m_Context->CreateEntity("Empty Entity");
-			
+
+			// Folder-like group (Blender collection): wraps the selection, or starts empty
+			if (ImGui::MenuItem(m_SelectedEntities.empty() ? "Group" : "Group Selection", "Ctrl+G")) {
+				if (!m_SelectedEntities.empty()) GroupSelection();
+				else {
+					Entity group = m_Context->CreateEntity("Group");
+					group.AddComponent<GroupComponent>();
+					SelectEntity(group, true);
+				}
+			}
+
 			Separator();
 			
 			if (BeginMenu("3D Object")) {
