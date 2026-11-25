@@ -86,7 +86,8 @@ namespace Lunex {
 		
 		void CreateRigidBodies();
 		void SyncTransformsFromPhysics();
-		void CleanupRuntimeBodies();
+		void PushTransformsToPhysics();
+void CleanupRuntimeBodies();
 		
 		// Box2D type conversion
 		static b2BodyType ConvertBodyType(int type);

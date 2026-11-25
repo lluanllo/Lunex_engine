@@ -82,7 +82,8 @@ namespace Lunex {
 		
 		void CreateRigidBodies();
 		void SyncTransformsFromPhysics();
-		void ClampVelocities();
+		void PushTransformsToPhysics();
+void ClampVelocities();
 		void CleanupRuntimeBodies();
 		
 	private:

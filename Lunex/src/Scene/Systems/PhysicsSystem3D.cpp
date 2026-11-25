@@ -49,7 +49,10 @@ namespace Lunex {
 
 	void PhysicsSystem3D::OnUpdate(Timestep ts, SceneMode mode) {
 		if (!IsActiveInMode(mode) || !m_Initialized) return;
-		
+
+		// Apply transform edits made by scripts / editor since the last step
+		PushTransformsToPhysics();
+
 		// Step physics with fixed timestep
 		PhysicsCore::Get().GetWorld()->StepSimulation(
 			ts, 
@@ -253,6 +256,37 @@ namespace Lunex {
 			body->GetRigidBody()->setUserPointer(reinterpret_cast<void*>(static_cast<intptr_t>(e)));
 			
 			rb3d.RuntimeBody = body;
+			rb3d.LastSyncedTranslation = transform.Translation;
+			rb3d.LastSyncedRotation = transform.Rotation;
+}
+	}
+
+	static bool Vec3Changed(const glm::vec3& a, const glm::vec3& b) {
+		const float eps = 1e-5f;
+		return std::abs(a.x - b.x) > eps || std::abs(a.y - b.y) > eps || std::abs(a.z - b.z) > eps;
+	}
+
+	void PhysicsSystem3D::PushTransformsToPhysics() {
+		if (!m_Context || !m_Context->Registry) return;
+
+		auto view = m_Context->Registry->view<TransformComponent, Rigidbody3DComponent>();
+		for (auto e : view) {
+			auto& transform = view.get<TransformComponent>(e);
+			auto& rb3d = view.get<Rigidbody3DComponent>(e);
+			if (!rb3d.RuntimeBody) continue;
+
+			if (!Vec3Changed(transform.Translation, rb3d.LastSyncedTranslation) &&
+				!Vec3Changed(transform.Rotation, rb3d.LastSyncedRotation)) {
+				continue;
+			}
+
+			// Kinematic: this becomes the target pose (Bullet derives velocity for contacts).
+			// Dynamic/static: teleport, velocities are kept so scripted pushes still feel right.
+			auto* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+			body->SetTransform(transform.Translation, glm::quat(transform.Rotation));
+
+			rb3d.LastSyncedTranslation = transform.Translation;
+			rb3d.LastSyncedRotation = transform.Rotation;
 		}
 	}
 
@@ -277,14 +311,18 @@ namespace Lunex {
 				auto& rb3d = view.get<Rigidbody3DComponent>(e);
 				
 				if (!rb3d.RuntimeBody) return;
-				
+				// Static bodies never move: don't rewrite their euler angles every frame
+				if (rb3d.Type == Rigidbody3DComponent::BodyType::Static) return;
+
 				RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
-				
+
 				glm::vec3 position = body->GetPosition();
 				glm::quat rotation = body->GetRotation();
-				
+
 				transform.Translation = position;
 				transform.Rotation = glm::eulerAngles(rotation);
+				rb3d.LastSyncedTranslation = transform.Translation;
+				rb3d.LastSyncedRotation = transform.Rotation;
 			},
 			32,  // Grain size
 			JobPriority::High

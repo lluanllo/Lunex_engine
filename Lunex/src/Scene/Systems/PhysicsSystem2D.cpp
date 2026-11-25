@@ -50,6 +50,9 @@ namespace Lunex {
 	void PhysicsSystem2D::OnUpdate(Timestep ts, SceneMode mode) {
 		if (!IsActiveInMode(mode) || !B2_IS_NON_NULL(m_PhysicsWorld)) return;
 		
+		// Apply transform edits made by scripts / editor since the last step
+		PushTransformsToPhysics();
+
 		// Accumulate time for fixed timestep
 		m_TimeAccumulator += ts;
 		
@@ -143,7 +146,7 @@ namespace Lunex {
 			bodyDef.type = ConvertBodyType(static_cast<int>(rb2d.Type));
 			bodyDef.position = { transform.Translation.x, transform.Translation.y };
 			bodyDef.rotation = b2MakeRot(transform.Rotation.z);
-			bodyDef.enableSleep = !rb2d.FixedRotation;
+			bodyDef.motionLocks.angularZ = rb2d.FixedRotation;
 			
 			b2BodyId bodyId = b2CreateBody(m_PhysicsWorld, &bodyDef);
 			
@@ -152,7 +155,9 @@ namespace Lunex {
 			}
 			
 			rb2d.RuntimeBody = new b2BodyId(bodyId);
-			
+			rb2d.LastSyncedTranslation = { transform.Translation.x, transform.Translation.y };
+			rb2d.LastSyncedRotation = transform.Rotation.z;
+
 			// Create box collider if present
 			if (entity.HasComponent<BoxCollider2DComponent>()) {
 				auto& bc2d = entity.GetComponent<BoxCollider2DComponent>();
@@ -190,6 +195,31 @@ namespace Lunex {
 		}
 	}
 
+	void PhysicsSystem2D::PushTransformsToPhysics() {
+		if (!m_Context || !m_Context->Registry) return;
+
+		const float eps = 1e-5f;
+		auto view = m_Context->Registry->view<TransformComponent, Rigidbody2DComponent>();
+		for (auto e : view) {
+			auto& transform = view.get<TransformComponent>(e);
+			auto& rb2d = view.get<Rigidbody2DComponent>(e);
+			if (!rb2d.RuntimeBody) continue;
+
+			glm::vec2 pos = { transform.Translation.x, transform.Translation.y };
+			bool moved = std::abs(pos.x - rb2d.LastSyncedTranslation.x) > eps ||
+				std::abs(pos.y - rb2d.LastSyncedTranslation.y) > eps ||
+				std::abs(transform.Rotation.z - rb2d.LastSyncedRotation) > eps;
+			if (!moved) continue;
+
+			b2BodyId bodyId = *static_cast<b2BodyId*>(rb2d.RuntimeBody);
+			b2Body_SetTransform(bodyId, { pos.x, pos.y }, b2MakeRot(transform.Rotation.z));
+			b2Body_SetAwake(bodyId, true);
+
+			rb2d.LastSyncedTranslation = pos;
+			rb2d.LastSyncedRotation = transform.Rotation.z;
+		}
+	}
+
 	void PhysicsSystem2D::SyncTransformsFromPhysics() {
 		if (!m_Context || !m_Context->Registry) return;
 		
@@ -223,6 +253,8 @@ namespace Lunex {
 				transform.Translation.x = position.x;
 				transform.Translation.y = position.y;
 				transform.Rotation.z = b2Rot_GetAngle(rotation);
+				rb2d.LastSyncedTranslation = { position.x, position.y };
+				rb2d.LastSyncedRotation = transform.Rotation.z;
 			},
 			64,  // Grain size
 			JobPriority::High
