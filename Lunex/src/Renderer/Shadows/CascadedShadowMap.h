@@ -17,6 +17,7 @@ namespace Lunex {
 		struct CascadeInfo {
 			glm::mat4 ViewProjection;
 			float SplitDepth;   // View-space depth of cascade far plane
+			float TexelWorldSize = 0.0f; // world units per shadow-map texel
 		};
 
 		/**

@@ -163,6 +163,28 @@ namespace Lunex {
 		return m_Position;
 	}
 	
+	void EditorCamera::LookAt(const glm::vec3& target) {
+		glm::vec3 d = target - m_Position;
+		float len = glm::length(d);
+		if (len < 1e-5f) return;
+		d /= len;
+		// Inverse of forward = (cos p sin y, -sin p, -cos p cos y) for orientation quat(-pitch, -yaw, 0)
+		m_Pitch = std::asin(glm::clamp(-d.y, -1.0f, 1.0f));
+		m_Yaw = std::atan2(d.x, -d.z);
+		m_FocalPoint = target;
+		m_Distance = len;
+		UpdateView();
+	}
+
+	void EditorCamera::Focus(const glm::vec3& center, float radius) {
+		radius = std::max(radius, 0.05f);
+		float distance = radius / std::sin(glm::radians(m_FOV) * 0.5f) * 1.2f;
+		m_Position = center - GetForwardDirection() * distance;
+		m_FocalPoint = center;
+		m_Distance = distance;
+		UpdateView();
+	}
+
 	glm::quat EditorCamera::GetOrientation() const {
 		return glm::quat(glm::vec3(-m_Pitch, -m_Yaw, 0.0f));
 	}

@@ -56,6 +56,7 @@ namespace Lunex {
 		struct Statistics {
 			uint32_t ShadowMapsRendered = 0;
 			uint32_t ShadowDrawCalls = 0;
+			uint32_t ShadowCulled = 0;
 			uint32_t CascadesRendered = 0;
 			uint32_t PointFacesRendered = 0;
 			uint32_t SpotMapsRendered = 0;
@@ -90,9 +91,9 @@ namespace Lunex {
 		void UploadGPUData();
 
 		// Render helpers
-		void RenderSceneDepthOnly(Scene* scene, const glm::mat4& lightVP);
-		void RenderSceneDepthPoint(Scene* scene, const glm::vec3& lightPos, float lightRange,
-			const glm::mat4 faceVPs[6]);
+		// Draws every mesh whose world AABB intersects the light frustum.
+		// cullNearPlane=false keeps casters that sit between the light and the shadow volume (CSM/spot).
+		void RenderShadowCasters(Scene* scene, const glm::mat4& lightVP, bool cullNearPlane);
 
 	private:
 		ShadowConfig m_Config;
@@ -104,6 +105,15 @@ namespace Lunex {
 		Ref<RHI::RHIFramebuffer>    m_AtlasFBO;             // Depth-only FBO
 		Ref<RHI::RHISampler> m_ShadowSampler;
 		uint32_t m_AtlasMaxLayers = 0;
+		uint32_t m_AtlasCapacityLimit = 0;   // hard upper bound (all cascades + 16 cube maps)
+		void EnsureAtlasCapacity(uint32_t layers);
+
+		// Far-cascade caching (FarCascadeUpdateInterval)
+		uint64_t m_FrameIndex = 0;
+		glm::mat4 m_CachedCascadeVP[MAX_SHADOW_CASCADES];
+		float m_CachedCascadeTexel[MAX_SHADOW_CASCADES] = {};
+		bool m_CascadeCacheValid[MAX_SHADOW_CASCADES] = {};
+		glm::vec3 m_CachedSunDirection{ 0.0f };
 		uint32_t m_AtlasResolution = 0;      // Uniform resolution for all layers
 		std::vector<bool> m_LayerOccupancy;
 
@@ -115,6 +125,8 @@ namespace Lunex {
 			glm::mat4 LightVP;                    // 64 bytes
 			glm::mat4 Model;                       // 64 bytes
 			glm::vec4 LightPosAndRange;            // 16 bytes (xyz = pos, w = range)
+			int Skinned = 0;                       // 1 = apply bone palette (SSBO binding 4)
+			int _pad[3] = { 0, 0, 0 };
 		};
 
 		// GPU data

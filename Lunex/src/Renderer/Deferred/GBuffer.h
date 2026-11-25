@@ -31,7 +31,8 @@ namespace Lunex {
 		EmissionAO      = 2,   // RT2: Emission.rgb + AO
 		PositionSpecular = 3,  // RT3: Position.xyz + Specular
 		EntityID        = 4,   // RT4: EntityID (R32I)
-		Count           = 5
+		Subsurface      = 5,   // RT5: Subsurface color.rgb + amount (RGBA8)
+		Count           = 6
 	};
 
 	/**

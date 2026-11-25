@@ -60,12 +60,12 @@ namespace Lunex {
 			
 			LightEntry entry;
 			entry.EntityID = entity.GetUUID();
-			entry.WorldPosition = transform.Translation;
-			
-			// Calculate world direction from rotation
-			glm::mat4 rotationMatrix = glm::toMat4(glm::quat(transform.Rotation));
-			entry.WorldDirection = -glm::normalize(glm::vec3(rotationMatrix[2]));
-			
+
+			// World-space transform (lights parented to other entities must follow them)
+			glm::mat4 world = scene->GetWorldTransform(entity);
+			entry.WorldPosition = glm::vec3(world[3]);
+			entry.WorldDirection = -glm::normalize(glm::vec3(world[2]));
+
 			// Copy properties from Light component
 			auto* light = lightComp.LightInstance.get();
 			entry.Properties.Type = light->GetType();

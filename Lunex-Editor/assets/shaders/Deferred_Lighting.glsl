@@ -38,6 +38,7 @@ layout (binding = 1) uniform sampler2D gNormalRoughness;
 layout (binding = 2) uniform sampler2D gEmissionAO;
 layout (binding = 3) uniform sampler2D gPositionSpecular;
 layout (binding = 4) uniform sampler2D gDepth;
+layout (binding = 5) uniform sampler2D gSubsurface;   // color.rgb + amount
 
 // ============ CAMERA UBO ============
 layout(std140, binding = 0) uniform Camera {
@@ -68,7 +69,7 @@ layout(std430, binding = 3) buffer Lights {
 };
 
 // ============ SHADOW SYSTEM (UBO binding=7) ============
-#define MAX_SHADOW_CASCADES 4
+#define MAX_SHADOW_CASCADES 6
 #define MAX_SHADOW_LIGHTS 16
 
 #define SHADOW_TYPE_NONE 0
@@ -79,7 +80,7 @@ layout(std430, binding = 3) buffer Lights {
 struct ShadowCascadeData {
 	mat4 ViewProjection;
 	float SplitDepth;
-	float _pad1;
+	float TexelWorldSize;
 	float _pad2;
 	float _pad3;
 };
@@ -98,8 +99,8 @@ layout(std140, binding = 7) uniform ShadowData {
 
 	float u_DistanceSofteningMax;
 	float u_SkyTintStrength;
-	float _shadowPad1;
-	float _shadowPad2;
+	int u_ShadowFilterMode;
+	float u_ShadowSoftness;
 	ShadowCascadeData u_Cascades[MAX_SHADOW_CASCADES];
 	ShadowLightData u_Shadows[MAX_SHADOW_LIGHTS];
 };
@@ -211,59 +212,83 @@ const vec2 poissonDisk[16] = vec2[](
 	vec2( 0.19984126,  0.78641367), vec2( 0.14383161, -0.14100790)
 );
 
+float ShadowNoise(vec2 p) {
+	return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
+}
+
+// Hard: one hardware-filtered tap (2x2 bilinear compare).
+// Soft: 16-tap Poisson disk rotated per pixel - the random rotation turns the
+// stepped "layers" of a fixed kernel into fine noise that reads as a smooth penumbra.
 float SampleShadowPCF(float layer, vec2 uv, float compareDepth, float radius, float resolution) {
+	if (u_ShadowFilterMode == 0 || radius <= 0.0) {
+		return texture(u_ShadowAtlas, vec4(uv, layer, compareDepth));
+	}
 	float texelSize = 1.0 / resolution;
+	float angle = ShadowNoise(gl_FragCoord.xy) * 6.2831853;
+	float s = sin(angle), c = cos(angle);
+	mat2 rot = mat2(c, s, -s, c);
 	float shadow = 0.0;
 	for (int i = 0; i < 16; i++) {
-		vec2 offset = poissonDisk[i] * radius * texelSize;
+		vec2 offset = rot * poissonDisk[i] * radius * texelSize;
 		shadow += texture(u_ShadowAtlas, vec4(uv + offset, layer, compareDepth));
 	}
 	return shadow / 16.0;
 }
 
-float CalculateDirectionalShadow(int shadowIndex, vec3 fragPos, vec3 normal, float viewDepth) {
-	if (shadowIndex < 0 || shadowIndex >= u_NumShadowLights) return 1.0;
-	
-	ShadowLightData sd = u_Shadows[shadowIndex];
-	float firstLayer = sd.ShadowParams.z;
-	float bias = sd.ShadowParams.x;
-	float normalBias = sd.ShadowParams.y;
-	float pcfRadius = sd.ShadowParams2.y;
-	float resolution = sd.ShadowParams2.w;
-	
-	int cascadeIndex = u_CSMCascadeCount - 1;
-	for (int c = 0; c < u_CSMCascadeCount; c++) {
-		if (viewDepth < u_Cascades[c].SplitDepth) {
-			cascadeIndex = c;
-			break;
-		}
+// Find the shadow entry owned by the light at 'lightIndex' (ShadowParams2.z = light index)
+int FindShadowForLight(int lightIndex) {
+	for (int s = 0; s < u_NumShadowLights && s < MAX_SHADOW_LIGHTS; s++) {
+		if (int(u_Shadows[s].ShadowParams2.z + 0.5) == lightIndex) return s;
 	}
-	
-	float cascadeBiasScale = 1.0 + float(cascadeIndex) * 0.5;
-	float adjustedBias = bias * cascadeBiasScale;
-	float adjustedNormalBias = normalBias * cascadeBiasScale;
-	
-	vec3 biasedPos = fragPos + normal * adjustedNormalBias;
-	vec4 lightSpacePos = u_Cascades[cascadeIndex].ViewProjection * vec4(biasedPos, 1.0);
-	vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
-	projCoords = projCoords * 0.5 + 0.5;
-	
-	if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
-		projCoords.y < 0.0 || projCoords.y > 1.0 ||
-		projCoords.z > 1.0 || projCoords.z < 0.0) {
+	return -1;
+}
+
+// One cascade lookup. Bias and filter size are expressed in world units through the
+// cascade's texel size, so the shadow looks the same on both sides of a cascade split.
+float SampleCascade(ShadowLightData sd, int cascade, vec3 fragPos, vec3 normal) {
+	float texelWorld = max(u_Cascades[cascade].TexelWorldSize, 1e-4);
+	vec3 biasedPos = fragPos + normal * max(sd.ShadowParams.y, texelWorld * 1.5);
+	vec4 lightSpacePos = sd.ViewProjection[cascade] * vec4(biasedPos, 1.0);
+	vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w * 0.5 + 0.5;
+	if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0 || projCoords.z > 1.0)
 		return 1.0;
+
+	float compareDepth = clamp(projCoords.z - sd.ShadowParams.x * 0.25, 0.0, 1.0);
+	float radiusTexels = clamp(u_ShadowSoftness / texelWorld, 1.0, 12.0);
+	return SampleShadowPCF(sd.ShadowParams.z + float(cascade), projCoords.xy, compareDepth, radiusTexels, sd.ShadowParams2.w);
+}
+
+float CalculateDirectionalShadowAtDepth(int shadowIndex, vec3 fragPos, vec3 normal, float viewDepth) {
+	if (shadowIndex < 0 || shadowIndex >= u_NumShadowLights) return 1.0;
+	if (viewDepth > u_MaxShadowDistance) return 1.0;
+
+	ShadowLightData sd = u_Shadows[shadowIndex];
+	int count = clamp(u_CSMCascadeCount, 1, MAX_SHADOW_CASCADES);
+
+	int cascade = count - 1;
+	for (int c = 0; c < count; c++) {
+		if (viewDepth < u_Cascades[c].SplitDepth) { cascade = c; break; }
 	}
-	
-	float compareDepth = clamp(projCoords.z - adjustedBias, 0.0, 1.0);
-	float layer = firstLayer + float(cascadeIndex);
-	float cascadePCFRadius = pcfRadius * (1.0 + float(cascadeIndex) * 0.3);
-	float shadow = SampleShadowPCF(layer, projCoords.xy, compareDepth, cascadePCFRadius, resolution);
-	
-	float fadeStart = u_MaxShadowDistance * 0.8;
-	float fadeFactor = clamp((u_MaxShadowDistance - viewDepth) / (u_MaxShadowDistance - fadeStart + 0.001), 0.0, 1.0);
-	shadow = mix(1.0, shadow, fadeFactor);
-	
+
+	float shadow = SampleCascade(sd, cascade, fragPos, normal);
+
+	// Blend into the next cascade over the last 15% of this one (no visible seam)
+	if (cascade < count - 1) {
+		float start = (cascade == 0) ? 0.0 : u_Cascades[cascade - 1].SplitDepth;
+		float end = u_Cascades[cascade].SplitDepth;
+		float blendStart = mix(start, end, 0.85);
+		float t = clamp((viewDepth - blendStart) / max(end - blendStart, 1e-4), 0.0, 1.0);
+		if (t > 0.0) shadow = mix(shadow, SampleCascade(sd, cascade + 1, fragPos, normal), t);
+	}
+
+	// Fade out towards the max shadow distance instead of cutting off
+	float fadeStart = u_MaxShadowDistance * 0.85;
+	shadow = mix(shadow, 1.0, clamp((viewDepth - fadeStart) / max(u_MaxShadowDistance - fadeStart, 1e-4), 0.0, 1.0));
 	return shadow;
+}
+
+float CalculateDirectionalShadow(int shadowIndex, vec3 fragPos, vec3 normal, float viewDepth) {
+	return CalculateDirectionalShadowAtDepth(shadowIndex, fragPos, normal, viewDepth);
 }
 
 float CalculateSpotShadow(int shadowIndex, vec3 fragPos, vec3 normal) {
@@ -340,33 +365,42 @@ float CalculatePointShadow(int shadowIndex, vec3 fragPos, vec3 normal, vec3 ligh
 	return SampleShadowPCF(layer, projCoords.xy, compareDepth, pointPCFRadius, resolution);
 }
 
+
+// ============ SUBSURFACE SCATTERING (approximate) ============
+// Wrap diffuse lets light bleed past the terminator; the transmission term
+// (Barre-Brisebois/Bouchard "fast translucency") lights thin parts from behind.
+const float SSS_WRAP = 0.5;
+const float SSS_DISTORTION = 0.25;
+const float SSS_POWER = 3.0;
+const float SSS_SCALE = 1.5;
+
+vec3 SubsurfaceLighting(vec3 N, vec3 V, vec3 L, vec3 albedo, vec3 sssColor, float sssAmount,
+                        vec3 radiance, float shadowFactor) {
+	float NdotLraw = dot(N, L);
+	float wrap = clamp((NdotLraw + SSS_WRAP) / (1.0 + SSS_WRAP), 0.0, 1.0);
+	// extra diffuse beyond plain Lambert, tinted by the scatter color
+	vec3 wrapTerm = sssColor * albedo * max(wrap - max(NdotLraw, 0.0), 0.0) / PI * shadowFactor;
+
+	vec3 Ht = normalize(L + N * SSS_DISTORTION);
+	float back = pow(clamp(dot(V, -Ht), 0.0, 1.0), SSS_POWER) * SSS_SCALE;
+	// shadows only partially block transmitted light (it travels through the object)
+	vec3 transmission = sssColor * albedo * back * mix(0.35, 1.0, shadowFactor);
+
+	return (wrapTerm + transmission) * radiance * sssAmount;
+}
+
 // ============ DIRECT LIGHTING ============
 
 float g_DirectionalShadowFactor = 1.0;
 
-vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, float roughness, vec3 fragPos, float ao, float viewDepth) {
+vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, float roughness, vec3 fragPos, float ao, float viewDepth,
+                             vec3 sssColor, float sssAmount) {
 	vec3 Lo = vec3(0.0);
 	float NdotV = max(dot(N, V), EPSILON);
 	
 	int lightCount = min(u_NumLights, MAX_LIGHTS);
 	g_DirectionalShadowFactor = 1.0;
 	
-	int dirShadowIndices[MAX_SHADOW_LIGHTS];
-	int spotShadowIndices[MAX_SHADOW_LIGHTS];
-	int pointShadowIndices[MAX_SHADOW_LIGHTS];
-	int numDirShadows = 0, numSpotShadows = 0, numPointShadows = 0;
-
-	for (int s = 0; s < u_NumShadowLights && s < MAX_SHADOW_LIGHTS; s++) {
-		int sType = int(u_Shadows[s].ShadowParams.w);
-		if (sType == SHADOW_TYPE_DIRECTIONAL && numDirShadows < MAX_SHADOW_LIGHTS)
-			dirShadowIndices[numDirShadows++] = s;
-		else if (sType == SHADOW_TYPE_SPOT && numSpotShadows < MAX_SHADOW_LIGHTS)
-			spotShadowIndices[numSpotShadows++] = s;
-		else if (sType == SHADOW_TYPE_POINT && numPointShadows < MAX_SHADOW_LIGHTS)
-			pointShadowIndices[numPointShadows++] = s;
-	}
-
-	int dirCounter = 0, spotCounter = 0, pointCounter = 0;
 	
 	for (int i = 0; i < lightCount; i++) {
 		LightData light = u_Lights[i];
@@ -383,9 +417,8 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 			L = normalize(-light.Direction.xyz);
 			radiance = light.Color.rgb * light.Color.a;
 			lightRadius = 0.0;
-			if (castsShadows && dirCounter < numDirShadows) {
-				shadowFactor = CalculateDirectionalShadow(dirShadowIndices[dirCounter], fragPos, N, viewDepth);
-				dirCounter++;
+			if (castsShadows) {
+				shadowFactor = CalculateDirectionalShadow(FindShadowForLight(i), fragPos, N, viewDepth);
 				g_DirectionalShadowFactor = min(g_DirectionalShadowFactor, shadowFactor);
 			}
 		} else if (lightType == 1) {
@@ -393,35 +426,38 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 			float distance = length(lightVec);
 			L = lightVec / max(distance, EPSILON);
 			float range = light.Direction.w;
-			if (range > 0.0 && distance > range) { if (castsShadows) pointCounter++; continue; }
+			if (range > 0.0 && distance > range) continue;
 			attenuation = GetPhysicalAttenuation(distance, range);
 			radiance = GetLightIntensity(light.Color.rgb, light.Color.a, distance, max(range * 0.1, 0.1));
 			lightRadius = max(range * 0.05, 0.05);
-			if (castsShadows && pointCounter < numPointShadows) {
-				shadowFactor = CalculatePointShadow(pointShadowIndices[pointCounter], fragPos, N, light.Position.xyz);
-				pointCounter++;
+			if (castsShadows) {
+				shadowFactor = CalculatePointShadow(FindShadowForLight(i), fragPos, N, light.Position.xyz);
 			}
 		} else if (lightType == 2) {
 			vec3 lightVec = light.Position.xyz - fragPos;
 			float distance = length(lightVec);
 			L = lightVec / max(distance, EPSILON);
 			float range = light.Direction.w;
-			if (range > 0.0 && distance > range) { if (castsShadows) spotCounter++; continue; }
+			if (range > 0.0 && distance > range) continue;
 			attenuation = GetPhysicalAttenuation(distance, range);
 			vec3 spotDir = normalize(light.Direction.xyz);
 			float spotAtten = GetSpotAttenuation(L, spotDir, light.Params.x, light.Params.y);
 			attenuation *= spotAtten;
-			if (attenuation < EPSILON) { if (castsShadows) spotCounter++; continue; }
+			if (attenuation < EPSILON) continue;
 			radiance = GetLightIntensity(light.Color.rgb, light.Color.a, distance, max(range * 0.1, 0.1));
 			lightRadius = max(range * 0.08, 0.08);
-			if (castsShadows && spotCounter < numSpotShadows) {
-				shadowFactor = CalculateSpotShadow(spotShadowIndices[spotCounter], fragPos, N);
-				spotCounter++;
+			if (castsShadows) {
+				shadowFactor = CalculateSpotShadow(FindShadowForLight(i), fragPos, N);
 			}
 		}
 		
 		if (attenuation < EPSILON) continue;
-		
+
+		if (sssAmount > 0.0) {
+			Lo += SubsurfaceLighting(N, V, L, albedo * (1.0 - metallic), sssColor, sssAmount,
+			                         radiance * attenuation, shadowFactor) * mix(1.0, ao, 0.5);
+		}
+
 		vec3 H = normalize(V + L);
 		float NdotL = max(dot(N, L), 0.0);
 		float NdotH = max(dot(N, H), 0.0);
@@ -546,7 +582,9 @@ void main() {
 	vec3 F0 = vec3(MIN_DIELECTRIC_F0 * specular * 2.0);
 	F0 = mix(F0, albedo, metallic);
 	
-	vec3 directLighting = CalculateDirectLighting(N, V, F0, albedo, metallic, roughness, fragPos, ao, viewDepth);
+	vec4 subsurface = texture(gSubsurface, v_TexCoords);
+	vec3 directLighting = CalculateDirectLighting(N, V, F0, albedo, metallic, roughness, fragPos, ao, viewDepth,
+	                                              subsurface.rgb, subsurface.a);
 	
 	vec3 ambient;
 	if (u_UseIBL != 0) {

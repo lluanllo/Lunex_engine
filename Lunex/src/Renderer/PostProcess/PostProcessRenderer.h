@@ -49,6 +49,27 @@ namespace Lunex {
 		int   ToneMapOperator = 0;
 		float Exposure = 1.0f;
 		float Gamma = 2.2f;
+
+		// Screen-space reflections
+		bool  EnableSSR = false;
+		float SSRIntensity = 1.0f;
+		float SSRMaxDistance = 30.0f;   // world units
+		float SSRThickness = 0.15f;// world units
+		int   SSRMaxSteps = 64;
+		float SSRMaxRoughness = 0.6f;
+	};
+
+	/**
+	 * @struct PostProcessFrameInputs
+	 * @brief Per-frame G-Buffer / camera data needed by screen-space effects
+	 */
+	struct PostProcessFrameInputs {
+		uint32_t NormalRoughnessTex = 0;
+		uint32_t AlbedoMetallicTex = 0;
+		uint32_t PositionSpecularTex = 0;
+		uint32_t DepthTex = 0;
+		glm::mat4 View = glm::mat4(1.0f);
+		glm::mat4 Projection = glm::mat4(1.0f);
 	};
 
 	/**
@@ -76,6 +97,11 @@ namespace Lunex {
 		static void OnViewportResize(uint32_t width, uint32_t height);
 
 		/**
+		 * @brief Provide G-Buffer + camera inputs for this frame (call before Execute)
+		 */
+		static void SetFrameInputs(const PostProcessFrameInputs& inputs);
+
+		/**
 		 * @brief Access configuration
 		 */
 		static PostProcessConfig& GetConfig();
@@ -90,6 +116,8 @@ namespace Lunex {
 
 		static void ExecuteBloom(uint32_t sceneColorTexID, uint32_t width, uint32_t height);
 		static void CreateBloomResources(uint32_t width, uint32_t height);
-	};
+		static void CreateFrameResources(uint32_t width, uint32_t height, uint32_t sceneFormat);
+		static void ExecuteSSR(uint32_t width, uint32_t height);
+};
 
 } // namespace Lunex

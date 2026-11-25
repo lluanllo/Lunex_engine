@@ -1,5 +1,6 @@
 ﻿#include "stpch.h"
 #include "Renderer2D.h"
+#include <glad/glad.h>
 
 #include "VertexArray.h"
 #include "Shader.h"
@@ -231,7 +232,24 @@ namespace Lunex {
 	void Renderer2D::Flush() {
 		auto* cmdList = RHI::GetImmediateCommandList();
 		if (!cmdList) return;
-		
+
+		// 2D/overlay geometry (sprites, billboards, gizmos) always needs alpha blending.
+		// Earlier passes (deferred lighting, post-processing) disable it; restore the
+		// previous state at the end so blending doesn't leak into e.g. the G-Buffer pass.
+		const GLboolean blendWasEnabled = glIsEnabled(GL_BLEND);
+		GLint prevSrc = GL_ONE, prevDst = GL_ZERO;
+		glGetIntegerv(GL_BLEND_SRC_RGB, &prevSrc);
+		glGetIntegerv(GL_BLEND_DST_RGB, &prevDst);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		struct BlendRestore {
+			GLboolean Enabled; GLint Src, Dst;
+			~BlendRestore() {
+				glBlendFunc(static_cast<GLenum>(Src), static_cast<GLenum>(Dst));
+				if (!Enabled) glDisable(GL_BLEND);
+			}
+		} blendRestore{ blendWasEnabled, prevSrc, prevDst };
+
 		if (s_Data.QuadIndexCount) {
 			uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.QuadVertexBufferPtr - (uint8_t*)s_Data.QuadVertexBufferBase);
 			s_Data.QuadVertexBuffer->SetData(s_Data.QuadVertexBufferBase, dataSize);
@@ -929,6 +947,12 @@ namespace Lunex {
 	}
 	
 	void Renderer2D::SetLineWidth(float width) {
+		// Line width is applied when the line batch is flushed, so lines already queued
+		// with the previous width must be drawn first (otherwise the last width set
+		// before EndScene would apply to every line in the batch).
+		if (width != s_Data.LineWidth && s_Data.LineVertexCount > 0) {
+			NextBatch();
+		}
 		s_Data.LineWidth = width;
 	}
 	

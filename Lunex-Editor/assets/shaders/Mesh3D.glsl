@@ -8,6 +8,13 @@ layout(location = 2) in vec2 a_TexCoords;
 layout(location = 3) in vec3 a_Tangent;
 layout(location = 4) in vec3 a_Bitangent;
 layout(location = 5) in int a_EntityID;
+layout(location = 6) in ivec4 a_BoneIDs;
+layout(location = 7) in vec4  a_BoneWeights;
+
+// Bone palette of the mesh being drawn (only read when u_Skinned != 0)
+layout(std430, binding = 4) readonly buffer BoneMatrices {
+	mat4 u_Bones[];
+};
 
 layout(std140, binding = 0) uniform Camera {
 	mat4 u_ViewProjection;
@@ -19,7 +26,19 @@ layout(std140, binding = 0) uniform Camera {
 
 layout(std140, binding = 1) uniform Transform {
 	mat4 u_Transform;
+	mat4 u_NormalMatrix;   // transpose(inverse(u_Transform)), computed on CPU
+	int  u_EntityID;
+	int  u_Skinned;
+	int  u_DebugBone;      // >= 0: visualize this bone's weights
 };
+
+mat4 GetSkinMatrix() {
+	if (u_Skinned == 0) return mat4(1.0);
+	return a_BoneWeights.x * u_Bones[a_BoneIDs.x] +
+	       a_BoneWeights.y * u_Bones[a_BoneIDs.y] +
+	       a_BoneWeights.z * u_Bones[a_BoneIDs.z] +
+	       a_BoneWeights.w * u_Bones[a_BoneIDs.w];
+}
 
 struct VertexOutput {
 	vec3 FragPos;
@@ -30,23 +49,32 @@ struct VertexOutput {
 
 layout (location = 0) out VertexOutput Output;
 layout (location = 7) out flat int v_EntityID;
+layout (location = 9) out float v_DebugWeight;   // < 0 = debug view off
 layout (location = 8) out float v_ViewDepth;
 
 void main() {
-	vec4 worldPos = u_Transform * vec4(a_Position, 1.0);
+	mat4 skin = GetSkinMatrix();
+	vec4 worldPos = u_Transform * (skin * vec4(a_Position, 1.0));
 	Output.FragPos = worldPos.xyz;
 	
-	mat3 normalMatrix = mat3(transpose(inverse(u_Transform)));
-	vec3 N = normalize(normalMatrix * a_Normal);
+	mat3 normalMatrix = mat3(u_NormalMatrix);
+	vec3 N = normalize(normalMatrix * (mat3(skin) * a_Normal));
 	Output.Normal = N;
 	Output.TexCoords = a_TexCoords;
 	
-	vec3 T = normalize(normalMatrix * a_Tangent);
+	vec3 T = normalize(normalMatrix * (mat3(skin) * a_Tangent));
 	T = normalize(T - dot(T, N) * N); // Re-orthogonalize
 	vec3 B = cross(N, T) * sign(dot(cross(a_Normal, a_Tangent), a_Bitangent)); // Preserve handedness
 	Output.TBN = mat3(T, B, N);
 	
-	v_EntityID = a_EntityID;
+	v_EntityID = u_EntityID;
+
+	v_DebugWeight = -1.0;
+	if (u_DebugBone >= 0) {
+		v_DebugWeight = 0.0;
+		for (int k = 0; k < 4; k++)
+			if (a_BoneIDs[k] == u_DebugBone) v_DebugWeight += a_BoneWeights[k];
+	}
 	
 	vec4 clipPos = u_ViewProjection * worldPos;
 	v_ViewDepth = clipPos.w; // Linear view-space depth for CSM cascade selection
@@ -67,6 +95,13 @@ struct VertexOutput {
 
 layout (location = 0) in VertexOutput Input;
 layout (location = 7) in flat int v_EntityID;
+layout (location = 9) in float v_DebugWeight;
+
+vec3 WeightHeatmap(float w) {
+	w = clamp(w, 0.0, 1.0);
+	return w < 0.5 ? mix(vec3(0.05, 0.1, 0.9), vec3(0.1, 0.9, 0.2), w * 2.0)
+	               : mix(vec3(0.1, 0.9, 0.2), vec3(1.0, 0.1, 0.05), (w - 0.5) * 2.0);
+}
 layout (location = 8) in float v_ViewDepth;
 
 // ============ MATERIAL PROPERTIES ============
@@ -111,7 +146,17 @@ layout(std140, binding = 2) uniform Material {
 	vec4 u_DetailNormalIntensities;
 	vec4 u_DetailNormalTilingX;
 	vec4 u_DetailNormalTilingY;
+
+	vec4 u_SubsurfaceColorAmount;   // rgb = scatter color, a = amount
+	vec4 u_UVTilingOffset;          // xy = tiling, zw = offset
 };
+
+// Material UV transform (tiling 0 = legacy upload without the field -> identity)
+vec2 MaterialUV() {
+	vec2 tiling = (u_UVTilingOffset.x == 0.0 && u_UVTilingOffset.y == 0.0) ? vec2(1.0) : u_UVTilingOffset.xy;
+	return Input.TexCoords * tiling + u_UVTilingOffset.zw;
+}
+
 
 // ============ LIGHTING SYSTEM (SSBO) ============
 #define MAX_LIGHTS 10000
@@ -133,7 +178,7 @@ layout(std430, binding = 3) buffer Lights {
 };
 
 // ============ SHADOW SYSTEM (UBO binding=7) ============
-#define MAX_SHADOW_CASCADES 4
+#define MAX_SHADOW_CASCADES 6
 #define MAX_SHADOW_LIGHTS 16
 
 #define SHADOW_TYPE_NONE 0
@@ -144,7 +189,7 @@ layout(std430, binding = 3) buffer Lights {
 struct ShadowCascadeData {
 	mat4 ViewProjection;   // 64
 	float SplitDepth;      // 4
-	float _pad1;           // 4
+	float TexelWorldSize; // 4
 	float _pad2;           // 4
 	float _pad3;           // 4   = 80
 };
@@ -163,8 +208,8 @@ layout(std140, binding = 7) uniform ShadowData {
 
 	float u_DistanceSofteningMax;
 	float u_SkyTintStrength;
-	float _shadowPad1;
-	float _shadowPad2;
+	int u_ShadowFilterMode;
+	float u_ShadowSoftness;
 	ShadowCascadeData u_Cascades[MAX_SHADOW_CASCADES];
 	ShadowLightData u_Shadows[MAX_SHADOW_LIGHTS];
 };
@@ -239,98 +284,76 @@ float SampleShadow(float layer, vec2 uv, float compareDepth) {
 }
 
 // PCF shadow with Poisson disk sampling
+float ShadowNoise(vec2 p) {
+	return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
+}
+
+// Hard: one hardware-filtered tap (2x2 bilinear compare).
+// Soft: 16-tap Poisson disk rotated per pixel - the random rotation turns the
+// stepped "layers" of a fixed kernel into fine noise that reads as a smooth penumbra.
 float SampleShadowPCF(float layer, vec2 uv, float compareDepth, float radius, float resolution) {
+	if (u_ShadowFilterMode == 0 || radius <= 0.0) {
+		return texture(u_ShadowAtlas, vec4(uv, layer, compareDepth));
+	}
 	float texelSize = 1.0 / resolution;
+	float angle = ShadowNoise(gl_FragCoord.xy) * 6.2831853;
+	float s = sin(angle), c = cos(angle);
+	mat2 rot = mat2(c, s, -s, c);
 	float shadow = 0.0;
-	
 	for (int i = 0; i < 16; i++) {
-		vec2 offset = poissonDisk[i] * radius * texelSize;
+		vec2 offset = rot * poissonDisk[i] * radius * texelSize;
 		shadow += texture(u_ShadowAtlas, vec4(uv + offset, layer, compareDepth));
 	}
-	
 	return shadow / 16.0;
 }
 
 // Calculate shadow for a directional light (CSM)
-float CalculateDirectionalShadow(int shadowIndex, vec3 fragPos, vec3 normal) {
-	if (shadowIndex < 0 || shadowIndex >= u_NumShadowLights) return 1.0;
-	
-	ShadowLightData sd = u_Shadows[shadowIndex];
-	float firstLayer = sd.ShadowParams.z;
-	float bias = sd.ShadowParams.x;
-	float normalBias = sd.ShadowParams.y;
-	float pcfRadius = sd.ShadowParams2.y;
-	float resolution = sd.ShadowParams2.w;
-	
-	// Select cascade based on view depth
-	int cascadeIndex = u_CSMCascadeCount - 1;
-	for (int c = 0; c < u_CSMCascadeCount; c++) {
-		if (v_ViewDepth < u_Cascades[c].SplitDepth) {
-			cascadeIndex = c;
-			break;
-		}
-	}
-	
-	// Scale bias by cascade index to reduce artifacts on far cascades
-	float cascadeBiasScale = 1.0 + float(cascadeIndex) * 0.5;
-	float adjustedBias = bias * cascadeBiasScale;
-	float adjustedNormalBias = normalBias * cascadeBiasScale;
-	
-	// Transform to light space of selected cascade
-	vec3 biasedPos = fragPos + normal * adjustedNormalBias;
-	vec4 lightSpacePos = u_Cascades[cascadeIndex].ViewProjection * vec4(biasedPos, 1.0);
-	vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
-	projCoords = projCoords * 0.5 + 0.5;
-	
-	// Out of shadow map range -> fully lit (use wider margin)
-	if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
-		projCoords.y < 0.0 || projCoords.y > 1.0 ||
-		projCoords.z > 1.0 || projCoords.z < 0.0) {
+// One cascade lookup. Bias and filter size are expressed in world units through the
+// cascade's texel size, so the shadow looks the same on both sides of a cascade split.
+float SampleCascade(ShadowLightData sd, int cascade, vec3 fragPos, vec3 normal) {
+	float texelWorld = max(u_Cascades[cascade].TexelWorldSize, 1e-4);
+	vec3 biasedPos = fragPos + normal * max(sd.ShadowParams.y, texelWorld * 1.5);
+	vec4 lightSpacePos = sd.ViewProjection[cascade] * vec4(biasedPos, 1.0);
+	vec3 projCoords = lightSpacePos.xyz / lightSpacePos.w * 0.5 + 0.5;
+	if (projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0 || projCoords.z > 1.0)
 		return 1.0;
+
+	float compareDepth = clamp(projCoords.z - sd.ShadowParams.x * 0.25, 0.0, 1.0);
+	float radiusTexels = clamp(u_ShadowSoftness / texelWorld, 1.0, 12.0);
+	return SampleShadowPCF(sd.ShadowParams.z + float(cascade), projCoords.xy, compareDepth, radiusTexels, sd.ShadowParams2.w);
+}
+
+float CalculateDirectionalShadowAtDepth(int shadowIndex, vec3 fragPos, vec3 normal, float viewDepth) {
+	if (shadowIndex < 0 || shadowIndex >= u_NumShadowLights) return 1.0;
+	if (viewDepth > u_MaxShadowDistance) return 1.0;
+
+	ShadowLightData sd = u_Shadows[shadowIndex];
+	int count = clamp(u_CSMCascadeCount, 1, MAX_SHADOW_CASCADES);
+
+	int cascade = count - 1;
+	for (int c = 0; c < count; c++) {
+		if (viewDepth < u_Cascades[c].SplitDepth) { cascade = c; break; }
 	}
-	
-	float compareDepth = projCoords.z - adjustedBias;
-	compareDepth = clamp(compareDepth, 0.0, 1.0);
-	float layer = firstLayer + float(cascadeIndex);
-	
-	// PCF sampling with cascade-scaled radius
-	float cascadePCFRadius = pcfRadius * (1.0 + float(cascadeIndex) * 0.3);
-	float shadow = SampleShadowPCF(layer, projCoords.xy, compareDepth, cascadePCFRadius, resolution);
-	
-	// Fade out at max shadow distance
-	float fadeStart = u_MaxShadowDistance * 0.8;
-	float fadeFactor = clamp((u_MaxShadowDistance - v_ViewDepth) / (u_MaxShadowDistance - fadeStart + 0.001), 0.0, 1.0);
-	shadow = mix(1.0, shadow, fadeFactor);
-	
-	// Cascade transition blending (smooth transition between cascades)
-	if (cascadeIndex < u_CSMCascadeCount - 1) {
-		float cascadeFar = u_Cascades[cascadeIndex].SplitDepth;
-		float blendRange = cascadeFar * 0.15;
-		float blendFactor = clamp((cascadeFar - v_ViewDepth) / max(blendRange, 0.001), 0.0, 1.0);
-		
-		if (blendFactor < 1.0) {
-			// Sample next cascade
-			int nextCascade = cascadeIndex + 1;
-			float nextBiasScale = 1.0 + float(nextCascade) * 0.5;
-			vec3 nextBiasedPos = fragPos + normal * (normalBias * nextBiasScale);
-			vec4 nextLightSpace = u_Cascades[nextCascade].ViewProjection * vec4(nextBiasedPos, 1.0);
-			vec3 nextProj = nextLightSpace.xyz / nextLightSpace.w;
-			nextProj = nextProj * 0.5 + 0.5;
-			
-			if (nextProj.x > 0.0 && nextProj.x < 1.0 &&
-				nextProj.y > 0.0 && nextProj.y < 1.0 &&
-				nextProj.z >= 0.0 && nextProj.z <= 1.0) {
-				float nextLayer = firstLayer + float(nextCascade);
-				float nextCompare = clamp(nextProj.z - (bias * nextBiasScale), 0.0, 1.0);
-				float nextPCFRadius = pcfRadius * (1.0 + float(nextCascade) * 0.3);
-				float nextShadow = SampleShadowPCF(nextLayer, nextProj.xy, nextCompare, nextPCFRadius, resolution);
-				
-				shadow = mix(nextShadow, shadow, blendFactor);
-			}
-		}
+
+	float shadow = SampleCascade(sd, cascade, fragPos, normal);
+
+	// Blend into the next cascade over the last 15% of this one (no visible seam)
+	if (cascade < count - 1) {
+		float start = (cascade == 0) ? 0.0 : u_Cascades[cascade - 1].SplitDepth;
+		float end = u_Cascades[cascade].SplitDepth;
+		float blendStart = mix(start, end, 0.85);
+		float t = clamp((viewDepth - blendStart) / max(end - blendStart, 1e-4), 0.0, 1.0);
+		if (t > 0.0) shadow = mix(shadow, SampleCascade(sd, cascade + 1, fragPos, normal), t);
 	}
-	
+
+	// Fade out towards the max shadow distance instead of cutting off
+	float fadeStart = u_MaxShadowDistance * 0.85;
+	shadow = mix(shadow, 1.0, clamp((viewDepth - fadeStart) / max(u_MaxShadowDistance - fadeStart, 1e-4), 0.0, 1.0));
 	return shadow;
+}
+
+float CalculateDirectionalShadow(int shadowIndex, vec3 fragPos, vec3 normal) {
+	return CalculateDirectionalShadowAtDepth(shadowIndex, fragPos, normal, v_ViewDepth);
 }
 
 // Calculate shadow for a spot light
@@ -419,17 +442,10 @@ float CalculatePointShadow(int shadowIndex, vec3 fragPos, vec3 normal, vec3 ligh
 	return SampleShadowPCF(layer, projCoords.xy, compareDepth, pointPCFRadius, resolution);
 }
 
-// Find shadow index for a given light index
-int FindShadowIndex(int lightType, vec3 lightPos, vec3 lightDir) {
-	for (int s = 0; s < u_NumShadowLights; s++) {
-		int sType = int(u_Shadows[s].ShadowParams.w);
-		if (sType == lightType) {
-			// For directional: match by type (usually only one)
-			if (lightType == SHADOW_TYPE_DIRECTIONAL) return s;
-			// For spot/point: we rely on order matching
-			// This works because both light list and shadow list are in same order
-			return s;
-		}
+// Find the shadow entry owned by the light at 'lightIndex' (ShadowParams2.z = light index)
+int FindShadowForLight(int lightIndex) {
+	for (int s = 0; s < u_NumShadowLights && s < MAX_SHADOW_LIGHTS; s++) {
+		if (int(u_Shadows[s].ShadowParams2.z + 0.5) == lightIndex) return s;
 	}
 	return -1;
 }
@@ -559,6 +575,29 @@ vec3 GetLightIntensity(vec3 color, float intensity, float distance, float radius
 // Output: directional shadow factor for IBL modulation
 float g_DirectionalShadowFactor = 1.0;
 
+// ============ SUBSURFACE SCATTERING (approximate) ============
+// Wrap diffuse lets light bleed past the terminator; the transmission term
+// (Barre-Brisebois/Bouchard "fast translucency") lights thin parts from behind.
+const float SSS_WRAP = 0.5;
+const float SSS_DISTORTION = 0.25;
+const float SSS_POWER = 3.0;
+const float SSS_SCALE = 1.5;
+
+vec3 SubsurfaceLighting(vec3 N, vec3 V, vec3 L, vec3 albedo, vec3 sssColor, float sssAmount,
+                        vec3 radiance, float shadowFactor) {
+	float NdotLraw = dot(N, L);
+	float wrap = clamp((NdotLraw + SSS_WRAP) / (1.0 + SSS_WRAP), 0.0, 1.0);
+	// extra diffuse beyond plain Lambert, tinted by the scatter color
+	vec3 wrapTerm = sssColor * albedo * max(wrap - max(NdotLraw, 0.0), 0.0) / PI * shadowFactor;
+
+	vec3 Ht = normalize(L + N * SSS_DISTORTION);
+	float back = pow(clamp(dot(V, -Ht), 0.0, 1.0), SSS_POWER) * SSS_SCALE;
+	// shadows only partially block transmitted light (it travels through the object)
+	vec3 transmission = sssColor * albedo * back * mix(0.35, 1.0, shadowFactor);
+
+	return (wrapTerm + transmission) * radiance * sssAmount;
+}
+
 vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metallic, float roughness, vec3 fragPos, float ao) {
 	vec3 Lo = vec3(0.0);
 	float NdotV = max(dot(N, V), EPSILON);
@@ -573,26 +612,6 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 	int nextSpotShadow = 0;
 	int nextPointShadow = 0;
 
-	// Pre-scan shadow casters to build index mapping
-	// We match lights to shadows by type and order
-	int dirShadowIndices[MAX_SHADOW_LIGHTS];
-	int spotShadowIndices[MAX_SHADOW_LIGHTS];
-	int pointShadowIndices[MAX_SHADOW_LIGHTS];
-	int numDirShadows = 0;
-	int numSpotShadows = 0;
-	int numPointShadows = 0;
-
-	for (int s = 0; s < u_NumShadowLights && s < MAX_SHADOW_LIGHTS; s++) {
-		int sType = int(u_Shadows[s].ShadowParams.w);
-		if (sType == SHADOW_TYPE_DIRECTIONAL && numDirShadows < MAX_SHADOW_LIGHTS)
-			dirShadowIndices[numDirShadows++] = s;
-		else if (sType == SHADOW_TYPE_SPOT && numSpotShadows < MAX_SHADOW_LIGHTS)
-			spotShadowIndices[numSpotShadows++] = s;
-		else if (sType == SHADOW_TYPE_POINT && numPointShadows < MAX_SHADOW_LIGHTS)
-			pointShadowIndices[numPointShadows++] = s;
-	}
-
-	int dirCounter = 0, spotCounter = 0, pointCounter = 0;
 	
 	for (int i = 0; i < lightCount; i++) {
 		LightData light = u_Lights[i];
@@ -615,9 +634,8 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 			lightRadius = 0.0;
 			
 			// Shadow
-			if (castsShadows && dirCounter < numDirShadows) {
-				shadowFactor = CalculateDirectionalShadow(dirShadowIndices[dirCounter], fragPos, N);
-				dirCounter++;
+			if (castsShadows) {
+				shadowFactor = CalculateDirectionalShadow(FindShadowForLight(i), fragPos, N);
 				// Store for IBL ambient modulation (first directional shadow wins)
 				g_DirectionalShadowFactor = min(g_DirectionalShadowFactor, shadowFactor);
 			}
@@ -630,7 +648,6 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 			
 			float range = light.Direction.w;
 			if (range > 0.0 && distance > range) {
-				if (castsShadows) pointCounter++;
 				continue;
 			}
 			
@@ -639,9 +656,8 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 			lightRadius = max(range * 0.05, 0.05);
 			
 			// Shadow
-			if (castsShadows && pointCounter < numPointShadows) {
-				shadowFactor = CalculatePointShadow(pointShadowIndices[pointCounter], fragPos, N, light.Position.xyz);
-				pointCounter++;
+			if (castsShadows) {
+				shadowFactor = CalculatePointShadow(FindShadowForLight(i), fragPos, N, light.Position.xyz);
 			}
 			
 		} else if (lightType == 2) {
@@ -652,7 +668,6 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 			
 			float range = light.Direction.w;
 			if (range > 0.0 && distance > range) {
-				if (castsShadows) spotCounter++;
 				continue;
 			}
 			
@@ -663,7 +678,6 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 			attenuation *= spotAtten;
 			
 			if (attenuation < EPSILON) {
-				if (castsShadows) spotCounter++;
 				continue;
 			}
 			
@@ -671,13 +685,17 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 			lightRadius = max(range * 0.08, 0.08);
 			
 			// Shadow
-			if (castsShadows && spotCounter < numSpotShadows) {
-				shadowFactor = CalculateSpotShadow(spotShadowIndices[spotCounter], fragPos, N);
-				spotCounter++;
+			if (castsShadows) {
+				shadowFactor = CalculateSpotShadow(FindShadowForLight(i), fragPos, N);
 			}
 		}
 		
 		if (attenuation < EPSILON) continue;
+
+		if (u_SubsurfaceColorAmount.a > 0.0) {
+			Lo += SubsurfaceLighting(N, V, L, albedo * (1.0 - metallic), u_SubsurfaceColorAmount.rgb, u_SubsurfaceColorAmount.a,
+			                         radiance * attenuation, shadowFactor);
+		}
 		
 		// ========== BRDF EVALUATION ==========
 		vec3 H = normalize(V + L);
@@ -818,7 +836,7 @@ void main() {
 	vec3 albedo;
 	float alpha = u_Color.a;
 	if (u_UseAlbedoMap != 0) {
-		vec4 texColor = texture(u_AlbedoMap, Input.TexCoords);
+		vec4 texColor = texture(u_AlbedoMap, MaterialUV());
 		albedo = pow(texColor.rgb, vec3(2.2));
 		alpha *= texColor.a;
 	} else {
@@ -828,7 +846,7 @@ void main() {
 	// ========== NORMAL MAPPING ==========
 	vec3 N;
 	if (u_UseNormalMap != 0) {
-		vec3 normalMap = texture(u_NormalMap, Input.TexCoords).rgb;
+		vec3 normalMap = texture(u_NormalMap, MaterialUV()).rgb;
 		normalMap = normalMap * 2.0 - 1.0;
 		normalMap.xy *= u_NormalIntensity;
 		normalMap = normalize(normalMap);
@@ -836,25 +854,25 @@ void main() {
 		// Blend detail normals (UDN method)
 		if (u_DetailNormalCount > 0) {
 			vec3 detailN;
-			detailN = SampleDetailNormal(u_DetailNormal0, Input.TexCoords, u_DetailNormalTilingX.x, u_DetailNormalTilingY.x);
+			detailN = SampleDetailNormal(u_DetailNormal0, MaterialUV(), u_DetailNormalTilingX.x, u_DetailNormalTilingY.x);
 			detailN.xy *= u_DetailNormalIntensities.x;
 			normalMap = BlendNormals_UDN(normalMap, detailN);
 		}
 		if (u_DetailNormalCount > 1) {
 			vec3 detailN;
-			detailN = SampleDetailNormal(u_DetailNormal1, Input.TexCoords, u_DetailNormalTilingX.y, u_DetailNormalTilingY.y);
+			detailN = SampleDetailNormal(u_DetailNormal1, MaterialUV(), u_DetailNormalTilingX.y, u_DetailNormalTilingY.y);
 			detailN.xy *= u_DetailNormalIntensities.y;
 			normalMap = BlendNormals_UDN(normalMap, detailN);
 		}
 		if (u_DetailNormalCount > 2) {
 			vec3 detailN;
-			detailN = SampleDetailNormal(u_DetailNormal2, Input.TexCoords, u_DetailNormalTilingX.z, u_DetailNormalTilingY.z);
+			detailN = SampleDetailNormal(u_DetailNormal2, MaterialUV(), u_DetailNormalTilingX.z, u_DetailNormalTilingY.z);
 			detailN.xy *= u_DetailNormalIntensities.z;
 			normalMap = BlendNormals_UDN(normalMap, detailN);
 		}
 		if (u_DetailNormalCount > 3) {
 			vec3 detailN;
-			detailN = SampleDetailNormal(u_DetailNormal3, Input.TexCoords, u_DetailNormalTilingX.w, u_DetailNormalTilingY.w);
+			detailN = SampleDetailNormal(u_DetailNormal3, MaterialUV(), u_DetailNormalTilingX.w, u_DetailNormalTilingY.w);
 			detailN.xy *= u_DetailNormalIntensities.w;
 			normalMap = BlendNormals_UDN(normalMap, detailN);
 		}
@@ -867,22 +885,22 @@ void main() {
 		if (u_DetailNormalCount > 0) {
 			vec3 detailAccum = vec3(0.0, 0.0, 1.0);
 			if (u_DetailNormalCount > 0) {
-				vec3 d = SampleDetailNormal(u_DetailNormal0, Input.TexCoords, u_DetailNormalTilingX.x, u_DetailNormalTilingY.x);
+				vec3 d = SampleDetailNormal(u_DetailNormal0, MaterialUV(), u_DetailNormalTilingX.x, u_DetailNormalTilingY.x);
 				d.xy *= u_DetailNormalIntensities.x;
 				detailAccum = BlendNormals_UDN(detailAccum, d);
 			}
 			if (u_DetailNormalCount > 1) {
-				vec3 d = SampleDetailNormal(u_DetailNormal1, Input.TexCoords, u_DetailNormalTilingX.y, u_DetailNormalTilingY.y);
+				vec3 d = SampleDetailNormal(u_DetailNormal1, MaterialUV(), u_DetailNormalTilingX.y, u_DetailNormalTilingY.y);
 				d.xy *= u_DetailNormalIntensities.y;
 				detailAccum = BlendNormals_UDN(detailAccum, d);
 			}
 			if (u_DetailNormalCount > 2) {
-				vec3 d = SampleDetailNormal(u_DetailNormal2, Input.TexCoords, u_DetailNormalTilingX.z, u_DetailNormalTilingY.z);
+				vec3 d = SampleDetailNormal(u_DetailNormal2, MaterialUV(), u_DetailNormalTilingX.z, u_DetailNormalTilingY.z);
 				d.xy *= u_DetailNormalIntensities.z;
 				detailAccum = BlendNormals_UDN(detailAccum, d);
 			}
 			if (u_DetailNormalCount > 3) {
-				vec3 d = SampleDetailNormal(u_DetailNormal3, Input.TexCoords, u_DetailNormalTilingX.w, u_DetailNormalTilingY.w);
+				vec3 d = SampleDetailNormal(u_DetailNormal3, MaterialUV(), u_DetailNormalTilingX.w, u_DetailNormalTilingY.w);
 				d.xy *= u_DetailNormalIntensities.w;
 				detailAccum = BlendNormals_UDN(detailAccum, d);
 			}
@@ -893,7 +911,7 @@ void main() {
 	// ========== LAYERED TEXTURE SAMPLING ==========
 	vec4 layeredSample = vec4(0.0);
 	if (u_UseLayeredTexture != 0) {
-		layeredSample = texture(u_LayeredMap, Input.TexCoords);
+		layeredSample = texture(u_LayeredMap, MaterialUV());
 	}
 	
 	// ========== METALLIC ==========
@@ -901,7 +919,7 @@ void main() {
 	if (u_UseLayeredTexture != 0 && u_LayeredUseMetallic != 0) {
 		metallic = clamp(SampleLayeredChannel(layeredSample, u_LayeredMetallicChannel) * u_MetallicMultiplier, 0.0, 1.0);
 	} else if (u_UseMetallicMap != 0) {
-		metallic = clamp(texture(u_MetallicMap, Input.TexCoords).r * u_MetallicMultiplier, 0.0, 1.0);
+		metallic = clamp(texture(u_MetallicMap, MaterialUV()).r * u_MetallicMultiplier, 0.0, 1.0);
 	}
 	
 	// ========== ROUGHNESS ==========
@@ -909,13 +927,13 @@ void main() {
 	if (u_UseLayeredTexture != 0 && u_LayeredUseRoughness != 0) {
 		roughness = clamp(SampleLayeredChannel(layeredSample, u_LayeredRoughnessChannel) * u_RoughnessMultiplier, 0.0, 1.0);
 	} else if (u_UseRoughnessMap != 0) {
-		roughness = clamp(texture(u_RoughnessMap, Input.TexCoords).r * u_RoughnessMultiplier, 0.0, 1.0);
+		roughness = clamp(texture(u_RoughnessMap, MaterialUV()).r * u_RoughnessMultiplier, 0.0, 1.0);
 	}
 	roughness = max(roughness, MIN_ROUGHNESS);
 	
 	float specular = u_Specular;
 	if (u_UseSpecularMap != 0) {
-		specular = clamp(texture(u_SpecularMap, Input.TexCoords).r * u_SpecularMultiplier, 0.0, 1.0);
+		specular = clamp(texture(u_SpecularMap, MaterialUV()).r * u_SpecularMultiplier, 0.0, 1.0);
 	}
 	
 	// ========== AMBIENT OCCLUSION ==========
@@ -923,7 +941,7 @@ void main() {
 	if (u_UseLayeredTexture != 0 && u_LayeredUseAO != 0) {
 		ao = clamp(SampleLayeredChannel(layeredSample, u_LayeredAOChannel) * u_AOMultiplier, 0.0, 1.0);
 	} else if (u_UseAOMap != 0) {
-		ao = clamp(texture(u_AOMap, Input.TexCoords).r * u_AOMultiplier, 0.0, 1.0);
+		ao = clamp(texture(u_AOMap, MaterialUV()).r * u_AOMultiplier, 0.0, 1.0);
 	}
 	
 	// ========== PBR LIGHTING ==========
@@ -950,7 +968,7 @@ void main() {
 	if (u_EmissionIntensity > EPSILON) {
 		emission = u_EmissionColor * u_EmissionIntensity;
 		if (u_UseEmissionMap != 0) {
-			vec3 emissionTex = texture(u_EmissionMap, Input.TexCoords).rgb;
+			vec3 emissionTex = texture(u_EmissionMap, MaterialUV()).rgb;
 			emissionTex = pow(emissionTex, vec3(2.2));
 			emission = emissionTex * u_EmissionColor * u_EmissionIntensity;
 		}
@@ -1000,6 +1018,7 @@ void main() {
 	// Gamma correction
 	color = pow(color, vec3(1.0 / 2.2));
 	
+	if (v_DebugWeight >= 0.0) { FragColor = vec4(WeightHeatmap(v_DebugWeight), 1.0); o_EntityID = v_EntityID; return; }
 	FragColor = vec4(color, alpha);
 	o_EntityID = v_EntityID;
 }

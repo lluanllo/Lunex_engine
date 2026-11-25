@@ -52,7 +52,7 @@ layout (binding = 0) uniform sampler2D u_Textures[32];
 void main() {
 	vec4 texColor = Input.Color;
 	
-	int texIndex = int(Input.TexIndex);
+	int texIndex = int(Input.TexIndex + 0.5);   // round: interpolated 0.9999 must not become slot 0 (white)
 	
 	// Sample texture based on index
 	switch(texIndex) {

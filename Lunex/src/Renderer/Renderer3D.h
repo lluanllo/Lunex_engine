@@ -34,10 +34,10 @@ namespace Lunex {
 		static void BindEnvironment(const Ref<EnvironmentMap>& environment);
 		static void UnbindEnvironment();
 
-		static void DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, int entityID = -1);
-		static void DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, MaterialComponent& materialComponent, int entityID = -1);
+		static void DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, int entityID = -1, const std::vector<glm::mat4>* bones = nullptr);
+		static void DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, MaterialComponent& materialComponent, int entityID = -1, const std::vector<glm::mat4>* bones = nullptr);
 		static void DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, MaterialComponent& materialComponent, TextureComponent& textureComponent, int entityID = -1);
-		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& color = glm::vec4(1.0f), int entityID = -1);
+		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& color = glm::vec4(1.0f), int entityID = -1, const std::vector<glm::mat4>* bones = nullptr);
 		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, MaterialComponent& materialComponent, int entityID = -1);
 		static void DrawModel(const glm::mat4& transform, const Ref<Model>& model, MaterialComponent& materialComponent, TextureComponent& textureComponent, int entityID = -1);
 

@@ -27,38 +27,27 @@ namespace Lunex {
 		glm::vec4 lineColor = glm::vec4(s_Settings.GridColor, 0.25f);
 		glm::vec4 majorColor = glm::vec4(s_Settings.GridColor * 0.6f, 0.4f);
 		
-		// Set thin line width
 		float previousLineWidth = Renderer2D::GetLineWidth();
-		Renderer2D::SetLineWidth(s_Settings.MinorLineThickness);
-		
-		// Draw grid lines on XZ plane (Y = 0)
-		// Lines parallel to Z axis
-		for (int i = -numCells; i <= numCells; i++) {
-			float x = i * cellSize;
-			
-			// Every 10 lines is a major line (but not the center)
-			bool isMajor = (i % 10 == 0) && (i != 0);
-			glm::vec4 color = isMajor ? majorColor : lineColor;
-			
-			glm::vec3 start = { x, 0.0f, -gridExtent };
-			glm::vec3 end = { x, 0.0f, gridExtent };
-			
-			Renderer2D::DrawLine(start, end, color);
+
+		// Two passes so minor and major lines can have different thickness
+		for (int pass = 0; pass < 2; pass++) {
+			const bool majorPass = (pass == 1);
+			Renderer2D::SetLineWidth(majorPass ? s_Settings.MajorLineThickness : s_Settings.MinorLineThickness);
+
+			for (int i = -numCells; i <= numCells; i++) {
+				// Every 10 lines is a major line (but not the center)
+				bool isMajor = (i % 10 == 0) && (i != 0);
+				if (isMajor != majorPass) continue;
+
+				glm::vec4 color = isMajor ? majorColor : lineColor;
+				float t = i * cellSize;
+				glm::vec3 zStart(t, 0.0f, -gridExtent), zEnd(t, 0.0f, gridExtent);
+				glm::vec3 xStart(-gridExtent, 0.0f, t), xEnd(gridExtent, 0.0f, t);
+				Renderer2D::DrawLine(zStart, zEnd, color);   // parallel to Z
+				Renderer2D::DrawLine(xStart, xEnd, color);   // parallel to X
+			}
 		}
-		
-		// Lines parallel to X axis
-		for (int i = -numCells; i <= numCells; i++) {
-			float z = i * cellSize;
-			
-			bool isMajor = (i % 10 == 0) && (i != 0);
-			glm::vec4 color = isMajor ? majorColor : lineColor;
-			
-			glm::vec3 start = { -gridExtent, 0.0f, z };
-			glm::vec3 end = { gridExtent, 0.0f, z };
-			
-			Renderer2D::DrawLine(start, end, color);
-		}
-		
+
 		// Restore previous line width
 		Renderer2D::SetLineWidth(previousLineWidth);
 	}

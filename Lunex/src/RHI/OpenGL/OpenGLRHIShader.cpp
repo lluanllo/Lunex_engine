@@ -240,7 +240,13 @@ namespace RHI {
 		
 		for (auto&& [stage, source] : shaderSources) {
 			std::filesystem::path shaderPath = m_FilePath.empty() ? m_Name : m_FilePath;
-			std::filesystem::path cachePath = cacheDir / (shaderPath.filename().string() + GetVulkanCacheExtension(stage));
+			// Key the cache on a hash of the stage source so edited shaders are recompiled
+			// (previously the cache was keyed on filename only and served stale SPIR-V forever).
+			uint64_t sourceHash = 14695981039346656037ull; // FNV-1a 64
+			for (unsigned char c : source) { sourceHash ^= c; sourceHash *= 1099511628211ull; }
+			char hashStr[17];
+			snprintf(hashStr, sizeof(hashStr), "%016llx", static_cast<unsigned long long>(sourceHash));
+			std::filesystem::path cachePath = cacheDir / (shaderPath.filename().string() + "." + hashStr + GetVulkanCacheExtension(stage));
 			
 			// Try loading from cache
 			bool cacheLoaded = false;

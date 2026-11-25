@@ -30,6 +30,15 @@ namespace Lunex {
 		bool EnablePCF = true;
 		float PCFRadius = 1.5f;
 
+		// Directional filter: Hard = single hardware-filtered tap (crisp, e.g. space games),
+		// Soft = rotated Poisson PCF with a penumbra of constant world size across cascades
+		int FilterMode = 1;                 // 0 = Hard, 1 = Soft
+		float Softness = 0.05f;             // penumbra radius in world units (soft mode)
+
+		// Performance: cascades beyond the first two are re-rendered every N frames
+		// (their texels are large, so a frame of latency is invisible). 1 = every frame.
+		uint32_t FarCascadeUpdateInterval = 2;
+
 		// Distance-based shadow softening
 		float DistanceSofteningStart = 50.0f;   // Start softening shadows beyond this distance
 		float DistanceSofteningMax = 4.0f;       // Max PCF radius multiplier at max distance
@@ -68,7 +77,8 @@ namespace Lunex {
 	struct alignas(16) ShadowCascadeGPU {
 		glm::mat4 ViewProjection;      // 64 bytes
 		float SplitDepth;              // 4 bytes
-		float _pad[3];                 // 12 bytes  ? total 80 bytes
+		float TexelWorldSize;          // world units covered by one shadow-map texel
+		float _pad[2];                 // 8 bytes  -> total 80 bytes
 	};
 
 	/**
@@ -88,7 +98,7 @@ namespace Lunex {
 	 * Must be ? 16KB for UBO on most GPUs; if large, use SSBO.
 	 * With 16 lights: 16 + (80*4) + (400*16) = 6736 bytes ? fits UBO.
 	 */
-	static constexpr uint32_t MAX_SHADOW_CASCADES = 4;
+	static constexpr uint32_t MAX_SHADOW_CASCADES = 6;   // matches ShadowLightGPU::ViewProjection[6]
 	static constexpr uint32_t MAX_SHADOW_LIGHTS = 16;
 
 	struct alignas(16) ShadowUniformData {
@@ -99,8 +109,8 @@ namespace Lunex {
 
 		float DistanceSofteningMax;       // 4
 		float SkyTintStrength;            // 4
-		float _pad1;                      // 4
-		float _pad2;                      // 4  ? 32 bytes
+		int FilterMode;                   // 4  (0 hard, 1 soft)
+		float Softness;                   // 4  -> 32 bytes
 
 		ShadowCascadeGPU Cascades[MAX_SHADOW_CASCADES]; // 80 × 4 = 320 bytes
 		ShadowLightGPU Shadows[MAX_SHADOW_LIGHTS];      // 400 × 16 = 6400 bytes
@@ -126,6 +136,7 @@ namespace Lunex {
 
 		// CSM cascade split depths (stored from actual computation)
 		float CascadeSplitDepths[MAX_SHADOW_CASCADES] = { 0.0f };
+		float CascadeTexelSizes[MAX_SHADOW_CASCADES] = { 0.0f };
 
 		// Light properties needed for rendering
 		glm::vec3 Position;

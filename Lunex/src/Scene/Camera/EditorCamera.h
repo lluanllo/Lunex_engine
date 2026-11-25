@@ -40,6 +40,11 @@ namespace Lunex {
 		
 		// ========== POSITION ==========
 		void SetPosition(const glm::vec3& position) { m_Position = position; UpdateView(); }
+
+		// Orient the camera towards a world point (keeps position)
+		void LookAt(const glm::vec3& target);
+		// Frame a bounding sphere (keeps orientation, moves back far enough to fit it)
+		void Focus(const glm::vec3& center, float radius);
 		const glm::vec3& GetPosition() const { return m_Position; }
 		
 		// ========== VIEWPORT ==========

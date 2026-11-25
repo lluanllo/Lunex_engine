@@ -7,6 +7,8 @@
 #include "Scene/Lighting/LightSystem.h"
 #include "Scene/Camera/EditorCamera.h"
 #include "Resources/Mesh/Model.h"
+#include "Scene/Camera/CameraData.h"
+#include "Renderer/SkinningBuffer.h"
 #include "Log/Log.h"
 #include "RHI/RHI.h"
 
@@ -31,8 +33,10 @@ namespace Lunex {
 
 		m_Config = config;
 
-		// ---- Calculate total atlas layers needed (worst case) ----
-		m_AtlasMaxLayers = MAX_SHADOW_CASCADES + MAX_SHADOW_LIGHTS * 6;
+		// ---- Atlas layers: allocated on demand (worst case was 100 layers of 2048^2
+		// Depth32F = 1.6 GB of VRAM even with a single sun light) ----
+		m_AtlasCapacityLimit = MAX_SHADOW_CASCADES + MAX_SHADOW_LIGHTS * 6;
+		m_AtlasMaxLayers = MAX_SHADOW_CASCADES + 6;   // sun + one point light to start
 		m_LayerOccupancy.resize(m_AtlasMaxLayers, false);
 
 		// ---- All layers use the same resolution (max of all types) ----
@@ -71,6 +75,19 @@ namespace Lunex {
 		m_Initialized = true;
 		LNX_LOG_INFO("ShadowSystem initialized: atlas {0}x{0} x{1} layers, Depth32F",
 			m_AtlasResolution, m_AtlasMaxLayers);
+	}
+
+	void ShadowSystem::EnsureAtlasCapacity(uint32_t layers) {
+		layers = std::min(layers, m_AtlasCapacityLimit);
+		if (layers <= m_AtlasMaxLayers) return;
+
+		uint32_t newCapacity = std::min(m_AtlasCapacityLimit, layers + 6);   // a little headroom
+		m_AtlasDepthTexture = RHI::RHITexture2DArray::Create(
+			m_AtlasResolution, m_AtlasResolution, newCapacity, RHI::TextureFormat::Depth32F, 1);
+		m_AtlasMaxLayers = newCapacity;
+		m_LayerOccupancy.assign(m_AtlasMaxLayers, false);
+		for (auto& valid : m_CascadeCacheValid) valid = false;   // contents are gone
+		LNX_LOG_INFO("ShadowSystem: atlas grown to {0} layers", m_AtlasMaxLayers);
 	}
 
 	void ShadowSystem::Shutdown() {
@@ -136,7 +153,14 @@ namespace Lunex {
 	// ========================================================================
 
 	void ShadowSystem::BindForSceneRendering() {
-		if (!m_Initialized || !m_Enabled) return;
+		if (!m_Initialized) return;
+		if (!m_Enabled) {
+			// Make sure shaders see "no shadow casters" instead of stale data from another pass
+			ShadowUniformData empty;
+			memset(&empty, 0, sizeof(empty));
+			m_ShadowUBO->SetData(&empty, sizeof(ShadowUniformData));
+			return;
+		}
 
 		m_AtlasDepthTexture->Bind(11);
 		m_ShadowSampler->Bind(11);
@@ -158,6 +182,10 @@ namespace Lunex {
 		bool needsResize = (config.DirectionalResolution != m_Config.DirectionalResolution ||
 			config.SpotResolution != m_Config.SpotResolution ||
 			config.PointResolution != m_Config.PointResolution);
+		if (config.CSMCascadeCount != m_Config.CSMCascadeCount || config.MaxShadowDistance != m_Config.MaxShadowDistance ||
+			config.CSMSplitLambda != m_Config.CSMSplitLambda) {
+			for (auto& valid : m_CascadeCacheValid) valid = false;
+		}
 		m_Config = config;
 
 		if (needsResize && m_Initialized) {
@@ -200,6 +228,7 @@ namespace Lunex {
 
 		// 4. Render depth into shadow atlas
 		RenderShadowMaps(scene);
+		m_FrameIndex++;
 
 		// 5. Upload GPU data
 		UploadGPUData();
@@ -270,6 +299,18 @@ namespace Lunex {
 	// ========================================================================
 
 	void ShadowSystem::AllocateAtlasLayers() {
+		// Grow the atlas first if this frame needs more layers than allocated
+		uint32_t needed = 0;
+		for (const auto& caster : m_ShadowCasters) {
+			switch (caster.Type) {
+				case ShadowType::Directional_CSM: needed += m_Config.CSMCascadeCount; break;
+				case ShadowType::Spot: needed += 1; break;
+				case ShadowType::Point_Cubemap: needed += 6; break;
+				default: break;
+			}
+		}
+		EnsureAtlasCapacity(needed);
+
 		int nextLayer = 0;
 
 		for (auto& caster : m_ShadowCasters) {
@@ -330,6 +371,7 @@ namespace Lunex {
 				for (uint32_t c = 0; c < cascades.size() && c < MAX_SHADOW_CASCADES; ++c) {
 					caster.ViewProjections[c] = cascades[c].ViewProjection;
 					caster.CascadeSplitDepths[c] = cascades[c].SplitDepth;
+					caster.CascadeTexelSizes[c] = cascades[c].TexelWorldSize;
 				}
 				break;
 			}
@@ -452,7 +494,7 @@ namespace Lunex {
 					// Set UBO data for this face
 					m_DepthUBOData.LightVP = caster.ViewProjections[face];
 					m_DepthUBOData.LightPosAndRange = glm::vec4(caster.Position, caster.Range);
-					RenderSceneDepthPoint(scene, caster.Position, caster.Range, caster.ViewProjections);
+					RenderShadowCasters(scene, caster.ViewProjections[face], true);
 
 					cmd->SetPolygonOffset(false);
 					m_Stats.PointFacesRendered++;
@@ -466,8 +508,30 @@ namespace Lunex {
 				// Disable face culling to capture all geometry
 			 cmd->SetCullMode(RHI::CullMode::None);
 
+				// Far cascades of the sun are refreshed every N frames (see FarCascadeUpdateInterval)
+				const bool isSun = (caster.Type == ShadowType::Directional_CSM);
+				if (isSun && glm::length(caster.Direction - m_CachedSunDirection) > 1e-4f) {
+					for (auto& valid : m_CascadeCacheValid) valid = false;   // sun moved: refresh all
+					m_CachedSunDirection = caster.Direction;
+				}
+
 				for (int m = 0; m < caster.NumMatrices; ++m) {
 					int layer = caster.AtlasFirstLayer + m;
+
+					if (isSun && m < static_cast<int>(MAX_SHADOW_CASCADES)) {
+						const uint32_t interval = std::max(1u, m_Config.FarCascadeUpdateInterval);
+						const bool farCascade = m >= 2;
+						const bool due = ((m_FrameIndex + static_cast<uint64_t>(m)) % interval) == 0;
+						if (farCascade && !due && m_CascadeCacheValid[m]) {
+							// Keep last frame's map AND the matrix it was rendered with
+							caster.ViewProjections[m] = m_CachedCascadeVP[m];
+							caster.CascadeTexelSizes[m] = m_CachedCascadeTexel[m];
+							continue;
+						}
+						m_CachedCascadeVP[m] = caster.ViewProjections[m];
+						m_CachedCascadeTexel[m] = caster.CascadeTexelSizes[m];
+						m_CascadeCacheValid[m] = true;
+					}
 
 					cmd->AttachDepthTextureLayer(fboHandle, texHandle, layer);
 					cmd->SetViewport(0.0f, 0.0f, static_cast<float>(res), static_cast<float>(res));
@@ -477,7 +541,7 @@ namespace Lunex {
 					cmd->SetPolygonOffset(true, caster.Bias * 2.0f, caster.Bias * 2.0f);
 
 					m_DepthUBOData.LightVP = caster.ViewProjections[m];
-					RenderSceneDepthOnly(scene, caster.ViewProjections[m]);
+					RenderShadowCasters(scene, caster.ViewProjections[m], false);
 
 					cmd->SetPolygonOffset(false);
 
@@ -516,11 +580,12 @@ namespace Lunex {
 	}
 
 	// ========================================================================
-	// RENDER SCENE DEPTH ONLY (shared by directional & spot)
+	// RENDER SHADOW CASTERS (frustum-culled, shared by all light types)
 	// ========================================================================
 
-	void ShadowSystem::RenderSceneDepthOnly(Scene* scene, const glm::mat4& lightVP) {
+	void ShadowSystem::RenderShadowCasters(Scene* scene, const glm::mat4& lightVP, bool cullNearPlane) {
 		auto* cmd = RHI::GetImmediateCommandList();
+		ViewFrustum frustum = ViewFrustum::FromViewProjection(lightVP);
 
 		auto view = scene->GetAllEntitiesWith<TransformComponent, MeshComponent>();
 		for (auto entityID : view) {
@@ -529,47 +594,44 @@ namespace Lunex {
 			if (!mesh.MeshModel) continue;
 
 			glm::mat4 worldTransform = scene->GetWorldTransform(entity);
+			bool uploaded = false;
 
-			// Upload per-object UBO data
-			m_DepthUBOData.Model = worldTransform;
-			m_DepthShaderUBO->SetData(&m_DepthUBOData, sizeof(DepthShaderUBOData));
-
-			// Draw all submeshes (depth only - no material)
-			for (const auto& submesh : mesh.MeshModel->GetMeshes()) {
-				auto va = submesh->GetVertexArray();
-				if (va) {
-					va->Bind();
-					cmd->DrawIndexed(static_cast<uint32_t>(submesh->GetIndices().size()));
-					m_Stats.ShadowDrawCalls++;
-				}
+			// Animated meshes cast shadows with their current pose
+			const std::vector<glm::mat4>* bones = nullptr;
+			if (mesh.MeshModel->IsSkinned() && entity.HasComponent<AnimatorComponent>()) {
+				auto& animator = entity.GetComponent<AnimatorComponent>();
+				if (!animator.BoneMatrices.empty()) bones = &animator.BoneMatrices;
 			}
-		}
-	}
-
-	void ShadowSystem::RenderSceneDepthPoint(Scene* scene, const glm::vec3& lightPos,
-		float lightRange, const glm::mat4 faceVPs[6])
-	{
-		auto* cmd = RHI::GetImmediateCommandList();
-
-		auto view = scene->GetAllEntitiesWith<TransformComponent, MeshComponent>();
-		for (auto entityID : view) {
-			Entity entity{ entityID, scene };
-			auto& mesh = entity.GetComponent<MeshComponent>();
-			if (!mesh.MeshModel) continue;
-
-			glm::mat4 worldTransform = scene->GetWorldTransform(entity);
-
-			// Upload per-object UBO data
-			m_DepthUBOData.Model = worldTransform;
-			m_DepthShaderUBO->SetData(&m_DepthUBOData, sizeof(DepthShaderUBOData));
 
 			for (const auto& submesh : mesh.MeshModel->GetMeshes()) {
 				auto va = submesh->GetVertexArray();
-				if (va) {
-					va->Bind();
-					cmd->DrawIndexed(static_cast<uint32_t>(submesh->GetIndices().size()));
-					m_Stats.ShadowDrawCalls++;
+				if (!va) continue;
+
+				glm::vec3 wMin, wMax;
+				Mesh::TransformAABB(worldTransform, submesh->GetAABBMin(), submesh->GetAABBMax(), wMin, wMax);
+				bool visible = true;
+				for (int p = 0; p < 6 && visible && !submesh->IsSkinned(); ++p) {
+					if (!cullNearPlane && p == ViewFrustum::Near) continue;
+					const auto& plane = frustum.Planes[p];
+					glm::vec3 positive(
+						plane.Normal.x >= 0.0f ? wMax.x : wMin.x,
+						plane.Normal.y >= 0.0f ? wMax.y : wMin.y,
+						plane.Normal.z >= 0.0f ? wMax.z : wMin.z);
+					if (plane.DistanceToPoint(positive) < 0.0f) visible = false;
 				}
+				if (!visible) { m_Stats.ShadowCulled++; continue; }
+
+				// Upload per-object UBO lazily (only if at least one submesh is visible)
+				if (!uploaded) {
+					m_DepthUBOData.Model = worldTransform;
+					m_DepthUBOData.Skinned = SkinningBuffer::Upload(bones);
+					m_DepthShaderUBO->SetData(&m_DepthUBOData, sizeof(DepthShaderUBOData));
+					uploaded = true;
+				}
+
+				va->Bind();
+				cmd->DrawIndexed(static_cast<uint32_t>(submesh->GetIndices().size()));
+				m_Stats.ShadowDrawCalls++;
 			}
 		}
 	}
@@ -587,6 +649,8 @@ namespace Lunex {
 		m_GPUData.DistanceSofteningStart = m_Config.DistanceSofteningStart;
 		m_GPUData.DistanceSofteningMax = m_Config.DistanceSofteningMax;
 		m_GPUData.SkyTintStrength = m_Config.EnableSkyColorTint ? m_Config.SkyTintStrength : 0.0f;
+		m_GPUData.FilterMode = m_Config.FilterMode;
+		m_GPUData.Softness = m_Config.Softness;
 
 		// Fill cascade data from first directional light
 		for (const auto& caster : m_ShadowCasters) {
@@ -594,6 +658,7 @@ namespace Lunex {
 				for (uint32_t c = 0; c < m_Config.CSMCascadeCount && c < MAX_SHADOW_CASCADES; ++c) {
 					m_GPUData.Cascades[c].ViewProjection = caster.ViewProjections[c];
 					m_GPUData.Cascades[c].SplitDepth = caster.CascadeSplitDepths[c];
+					m_GPUData.Cascades[c].TexelWorldSize = caster.CascadeTexelSizes[c];
 				}
 				break; // Only first directional gets CSM cascade data
 			}
@@ -618,15 +683,20 @@ namespace Lunex {
 				static_cast<float>(caster.Type)
 			);
 
+			// z = index of the owning light in the lights SSBO (LightSystem order).
+			// Shaders look shadows up by light index instead of relying on list order.
 			sd.ShadowParams2 = glm::vec4(
 				caster.Range,
 				m_Config.PCFRadius,
-				static_cast<float>(caster.NumMatrices),
+				static_cast<float>(caster.LightIndex),
 				static_cast<float>(m_AtlasResolution)
 			);
 
 			shadowIdx++;
 		}
+
+		// Only casters that actually got atlas space are valid entries
+		m_GPUData.NumShadowLights = shadowIdx;
 
 		// Upload
 		m_ShadowUBO->SetData(&m_GPUData, sizeof(ShadowUniformData));

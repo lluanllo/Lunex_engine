@@ -28,6 +28,7 @@ layout(location = 0) in vec2 v_TexCoords;
 // ============ SAMPLERS ============
 layout(binding = 0) uniform sampler2D u_SceneColor;
 layout(binding = 1) uniform sampler2D u_BloomTexture;
+layout(binding = 2) uniform sampler2D u_SSRTexture;
 
 // ============ UNIFORMS (packed in UBO for SPIR-V) ============
 layout(std140, binding = 0) uniform CompositeParams {
@@ -46,7 +47,7 @@ layout(std140, binding = 0) uniform CompositeParams {
 	int   u_ToneMapOperator;  // 0=ACES, 1=Reinhard, 2=Uncharted2, 3=None
 	float u_Exposure;
 	float u_Gamma;
-	float _pad0;
+	int   u_EnableSSR;
 };
 
 // ============ TONE MAP FUNCTIONS ============
@@ -138,6 +139,18 @@ void main() {
 		color = SampleWithChromaticAberration(v_TexCoords, u_ChromaticAberrationIntensity);
 	} else {
 		color = texture(u_SceneColor, v_TexCoords).rgb;
+	}
+
+	// Screen-space reflections (already weighted by Fresnel/roughness/confidence)
+	if (u_EnableSSR != 0) {
+		// 3x3 filter: the SSR march is jittered per pixel, which leaves hit/miss
+		// speckles at reflection edges. Averaging neighbours turns them into a soft fade.
+		vec2 texel = 1.5 / vec2(textureSize(u_SSRTexture, 0));
+		vec3 ssr = vec3(0.0);
+		for (int y = -1; y <= 1; y++)
+			for (int x = -1; x <= 1; x++)
+				ssr += texture(u_SSRTexture, v_TexCoords + vec2(x, y) * texel).rgb * ((x == 0 && y == 0) ? 0.25 : 0.09375);
+		color += ssr;
 	}
 
 	// Add bloom

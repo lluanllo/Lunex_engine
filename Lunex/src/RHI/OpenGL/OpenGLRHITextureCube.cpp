@@ -162,11 +162,18 @@ namespace Lunex {
 		glGenTextures(1, &m_RendererID);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, m_RendererID);
 		
-		// Allocate storage for all faces and mip levels
-		for (uint32_t i = 0; i < 6; i++) {
-			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, m_InternalFormat,
-				size, size, 0, m_DataFormat, hdr ? GL_FLOAT : GL_UNSIGNED_BYTE, nullptr);
+		// Allocate storage for all faces AND all mip levels. Only level 0 used to be
+		// allocated while the min filter used mipmaps: the texture was incomplete and
+		// sampled black (no sky reflections from the prefiltered environment map).
+		for (uint32_t mip = 0; mip < m_MipLevels; mip++) {
+			uint32_t mipSize = std::max(1u, size >> mip);
+			for (uint32_t i = 0; i < 6; i++) {
+				glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, static_cast<GLint>(mip), m_InternalFormat,
+					mipSize, mipSize, 0, m_DataFormat, hdr ? GL_FLOAT : GL_UNSIGNED_BYTE, nullptr);
+			}
 		}
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_BASE_LEVEL, 0);
+		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(m_MipLevels - 1));
 		
 		// Set texture parameters
 		glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, 

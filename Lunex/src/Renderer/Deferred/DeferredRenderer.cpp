@@ -8,12 +8,15 @@
 #include "Renderer/VertexArray.h"
 #include "Renderer/Buffer.h"
 #include "Renderer/SkyboxRenderer.h"
+#include "Renderer/Renderer3D.h"
+#include "Renderer/SkinningBuffer.h"
 #include "Renderer/Shadows/ShadowSystem.h"
 #include "Renderer/PostProcess/PostProcessRenderer.h"
 #include "Assets/Materials/MaterialRegistry.h"
 #include "Resources/Mesh/Model.h"
 #include "Scene/Components.h"
 #include "Scene/Lighting/LightTypes.h"
+#include "Scene/Camera/CameraData.h"
 #include "Log/Log.h"
 
 #include <glm/gtc/type_ptr.hpp>
@@ -50,8 +53,14 @@ namespace Lunex {
 			float _padding;
 		};
 
+		// Matches std140 layout of 'Transform' UBO (binding 1) in Mesh3D / Deferred_Geometry
 		struct TransformData {
 			glm::mat4 Transform;
+			glm::mat4 NormalMatrix;
+			int EntityID;
+			int Skinned;
+			int DebugBone = -1;
+			int _pad = 0;
 		};
 
 		// Post-process control UBO (binding 6) - matches shader layout
@@ -102,6 +111,9 @@ namespace Lunex {
 			glm::vec4 DetailNormalIntensities;
 			glm::vec4 DetailNormalTilingX;
 			glm::vec4 DetailNormalTilingY;
+
+			glm::vec4 SubsurfaceColorAmount;   // rgb color, a amount
+			glm::vec4 UVTilingOffset = { 1.0f, 1.0f, 0.0f, 0.0f };
 		};
 
 		CameraData CameraBuffer;
@@ -118,6 +130,8 @@ namespace Lunex {
 		glm::vec3 CameraPosition = { 0.0f, 0.0f, 0.0f };
 		glm::mat4 ViewMatrix = glm::mat4(1.0f);
 		glm::mat4 ProjectionMatrix = glm::mat4(1.0f);
+		ViewFrustum CameraFrustum;
+		bool FrustumCullingEnabled = true;
 
 		// ========== STATISTICS ==========
 		DeferredRenderer::Statistics Stats;
@@ -207,6 +221,7 @@ namespace Lunex {
 		s_Data.CameraBuffer.Projection = s_Data.ProjectionMatrix;
 		s_Data.CameraBuffer.ViewPos = s_Data.CameraPosition;
 		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(DeferredRendererData::CameraData));
+		s_Data.CameraFrustum = ViewFrustum::FromViewProjection(s_Data.CameraBuffer.ViewProjection);
 
 		// Bind shadow atlas for reading
 		ShadowSystem::Get().BindForSceneRendering();
@@ -224,6 +239,7 @@ namespace Lunex {
 		s_Data.CameraBuffer.Projection = s_Data.ProjectionMatrix;
 		s_Data.CameraBuffer.ViewPos = s_Data.CameraPosition;
 		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(DeferredRendererData::CameraData));
+		s_Data.CameraFrustum = ViewFrustum::FromViewProjection(s_Data.CameraBuffer.ViewProjection);
 
 		ShadowSystem::Get().BindForSceneRendering();
 	}
@@ -236,6 +252,28 @@ namespace Lunex {
 	// GEOMETRY PASS
 	// ============================================================================
 
+	// Draws every submesh of a model whose world AABB intersects the camera frustum.
+	static void DrawModelCulled(Model& model, const glm::mat4& transform, const Ref<Shader>& shader) {
+		for (const auto& mesh : model.GetMeshes()) {
+			// Skinned meshes deform beyond their bind-pose bounds: never cull them
+			if (s_Data.FrustumCullingEnabled && !mesh->IsSkinned()) {
+				glm::vec3 wMin, wMax;
+				Mesh::TransformAABB(transform, mesh->GetAABBMin(), mesh->GetAABBMax(), wMin, wMax);
+				if (!s_Data.CameraFrustum.IntersectsAABB(wMin, wMax)) {
+					s_Data.Stats.CulledMeshes++;
+					continue;
+				}
+			}
+			mesh->Draw(shader);
+			s_Data.Stats.GeometryDrawCalls++;
+			s_Data.Stats.MeshCount++;
+			s_Data.Stats.TriangleCount += static_cast<uint32_t>(mesh->GetIndices().size()) / 3;
+		}
+	}
+
+	void DeferredRenderer::SetFrustumCullingEnabled(bool enabled) { s_Data.FrustumCullingEnabled = enabled; }
+	bool DeferredRenderer::IsFrustumCullingEnabled() { return s_Data.FrustumCullingEnabled; }
+
 	void DeferredRenderer::BeginGeometryPass() {
 		LNX_PROFILE_FUNCTION();
 
@@ -244,6 +282,10 @@ namespace Lunex {
 		}
 
 		s_Data.GBuffer.Bind();
+
+		// G-Buffer targets store data in alpha (metallic, roughness, AO, specular): blending
+		// must be off, whatever the previous pass (2D overlays, UI) left enabled.
+		glDisable(GL_BLEND);
 
 		auto* cmdList = RHI::GetImmediateCommandList();
 		if (cmdList) {
@@ -263,17 +305,20 @@ namespace Lunex {
 	}
 
 	void DeferredRenderer::SubmitMesh(const glm::mat4& transform, MeshComponent& meshComponent,
-									  MaterialComponent& materialComponent, int entityID) {
+									  MaterialComponent& materialComponent, int entityID, const std::vector<glm::mat4>* bones) {
 		if (!meshComponent.MeshModel || !materialComponent.Instance)
 			return;
 
 		if (!s_Data.GeometryShader || !s_Data.GeometryShader->IsValid() || !s_Data.GBuffer.IsInitialized())
 			return;
 
-		const_cast<Model*>(meshComponent.MeshModel.get())->SetEntityID(entityID);
 
 		// Update Transform UBO
 		s_Data.TransformBuffer.Transform = transform;
+		s_Data.TransformBuffer.NormalMatrix = glm::transpose(glm::inverse(transform));
+		s_Data.TransformBuffer.EntityID = entityID;
+		s_Data.TransformBuffer.Skinned = meshComponent.MeshModel->IsSkinned() ? SkinningBuffer::Upload(bones) : 0;
+		s_Data.TransformBuffer.DebugBone = s_Data.TransformBuffer.Skinned ? SkinningBuffer::GetDebugBone() : -1;
 		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(DeferredRendererData::TransformData));
 
 		// Get material uniform data
@@ -313,6 +358,8 @@ namespace Lunex {
 		s_Data.MaterialBuffer.DetailNormalIntensities = uniformData.DetailNormalIntensities;
 		s_Data.MaterialBuffer.DetailNormalTilingX = uniformData.DetailNormalTilingX;
 		s_Data.MaterialBuffer.DetailNormalTilingY = uniformData.DetailNormalTilingY;
+		s_Data.MaterialBuffer.SubsurfaceColorAmount = uniformData.SubsurfaceColorAmount;
+		s_Data.MaterialBuffer.UVTilingOffset = uniformData.UVTilingOffset;
 
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(DeferredRendererData::MaterialUniformData));
 
@@ -320,27 +367,23 @@ namespace Lunex {
 		s_Data.GeometryShader->Bind();
 		materialComponent.Instance->BindTextures();
 
-		// Draw
-		meshComponent.MeshModel->Draw(s_Data.GeometryShader);
-
-		s_Data.Stats.GeometryDrawCalls++;
-		s_Data.Stats.MeshCount += static_cast<uint32_t>(meshComponent.MeshModel->GetMeshes().size());
-		for (const auto& mesh : meshComponent.MeshModel->GetMeshes()) {
-			s_Data.Stats.TriangleCount += static_cast<uint32_t>(mesh->GetIndices().size()) / 3;
-		}
+		DrawModelCulled(*meshComponent.MeshModel, transform, s_Data.GeometryShader);
 	}
 
-	void DeferredRenderer::SubmitMesh(const glm::mat4& transform, MeshComponent& meshComponent, int entityID) {
+	void DeferredRenderer::SubmitMesh(const glm::mat4& transform, MeshComponent& meshComponent, int entityID, const std::vector<glm::mat4>* bones) {
 		if (!meshComponent.MeshModel)
 			return;
 
 		if (!s_Data.GeometryShader || !s_Data.GeometryShader->IsValid() || !s_Data.GBuffer.IsInitialized())
 			return;
 
-		const_cast<Model*>(meshComponent.MeshModel.get())->SetEntityID(entityID);
 
 		// Update Transform UBO
 		s_Data.TransformBuffer.Transform = transform;
+		s_Data.TransformBuffer.NormalMatrix = glm::transpose(glm::inverse(transform));
+		s_Data.TransformBuffer.EntityID = entityID;
+		s_Data.TransformBuffer.Skinned = meshComponent.MeshModel->IsSkinned() ? SkinningBuffer::Upload(bones) : 0;
+		s_Data.TransformBuffer.DebugBone = s_Data.TransformBuffer.Skinned ? SkinningBuffer::GetDebugBone() : -1;
 		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(DeferredRendererData::TransformData));
 
 		// Default material
@@ -358,13 +401,7 @@ namespace Lunex {
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(DeferredRendererData::MaterialUniformData));
 
 		s_Data.GeometryShader->Bind();
-		meshComponent.MeshModel->Draw(s_Data.GeometryShader);
-
-		s_Data.Stats.GeometryDrawCalls++;
-		s_Data.Stats.MeshCount += static_cast<uint32_t>(meshComponent.MeshModel->GetMeshes().size());
-		for (const auto& mesh : meshComponent.MeshModel->GetMeshes()) {
-			s_Data.Stats.TriangleCount += static_cast<uint32_t>(mesh->GetIndices().size()) / 3;
-		}
+		DrawModelCulled(*meshComponent.MeshModel, transform, s_Data.GeometryShader);
 	}
 
 	// ============================================================================
@@ -372,9 +409,9 @@ namespace Lunex {
 	// ============================================================================
 
 	bool DeferredRenderer::IsPostProcessingActive() {
-		auto& config = PostProcessRenderer::GetConfig();
-		return PostProcessRenderer::IsInitialized() &&
-			   (config.EnableBloom || config.EnableVignette || config.EnableChromaticAberration);
+		// The composite pass always runs so exposure / tone-map operator / gamma settings
+		// apply even when no other effect is enabled. The lighting pass then outputs linear HDR.
+		return PostProcessRenderer::IsInitialized();
 	}
 
 	void DeferredRenderer::ExecuteLightingPass(const Ref<Framebuffer>& targetFramebuffer) {
@@ -406,6 +443,15 @@ namespace Lunex {
 		// ? FIX: Disable blending for the lighting pass.
 		glDisable(GL_BLEND);
 
+		// Sky lighting/reflections (IBL). Bound here every frame: the deferred path used to
+		// rely on whatever state Renderer3D left behind, and the material preview renderer
+		// unbinds the environment, which turned sky reflections off for the whole scene.
+		{
+			auto environment = SkyboxRenderer::GetGlobalEnvironment();
+			if (environment && environment->IsLoaded()) Renderer3D::BindEnvironment(environment);
+			else Renderer3D::UnbindEnvironment();
+		}
+
 		// Bind the lighting shader
 		s_Data.LightingShader->Bind();
 
@@ -433,12 +479,14 @@ namespace Lunex {
 			auto emissionAO = rhiFB->GetColorAttachment(static_cast<uint32_t>(GBufferAttachment::EmissionAO));
 			auto posSpec = rhiFB->GetColorAttachment(static_cast<uint32_t>(GBufferAttachment::PositionSpecular));
 			auto depth = rhiFB->GetDepthAttachment();
+			auto subsurface = rhiFB->GetColorAttachment(static_cast<uint32_t>(GBufferAttachment::Subsurface));
 
 			if (albedoMet)   albedoMet->Bind(0);
 			if (normalRough) normalRough->Bind(1);
 			if (emissionAO)  emissionAO->Bind(2);
 			if (posSpec)     posSpec->Bind(3);
 			if (depth)       depth->Bind(4);
+			if (subsurface)  subsurface->Bind(5);
 		}
 
 		// Draw full-screen quad (6 vertices = 2 triangles)
@@ -488,6 +536,15 @@ namespace Lunex {
 		uint32_t sceneColorTexID = targetFramebuffer->GetColorAttachmentRendererID(0);
 		uint32_t width = targetFramebuffer->GetSpecification().Width;
 		uint32_t height = targetFramebuffer->GetSpecification().Height;
+
+		PostProcessFrameInputs inputs;
+		inputs.AlbedoMetallicTex   = s_Data.GBuffer.GetAttachmentRendererID(GBufferAttachment::AlbedoMetallic);
+		inputs.NormalRoughnessTex  = s_Data.GBuffer.GetAttachmentRendererID(GBufferAttachment::NormalRoughness);
+		inputs.PositionSpecularTex = s_Data.GBuffer.GetAttachmentRendererID(GBufferAttachment::PositionSpecular);
+		inputs.DepthTex            = s_Data.GBuffer.GetDepthAttachmentRendererID();
+		inputs.View                = s_Data.ViewMatrix;
+		inputs.Projection          = s_Data.ProjectionMatrix;
+		PostProcessRenderer::SetFrameInputs(inputs);
 
 		PostProcessRenderer::Execute(sceneColorTexID, targetFramebuffer, width, height);
 

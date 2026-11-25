@@ -66,14 +66,15 @@ namespace Lunex {
 		/**
 		 * @brief Submit a mesh with material for rendering into G-Buffer
 		 */
-		static void SubmitMesh(const glm::mat4& transform, MeshComponent& meshComponent, 
-							   MaterialComponent& materialComponent, int entityID = -1);
+		static void SubmitMesh(const glm::mat4& transform, MeshComponent& meshComponent,
+							   MaterialComponent& materialComponent, int entityID = -1,
+							   const std::vector<glm::mat4>* bones = nullptr);
 
 		/**
 		 * @brief Submit a mesh without material (default material)
 		 */
-		static void SubmitMesh(const glm::mat4& transform, MeshComponent& meshComponent, 
-							   int entityID = -1);
+		static void SubmitMesh(const glm::mat4& transform, MeshComponent& meshComponent,
+							   int entityID = -1, const std::vector<glm::mat4>* bones = nullptr);
 
 		// ========== LIGHTING PASS ==========
 
@@ -125,7 +126,11 @@ namespace Lunex {
 			uint32_t LightingDrawCalls = 0;
 			uint32_t MeshCount = 0;
 			uint32_t TriangleCount = 0;
+			uint32_t CulledMeshes = 0;
 		};
+
+		static void SetFrustumCullingEnabled(bool enabled);
+		static bool IsFrustumCullingEnabled();
 
 		static void ResetStats();
 		static Statistics GetStats();

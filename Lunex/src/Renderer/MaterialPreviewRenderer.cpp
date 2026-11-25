@@ -85,6 +85,33 @@ namespace Lunex {
 		return glm::vec3(center.x + cameraOffset.x, cameraOffset.y, center.z + cameraOffset.z);
 	}
 
+	void MaterialPreviewRenderer::FrameBounds(const glm::vec3& boundsMin, const glm::vec3& boundsMax) {
+		glm::vec3 center = (boundsMin + boundsMax) * 0.5f;
+		float radius = glm::length(boundsMax - boundsMin) * 0.5f;
+		if (radius < 0.0001f) radius = 1.0f;
+
+		const float fov = 45.0f;
+		float distance = (radius / std::sin(glm::radians(fov) * 0.5f)) * 1.05f;
+
+		// The camera stays on +Z looking down -Z; the model is moved/rotated instead
+		m_ModelTransform =
+			glm::rotate(glm::mat4(1.0f), glm::radians(20.0f), glm::vec3(1.0f, 0.0f, 0.0f)) *
+			glm::rotate(glm::mat4(1.0f), glm::radians(-30.0f), glm::vec3(0.0f, 1.0f, 0.0f)) *
+			glm::translate(glm::mat4(1.0f), -center);
+
+		float nearClip = std::max(distance - radius * 1.5f, distance * 0.01f);
+		m_Camera = EditorCamera(fov, 1.0f, nearClip, distance + radius * 2.0f);
+		m_Camera.SetViewportSize(m_Width, m_Height);
+		m_Camera.SetPosition(glm::vec3(0.0f, 0.0f, distance));
+	}
+
+	void MaterialPreviewRenderer::ResetFraming() {
+		m_ModelTransform = glm::mat4(1.0f);
+		m_Camera = EditorCamera(45.0f, 1.0f, 0.1f, 1000.0f);
+		m_Camera.SetViewportSize(m_Width, m_Height);
+		m_Camera.SetPosition(glm::vec3(0.0f, 0.0f, 2.5f));
+	}
+
 	void MaterialPreviewRenderer::ComputeModelBounds(const Ref<Model>& model, glm::vec3& outMin, glm::vec3& outMax) {
 		outMin = glm::vec3(std::numeric_limits<float>::max());
 		outMax = glm::vec3(std::numeric_limits<float>::lowest());
@@ -167,6 +194,7 @@ namespace Lunex {
 		m_Framebuffer->Bind();
 		glReadPixels(0, 0, m_Width, m_Height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 		m_Framebuffer->Unbind();
+
 
 		// Upload to texture
 		texture->SetData(pixels.data(), dataSize);
@@ -333,6 +361,7 @@ namespace Lunex {
 		if (m_AutoRotate) {
 			transform = glm::rotate(transform, glm::radians(m_CurrentRotation), glm::vec3(0.0f, 1.0f, 0.0f));
 		}
+		transform = transform * m_ModelTransform;
 
 		// Create temporary MaterialInstance for rendering
 		Ref<MaterialInstance> tempInstance = MaterialInstance::Create(material);

@@ -61,7 +61,7 @@ namespace Lunex {
 		uint32_t shadowResolution)
 	{
 		cascadeCount = std::clamp(cascadeCount, 1u, MAX_SHADOW_CASCADES);
-		float effectiveFar = std::min(cameraFar, 500.0f); // Clamp to reasonable distance
+		float effectiveFar = cameraFar; // caller already clamps to MaxShadowDistance
 
 		// ------------------------------------------------------------------
 		// 1. Compute cascade split depths using PSSM (Practical Split Scheme)
@@ -103,64 +103,38 @@ namespace Lunex {
 			}
 			center /= 8.0f;
 
-			// Calculate frustum radius for a good offset distance
-			float frustumRadius = 0.0f;
+			// Bounding sphere of the cascade slice. Using a sphere (instead of a tight AABB)
+			// keeps the ortho box the same size while the camera rotates, which together
+			// with texel snapping removes shadow shimmering.
+			float radius = 0.0f;
 			for (const auto& c : corners) {
-				frustumRadius = std::max(frustumRadius, glm::length(c - center));
+				radius = std::max(radius, glm::length(c - center));
 			}
+			radius = std::ceil(radius * 16.0f) / 16.0f;
 
-			// Build light view matrix looking along lightDirection
 			glm::vec3 lightDir = glm::normalize(lightDirection);
-			
-			// Use frustum-based offset to ensure near plane captures all geometry
-			float lightOffset = frustumRadius * 3.0f + 100.0f;
-			
-			glm::mat4 lightView = glm::lookAt(
-				center - lightDir * lightOffset,
-				center,
-				glm::vec3(0.0f, 1.0f, 0.0f)
-			);
+			glm::vec3 up = (std::abs(glm::dot(lightDir, glm::vec3(0, 1, 0))) > 0.999f)
+				? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
 
-			// Handle degenerate up vector (light pointing straight up/down)
-			if (std::abs(glm::dot(lightDir, glm::vec3(0, 1, 0))) > 0.999f) {
-				lightView = glm::lookAt(
-					center - lightDir * lightOffset,
-					center,
-					glm::vec3(0.0f, 0.0f, 1.0f)
-				);
-			}
+			// Occluders outside the view frustum but between it and the sun must still be
+			// rendered, so the light is pulled back beyond the sphere.
+			const float casterDistance = std::max(radius * 2.0f, 100.0f);
+			glm::vec3 eye = center - lightDir * (radius + casterDistance);
+			glm::mat4 lightView = glm::lookAt(eye, center, up);
 
-			// Find AABB of frustum in light space
-			float minX = std::numeric_limits<float>::max();
-			float maxX = std::numeric_limits<float>::lowest();
-			float minY = std::numeric_limits<float>::max();
-			float maxY = std::numeric_limits<float>::lowest();
-			float minZ = std::numeric_limits<float>::max();
-			float maxZ = std::numeric_limits<float>::lowest();
-
-			for (const auto& c : corners) {
-				glm::vec4 lc = lightView * glm::vec4(c, 1.0f);
-				minX = std::min(minX, lc.x);
-				maxX = std::max(maxX, lc.x);
-				minY = std::min(minY, lc.y);
-				maxY = std::max(maxY, lc.y);
-				minZ = std::min(minZ, lc.z);
-				maxZ = std::max(maxZ, lc.z);
-			}
-
-			// Extend Z range to catch shadow casters behind the camera frustum
-			float zExtent = maxZ - minZ;
-			minZ -= zExtent * 2.0f;
-			maxZ += zExtent * 0.5f;
-
-			glm::mat4 lightOrtho = glm::ortho(minX, maxX, minY, maxY, minZ, maxZ);
+			// glm::ortho takes near/far as positive distances along the view direction.
+			// (The previous code passed raw light-view Z values, which are negative, so
+			// every caster ended up outside the clip volume and the map stayed empty.)
+			glm::mat4 lightOrtho = glm::ortho(-radius, radius, -radius, radius,
+				0.0f, casterDistance + 2.0f * radius);
 			glm::mat4 lightVP = lightOrtho * lightView;
 
-			// Stabilize to prevent edge shimmer when camera moves
+			// Snap to shadow-map texels to prevent edge shimmer when the camera moves
 			lightVP = StabilizeProjection(lightVP, shadowResolution);
 
 			cascades[i].ViewProjection = lightVP;
 			cascades[i].SplitDepth = farSplit;
+			cascades[i].TexelWorldSize = (2.0f * radius) / static_cast<float>(std::max(shadowResolution, 1u));
 		}
 
 		return cascades;

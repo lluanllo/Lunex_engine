@@ -13,6 +13,7 @@
 #include "Scene/Entity.h"
 #include "Scene/Lighting/LightTypes.h"
 #include "Scene/Lighting/LightSystem.h"
+#include "Renderer/SkinningBuffer.h"
 #include "Log/Log.h"
 
 #include <glad/glad.h>
@@ -30,8 +31,14 @@ namespace Lunex {
 			float _padding = 0.0f;
 		};
 
+		// Matches std140 layout of 'Transform' UBO (binding 1) in Mesh3D / Deferred_Geometry
 		struct TransformData {
 			glm::mat4 Transform;
+			glm::mat4 NormalMatrix;
+			int EntityID;
+			int Skinned;
+			int DebugBone = -1;
+			int _pad = 0;
 		};
 
 		struct MaterialUniformData {
@@ -78,6 +85,9 @@ namespace Lunex {
 			glm::vec4 DetailNormalIntensities;
 			glm::vec4 DetailNormalTilingX;
 			glm::vec4 DetailNormalTilingY;
+
+			glm::vec4 SubsurfaceColorAmount;   // rgb color, a amount
+			glm::vec4 UVTilingOffset = { 1.0f, 1.0f, 0.0f, 0.0f };
 		};
 
 		struct IBLUniformData {
@@ -261,15 +271,11 @@ namespace Lunex {
 		// ? SYNC WITH LIGHT SYSTEM for sun light detection and skybox sync
 		LightSystem::Get().SyncFromScene(scene);
 
-		auto view = scene->GetAllEntitiesWith<TransformComponent, LightComponent>();
+		// Upload lights in LightSystem order. ShadowSystem indexes the same list, so
+		// a shadow's light index == the light's position in this SSBO.
+		const auto& lights = LightSystem::Get().GetAllLights();
 
-		int lightCount = 0;
-		view.each([&](auto entity, auto& transform, auto& light) {
-			if (lightCount < s_Data.MaxLights) {
-				lightCount++;
-			}
-			});
-
+		int lightCount = static_cast<int>(lights.size());
 		if (lightCount > s_Data.MaxLights) {
 			LNX_LOG_WARN("Light count exceeded maximum of {0}. Some lights will not be rendered.", s_Data.MaxLights);
 			lightCount = s_Data.MaxLights;
@@ -284,18 +290,13 @@ namespace Lunex {
 			s_Data.LightsBufferData.data() + sizeof(Renderer3DData::LightsStorageData)
 			);
 
-		int lightIndex = 0;
-		view.each([&](auto entity, auto& transform, auto& light) {
-			if (lightIndex >= s_Data.MaxLights) return;
-
-			glm::vec3 position = transform.Translation;
-			glm::vec3 direction = glm::normalize(
-				glm::rotate(glm::quat(transform.Rotation), glm::vec3(0.0f, 0.0f, -1.0f))
-			);
-
-			lightsArray[lightIndex] = light.LightInstance->GetLightData(position, direction);
-			lightIndex++;
-			});
+		for (int i = 0; i < lightCount; i++) {
+			const auto& light = lights[i];
+			lightsArray[i] = light.Properties.ToGPUData(light.WorldPosition, light.WorldDirection);
+			if (!light.IsActive) {
+				lightsArray[i].Color.a = 0.0f; // keep slot (index stability), contribute nothing
+			}
+		}
 
 		s_Data.CurrentLightCount = lightCount;
 
@@ -319,23 +320,26 @@ namespace Lunex {
 	// NEW MATERIAL SYSTEM - DrawMesh overloads
 	// ============================================================================
 
-	void Renderer3D::DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, int entityID) {
+	void Renderer3D::DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, int entityID, const std::vector<glm::mat4>* bones) {
 		if (!meshComponent.MeshModel)
 			return;
 
 		// Usar material por defecto si no hay MaterialComponent
 		auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
-		DrawModel(transform, meshComponent.MeshModel, defaultMaterial->GetAlbedo(), entityID);
+		DrawModel(transform, meshComponent.MeshModel, defaultMaterial->GetAlbedo(), entityID, bones);
 	}
 
-	void Renderer3D::DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, MaterialComponent& materialComponent, int entityID) {
+	void Renderer3D::DrawMesh(const glm::mat4& transform, MeshComponent& meshComponent, MaterialComponent& materialComponent, int entityID, const std::vector<glm::mat4>* bones) {
 		if (!meshComponent.MeshModel || !materialComponent.Instance)
 			return;
 
-		const_cast<Model*>(meshComponent.MeshModel.get())->SetEntityID(entityID);
 
 		// Update Transform uniform buffer
 		s_Data.TransformBuffer.Transform = transform;
+		s_Data.TransformBuffer.NormalMatrix = glm::transpose(glm::inverse(transform));
+		s_Data.TransformBuffer.EntityID = entityID;
+		s_Data.TransformBuffer.Skinned = meshComponent.MeshModel->IsSkinned() ? SkinningBuffer::Upload(bones) : 0;
+		s_Data.TransformBuffer.DebugBone = s_Data.TransformBuffer.Skinned ? SkinningBuffer::GetDebugBone() : -1;
 		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
 
 		// Get material uniform data from MaterialInstance (con overrides aplicados)
@@ -375,6 +379,8 @@ namespace Lunex {
 		s_Data.MaterialBuffer.DetailNormalIntensities = uniformData.DetailNormalIntensities;
 		s_Data.MaterialBuffer.DetailNormalTilingX = uniformData.DetailNormalTilingX;
 		s_Data.MaterialBuffer.DetailNormalTilingY = uniformData.DetailNormalTilingY;
+		s_Data.MaterialBuffer.SubsurfaceColorAmount = uniformData.SubsurfaceColorAmount;
+		s_Data.MaterialBuffer.UVTilingOffset = uniformData.UVTilingOffset;
 
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
 
@@ -404,16 +410,19 @@ namespace Lunex {
 	// DrawModel overloads (internal use)
 	// ================================================================================
 
-	void Renderer3D::DrawModel(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& color, int entityID) {
+	void Renderer3D::DrawModel(const glm::mat4& transform, const Ref<Model>& model, const glm::vec4& color, int entityID, const std::vector<glm::mat4>* bones) {
 		LNX_PROFILE_FUNCTION();
 
 		if (!model || model->GetMeshes().empty())
 			return;
 
-		const_cast<Model*>(model.get())->SetEntityID(entityID);
 
 		// Update Transform uniform buffer
 		s_Data.TransformBuffer.Transform = transform;
+		s_Data.TransformBuffer.NormalMatrix = glm::transpose(glm::inverse(transform));
+		s_Data.TransformBuffer.EntityID = entityID;
+		s_Data.TransformBuffer.Skinned = model->IsSkinned() ? SkinningBuffer::Upload(bones) : 0;
+		s_Data.TransformBuffer.DebugBone = s_Data.TransformBuffer.Skinned ? SkinningBuffer::GetDebugBone() : -1;
 		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
 
 		// Update Material uniform buffer with default values
@@ -460,10 +469,13 @@ namespace Lunex {
 		if (!model || model->GetMeshes().empty() || !materialComponent.Instance)
 			return;
 
-		const_cast<Model*>(model.get())->SetEntityID(entityID);
 
 		// Update Transform uniform buffer
 		s_Data.TransformBuffer.Transform = transform;
+		s_Data.TransformBuffer.NormalMatrix = glm::transpose(glm::inverse(transform));
+		s_Data.TransformBuffer.EntityID = entityID;
+		s_Data.TransformBuffer.Skinned = 0;
+		s_Data.TransformBuffer.DebugBone = s_Data.TransformBuffer.Skinned ? SkinningBuffer::GetDebugBone() : -1;
 		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
 
 		// Get material uniform data from MaterialInstance
@@ -503,6 +515,8 @@ namespace Lunex {
 		s_Data.MaterialBuffer.DetailNormalIntensities = uniformData.DetailNormalIntensities;
 		s_Data.MaterialBuffer.DetailNormalTilingX = uniformData.DetailNormalTilingX;
 		s_Data.MaterialBuffer.DetailNormalTilingY = uniformData.DetailNormalTilingY;
+		s_Data.MaterialBuffer.SubsurfaceColorAmount = uniformData.SubsurfaceColorAmount;
+		s_Data.MaterialBuffer.UVTilingOffset = uniformData.UVTilingOffset;
 
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(Renderer3DData::MaterialUniformData));
 
@@ -528,10 +542,13 @@ namespace Lunex {
 		if (!model || model->GetMeshes().empty())
 			return;
 
-		const_cast<Model*>(model.get())->SetEntityID(entityID);
 
 		// Update Transform uniform buffer
 		s_Data.TransformBuffer.Transform = transform;
+		s_Data.TransformBuffer.NormalMatrix = glm::transpose(glm::inverse(transform));
+		s_Data.TransformBuffer.EntityID = entityID;
+		s_Data.TransformBuffer.Skinned = 0;
+		s_Data.TransformBuffer.DebugBone = s_Data.TransformBuffer.Skinned ? SkinningBuffer::GetDebugBone() : -1;
 		s_Data.TransformUniformBuffer->SetData(&s_Data.TransformBuffer, sizeof(Renderer3DData::TransformData));
 
 		// Get material from MaterialComponent (ignore TextureComponent - deprecated)

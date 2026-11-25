@@ -49,7 +49,21 @@ namespace Lunex {
 		int   ToneMapOperator;
 		float Exposure;
 		float Gamma;
+		int   EnableSSR;
+	};
+
+	// UBO data matching shader layout(std140, binding = 0) uniform SSRParams
+	struct SSRParamsUBO {
+		glm::mat4 View;
+		glm::mat4 Projection;
+		float MaxDistance;
+		float Thickness;
+		int   MaxSteps;
+		float MaxRoughness;
+		float Intensity;
+		float EdgeFade;
 		float _pad0;
+		float _pad1;
 	};
 
 	struct PostProcessData {
@@ -61,11 +75,23 @@ namespace Lunex {
 		Ref<Shader> BloomDownsampleShader;
 		Ref<Shader> BloomUpsampleShader;
 		Ref<Shader> CompositeShader;
+		Ref<Shader> SSRShader;
 
 		// ========== UNIFORM BUFFERS ==========
 		Ref<UniformBuffer> BloomDownUBO;
 		Ref<UniformBuffer> BloomUpUBO;
 		Ref<UniformBuffer> CompositeUBO;
+		Ref<UniformBuffer> SSRUBO;
+
+		// ========== FRAME RESOURCES ==========
+		// Copy of the scene color: effects read from here while writing the real target
+		// (reading and writing the same texture in one pass is undefined behavior).
+		uint32_t SceneCopyTex = 0;
+		uint32_t SceneCopyFormat = 0;
+		uint32_t SSRTex = 0;
+		uint32_t FrameWidth = 0;
+		uint32_t FrameHeight = 0;
+		PostProcessFrameInputs Inputs;
 
 		// ========== FULL-SCREEN QUAD ==========
 		Ref<VertexArray>  QuadVAO;
@@ -104,6 +130,9 @@ namespace Lunex {
 		s_Data.BloomDownsampleShader = Shader::Create("assets/shaders/PostProcess_BloomDown.glsl");
 		s_Data.BloomUpsampleShader   = Shader::Create("assets/shaders/PostProcess_BloomUp.glsl");
 		s_Data.CompositeShader       = Shader::Create("assets/shaders/PostProcess_Composite.glsl");
+		s_Data.SSRShader             = Shader::Create("assets/shaders/PostProcess_SSR.glsl");
+		if (!s_Data.SSRShader || !s_Data.SSRShader->IsValid())
+			LNX_LOG_ERROR("PostProcessRenderer: Failed to compile PostProcess_SSR shader!");
 
 		if (!s_Data.BloomDownsampleShader || !s_Data.BloomDownsampleShader->IsValid())
 			LNX_LOG_ERROR("PostProcessRenderer: Failed to compile PostProcess_BloomDown shader!");
@@ -116,6 +145,7 @@ namespace Lunex {
 		s_Data.BloomDownUBO = UniformBuffer::Create(sizeof(BloomDownParamsUBO), 0);
 		s_Data.BloomUpUBO   = UniformBuffer::Create(sizeof(BloomUpParamsUBO), 0);
 		s_Data.CompositeUBO = UniformBuffer::Create(sizeof(CompositeParamsUBO), 0);
+		s_Data.SSRUBO       = UniformBuffer::Create(sizeof(SSRParamsUBO), 0);
 
 		// Create full-screen quad (same as DeferredRenderer)
 		float quadVertices[] = {
@@ -161,6 +191,9 @@ namespace Lunex {
 			s_Data.BloomFBO = 0;
 		}
 
+		if (s_Data.SceneCopyTex) { glDeleteTextures(1, &s_Data.SceneCopyTex); s_Data.SceneCopyTex = 0; }
+		if (s_Data.SSRTex)       { glDeleteTextures(1, &s_Data.SSRTex);       s_Data.SSRTex = 0; }
+
 		s_Data.Initialized = false;
 		LNX_LOG_INFO("PostProcessRenderer shutdown");
 	}
@@ -204,6 +237,74 @@ namespace Lunex {
 
 		s_Data.CurrentWidth  = width;
 		s_Data.CurrentHeight = height;
+	}
+
+	// ============================================================================
+	// FRAME RESOURCES (scene copy + SSR target)
+	// ============================================================================
+
+	void PostProcessRenderer::CreateFrameResources(uint32_t width, uint32_t height, uint32_t sceneFormat) {
+		if (s_Data.SceneCopyTex) glDeleteTextures(1, &s_Data.SceneCopyTex);
+		if (s_Data.SSRTex)       glDeleteTextures(1, &s_Data.SSRTex);
+
+		auto makeTex = [](uint32_t& id, GLenum format, uint32_t w, uint32_t h) {
+			glCreateTextures(GL_TEXTURE_2D, 1, &id);
+			glTextureStorage2D(id, 1, format, w, h);
+			glTextureParameteri(id, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTextureParameteri(id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTextureParameteri(id, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTextureParameteri(id, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		};
+
+		makeTex(s_Data.SceneCopyTex, sceneFormat, width, height);
+		makeTex(s_Data.SSRTex, GL_RGBA16F, width, height);
+
+		s_Data.SceneCopyFormat = sceneFormat;
+		s_Data.FrameWidth = width;
+		s_Data.FrameHeight = height;
+	}
+
+	void PostProcessRenderer::SetFrameInputs(const PostProcessFrameInputs& inputs) {
+		s_Data.Inputs = inputs;
+	}
+
+	// ============================================================================
+	// SSR PASS
+	// ============================================================================
+
+	void PostProcessRenderer::ExecuteSSR(uint32_t width, uint32_t height) {
+		const auto& in = s_Data.Inputs;
+		if (!s_Data.SSRShader || !s_Data.SSRShader->IsValid()) return;
+		if (!in.NormalRoughnessTex || !in.PositionSpecularTex || !in.DepthTex || !in.AlbedoMetallicTex) return;
+
+		glBindFramebuffer(GL_FRAMEBUFFER, s_Data.BloomFBO);
+		glNamedFramebufferTexture(s_Data.BloomFBO, GL_COLOR_ATTACHMENT0, s_Data.SSRTex, 0);
+		glNamedFramebufferDrawBuffer(s_Data.BloomFBO, GL_COLOR_ATTACHMENT0);
+		glViewport(0, 0, width, height);
+		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_BLEND);
+
+		s_Data.SSRShader->Bind();
+
+		SSRParamsUBO params;
+		params.View = in.View;
+		params.Projection = in.Projection;
+		params.MaxDistance = std::max(s_Data.Config.SSRMaxDistance, 0.1f);
+		params.Thickness = std::max(s_Data.Config.SSRThickness, 0.001f);
+		params.MaxSteps = std::clamp(s_Data.Config.SSRMaxSteps, 8, 256);
+		params.MaxRoughness = std::clamp(s_Data.Config.SSRMaxRoughness, 0.05f, 1.0f);
+		params.Intensity = s_Data.Config.SSRIntensity;
+		params.EdgeFade = 0.1f;
+		params._pad0 = params._pad1 = 0.0f;
+		s_Data.SSRUBO->SetData(&params, sizeof(SSRParamsUBO));
+
+		glBindTextureUnit(0, s_Data.SceneCopyTex);
+		glBindTextureUnit(1, in.NormalRoughnessTex);
+		glBindTextureUnit(2, in.AlbedoMetallicTex);
+		glBindTextureUnit(3, in.PositionSpecularTex);
+		glBindTextureUnit(4, in.DepthTex);
+
+		DrawFullScreenQuad();
 	}
 
 	// ============================================================================
@@ -291,13 +392,26 @@ namespace Lunex {
 									  uint32_t width, uint32_t height) {
 		LNX_PROFILE_FUNCTION();
 
-		if (!s_Data.Initialized) return;
+		if (!s_Data.Initialized || width == 0 || height == 0) return;
 
-		bool anyEffectEnabled = s_Data.Config.EnableBloom ||
-								s_Data.Config.EnableVignette ||
-								s_Data.Config.EnableChromaticAberration;
+		// ===== COPY SCENE COLOR =====
+		// Everything below samples the copy; the composite then writes the real target.
+		GLint sceneFormat = GL_RGBA16F;
+		glGetTextureLevelParameteriv(sceneColorTexID, 0, GL_TEXTURE_INTERNAL_FORMAT, &sceneFormat);
+		if (width != s_Data.FrameWidth || height != s_Data.FrameHeight ||
+			static_cast<uint32_t>(sceneFormat) != s_Data.SceneCopyFormat || !s_Data.SceneCopyTex) {
+			CreateFrameResources(width, height, static_cast<uint32_t>(sceneFormat));
+		}
+		glCopyImageSubData(sceneColorTexID, GL_TEXTURE_2D, 0, 0, 0, 0,
+						   s_Data.SceneCopyTex, GL_TEXTURE_2D, 0, 0, 0, 0,
+						   width, height, 1);
+		const uint32_t sourceTex = s_Data.SceneCopyTex;
 
-		if (!anyEffectEnabled) return;
+		// ===== SSR =====
+		const bool hasSSR = s_Data.Config.EnableSSR;
+		if (hasSSR) {
+			ExecuteSSR(width, height);
+		}
 
 		// Ensure bloom resources match viewport size
 		if (s_Data.Config.EnableBloom) {
@@ -305,7 +419,7 @@ namespace Lunex {
 				s_Data.BloomMips.empty()) {
 				CreateBloomResources(width, height);
 			}
-			ExecuteBloom(sceneColorTexID, width, height);
+			ExecuteBloom(sourceTex, width, height);
 		}
 
 		// ===== COMPOSITE PASS =====
@@ -326,10 +440,11 @@ namespace Lunex {
 
 		s_Data.CompositeShader->Bind();
 
-		// Bind textures (ensure CLAMP_TO_EDGE to prevent edge sampling artifacts with chromatic aberration)
-		glBindTextureUnit(0, sceneColorTexID);
-		glTextureParameteri(sceneColorTexID, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTextureParameteri(sceneColorTexID, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		// Bind textures (the copy is CLAMP_TO_EDGE, avoiding edge artifacts with chromatic aberration)
+		glBindTextureUnit(0, sourceTex);
+		if (hasSSR) {
+			glBindTextureUnit(2, s_Data.SSRTex);
+		}
 
 		bool hasBloom = s_Data.Config.EnableBloom && !s_Data.BloomMips.empty();
 		if (hasBloom) {
@@ -349,8 +464,8 @@ namespace Lunex {
 		compositeParams.ToneMapOperator = s_Data.Config.ToneMapOperator;
 		compositeParams.Exposure = s_Data.Config.Exposure;
 		compositeParams.Gamma = s_Data.Config.Gamma;
-		compositeParams._pad0 = 0.0f;
-		s_Data.CompositeUBO->SetData(&compositeParams, sizeof(CompositeParamsUBO));
+		compositeParams.EnableSSR = hasSSR ? 1 : 0;
+s_Data.CompositeUBO->SetData(&compositeParams, sizeof(CompositeParamsUBO));
 
 		DrawFullScreenQuad();
 

@@ -50,6 +50,12 @@ namespace Lunex {
 		// Compute bounding box from a Model
 		static void ComputeModelBounds(const Ref<Model>& model, glm::vec3& outMin, glm::vec3& outMax);
 
+		// Frame arbitrary geometry (any scale/units): centers the model, gives it a 3/4 view
+		// angle and fits camera distance + near/far planes to its bounding sphere.
+		void FrameBounds(const glm::vec3& boundsMin, const glm::vec3& boundsMax);
+		// Back to the default material-sphere framing
+		void ResetFraming();
+
 		// Configurar iluminación del preview
 		void SetLightIntensity(float intensity) { m_LightIntensity = intensity; }
 		void SetLightColor(const glm::vec3& color) { m_LightColor = color; }
@@ -122,6 +128,7 @@ namespace Lunex {
 
 		// Rotación
 		bool m_AutoRotate = true;
+		glm::mat4 m_ModelTransform = glm::mat4(1.0f);   // applied before auto-rotation (see FrameBounds)
 		float m_RotationSpeed = 20.0f; // grados por segundo
 		float m_CurrentRotation = 0.0f;
 

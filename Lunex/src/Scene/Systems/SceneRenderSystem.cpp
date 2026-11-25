@@ -9,6 +9,7 @@
 #include "Renderer/Deferred/DeferredRenderer.h"
 #include "Renderer/GridRenderer.h"
 #include "Renderer/SkyboxRenderer.h"
+#include "Renderer/SkinningBuffer.h"
 #include "RHI/RHI.h"
 
 #include <algorithm>
@@ -219,8 +220,6 @@ namespace Lunex {
 			RenderCircles(camera, cameraTransform);
 			Renderer2D::EndScene();
 			
-			Renderer3D::UpdateShadows(m_Context->OwningScene, camera, cameraTransform);
-			
 			Renderer3D::BeginScene(camera, cameraTransform);
 			RenderMeshes(camera, cameraTransform);
 			Renderer3D::EndScene();
@@ -263,22 +262,31 @@ namespace Lunex {
 			Entity e = { entity, m_Context->OwningScene };
 			auto& mesh = view.get<MeshComponent>(entity);
 			glm::mat4 worldTransform = GetWorldTransform(entity);
-			
+
+			// Skinning palette from the AnimatorComponent (if any)
+			const std::vector<glm::mat4>* bones = nullptr;
+			int debugBone = -1;
+			if (auto* animator = m_Context->Registry->try_get<AnimatorComponent>(entity)) {
+				if (!animator->BoneMatrices.empty()) bones = &animator->BoneMatrices;
+				debugBone = animator->DebugWeightsBone;
+			}
+			SkinningBuffer::SetDebugBone(debugBone);
+
 			if (DeferredRenderer::IsEnabled()) {
 				// Deferred path: submit to DeferredRenderer
 				if (e.HasComponent<MaterialComponent>()) {
 					auto& material = e.GetComponent<MaterialComponent>();
-					DeferredRenderer::SubmitMesh(worldTransform, mesh, material, static_cast<int>(entity));
+					DeferredRenderer::SubmitMesh(worldTransform, mesh, material, static_cast<int>(entity), bones);
 				} else {
-					DeferredRenderer::SubmitMesh(worldTransform, mesh, static_cast<int>(entity));
+					DeferredRenderer::SubmitMesh(worldTransform, mesh, static_cast<int>(entity), bones);
 				}
 			} else {
 				// Forward path: submit to Renderer3D
 				if (e.HasComponent<MaterialComponent>()) {
 					auto& material = e.GetComponent<MaterialComponent>();
-					Renderer3D::DrawMesh(worldTransform, mesh, material, static_cast<int>(entity));
+					Renderer3D::DrawMesh(worldTransform, mesh, material, static_cast<int>(entity), bones);
 				} else {
-					Renderer3D::DrawModel(worldTransform, mesh.MeshModel, mesh.Color, static_cast<int>(entity));
+					Renderer3D::DrawModel(worldTransform, mesh.MeshModel, mesh.Color, static_cast<int>(entity), bones);
 				}
 			}
 		}
@@ -366,7 +374,7 @@ namespace Lunex {
 			glm::mat4 cameraProjection = cameraComp.Camera.GetProjection();
 			glm::mat4 cameraView = glm::inverse(worldTransform);
 			
-			glm::vec4 frustumColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+			glm::vec4 frustumColor = glm::vec4(0.75f, 0.75f, 0.75f, 0.9f);
 			Renderer2D::DrawCameraFrustum(cameraProjection, cameraView, frustumColor, static_cast<int>(entity));
 		}
 	}
@@ -378,7 +386,9 @@ namespace Lunex {
 			glm::mat4 worldTransform = GetWorldTransform(entity);
 			glm::vec3 worldPos = glm::vec3(worldTransform[3]);
 			
-			glm::vec4 gizmoColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+			// Tint the gizmo with the light color (dimmed so it doesn't glare)
+			glm::vec3 lightColor = light.LightInstance ? light.LightInstance->GetColor() : glm::vec3(1.0f);
+			glm::vec4 gizmoColor = glm::vec4(glm::mix(glm::vec3(0.15f), lightColor, 0.75f), 0.9f);
 			glm::vec3 forward = -glm::normalize(glm::vec3(worldTransform[2]));
 			
 			switch (light.GetType()) {
