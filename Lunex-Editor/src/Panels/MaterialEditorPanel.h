@@ -16,7 +16,6 @@
 #include "Assets/Materials/MaterialAsset.h"
 #include "Resources/Render/MaterialInstance.h"
 #include "Renderer/MaterialPreviewRenderer.h"
-#include "../UI/Graph/NodeGraphEditor.h"
 
 #include <filesystem>
 #include <functional>
@@ -58,6 +57,10 @@ namespace Lunex {
 		using MaterialSavedCallback = std::function<void(const std::filesystem::path&)>;
 		void SetOnMaterialSavedCallback(MaterialSavedCallback callback) { m_OnMaterialSaved = callback; }
 
+		// Node graph materials are edited in their own window (MaterialGraphPanel)
+		using OpenNodeEditorCallback = std::function<void(Ref<MaterialAsset>)>;
+		void SetOnOpenNodeEditorCallback(OpenNodeEditorCallback callback) { m_OnOpenNodeEditor = std::move(callback); }
+
 		// ========== RENDERING ==========
 
 		void OnImGuiRender();
@@ -96,21 +99,14 @@ namespace Lunex {
 		void DrawTextureMapsPanel();
 		void DrawPBRPropertiesPanel();
 		void DrawAdvancedOptionsPanel();
-		void DrawNodeGraphPanel();
 
 		// ========== NODE GRAPH MODE ==========
-		// Properties mode edits the PBR values directly; Node Graph mode makes the
-		// graph the source of truth and bakes it into those values.
+		// Properties mode edits the PBR values directly; Node Graph mode makes the graph
+		// the source of truth (compiled to GLSL) and opens the node editor window.
 		void SetNodeMode(bool enabled);
-		void ApplyGraph();
-		bool DrawMaterialNodeBody(Graph::Node& node);
-		Ref<Texture2D> GetGraphThumbnail(const std::string& path);
 		void DrawUVSection();
 
-		std::unique_ptr<UI::NodeGraphEditor> m_GraphEditor;
-		std::vector<std::string> m_GraphWarnings;
-		std::unordered_map<std::string, Ref<Texture2D>> m_GraphThumbnails;
-		bool m_FocusGraphTab = false;
+		OpenNodeEditorCallback m_OnOpenNodeEditor;
 
 		// ========== SECTION DRAWING ==========
 

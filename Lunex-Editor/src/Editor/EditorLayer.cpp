@@ -247,7 +247,18 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 		
 		// 1. Content Browser -> Material Editor (double-click .umat files)
 		m_ContentBrowserPanel.SetOnMaterialOpenCallback([this](const std::filesystem::path& path) {
-			m_MaterialEditorPanel.OpenMaterial(path);
+			// Node materials open straight in the node editor window
+			auto material = MaterialRegistry::Get().LoadMaterial(path);
+			if (material && material->UsesNodeGraph()) m_MaterialGraphPanel.Open(material);
+			else m_MaterialEditorPanel.OpenMaterial(path);
+		});
+		m_MaterialGraphPanel.SetOnOpenPropertiesCallback([this](Ref<MaterialAsset> material) {
+			m_MaterialEditorPanel.OpenMaterial(material);
+		});
+
+		// Material Editor -> standalone node editor (Unreal-style window)
+		m_MaterialEditorPanel.SetOnOpenNodeEditorCallback([this](Ref<MaterialAsset> material) {
+			m_MaterialGraphPanel.Open(material);
 		});
 		
 		// 2. Properties Panel -> Material Editor (Edit Material button)
@@ -255,8 +266,8 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 			m_MaterialEditorPanel.OpenMaterial(asset);
 		});
 		
-		// 3. Material Editor -> Content Browser & Properties Panel (hot reload when saved)
-		m_MaterialEditorPanel.SetOnMaterialSavedCallback([this](const std::filesystem::path& path) {
+		// 3. Material Editor / Node Editor -> Content Browser & Properties Panel (hot reload when saved)
+		auto onMaterialSaved = [this](const std::filesystem::path& path) {
 			// Invalidate Content Browser thumbnail (memory cache)
 			m_ContentBrowserPanel.InvalidateMaterialThumbnail(path);
 			
@@ -271,7 +282,9 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 			}
 			
 			LNX_LOG_INFO("Hot reload: Material thumbnails invalidated for {0}", path.filename().string());
-		});
+		};
+		m_MaterialEditorPanel.SetOnMaterialSavedCallback(onMaterialSaved);
+		m_MaterialGraphPanel.SetOnSavedCallback(onMaterialSaved);
 		
 		LNX_LOG_INFO("✅ Material Editor Panel callbacks configured");
 
@@ -953,6 +966,7 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 
 		// Material Editor Preview (has own UBOs but shares bindings)
 		m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
+		m_MaterialGraphPanel.OnUpdate(ts.GetSeconds());
 		
 		Entity selectedEntity = m_SceneHierarchyPanel.GetSelectedEntity();
 		if (selectedEntity && selectedEntity.HasComponent<CameraComponent>() && m_SceneState == SceneState::Edit) {
@@ -1019,6 +1033,7 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 		m_PropertiesPanel.OnImGuiRender();
 		m_ContentBrowserPanel.OnImGuiRender();
 		m_MaterialEditorPanel.OnImGuiRender();
+		m_MaterialGraphPanel.OnImGuiRender();
 		{
 			// Animation editor follows the selection (only rigged entities retarget it)
 			m_AnimationEditorPanel.SetContext(m_SceneState == SceneState::Edit ? m_ActiveScene : nullptr);

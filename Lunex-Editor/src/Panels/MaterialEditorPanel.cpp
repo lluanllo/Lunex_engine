@@ -46,9 +46,6 @@ namespace Lunex {
 	MaterialEditorPanel::MaterialEditorPanel() {
 		m_PreviewRenderer = CreateRef<MaterialPreviewRenderer>();
 		m_PreviewRenderer->SetResolution(m_PreviewWidth, m_PreviewHeight);
-
-		m_GraphEditor = std::make_unique<UI::NodeGraphEditor>("MaterialGraph");
-		m_GraphEditor->DrawNodeBody = [this](Graph::Node& node) { return DrawMaterialNodeBody(node); };
 	}
 
 	// ============================================================================
@@ -66,9 +63,6 @@ namespace Lunex {
 		m_EditingMaterial = material;
 		m_IsOpen = true;
 		m_HasUnsavedChanges = false;
-		m_GraphWarnings.clear();
-		m_FocusGraphTab = material->UsesNodeGraph();
-		if (m_GraphEditor) m_GraphEditor->RequestFrameAll();
 		LNX_LOG_INFO("Material opened in editor: {0}", material->GetName());
 	}
 
@@ -157,7 +151,6 @@ namespace Lunex {
 		DrawPBRPropertiesPanel();
 		DrawTextureMapsPanel();
 		DrawAdvancedOptionsPanel();
-		DrawNodeGraphPanel();
 	}
 
 	void MaterialEditorPanel::SetupDockspace(unsigned int dockspaceID) {
@@ -173,7 +166,6 @@ namespace Lunex {
 
 		ImGui::DockBuilderDockWindow("###MatEd_Preview", dockLeft);
 		ImGui::DockBuilderDockWindow("###MatEd_PBR", dockRightTop);
-		ImGui::DockBuilderDockWindow("###MatEd_Graph", dockRightTop);
 		ImGui::DockBuilderDockWindow("###MatEd_Textures", dockRightBottom);
 		ImGui::DockBuilderDockWindow("###MatEd_Advanced", dockRightBottom);
 
@@ -224,7 +216,7 @@ namespace Lunex {
 				const bool nodeMode = m_EditingMaterial && m_EditingMaterial->UsesNodeGraph();
 				Separator();
 				if (MenuItem("Properties", nullptr, !nodeMode)) SetNodeMode(false);
-				if (MenuItem("Node Graph", nullptr, nodeMode)) SetNodeMode(true);
+				if (MenuItem("Node Editor", nullptr, nodeMode)) SetNodeMode(true);
 			}
 
 			float statusWidth = 100.0f;
@@ -298,7 +290,17 @@ namespace Lunex {
 			ScopedStyle itemSpacing(ImGuiStyleVar_ItemSpacing, ImVec2(8, 6));
 
 			const bool graphDriven = m_EditingMaterial->UsesNodeGraph();
-			if (graphDriven) TextWrapped("Driven by the node graph. Switch to 'Properties' in the menu bar to edit values here.", TextVariant::Muted);
+			if (graphDriven) {
+				TextWrapped("This material is built with nodes. The values below are a preview of the graph.", TextVariant::Muted);
+				AddSpacing(SpacingValues::SM);
+				if (ButtonBlock("Open Node Editor", ButtonVariant::Primary) && m_OnOpenNodeEditor) m_OnOpenNodeEditor(m_EditingMaterial);
+				if (ButtonBlock("Back to Properties")) SetNodeMode(false);
+				AddSpacing(SpacingValues::MD);
+			}
+			else {
+				if (ButtonBlock("Open Node Editor")) SetNodeMode(true);
+				AddSpacing(SpacingValues::SM);
+			}
 			ImGui::BeginDisabled(graphDriven);
 			DrawPBRSection();
 			AddSpacing(SpacingValues::LG);
@@ -936,116 +938,23 @@ namespace Lunex {
 	// ============================================================================
 
 	void MaterialEditorPanel::SetNodeMode(bool enabled) {
-		if (!m_EditingMaterial || enabled == m_EditingMaterial->UsesNodeGraph()) return;
+		if (!m_EditingMaterial) return;
 		if (enabled) {
 			// First time: build the graph from the current sliders/textures (lossless migration)
 			if (!m_EditingMaterial->GetNodeGraph())
 				m_EditingMaterial->SetNodeGraph(MaterialGraph::CreateFromMaterial(*m_EditingMaterial));
-			m_EditingMaterial->SetUseNodeGraph(true);
-			ApplyGraph();
-			m_FocusGraphTab = true;
-			if (m_GraphEditor) m_GraphEditor->RequestFrameAll();
+			if (!m_EditingMaterial->UsesNodeGraph()) {
+				m_EditingMaterial->SetUseNodeGraph(true);
+				m_EditingMaterial->RebuildGraph();
+				MarkAsModified();
+			}
+			if (m_OnOpenNodeEditor) m_OnOpenNodeEditor(m_EditingMaterial);
 		}
-		else {
+		else if (m_EditingMaterial->UsesNodeGraph()) {
 			// The baked values stay; the graph is kept in the asset for later
 			m_EditingMaterial->SetUseNodeGraph(false);
-			m_GraphWarnings.clear();
+			MarkAsModified();
 		}
-		MarkAsModified();
-	}
-
-	void MaterialEditorPanel::ApplyGraph() {
-		if (!m_EditingMaterial || !m_EditingMaterial->GetNodeGraph()) return;
-		m_GraphWarnings = MaterialGraph::Apply(*m_EditingMaterial->GetNodeGraph(), *m_EditingMaterial);
-	}
-
-	Ref<Texture2D> MaterialEditorPanel::GetGraphThumbnail(const std::string& path) {
-		if (path.empty()) return nullptr;
-		auto& slot = m_GraphThumbnails[path];
-		if (!slot) slot = Texture2D::Create(path);
-		return (slot && slot->IsLoaded()) ? slot : nullptr;
-	}
-
-	bool MaterialEditorPanel::DrawMaterialNodeBody(Graph::Node& node) {
-		bool changed = false;
-		if (node.TypeName == MaterialGraph::ColorNode) {
-			ImGui::SetNextItemWidth(170.0f);
-			changed |= ImGui::ColorEdit4("##color", glm::value_ptr(node.Value),
-				ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_NoOptions | ImGuiColorEditFlags_NoLabel);
-		}
-		else if (node.TypeName == MaterialGraph::FloatNode) {
-			ImGui::SetNextItemWidth(120.0f);
-			changed |= ImGui::DragFloat("##value", &node.Value.x, 0.01f, 0.0f, 0.0f, "%.3f");
-		}
-		else if (node.TypeName == MaterialGraph::TextureNode) {
-			std::string& path = node.Properties["Path"];
-			const float size = 72.0f;
-			if (Ref<Texture2D> thumb = GetGraphThumbnail(path)) {
-				ImGui::Image((void*)(intptr_t)thumb->GetRendererID(), ImVec2(size, size), ImVec2(0, 1), ImVec2(1, 0));
-			}
-			else {
-				ImGui::Button("Drop\ntexture", ImVec2(size, size));
-			}
-			// Drag a texture from the Content Browser onto the node
-			if (ImGui::BeginDragDropTarget()) {
-				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
-					auto* data = static_cast<const ContentBrowserPayload*>(payload->Data);
-					std::string ext = data->Extension;
-					if (!data->IsDirectory && (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".hdr" || ext == ".bmp")) {
-						path = data->FilePath;
-						changed = true;
-					}
-				}
-				ImGui::EndDragDropTarget();
-			}
-			ImGui::SameLine();
-			ImGui::BeginGroup();
-			std::string name = path.empty() ? std::string("(none)") : std::filesystem::path(path).filename().string();
-			if (name.size() > 18) name = name.substr(0, 15) + "...";
-			ImGui::TextUnformatted(name.c_str());
-			if (ImGui::SmallButton("Browse")) {
-				std::string file = FileDialogs::OpenFile("Images (*.png;*.jpg;*.tga)\0*.png;*.jpg;*.jpeg;*.tga\0");
-				if (!file.empty()) { path = file; changed = true; }
-			}
-			if (!path.empty() && ImGui::SmallButton("Clear")) { path.clear(); changed = true; }
-			ImGui::EndGroup();
-		}
-		return changed;
-	}
-
-	void MaterialEditorPanel::DrawNodeGraphPanel() {
-		if (!m_EditingMaterial) return;
-		using namespace UI;
-
-		ScopedStyle padding(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
-		if (m_FocusGraphTab) {
-			ImGui::SetNextWindowFocus();
-			m_FocusGraphTab = false;
-		}
-		if (BeginPanel("Node Graph###MatEd_Graph", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
-			if (!m_EditingMaterial->UsesNodeGraph()) {
-				AddSpacing(SpacingValues::LG);
-				TextWrapped("This material is edited with properties. Convert it to a node graph to wire textures and values visually; "
-					"the current setup is migrated automatically and you can switch back at any time.", TextVariant::Muted);
-				AddSpacing(SpacingValues::MD);
-				if (ButtonBlock("Use Node Graph", ButtonVariant::Primary)) SetNodeMode(true);
-			}
-			else {
-				auto graph = m_EditingMaterial->GetNodeGraph();
-				const float footer = m_GraphWarnings.empty() ? 22.0f : 22.0f + 18.0f * static_cast<float>(std::min<size_t>(m_GraphWarnings.size(), 3));
-				ImGui::BeginChild("##GraphCanvas", ImVec2(0, -footer), false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-				if (m_GraphEditor->Draw(*graph, "Right-click to add nodes")) {
-					ApplyGraph();
-					MarkAsModified();
-				}
-				ImGui::EndChild();
-
-				for (size_t i = 0; i < m_GraphWarnings.size() && i < 3; i++)
-					ImGui::TextColored(ImVec4(0.95f, 0.7f, 0.25f, 1.0f), "! %s", m_GraphWarnings[i].c_str());
-				ImGui::TextDisabled("Right-click: add node   Drag pin: link   Del: remove   F: frame   Drop textures from the Content Browser");
-			}
-		}
-		EndPanel();
 	}
 
 	void MaterialEditorPanel::DrawUVSection() {
