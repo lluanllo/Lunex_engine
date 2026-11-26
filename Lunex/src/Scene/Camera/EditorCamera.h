@@ -116,6 +116,7 @@ namespace Lunex {
 		
 		bool m_IsFlyCameraActive = false;
 		bool m_AllowFlyCamera = false;
+		bool m_IsPanning = false;
 	};
 	
 } // namespace Lunex

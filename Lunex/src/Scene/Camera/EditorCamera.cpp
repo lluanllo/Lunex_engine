@@ -102,14 +102,18 @@ namespace Lunex {
 				m_Position -= GetUpDirection() * moveSpeed;
 			}
 		}
-		else if (Input::IsMouseButtonPressed(Mouse::ButtonMiddle)) {
+		else if (Input::IsMouseButtonPressed(Mouse::ButtonMiddle) && (m_IsPanning || m_AllowFlyCamera)) {
+			// The pan must start over the viewport (middle-drag in other panels, e.g. the node
+			// editor, must not move the camera); once started it continues outside it
 			const glm::vec2& mouse{ Input::GetMouseX(), Input::GetMouseY() };
+			if (!m_IsPanning) { m_IsPanning = true; m_InitialMousePosition = mouse; }
 			glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.003f;
 			m_InitialMousePosition = mouse;
 			
 			MousePan(delta);
 		}
 		else {
+			m_IsPanning = false;
 			m_InitialMousePosition = { Input::GetMouseX(), Input::GetMouseY() };
 		}
 		
