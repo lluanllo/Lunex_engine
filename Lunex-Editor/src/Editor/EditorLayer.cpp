@@ -1,5 +1,6 @@
 ﻿#include "EditorLayer.h"
 #include "imgui.h"
+#include "Core/FrameProfiler.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -782,6 +783,7 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 		// ========================================
 		// FLUSH MAIN-THREAD COMMANDS (Job System)
 		// ========================================
+		FrameProfiler::BeginFrame(ts.GetMilliseconds());
 		JobSystem::Get().FlushMainThreadCommands(0);
 
 		// Background compile of edited scripts (Edit mode only)
@@ -821,6 +823,7 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 		// ========================================
 		Renderer2D::ResetStats();
 		Renderer3D::ResetStats();
+		DeferredRenderer::ResetStats();
 
 		// ✅ CRITICAL FIX: Bind framebuffer BEFORE rendering
 		// NOTE: Shadow pass is now handled entirely inside SceneRenderSystem::RenderScene()
@@ -854,22 +857,27 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 				m_EditorCamera.OnUpdate(ts);
 				
 				m_AnimationEditorPanel.OnUpdate(ts.GetSeconds());   // pushes the edited pose before skinning
-				m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
-				
+				{
+					ProfileScope scope("Scene (systems + geometry)");
+					m_ActiveScene->OnUpdateEditor(ts, m_EditorCamera);
+				}
+
 				// Execute deferred lighting pass into the scene framebuffer
 				if (DeferredRenderer::IsEnabled()) {
-					DeferredRenderer::ExecuteLightingPass(m_Framebuffer);
-					
+					{ ProfileScope scope("Lighting", true); DeferredRenderer::ExecuteLightingPass(m_Framebuffer); }
+
 					// Render skybox, grid, sprites AFTER lighting (affected by bloom)
 					if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+						ProfileScope scope("Sky, sprites, particles", true);
 						renderSystem->RenderPostLighting(m_EditorCamera);
 					}
 
 					// Post-processing (bloom + tone mapping) on complete scene
-					DeferredRenderer::ExecutePostProcessing(m_Framebuffer);
+					{ ProfileScope scope("Post-processing", true); DeferredRenderer::ExecutePostProcessing(m_Framebuffer); }
 
 					// Render billboards, gizmos, frustums AFTER post-processing (not affected by bloom)
 					if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+						ProfileScope scope("Editor overlays", true);
 						renderSystem->RenderPostLightingOverlays(m_EditorCamera);
 					}
 				}
@@ -880,10 +888,13 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 				m_EditorCamera.SetAllowFlyCamera(m_ViewportPanel.IsViewportHovered());
 				m_EditorCamera.OnUpdate(ts);
 				
-				m_ActiveScene->OnUpdateSimulation(ts, m_EditorCamera);
-				
+				{
+					ProfileScope scope("Scene (systems + geometry)");
+					m_ActiveScene->OnUpdateSimulation(ts, m_EditorCamera);
+				}
+
 				if (DeferredRenderer::IsEnabled()) {
-					DeferredRenderer::ExecuteLightingPass(m_Framebuffer);
+					{ ProfileScope scope("Lighting", true); DeferredRenderer::ExecuteLightingPass(m_Framebuffer); }
 					
 					// Render skybox, grid, sprites AFTER lighting (affected by bloom)
 					if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
@@ -902,10 +913,13 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 			}
 			case SceneState::Play:
 			{
-				m_ActiveScene->OnUpdateRuntime(ts);
-				
+				{
+					ProfileScope scope("Scene (systems + geometry)");
+					m_ActiveScene->OnUpdateRuntime(ts);
+				}
+
 				if (DeferredRenderer::IsEnabled()) {
-					DeferredRenderer::ExecuteLightingPass(m_Framebuffer);
+					{ ProfileScope scope("Lighting", true); DeferredRenderer::ExecuteLightingPass(m_Framebuffer); }
 					
 					// Render skybox, sprites AFTER lighting (runtime, affected by bloom)
 					Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
@@ -954,11 +968,28 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 		}
 
 		m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
-		//m_MaterialEditorPanel.OnUpdate(ts.GetSeconds());
+		m_StatsPanel.SetContext(m_ActiveScene);
 
-		OnOverlayRender();
+		{ ProfileScope scope("Selection / debug overlay", true); OnOverlayRender(); }
 
 		m_Framebuffer->Unbind();
+
+		// Main view statistics, before the previews below reset/pollute the renderer stats
+		{
+			FrameProfiler::RenderCounters counters;
+			const auto deferred = DeferredRenderer::GetStats();
+			const auto stats2D = Renderer2D::GetStats();
+			const auto stats3D = Renderer3D::GetStats();
+			counters.GeometryDrawCalls = deferred.GeometryDrawCalls + stats3D.DrawCalls;
+			counters.LightingDrawCalls = deferred.LightingDrawCalls;
+			counters.Meshes = deferred.MeshCount + stats3D.MeshCount;
+			counters.CulledMeshes = deferred.CulledMeshes;
+			counters.Triangles = static_cast<uint64_t>(deferred.TriangleCount) + stats3D.TriangleCount;
+			counters.DrawCalls2D = stats2D.DrawCalls;
+			counters.Quads2D = stats2D.QuadCount;
+			FrameProfiler::SetRenderCounters(counters);
+		}
+		FrameProfiler::Begin("Previews (materials, camera)", true);
 
 		// ========================================
 		// CAMERA PREVIEW RENDERING (after main scene, separate pass)
@@ -973,12 +1004,15 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 			RenderCameraPreview(selectedEntity);
 		}
 
+		FrameProfiler::End();
+
 		if (m_ThumbnailCaptureFrames > 0 && --m_ThumbnailCaptureFrames == 0)
 			CaptureProjectThumbnail();
 	}
 
 	void EditorLayer::OnImGuiRender() {
 		LNX_PROFILE_FUNCTION();
+		ProfileScope uiScope("Editor UI (ImGui build)");
 
 		// Lunexi theme: user's saved preset (overrides the engine's base style once)
 		static bool s_ThemeLoaded = false;
@@ -1088,9 +1122,14 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 	}
 
 	void EditorLayer::OnEvent(Lunex::Event& e) {
-		m_CameraController.OnEvent(e);
-		if (m_SceneState == SceneState::Edit) {
-			m_EditorCamera.OnEvent(e);
+		// The mouse wheel only zooms the viewport cameras while the mouse is over the viewport
+		// (scrolling the node editor, inspector or content browser must not zoom the scene)
+		const bool scrollElsewhere = e.GetEventType() == EventType::MouseScrolled && !m_ViewportPanel.IsViewportHovered();
+		if (!scrollElsewhere) {
+			m_CameraController.OnEvent(e);
+			if (m_SceneState == SceneState::Edit) {
+				m_EditorCamera.OnEvent(e);
+			}
 		}
 		
 		// Forward events to Content Browser for file drop
