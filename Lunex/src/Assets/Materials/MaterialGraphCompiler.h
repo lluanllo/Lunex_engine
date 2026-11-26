@@ -33,7 +33,7 @@ namespace Lunex {
 
 	namespace MaterialGraph {
 
-		inline constexpr int kMaxGraphParams = 128;      // vec4 slots incl. slot 0 (time)
+		inline constexpr int kMaxGraphParams = 512;      // vec4 slots incl. slot 0 (time)
 		inline constexpr int kMaxGraphTextures = 12;
 		inline constexpr uint32_t kGraphParamsBinding = 11;
 
@@ -41,8 +41,9 @@ namespace Lunex {
 		struct ParamRef {
 			Graph::ID Node = 0;
 			Graph::ID Pin = 0;        // 0 = Node::Value
-			int RampStop = -1;        // >= 0: color ramp stop
+			int RampStop = -1;        // >= 0: color ramp stop (or curve point when Curve is set)
 			bool RampPosition = false;
+			std::string Curve;        // curve property key ("Curve R"...): value = (x, y, tangent, 0)
 		};
 
 		struct CompiledGraph {
@@ -52,6 +53,8 @@ namespace Lunex {
 			std::unordered_map<std::string, int> NamedParams;   // Value/RGB node Name -> param index
 			std::vector<std::string> TexturePaths;              // texture i -> sampler slot SlotForTexture(i)
 			std::vector<std::string> Errors;
+			bool Forward = false;    // rendered after lighting (transparent pass / Shader to RGB), not in the G-Buffer
+			bool Blended = false;    // sorted, alpha blended, with screen-space refraction
 			bool IsValid() const { return Errors.empty() && !Code.empty(); }
 		};
 
@@ -59,10 +62,13 @@ namespace Lunex {
 		// Every node of `graph` in one function: `vec4 lnx_preview(int target)`, target = index in `order`
 		CompiledGraph CompilePreviews(const Graph::NodeGraph& graph, std::vector<Graph::ID>& order);
 		uint32_t SlotForTexture(int index);
+		// Current value of a parameter (socket default, Value/RGB node, ramp stop, curve point)
+		glm::vec4 EvaluateParam(const Graph::NodeGraph& graph, const ParamRef& ref);
 
 		// GPU side of a graph material: GL programs (deferred + forward), textures and params
 		class GraphRuntime {
 		public:
+			enum class Mode { Deferred = 0, Forward = 1, ForwardHDR = 2 };
 			// Re-generate code; keeps the GL programs when the code did not change
 			void Update(const Graph::NodeGraph& graph);
 			const CompiledGraph& GetCompiled() const { return m_Compiled; }
@@ -71,15 +77,19 @@ namespace Lunex {
 			// (graph invalid / shader failed) so the caller falls back to the classic path.
 			Ref<Shader> Bind(bool deferred, const Graph::NodeGraph& graph,
 				const std::unordered_map<std::string, glm::vec4>* overrides = nullptr);
+			Ref<Shader> Bind(Mode mode, const Graph::NodeGraph& graph,
+				const std::unordered_map<std::string, glm::vec4>* overrides = nullptr);
+			bool IsForward() const { return m_Compiled.IsValid() && m_Compiled.Forward; }
+			bool IsBlended() const { return m_Compiled.IsValid() && m_Compiled.Blended; }
 
 			bool HasShaderError() const { return m_ShaderFailed; }
 
 		private:
-			Ref<Shader> GetOrCreateShader(bool deferred);
+			Ref<Shader> GetOrCreateShader(Mode mode);
 
 			CompiledGraph m_Compiled;
-			Ref<Shader> m_Deferred, m_Forward;
-			bool m_DeferredTried = false, m_ForwardTried = false;
+			Ref<Shader> m_Shaders[3];
+			bool m_Tried[3] = { false, false, false };
 			bool m_ShaderFailed = false;
 			std::vector<Ref<Texture2D>> m_Textures;
 			std::vector<glm::vec4> m_Params;
@@ -87,7 +97,7 @@ namespace Lunex {
 		};
 
 		// Source of the shader templates (relative to the editor working directory)
-		std::string BuildShaderSource(const std::string& templatePath, const std::string& graphCode, const char* stageDefine);
+		std::string BuildShaderSource(const std::string& templatePath, const std::string& graphCode, const char* stageDefine, const char* extraDefine = nullptr);
 
 	}
 

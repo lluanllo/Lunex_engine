@@ -5,6 +5,8 @@
 #include "Renderer/Texture.h"
 
 #include <filesystem>
+#include <algorithm>
+#include <cmath>
 #include <sstream>
 #include <unordered_map>
 
@@ -26,6 +28,7 @@ namespace Lunex::MaterialGraph {
 		Pin Implicit(const char* name, PinType type) { Pin p = In(name, type); p.HideValue = true; return p; }
 		Pin Out(const char* name, PinType type) { Pin p; p.Name = name; p.Type = type; return p; }
 		Pin Labeled(Pin p, const char* label) { p.Label = label; return p; }
+		Pin P(Pin p, const char* panel) { p.Panel = panel; return p; }
 
 		// Blender node header colors
 		const glm::vec4 kInput(0.514f, 0.192f, 0.290f, 1.0f);
@@ -86,27 +89,59 @@ namespace Lunex::MaterialGraph {
 			};
 
 			// ---------------- Output ----------------
-			reg(MaterialOutput, "Material Output", "Output", kOutput, 150.0f, [](Node& n) {
-				n.Inputs = { Implicit("Surface", PinType::Shader) };
-			}).Unique = true;
+			auto& output = reg(MaterialOutput, "Material Output", "Output", kOutput, 170.0f, [](Node& n) {
+				n.Inputs = { Implicit("Surface", PinType::Shader), Implicit("Volume", PinType::Shader), Implicit("Displacement", PinType::Vec3) };
+				n.Properties["Render Method"] = "Auto";
+			});
+			output.Unique = true;
+			output.Enums = { { "Render Method", { "Auto", "Dithered", "Blended" } }, { "Target", { "All", "EEVEE", "Cycles" } } };
+			output.Description = "Render Method: Auto blends when the surface uses alpha or transmission; Dithered keeps alpha clip (0.5) in the deferred pass; Blended always uses the sorted transparent pass";
+			reg(AOVOutput, "AOV Output", "Output", kOutput, 150.0f, [](Node& n) {
+				n.Inputs = { C("Color", glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)), F("Value", 0.0f) };
+				n.Properties["Name"] = "";
+			}).Description = "Arbitrary output value (render passes). No effect in the realtime viewport.";
 
 			// ---------------- Shader ----------------
-			reg(PrincipledBSDF, "Principled BSDF", "Shader", kShader, 240.0f, [](Node& n) {
+			auto& principled = reg(PrincipledBSDF, "Principled BSDF", "Shader", kShader, 250.0f, [](Node& n) {
 				n.Outputs = { Out("BSDF", PinType::Shader) };
 				n.Inputs = {
 					C("Base Color", glm::vec4(0.8f, 0.8f, 0.8f, 1.0f)),
 					F("Metallic", 0.0f, 0.0f, 1.0f),
 					F("Roughness", 0.5f, 0.0f, 1.0f),
-					F("Specular", 0.5f, 0.0f, 1.0f),
+					F("IOR", 1.5f, 1.0f, 3.0f),
 					F("Alpha", 1.0f, 0.0f, 1.0f),
 					Implicit("Normal", PinType::Vec3),
 					F("Ambient Occlusion", 1.0f, 0.0f, 1.0f),
-					F("Subsurface Weight", 0.0f, 0.0f, 1.0f),
-					C("Subsurface Color", glm::vec4(1.0f, 0.35f, 0.25f, 1.0f)),
-					C("Emission Color", glm::vec4(1.0f)),
-					F("Emission Strength", 0.0f, 0.0f, 0.0f),
+					P(Labeled(F("Subsurface Weight", 0.0f, 0.0f, 1.0f), "Weight"), "Subsurface"),
+					P(Labeled(V("Subsurface Radius", glm::vec3(1.0f, 0.2f, 0.1f)), "Radius"), "Subsurface"),
+					P(Labeled(F("Subsurface Scale", 0.05f, 0.0f, 0.0f), "Scale"), "Subsurface"),
+					P(Labeled(F("Subsurface IOR", 1.4f, 1.0f, 3.8f), "IOR"), "Subsurface"),
+					P(Labeled(F("Subsurface Anisotropy", 0.0f, 0.0f, 1.0f), "Anisotropy"), "Subsurface"),
+					P(C("Subsurface Color", glm::vec4(1.0f, 0.35f, 0.25f, 1.0f)), "Subsurface"),
+					P(Labeled(F("Specular", 0.5f, 0.0f, 1.0f), "IOR Level"), "Specular"),
+					P(Labeled(C("Specular Tint", glm::vec4(1.0f)), "Tint"), "Specular"),
+					P(F("Anisotropic", 0.0f, 0.0f, 1.0f), "Specular"),
+					P(F("Anisotropic Rotation", 0.0f, 0.0f, 1.0f), "Specular"),
+					P(Implicit("Tangent", PinType::Vec3), "Specular"),
+					P(Labeled(F("Transmission Weight", 0.0f, 0.0f, 1.0f), "Weight"), "Transmission"),
+					P(Labeled(F("Coat Weight", 0.0f, 0.0f, 1.0f), "Weight"), "Coat"),
+					P(Labeled(F("Coat Roughness", 0.03f, 0.0f, 1.0f), "Roughness"), "Coat"),
+					P(Labeled(F("Coat IOR", 1.5f, 1.0f, 4.0f), "IOR"), "Coat"),
+					P(Labeled(C("Coat Tint", glm::vec4(1.0f)), "Tint"), "Coat"),
+					P(Labeled(Implicit("Coat Normal", PinType::Vec3), "Normal"), "Coat"),
+					P(Labeled(F("Sheen Weight", 0.0f, 0.0f, 1.0f), "Weight"), "Sheen"),
+					P(Labeled(F("Sheen Roughness", 0.5f, 0.0f, 1.0f), "Roughness"), "Sheen"),
+					P(Labeled(C("Sheen Tint", glm::vec4(1.0f)), "Tint"), "Sheen"),
+					P(Labeled(C("Emission Color", glm::vec4(1.0f)), "Color"), "Emission"),
+					P(Labeled(F("Emission Strength", 0.0f, 0.0f, 0.0f), "Strength"), "Emission"),
+					P(Labeled(F("Thin Film Thickness", 0.0f, 0.0f, 100000.0f), "Thickness"), "Thin Film"),
+					P(Labeled(F("Thin Film IOR", 1.33f, 1.0f, 3.0f), "IOR"), "Thin Film"),
 				};
-			}).Description = "Physically based surface (metal/roughness workflow)";
+				n.Properties["Distribution"] = "Multiscatter GGX";
+				n.Properties["Subsurface Method"] = "Random Walk";
+			});
+			principled.Enums = { { "Distribution", { "GGX", "Multiscatter GGX" } }, { "Subsurface Method", { "Christensen-Burley", "Random Walk", "Random Walk (Skin)" } } };
+			principled.Description = "Blender 4.x Principled BSDF: base, IOR, alpha, subsurface, specular, transmission, coat, sheen, emission, thin film";
 			reg(EmissionShader, "Emission", "Shader", kShader, 150.0f, [](Node& n) {
 				n.Outputs = { Out("Emission", PinType::Shader) };
 				n.Inputs = { C("Color", glm::vec4(1.0f)), F("Strength", 1.0f) };
@@ -119,13 +154,106 @@ namespace Lunex::MaterialGraph {
 				n.Outputs = { Out("Shader", PinType::Shader) };
 				n.Inputs = { Labeled(Implicit("Shader A", PinType::Shader), "Shader"), Labeled(Implicit("Shader B", PinType::Shader), "Shader") };
 			});
+			reg(DiffuseBSDF, "Diffuse BSDF", "Shader", kShader, 160.0f, [](Node& n) {
+				n.Outputs = { Out("BSDF", PinType::Shader) };
+				n.Inputs = { C("Color", glm::vec4(0.8f, 0.8f, 0.8f, 1.0f)), F("Roughness", 0.0f, 0.0f, 1.0f), Implicit("Normal", PinType::Vec3) };
+			});
+			auto& glossy = reg(GlossyBSDF, "Glossy BSDF", "Shader", kShader, 170.0f, [](Node& n) {
+				n.Outputs = { Out("BSDF", PinType::Shader) };
+				n.Inputs = { C("Color", glm::vec4(0.8f, 0.8f, 0.8f, 1.0f)), F("Roughness", 0.5f, 0.0f, 1.0f), F("Anisotropy", 0.0f, -1.0f, 1.0f),
+					F("Rotation", 0.0f, 0.0f, 1.0f), Implicit("Normal", PinType::Vec3), Implicit("Tangent", PinType::Vec3) };
+				n.Properties["Distribution"] = "Multiscatter GGX";
+			});
+			glossy.Enums = { { "Distribution", { "Sharp", "Beckmann", "GGX", "Ashikhmin-Shirley", "Multiscatter GGX" } } };
+			auto& metallic = reg(MetallicBSDF, "Metallic BSDF", "Shader", kShader, 180.0f, [](Node& n) {
+				n.Outputs = { Out("BSDF", PinType::Shader) };
+				n.Inputs = { C("Base Color", glm::vec4(0.617f, 0.577f, 0.540f, 1.0f)), C("Edge Tint", glm::vec4(0.695f, 0.726f, 0.770f, 1.0f)),
+					F("Roughness", 0.5f, 0.0f, 1.0f), F("Anisotropy", 0.0f, -1.0f, 1.0f), F("Rotation", 0.0f, 0.0f, 1.0f),
+					Implicit("Normal", PinType::Vec3), Implicit("Tangent", PinType::Vec3) };
+				n.Properties["Fresnel Type"] = "F82 Tint";
+			});
+			metallic.Enums = { { "Fresnel Type", { "Physical Conductor", "F82 Tint" } }, { "Distribution", { "Beckmann", "GGX", "Multiscatter GGX" } } };
+			auto& glass = reg(GlassBSDF, "Glass BSDF", "Shader", kShader, 160.0f, [](Node& n) {
+				n.Outputs = { Out("BSDF", PinType::Shader) };
+				n.Inputs = { C("Color", glm::vec4(1.0f)), F("Roughness", 0.0f, 0.0f, 1.0f), F("IOR", 1.5f, 1.0f, 3.0f), Implicit("Normal", PinType::Vec3) };
+				n.Properties["Distribution"] = "Multiscatter GGX";
+			});
+			glass.Enums = { { "Distribution", { "Sharp", "Beckmann", "GGX", "Multiscatter GGX" } } };
+			glass.Description = "Reflection + refraction (IOR). Rendered in the sorted transparent pass with screen-space refraction";
+			reg(RefractionBSDF, "Refraction BSDF", "Shader", kShader, 160.0f, [](Node& n) {
+				n.Outputs = { Out("BSDF", PinType::Shader) };
+				n.Inputs = { C("Color", glm::vec4(1.0f)), F("Roughness", 0.0f, 0.0f, 1.0f), F("IOR", 1.45f, 1.0f, 3.0f), Implicit("Normal", PinType::Vec3) };
+			});
+			reg(TransparentBSDF, "Transparent BSDF", "Shader", kShader, 150.0f, [](Node& n) {
+				n.Outputs = { Out("BSDF", PinType::Shader) };
+				n.Inputs = { C("Color", glm::vec4(1.0f)) };
+			}).Description = "Light passes straight through, tinted by Color (mix with another shader for partial transparency)";
+			reg(TranslucentBSDF, "Translucent BSDF", "Shader", kShader, 150.0f, [](Node& n) {
+				n.Outputs = { Out("BSDF", PinType::Shader) };
+				n.Inputs = { C("Color", glm::vec4(0.8f, 0.8f, 0.8f, 1.0f)), Implicit("Normal", PinType::Vec3) };
+			}).Description = "Diffuse light transmitted through thin surfaces (leaves, paper, cloth)";
+			reg(SubsurfaceBSDF, "Subsurface Scattering", "Shader", kShader, 180.0f, [](Node& n) {
+				n.Outputs = { Out("BSSRDF", PinType::Shader) };
+				n.Inputs = { C("Color", glm::vec4(0.8f, 0.8f, 0.8f, 1.0f)), F("Scale", 0.05f), V("Radius", glm::vec3(1.0f, 0.2f, 0.1f)),
+					F("IOR", 1.4f, 1.0f, 3.8f), F("Roughness", 1.0f, 0.0f, 1.0f), F("Anisotropy", 0.0f, 0.0f, 1.0f), Implicit("Normal", PinType::Vec3) };
+			});
+			reg(SheenBSDF, "Sheen BSDF", "Shader", kShader, 150.0f, [](Node& n) {
+				n.Outputs = { Out("BSDF", PinType::Shader) };
+				n.Inputs = { C("Color", glm::vec4(0.8f, 0.8f, 0.8f, 1.0f)), F("Roughness", 0.5f, 0.0f, 1.0f), Implicit("Normal", PinType::Vec3) };
+			});
+			auto& toon = reg(ToonBSDF, "Toon BSDF", "Shader", kShader, 150.0f, [](Node& n) {
+				n.Outputs = { Out("BSDF", PinType::Shader) };
+				n.Inputs = { C("Color", glm::vec4(0.8f, 0.8f, 0.8f, 1.0f)), F("Size", 0.5f, 0.0f, 1.0f), F("Smooth", 0.0f, 0.0f, 1.0f), Implicit("Normal", PinType::Vec3) };
+				n.Properties["Component"] = "Diffuse";
+			});
+			toon.Enums = { { "Component", { "Diffuse", "Glossy" } } };
+			reg(HairBSDF, "Hair BSDF", "Shader", kShader, 160.0f, [](Node& n) {
+				n.Outputs = { Out("BSDF", PinType::Shader) };
+				n.Inputs = { C("Color", glm::vec4(0.8f, 0.8f, 0.8f, 1.0f)), F("Offset", 0.0f), F("Roughness U", 0.1f, 0.0f, 1.0f), F("Roughness V", 1.0f, 0.0f, 1.0f), Implicit("Tangent", PinType::Vec3) };
+			});
+			reg(PrincipledHair, "Principled Hair BSDF", "Shader", kShader, 190.0f, [](Node& n) {
+				n.Outputs = { Out("BSDF", PinType::Shader) };
+				n.Inputs = { C("Color", glm::vec4(0.017513f, 0.005763f, 0.002059f, 1.0f)), F("Melanin", 0.8f, 0.0f, 1.0f), F("Melanin Redness", 1.0f, 0.0f, 1.0f),
+					C("Tint", glm::vec4(1.0f)), F("Roughness", 0.3f, 0.0f, 1.0f), F("Radial Roughness", 0.3f, 0.0f, 1.0f), F("Coat", 0.0f, 0.0f, 1.0f), F("IOR", 1.55f, 0.0f, 3.0f) };
+			});
+			reg(SpecularBSDF, "Specular BSDF", "Shader", kShader, 190.0f, [](Node& n) {
+				n.Outputs = { Out("BSDF", PinType::Shader) };
+				n.Inputs = { C("Base Color", glm::vec4(0.8f, 0.8f, 0.8f, 1.0f)), C("Specular", glm::vec4(0.03f, 0.03f, 0.03f, 1.0f)), F("Roughness", 0.2f, 0.0f, 1.0f),
+					C("Emissive Color", glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)), F("Transparency", 0.0f, 0.0f, 1.0f), Implicit("Normal", PinType::Vec3),
+					F("Clear Coat", 0.0f, 0.0f, 1.0f), F("Clear Coat Roughness", 0.0f, 0.0f, 1.0f), Implicit("Clear Coat Normal", PinType::Vec3), F("Ambient Occlusion", 1.0f, 0.0f, 1.0f) };
+			}).Description = "EEVEE specular workflow";
+			reg(HoldoutShader, "Holdout", "Shader", kShader, 140.0f, [](Node& n) {
+				n.Outputs = { Out("Holdout", PinType::Shader) };
+				n.Inputs = { F("Weight", 1.0f, 0.0f, 1.0f) };
+			});
+			reg(RayPortalBSDF, "Ray Portal BSDF", "Shader", kShader, 160.0f, [](Node& n) {
+				n.Outputs = { Out("BSDF", PinType::Shader) };
+				n.Inputs = { C("Color", glm::vec4(1.0f)), Implicit("Position", PinType::Vec3), Implicit("Direction", PinType::Vec3) };
+			}).Description = "Cycles only: rendered as a transparent surface in the realtime viewport";
+			reg(PrincipledVolume, "Principled Volume", "Shader", kShader, 190.0f, [](Node& n) {
+				n.Outputs = { Out("Volume", PinType::Shader) };
+				n.Inputs = { C("Color", glm::vec4(0.5f, 0.5f, 0.5f, 1.0f)), F("Density", 1.0f), F("Anisotropy", 0.0f, -1.0f, 1.0f),
+					C("Absorption Color", glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)), F("Emission Strength", 0.0f), C("Emission Color", glm::vec4(1.0f)),
+					F("Blackbody Intensity", 0.0f, 0.0f, 1.0f), C("Blackbody Tint", glm::vec4(1.0f)), F("Temperature", 1000.0f) };
+			}).Description = "Volumes are not rendered by the raster engine yet (connect to Material Output > Volume)";
+			reg(VolumeAbsorption, "Volume Absorption", "Shader", kShader, 160.0f, [](Node& n) {
+				n.Outputs = { Out("Volume", PinType::Shader) };
+				n.Inputs = { C("Color", glm::vec4(0.8f, 0.8f, 0.8f, 1.0f)), F("Density", 1.0f) };
+			});
+			reg(VolumeScatter, "Volume Scatter", "Shader", kShader, 160.0f, [](Node& n) {
+				n.Outputs = { Out("Volume", PinType::Shader) };
+				n.Inputs = { C("Color", glm::vec4(0.8f, 0.8f, 0.8f, 1.0f)), F("Density", 1.0f), F("Anisotropy", 0.0f, -1.0f, 1.0f) };
+			});
 
 			// ---------------- Input ----------------
 			reg(TexCoordNode, "Texture Coordinate", "Input", kInput, 150.0f, [](Node& n) {
-				n.Outputs = { Out("UV", PinType::Vec3), Out("Generated", PinType::Vec3), Out("Normal", PinType::Vec3), Out("Reflection", PinType::Vec3) };
+				n.Outputs = { Out("Generated", PinType::Vec3), Out("Normal", PinType::Vec3), Out("UV", PinType::Vec3), Out("Object", PinType::Vec3),
+					Out("Camera", PinType::Vec3), Out("Window", PinType::Vec3), Out("Reflection", PinType::Vec3) };
 			});
-			reg(GeometryNode, "Geometry", "Input", kInput, 150.0f, [](Node& n) {
-				n.Outputs = { Out("Position", PinType::Vec3), Out("Normal", PinType::Vec3), Out("Tangent", PinType::Vec3), Out("Incoming", PinType::Vec3) };
+			reg(GeometryNode, "Geometry", "Input", kInput, 160.0f, [](Node& n) {
+				n.Outputs = { Out("Position", PinType::Vec3), Out("Normal", PinType::Vec3), Out("Tangent", PinType::Vec3), Out("True Normal", PinType::Vec3),
+					Out("Incoming", PinType::Vec3), Out("Parametric", PinType::Vec3), Out("Backfacing", PinType::Float), Out("Pointiness", PinType::Float),
+					Out("Random Per Island", PinType::Float) };
 			});
 			reg(ValueNode, "Value", "Input", kInput, 150.0f, [](Node& n) {
 				n.Outputs = { Out("Value", PinType::Float) };
@@ -139,7 +267,7 @@ namespace Lunex::MaterialGraph {
 			}).Description = "Constant color. Give it a Name to edit it per entity from scripts.";
 			reg(FresnelNode, "Fresnel", "Input", kInput, 150.0f, [](Node& n) {
 				n.Outputs = { Out("Fac", PinType::Float) };
-				n.Inputs = { F("IOR", 1.45f, 1.0f, 3.0f), Implicit("Normal", PinType::Vec3) };
+				n.Inputs = { F("IOR", 1.5f, 1.0f, 3.0f), Implicit("Normal", PinType::Vec3) };
 			});
 			reg(LayerWeight, "Layer Weight", "Input", kInput, 150.0f, [](Node& n) {
 				n.Outputs = { Out("Fresnel", PinType::Float), Out("Facing", PinType::Float) };
@@ -148,6 +276,74 @@ namespace Lunex::MaterialGraph {
 			reg(TimeNode, "Time", "Input", kInput, 140.0f, [](Node& n) {
 				n.Outputs = { Out("Seconds", PinType::Float) };
 			}).Description = "Elapsed time in seconds (animated materials)";
+			auto& ao = reg(AmbientOcclusionNode, "Ambient Occlusion", "Input", kInput, 160.0f, [](Node& n) {
+				n.Outputs = { Out("Color", PinType::Color), Out("AO", PinType::Float) };
+				n.Inputs = { C("Color", glm::vec4(1.0f)), F("Distance", 1.0f), Implicit("Normal", PinType::Vec3) };
+				n.Properties["Inside"] = "0";
+				n.Properties["Only Local"] = "0";
+			});
+			ao.Toggles = { "Inside", "Only Local" };
+			ao.Description = "Screen-space AO is applied by the renderer; AO output = 1 in the raster engine";
+			auto& attr = reg(AttributeNode, "Attribute", "Input", kInput, 160.0f, [](Node& n) {
+				n.Outputs = { Out("Color", PinType::Color), Out("Vector", PinType::Vec3), Out("Fac", PinType::Float), Out("Alpha", PinType::Float) };
+				n.Properties["Name"] = "UVMap";
+				n.Properties["Type"] = "Geometry";
+			});
+			attr.Enums = { { "Type", { "Geometry", "Object", "Instancer", "View Layer" } } };
+			attr.Description = "Supported names: UVMap / uv (texture coordinates), position, normal";
+			reg(BevelNode, "Bevel", "Input", kInput, 150.0f, [](Node& n) {
+				n.Outputs = { Out("Normal", PinType::Vec3) };
+				n.Inputs = { F("Radius", 0.05f), Implicit("Normal", PinType::Vec3) };
+				n.Properties["Samples"] = "4";
+			});
+			reg(CameraDataNode, "Camera Data", "Input", kInput, 160.0f, [](Node& n) {
+				n.Outputs = { Out("View Vector", PinType::Vec3), Out("View Z Depth", PinType::Float), Out("View Distance", PinType::Float) };
+			});
+			reg(ColorAttributeNode, "Color Attribute", "Input", kInput, 160.0f, [](Node& n) {
+				n.Outputs = { Out("Color", PinType::Color), Out("Alpha", PinType::Float) };
+				n.Properties["Layer"] = "";
+			}).Description = "Vertex colors are not imported yet: white";
+			reg(CurvesInfoNode, "Curves Info", "Input", kInput, 150.0f, [](Node& n) {
+				n.Outputs = { Out("Is Strand", PinType::Float), Out("Intercept", PinType::Float), Out("Length", PinType::Float), Out("Thickness", PinType::Float),
+					Out("Tangent Normal", PinType::Vec3), Out("Random", PinType::Float) };
+			});
+			reg(LightPathNode, "Light Path", "Input", kInput, 170.0f, [](Node& n) {
+				n.Outputs = { Out("Is Camera Ray", PinType::Float), Out("Is Shadow Ray", PinType::Float), Out("Is Diffuse Ray", PinType::Float),
+					Out("Is Glossy Ray", PinType::Float), Out("Is Singular Ray", PinType::Float), Out("Is Reflection Ray", PinType::Float),
+					Out("Is Transmission Ray", PinType::Float), Out("Ray Length", PinType::Float), Out("Ray Depth", PinType::Float),
+					Out("Diffuse Depth", PinType::Float), Out("Glossy Depth", PinType::Float), Out("Transparent Depth", PinType::Float),
+					Out("Transmission Depth", PinType::Float) };
+			}).Description = "Raster engine: only camera rays (Is Camera Ray = 1)";
+			reg(ObjectInfoNode, "Object Info", "Input", kInput, 160.0f, [](Node& n) {
+				n.Outputs = { Out("Location", PinType::Vec3), Out("Color", PinType::Color), Out("Alpha", PinType::Float), Out("Object Index", PinType::Float),
+					Out("Material Index", PinType::Float), Out("Random", PinType::Float) };
+			});
+			reg(ParticleInfoNode, "Particle Info", "Input", kInput, 150.0f, [](Node& n) {
+				n.Outputs = { Out("Index", PinType::Float), Out("Random", PinType::Float), Out("Age", PinType::Float), Out("Lifetime", PinType::Float),
+					Out("Location", PinType::Vec3), Out("Size", PinType::Float), Out("Velocity", PinType::Vec3), Out("Angular Velocity", PinType::Vec3) };
+			});
+			reg(PointInfoNode, "Point Info", "Input", kInput, 150.0f, [](Node& n) {
+				n.Outputs = { Out("Position", PinType::Vec3), Out("Radius", PinType::Float), Out("Random", PinType::Float) };
+			});
+			auto& tangent = reg(TangentNode, "Tangent", "Input", kInput, 150.0f, [](Node& n) {
+				n.Outputs = { Out("Tangent", PinType::Vec3) };
+				n.Properties["Direction Type"] = "UV Map";
+				n.Properties["Axis"] = "Z";
+			});
+			tangent.Enums = { { "Direction Type", { "Radial", "UV Map" } }, { "Axis", { "X", "Y", "Z" } } };
+			reg(UVMapNode, "UV Map", "Input", kInput, 150.0f, [](Node& n) {
+				n.Outputs = { Out("UV", PinType::Vec3) };
+				n.Properties["UV Map"] = "";
+				n.Properties["From Instancer"] = "0";
+			}).Toggles = { "From Instancer" };
+			reg(VolumeInfoNode, "Volume Info", "Input", kInput, 150.0f, [](Node& n) {
+				n.Outputs = { Out("Color", PinType::Color), Out("Density", PinType::Float), Out("Flame", PinType::Float), Out("Temperature", PinType::Float) };
+			});
+			reg(WireframeNode, "Wireframe", "Input", kInput, 150.0f, [](Node& n) {
+				n.Outputs = { Out("Fac", PinType::Float) };
+				n.Inputs = { F("Size", 0.01f) };
+				n.Properties["Pixel Size"] = "0";
+			}).Toggles = { "Pixel Size" };
 
 			// ---------------- Texture ----------------
 			auto& img = reg(ImageTexture, "Image Texture", "Texture", kTexture, 240.0f, [](Node& n) {
@@ -168,23 +364,53 @@ namespace Lunex::MaterialGraph {
 			img.Description = "Color Space: sRGB for colors (albedo, emission), Non-Color for data (normal, roughness, metallic, AO, height, packed ORM)";
 			auto& noise = reg(NoiseTexture, "Noise Texture", "Texture", kTexture, 170.0f, [](Node& n) {
 				n.Outputs = { Out("Fac", PinType::Float), Out("Color", PinType::Color) };
-				n.Inputs = { Implicit("Vector", PinType::Vec3), F("Scale", 5.0f), F("Detail", 2.0f, 0.0f, 15.0f), F("Roughness", 0.5f, 0.0f, 1.0f), F("Distortion", 0.0f) };
+				n.Inputs = { Implicit("Vector", PinType::Vec3), F("W", 0.0f), F("Scale", 5.0f), F("Detail", 2.0f, 0.0f, 15.0f), F("Roughness", 0.5f, 0.0f, 1.0f),
+					F("Lacunarity", 2.0f, 0.0f, 0.0f), F("Offset", 0.0f), F("Gain", 1.0f), F("Distortion", 0.0f) };
 				n.Properties["Dimensions"] = "3D";
+				n.Properties["Type"] = "fBM";
+				n.Properties["Normalize"] = "1";
 			});
-			noise.Enums = { { "Dimensions", { "3D", "2D" } } };
-			auto& voronoi = reg(VoronoiTexture, "Voronoi Texture", "Texture", kTexture, 170.0f, [](Node& n) {
-				n.Outputs = { Out("Distance", PinType::Float), Out("Color", PinType::Color), Out("Position", PinType::Vec3) };
-				n.Inputs = { Implicit("Vector", PinType::Vec3), F("Scale", 5.0f), F("Randomness", 1.0f, 0.0f, 1.0f) };
+			noise.Enums = { { "Dimensions", { "1D", "2D", "3D", "4D" } }, { "Type", { "Multifractal", "Ridged Multifractal", "Hybrid Multifractal", "fBM", "Hetero Terrain" } } };
+			noise.Toggles = { "Normalize" };
+			noise.PinVisible = [](const Node& n, const Pin& p) {
+				const std::string d = Prop(n, "Dimensions", "3D"), t = Prop(n, "Type", "fBM");
+				if (p.Name == "W") return d == "1D" || d == "4D";
+				if (p.Name == "Vector") return d != "1D";
+				if (p.Name == "Offset") return t == "Ridged Multifractal" || t == "Hybrid Multifractal" || t == "Hetero Terrain";
+				if (p.Name == "Gain") return t == "Ridged Multifractal" || t == "Hybrid Multifractal";
+				return true;
+			};
+			auto& voronoi = reg(VoronoiTexture, "Voronoi Texture", "Texture", kTexture, 180.0f, [](Node& n) {
+				n.Outputs = { Out("Distance", PinType::Float), Out("Color", PinType::Color), Out("Position", PinType::Vec3), Out("W", PinType::Float), Out("Radius", PinType::Float) };
+				n.Inputs = { Implicit("Vector", PinType::Vec3), F("W", 0.0f), F("Scale", 5.0f), F("Detail", 0.0f, 0.0f, 15.0f), F("Roughness", 0.5f, 0.0f, 1.0f),
+					F("Lacunarity", 2.0f), F("Smoothness", 1.0f, 0.0f, 1.0f), F("Exponent", 0.5f, 0.0f, 32.0f), F("Randomness", 1.0f, 0.0f, 1.0f) };
+				n.Properties["Dimensions"] = "3D";
 				n.Properties["Feature"] = "F1";
+				n.Properties["Distance"] = "Euclidean";
+				n.Properties["Normalize"] = "0";
 			});
-			voronoi.Enums = { { "Feature", { "F1", "F2", "Distance to Edge" } } };
+			voronoi.Enums = { { "Dimensions", { "1D", "2D", "3D", "4D" } }, { "Feature", { "F1", "F2", "Smooth F1", "Distance to Edge", "N-Sphere Radius" } },
+				{ "Distance", { "Euclidean", "Manhattan", "Chebychev", "Minkowski" } } };
+			voronoi.Toggles = { "Normalize" };
+			voronoi.PinVisible = [](const Node& n, const Pin& p) {
+				const std::string d = Prop(n, "Dimensions", "3D"), f = Prop(n, "Feature", "F1"), m = Prop(n, "Distance", "Euclidean");
+				if (p.Name == "W") return d == "1D" || d == "4D";
+				if (p.Name == "Vector") return d != "1D";
+				if (p.Name == "Smoothness") return f == "Smooth F1";
+				if (p.Name == "Exponent") return m == "Minkowski";
+				if (p.Name == "Radius") return f == "N-Sphere Radius";
+				if (p.Name == "Color" || p.Name == "Position") return f != "Distance to Edge" && f != "N-Sphere Radius";
+				return true;
+			};
 			auto& wave = reg(WaveTexture, "Wave Texture", "Texture", kTexture, 170.0f, [](Node& n) {
 				n.Outputs = { Out("Color", PinType::Color), Out("Fac", PinType::Float) };
-				n.Inputs = { Implicit("Vector", PinType::Vec3), F("Scale", 5.0f), F("Distortion", 0.0f), F("Detail", 2.0f, 0.0f, 15.0f), F("Phase Offset", 0.0f) };
+				n.Inputs = { Implicit("Vector", PinType::Vec3), F("Scale", 5.0f), F("Distortion", 0.0f), F("Detail", 2.0f, 0.0f, 15.0f), F("Detail Scale", 1.0f),
+					F("Detail Roughness", 0.5f, 0.0f, 1.0f), F("Phase Offset", 0.0f) };
 				n.Properties["Type"] = "Bands";
+				n.Properties["Direction"] = "X";
 				n.Properties["Profile"] = "Sine";
 			});
-			wave.Enums = { { "Type", { "Bands", "Rings" } }, { "Profile", { "Sine", "Saw", "Triangle" } } };
+			wave.Enums = { { "Type", { "Bands", "Rings" } }, { "Direction", { "X", "Y", "Z", "Diagonal" } }, { "Profile", { "Sine", "Saw", "Triangle" } } };
 			reg(CheckerTexture, "Checker Texture", "Texture", kTexture, 160.0f, [](Node& n) {
 				n.Outputs = { Out("Color", PinType::Color), Out("Fac", PinType::Float) };
 				n.Inputs = { Implicit("Vector", PinType::Vec3), C("Color1", glm::vec4(0.8f, 0.8f, 0.8f, 1.0f)), C("Color2", glm::vec4(0.2f, 0.2f, 0.2f, 1.0f)), F("Scale", 5.0f) };
@@ -194,7 +420,73 @@ namespace Lunex::MaterialGraph {
 				n.Inputs = { Implicit("Vector", PinType::Vec3) };
 				n.Properties["Type"] = "Linear";
 			});
-			grad.Enums = { { "Type", { "Linear", "Quadratic", "Easing", "Diagonal", "Spherical", "Radial" } } };
+			grad.Enums = { { "Type", { "Linear", "Quadratic", "Easing", "Diagonal", "Spherical", "Quadratic Sphere", "Radial" } } };
+			auto& brick = reg(BrickTexture, "Brick Texture", "Texture", kTexture, 180.0f, [](Node& n) {
+				n.Outputs = { Out("Color", PinType::Color), Out("Fac", PinType::Float) };
+				n.Inputs = { Implicit("Vector", PinType::Vec3), C("Color1", glm::vec4(0.8f, 0.8f, 0.8f, 1.0f)), C("Color2", glm::vec4(0.2f, 0.2f, 0.2f, 1.0f)),
+					C("Mortar", glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)), F("Scale", 5.0f), F("Mortar Size", 0.02f, 0.0f, 0.125f), F("Mortar Smooth", 0.1f, 0.0f, 1.0f),
+					F("Bias", 0.0f, -1.0f, 1.0f), F("Brick Width", 0.5f, 0.01f, 100.0f), F("Row Height", 0.25f, 0.01f, 100.0f) };
+				n.Properties["Offset"] = "0.5";
+				n.Properties["Offset Frequency"] = "2";
+				n.Properties["Squash"] = "1.0";
+				n.Properties["Squash Frequency"] = "2";
+			});
+			brick.Description = "Offset / Squash (and their frequencies) are edited in the node details";
+			auto& env = reg(EnvironmentTexture, "Environment Texture", "Texture", kTexture, 240.0f, [](Node& n) {
+				n.Outputs = { Out("Color", PinType::Color) };
+				n.Inputs = { Implicit("Vector", PinType::Vec3) };
+				n.Properties["Path"] = "";
+				n.Properties["Projection"] = "Equirectangular";
+			});
+			env.Enums = { { "Interpolation", { "Linear", "Closest", "Cubic" } }, { "Projection", { "Equirectangular", "Mirror Ball" } }, { "Color Space", { "sRGB", "Linear Rec.709", "Non-Color" } } };
+			auto& gabor = reg(GaborTexture, "Gabor Texture", "Texture", kTexture, 170.0f, [](Node& n) {
+				n.Outputs = { Out("Value", PinType::Float), Out("Phase", PinType::Float), Out("Intensity", PinType::Float) };
+				n.Inputs = { Implicit("Vector", PinType::Vec3), F("Scale", 5.0f), F("Frequency", 2.0f), F("Anisotropy", 1.0f, 0.0f, 1.0f),
+					F("Orientation", 0.785398f), V("Orientation 3D", glm::vec3(1.414214f, 1.414214f, 0.0f)) };
+				n.Properties["Type"] = "2D";
+			});
+			gabor.Enums = { { "Type", { "2D", "3D" } } };
+			gabor.PinVisible = [](const Node& n, const Pin& p) {
+				const bool is3D = Prop(n, "Type", "2D") == "3D";
+				if (p.Name == "Orientation") return !is3D;
+				if (p.Name == "Orientation 3D") return is3D;
+				return true;
+			};
+			reg(IESTexture, "IES Texture", "Texture", kTexture, 160.0f, [](Node& n) {
+				n.Outputs = { Out("Fac", PinType::Float) };
+				n.Inputs = { Implicit("Vector", PinType::Vec3), F("Strength", 1.0f) };
+				n.Properties["Path"] = "";
+			}).Description = "Light profiles: used on lights; on surfaces it returns Strength";
+			reg(MagicTexture, "Magic Texture", "Texture", kTexture, 160.0f, [](Node& n) {
+				n.Outputs = { Out("Color", PinType::Color), Out("Fac", PinType::Float) };
+				n.Inputs = { Implicit("Vector", PinType::Vec3), F("Scale", 5.0f), F("Distortion", 1.0f) };
+				n.Properties["Depth"] = "2";
+			}).Description = "Depth (0-10) is edited in the node details";
+			reg(PointDensityTexture, "Point Density", "Texture", kTexture, 160.0f, [](Node& n) {
+				n.Outputs = { Out("Color", PinType::Color), Out("Density", PinType::Float) };
+				n.Inputs = { Implicit("Vector", PinType::Vec3) };
+			}).Description = "Cycles only (particle / vertex density): returns 0";
+			auto& sky = reg(SkyTexture, "Sky Texture", "Texture", kTexture, 180.0f, [](Node& n) {
+				n.Outputs = { Out("Color", PinType::Color) };
+				n.Inputs = { Implicit("Vector", PinType::Vec3), F("Sun Size", 0.545f, 0.0f, 90.0f), F("Sun Intensity", 1.0f), F("Sun Elevation", 15.0f, -90.0f, 90.0f),
+					F("Sun Rotation", 0.0f, 0.0f, 360.0f), F("Altitude", 0.0f), F("Air", 1.0f, 0.0f, 10.0f), F("Dust", 1.0f, 0.0f, 10.0f), F("Ozone", 1.0f, 0.0f, 10.0f) };
+				n.Properties["Sky Type"] = "Nishita";
+				n.Properties["Sun Disc"] = "1";
+			});
+			sky.Enums = { { "Sky Type", { "Nishita", "Preetham", "Hosek / Wilkie" } } };
+			sky.Toggles = { "Sun Disc" };
+			auto& white = reg(WhiteNoiseTexture, "White Noise Texture", "Texture", kTexture, 160.0f, [](Node& n) {
+				n.Outputs = { Out("Value", PinType::Float), Out("Color", PinType::Color) };
+				n.Inputs = { Implicit("Vector", PinType::Vec3), F("W", 0.0f) };
+				n.Properties["Dimensions"] = "3D";
+			});
+			white.Enums = { { "Dimensions", { "1D", "2D", "3D", "4D" } } };
+			white.PinVisible = [](const Node& n, const Pin& p) {
+				const std::string d = Prop(n, "Dimensions", "3D");
+				if (p.Name == "W") return d == "1D" || d == "4D";
+				if (p.Name == "Vector") return d != "1D";
+				return true;
+			};
 
 			// ---------------- Color ----------------
 			auto& mix = reg(MixNode, "Mix", "Color", kColor, 160.0f, [](Node& n) {
@@ -348,6 +640,98 @@ namespace Lunex::MaterialGraph {
 				n.Inputs = { C("Color", glm::vec4(0.5f, 0.5f, 0.5f, 1.0f)) };
 			});
 
+			// ---- Color (Blender 4.x additions) ----
+			auto& falloff = reg(LightFalloffNode, "Light Falloff", "Color", kColor, 160.0f, [](Node& n) {
+				n.Outputs = { Out("Quadratic", PinType::Float), Out("Linear", PinType::Float), Out("Constant", PinType::Float) };
+				n.Inputs = { F("Strength", 100.0f), F("Smooth", 0.0f) };
+			});
+			falloff.Description = "Ray length = distance to the camera in the raster engine";
+			reg(RGBCurvesNode, "RGB Curves", "Color", kColor, 240.0f, [](Node& n) {
+				n.Outputs = { Out("Color", PinType::Color) };
+				n.Inputs = { F("Fac", 1.0f, 0.0f, 1.0f), C("Color", glm::vec4(1.0f)) };
+				n.Properties["Curve C"] = "0,0;1,1";
+				n.Properties["Curve R"] = "0,0;1,1";
+				n.Properties["Curve G"] = "0,0;1,1";
+				n.Properties["Curve B"] = "0,0;1,1";
+				n.Properties["Channel"] = "C";
+			});
+
+			// ---- Vector (Blender 4.x additions) ----
+			auto& disp = reg(DisplacementNode, "Displacement", "Vector", kVector, 160.0f, [](Node& n) {
+				n.Outputs = { Out("Displacement", PinType::Vec3) };
+				n.Inputs = { F("Height", 0.0f), F("Midlevel", 0.5f), F("Scale", 1.0f), Implicit("Normal", PinType::Vec3) };
+				n.Properties["Space"] = "Object";
+			});
+			disp.Enums = { { "Space", { "Object", "World" } } };
+			disp.Description = "Connect to Material Output > Displacement (applied as bump in the raster engine, like EEVEE)";
+			auto& vdisp = reg(VectorDisplacementNode, "Vector Displacement", "Vector", kVector, 170.0f, [](Node& n) {
+				n.Outputs = { Out("Displacement", PinType::Vec3) };
+				n.Inputs = { C("Vector", glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)), F("Midlevel", 0.0f), F("Scale", 1.0f) };
+				n.Properties["Space"] = "Tangent";
+			});
+			vdisp.Enums = { { "Space", { "Tangent", "Object", "World" } } };
+			reg(NormalNode, "Normal", "Vector", kVector, 150.0f, [](Node& n) {
+				n.Outputs = { Out("Normal", PinType::Vec3), Out("Dot", PinType::Float) };
+				n.Inputs = { V("Normal", glm::vec3(0.0f, 0.0f, 1.0f)) };
+				n.Value = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
+			}).Description = "Normal output = the direction set in the node; Dot = dot(input, direction)";
+			reg(VectorCurvesNode, "Vector Curves", "Vector", kVector, 240.0f, [](Node& n) {
+				n.Outputs = { Out("Vector", PinType::Vec3) };
+				n.Inputs = { F("Fac", 1.0f, 0.0f, 1.0f), V("Vector") };
+				n.Properties["Curve X"] = "-1,-1;1,1";
+				n.Properties["Curve Y"] = "-1,-1;1,1";
+				n.Properties["Curve Z"] = "-1,-1;1,1";
+				n.Properties["Channel"] = "X";
+			});
+			auto& vrot = reg(VectorRotateNode, "Vector Rotate", "Vector", kVector, 170.0f, [](Node& n) {
+				n.Outputs = { Out("Vector", PinType::Vec3) };
+				n.Inputs = { V("Vector"), V("Center"), V("Axis", glm::vec3(0.0f, 0.0f, 1.0f)), F("Angle", 0.0f), V("Rotation") };
+				n.Properties["Type"] = "Axis Angle";
+				n.Properties["Invert"] = "0";
+			});
+			vrot.Enums = { { "Type", { "Axis Angle", "X Axis", "Y Axis", "Z Axis", "Euler" } } };
+			vrot.Toggles = { "Invert" };
+			vrot.PinVisible = [](const Node& n, const Pin& p) {
+				const std::string t = Prop(n, "Type", "Axis Angle");
+				if (p.Name == "Axis") return t == "Axis Angle";
+				if (p.Name == "Angle") return t != "Euler";
+				if (p.Name == "Rotation") return t == "Euler";
+				return true;
+			};
+			auto& vxf = reg(VectorTransformNode, "Vector Transform", "Vector", kVector, 170.0f, [](Node& n) {
+				n.Outputs = { Out("Vector", PinType::Vec3) };
+				n.Inputs = { V("Vector", glm::vec3(0.5f)) };
+				n.Properties["Type"] = "Vector";
+				n.Properties["Convert From"] = "World";
+				n.Properties["Convert To"] = "Object";
+			});
+			vxf.Enums = { { "Type", { "Point", "Vector", "Normal" } }, { "Convert From", { "World", "Object", "Camera" } }, { "Convert To", { "World", "Object", "Camera" } } };
+
+			// ---- Converter (Blender 4.x additions) ----
+			reg(BlackbodyNode, "Blackbody", "Converter", kConverter, 150.0f, [](Node& n) {
+				n.Outputs = { Out("Color", PinType::Color) };
+				n.Inputs = { F("Temperature", 1500.0f, 800.0f, 12000.0f) };
+			});
+			reg(FloatCurveNode, "Float Curve", "Converter", kConverter, 240.0f, [](Node& n) {
+				n.Outputs = { Out("Value", PinType::Float) };
+				n.Inputs = { F("Factor", 1.0f, 0.0f, 1.0f), F("Value", 1.0f) };
+				n.Properties["Curve V"] = "0,0;1,1";
+				n.Properties["Channel"] = "V";
+			});
+			reg(ShaderToRGB, "Shader to RGB", "Converter", kConverter, 150.0f, [](Node& n) {
+				n.Outputs = { Out("Color", PinType::Color), Out("Alpha", PinType::Float) };
+				n.Inputs = { Implicit("Shader", PinType::Shader) };
+			}).Description = "EEVEE: evaluates the lighting of a shader and returns it as a color (toon / NPR). The material renders in the forward pass";
+			reg(WavelengthNode, "Wavelength", "Converter", kConverter, 150.0f, [](Node& n) {
+				n.Outputs = { Out("Color", PinType::Color) };
+				n.Inputs = { F("Wavelength", 500.0f, 380.0f, 780.0f) };
+			});
+
+			const_cast<NodeTypeInfo*>(r.Get(BrickTexture))->Numbers = { { "Offset", 0.0f, 1.0f, false }, { "Offset Frequency", 1.0f, 99.0f, true },
+				{ "Squash", 0.0f, 99.0f, false }, { "Squash Frequency", 1.0f, 99.0f, true } };
+			const_cast<NodeTypeInfo*>(r.Get(MagicTexture))->Numbers = { { "Depth", 0.0f, 10.0f, true } };
+			const_cast<NodeTypeInfo*>(r.Get(BevelNode))->Numbers = { { "Samples", 2.0f, 128.0f, true } };
+
 			// ---------------- Legacy (v1 graphs) ----------------
 			reg(OutputNode, "Material Output (v1)", "Legacy", kLegacy, 220.0f, [](Node& n) {
 				n.Inputs = {
@@ -382,6 +766,65 @@ namespace Lunex::MaterialGraph {
 	// ============================================================================
 	// COLOR RAMP
 	// ============================================================================
+
+	std::vector<CurvePoint> ParseCurve(const std::string& text) {
+		std::vector<CurvePoint> points;
+		std::stringstream ss(text);
+		std::string item;
+		while (std::getline(ss, item, ';')) {
+			const size_t comma = item.find(',');
+			if (comma == std::string::npos) continue;
+			CurvePoint pt;
+			pt.X = static_cast<float>(std::atof(item.substr(0, comma).c_str()));
+			pt.Y = static_cast<float>(std::atof(item.substr(comma + 1).c_str()));
+			points.push_back(pt);
+		}
+		std::sort(points.begin(), points.end(), [](const CurvePoint& a, const CurvePoint& b) { return a.X < b.X; });
+		if (points.empty()) points = { { 0.0f, 0.0f }, { 1.0f, 1.0f } };
+		if (points.size() == 1) points.push_back({ points[0].X + 1.0f, points[0].Y });
+		return points;
+	}
+
+	std::string WriteCurve(const std::vector<CurvePoint>& points) {
+		std::ostringstream ss;
+		for (size_t i = 0; i < points.size(); i++) {
+			if (i) ss << ';';
+			ss << points[i].X << ',' << points[i].Y;
+		}
+		return ss.str();
+	}
+
+	std::vector<float> CurveTangents(const std::vector<CurvePoint>& p) {
+		const size_t n = p.size();
+		std::vector<float> m(n, 0.0f);
+		if (n < 2) return m;
+		std::vector<float> d(n - 1);
+		for (size_t i = 0; i + 1 < n; i++) d[i] = (p[i + 1].Y - p[i].Y) / std::max(p[i + 1].X - p[i].X, 1e-6f);
+		m[0] = d[0];
+		m[n - 1] = d[n - 2];
+		for (size_t i = 1; i + 1 < n; i++) m[i] = (d[i - 1] * d[i] <= 0.0f) ? 0.0f : (d[i - 1] + d[i]) * 0.5f;
+		// Fritsch-Carlson: no overshoot
+		for (size_t i = 0; i + 1 < n; i++) {
+			if (std::abs(d[i]) < 1e-7f) { m[i] = m[i + 1] = 0.0f; continue; }
+			const float a = m[i] / d[i], b = m[i + 1] / d[i], h = a * a + b * b;
+			if (h > 9.0f) { const float t = 3.0f / std::sqrt(h); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; }
+		}
+		return m;
+	}
+
+	float EvaluateCurve(const std::vector<CurvePoint>& p, float x) {
+		if (p.empty()) return x;
+		if (x <= p.front().X) return p.front().Y;
+		if (x >= p.back().X) return p.back().Y;
+		const std::vector<float> m = CurveTangents(p);
+		for (size_t i = 0; i + 1 < p.size(); i++) {
+			if (x > p[i + 1].X) continue;
+			const float h = std::max(p[i + 1].X - p[i].X, 1e-6f), t = (x - p[i].X) / h;
+			const float t2 = t * t, t3 = t2 * t;
+			return (2 * t3 - 3 * t2 + 1) * p[i].Y + (t3 - 2 * t2 + t) * h * m[i] + (-2 * t3 + 3 * t2) * p[i + 1].Y + (t3 - t2) * h * m[i + 1];
+		}
+		return p.back().Y;
+	}
 
 	std::vector<RampStop> ParseRamp(const std::string& text) {
 		std::vector<RampStop> stops;

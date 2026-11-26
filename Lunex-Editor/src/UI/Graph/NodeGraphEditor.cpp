@@ -577,6 +577,23 @@ namespace Lunex::UI {
 				ImGui::PopID();
 				ImGui::SetCursorScreenPos(ImVec2(origin.x, y + h + 2.0f));
 			}
+			// Numeric node properties (Blender properties that are not sockets: brick offset, magic depth...)
+			for (const auto& num : info->Numbers) {
+				ImGui::SetCursorScreenPos(ImVec2(origin.x + kMargin, ImGui::GetCursorScreenPos().y + 2.0f));
+				auto it = node.Properties.find(num.Key);
+				float v = it != node.Properties.end() ? static_cast<float>(std::atof(it->second.c_str())) : num.Min;
+				ImGui::PushID(num.Key.c_str());
+				if (SliderField("##num", num.Key.c_str(), &v, num.Min, num.Max, inner, num.IsInt)) {
+					v = std::clamp(v, num.Min, num.Max > num.Min ? num.Max : v);
+					char buf[32];
+					if (num.IsInt) snprintf(buf, sizeof(buf), "%d", static_cast<int>(std::round(v)));
+					else snprintf(buf, sizeof(buf), "%g", v);
+					node.Properties[num.Key] = buf;
+					changed = true;
+				}
+				ImGui::PopID();
+				ImGui::SetCursorScreenPos(ImVec2(origin.x, ImGui::GetCursorScreenPos().y));
+			}
 			for (const auto& key : info->Toggles) {
 				ImGui::SetCursorScreenPos(ImVec2(origin.x + kMargin, ImGui::GetCursorScreenPos().y + 2.0f));
 				bool v = node.Properties[key] == "1";
@@ -608,10 +625,41 @@ namespace Lunex::UI {
 			ImGui::SetCursorScreenPos(ImVec2(origin.x, ImGui::GetCursorScreenPos().y));
 		}
 
-		// ---- Inputs ----
+		// ---- Inputs (grouped in collapsible panels like Blender's Principled BSDF) ----
+		std::string currentPanel;
+		bool panelOpen = true;
 		for (auto& pin : node.Inputs) {
 			if (!IsPinVisible(info, node, pin)) continue;
 			if (hideUnused && !linked.count(pin.PinID)) continue;
+			if (pin.Panel != currentPanel) {
+				currentPanel = pin.Panel;
+				panelOpen = true;
+				if (!currentPanel.empty()) {
+					const std::string key = "__panel_" + currentPanel;
+					auto it = node.Properties.find(key);
+					panelOpen = it != node.Properties.end() && it->second == "1";
+					const float y = ImGui::GetCursorScreenPos().y + 1.0f;
+					ImGui::SetCursorScreenPos(ImVec2(origin.x + 4.0f, y));
+					ImGui::PushID(key.c_str());
+					if (ImGui::InvisibleButton("##panel", ImVec2(W - 8.0f, rowH - 2.0f))) {
+						node.Properties[key] = panelOpen ? "0" : "1";
+						panelOpen = !panelOpen;
+						changed = true;
+					}
+					const bool hov = ImGui::IsItemHovered();
+					ImGui::PopID();
+					ImDrawList* dl = ImGui::GetWindowDrawList();
+					const ImVec2 a0(origin.x + 4.0f, y), a1(origin.x + W - 4.0f, y + rowH - 2.0f);
+					dl->AddRectFilled(a0, a1, U32(hov ? ImVec4(0.27f, 0.27f, 0.27f, 1) : ImVec4(0.22f, 0.22f, 0.22f, 1)), 3.0f);
+					const float cy = y + (rowH - 2.0f) * 0.5f, cx = origin.x + 13.0f;
+					if (panelOpen) dl->AddTriangleFilled(ImVec2(cx - 4, cy - 2), ImVec2(cx + 4, cy - 2), ImVec2(cx, cy + 3), U32(ImVec4(0.85f, 0.85f, 0.85f, 1)));
+					else dl->AddTriangleFilled(ImVec2(cx - 2, cy - 4), ImVec2(cx - 2, cy + 4), ImVec2(cx + 3, cy), U32(ImVec4(0.85f, 0.85f, 0.85f, 1)));
+					dl->AddText(ImVec2(origin.x + 22.0f, cy - ImGui::GetTextLineHeight() * 0.5f), U32(ImVec4(0.9f, 0.9f, 0.9f, 1)), currentPanel.c_str());
+					ImGui::SetCursorScreenPos(ImVec2(origin.x, y + rowH));
+				}
+			}
+			// Collapsed panel: only linked sockets stay (their links need somewhere to attach)
+			if (!panelOpen && !linked.count(pin.PinID)) continue;
 			const float y = ImGui::GetCursorScreenPos().y;
 			const bool isLinked = linked.count(pin.PinID) > 0;
 			socketRow(pin, false, y);
@@ -1050,10 +1098,13 @@ namespace Lunex::UI {
 		}
 
 		// Home: frame everything, Period: frame selection (Blender)
-		if (ImGui::IsKeyPressed(ImGuiKey_Home, false)) ed::NavigateToContent();
-		if (ImGui::IsKeyPressed(ImGuiKey_Period, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadDecimal, false)) {
-			if (!selected.empty()) ed::NavigateToSelection(false);
-			else ed::NavigateToContent();
+		// (immediate navigation: the animated variant never advanced here, same path as the Frame All button)
+		// Home / Period are claimed by ImGui keyboard navigation (window scrolling): read the raw key state
+		auto rawPressed = [](ImGuiKey key) { const ImGuiKeyData* k = ImGui::GetKeyData(key); return k && k->Down && k->DownDuration == 0.0f; };
+		if (rawPressed(ImGuiKey_Home) || ImGui::IsKeyPressed(ImGuiKey_Home, false)) RequestFrameAll();   // same path as the Frame All button
+		if (rawPressed(ImGuiKey_Period) || rawPressed(ImGuiKey_KeypadDecimal)) {
+			if (!selected.empty()) ed::NavigateToSelection(false, 0.0f);
+			else ed::NavigateToContent(0.0f);
 		}
 
 		// Ctrl+Shift+Click: preview the node's output (cycles through outputs)

@@ -327,6 +327,19 @@ namespace Lunex {
 				bool v = node->Properties[key] == "1";
 				if (ImGui::Checkbox(key.c_str(), &v)) { node->Properties[key] = v ? "1" : "0"; changed = true; }
 			}
+			for (const auto& num : info->Numbers) {
+				auto it = node->Properties.find(num.Key);
+				float v = it != node->Properties.end() ? static_cast<float>(std::atof(it->second.c_str())) : num.Min;
+				ImGui::PushID(num.Key.c_str());
+				if (UI::NodeGraphEditor::SliderField("##num", num.Key.c_str(), &v, num.Min, num.Max, width, num.IsInt)) {
+					char buf[32];
+					if (num.IsInt) snprintf(buf, sizeof(buf), "%d", static_cast<int>(std::round(v)));
+					else snprintf(buf, sizeof(buf), "%g", v);
+					node->Properties[num.Key] = buf;
+					changed = true;
+				}
+				ImGui::PopID();
+			}
 		}
 		if (node->TypeName == MaterialGraph::ValueNode || node->TypeName == MaterialGraph::FloatNode)
 			changed |= UI::NodeGraphEditor::SliderField("##value", "Value", &node->Value.x, 0.0f, 0.0f, width);
@@ -537,14 +550,126 @@ namespace Lunex {
 	bool MaterialGraphPanel::DrawNodeBody(Node& node) {
 		const std::string& t = node.TypeName;
 		const float width = ImGui::CalcItemWidth();
-		if (t == MaterialGraph::ImageTexture || t == MaterialGraph::TextureNode) return DrawImageBody(node);
+		if (t == MaterialGraph::ImageTexture || t == MaterialGraph::TextureNode || t == MaterialGraph::EnvironmentTexture) return DrawImageBody(node);
 		if (t == MaterialGraph::ColorRampNode) return DrawRampBody(node);
+		if (t == MaterialGraph::RGBCurvesNode || t == MaterialGraph::VectorCurvesNode || t == MaterialGraph::FloatCurveNode) return DrawCurveBody(node);
+		if (t == MaterialGraph::NormalNode) return DrawNormalBody(node);
 		if (t == MaterialGraph::ValueNode || t == MaterialGraph::FloatNode)
 			return UI::NodeGraphEditor::SliderField("##value", "", &node.Value.x, 0.0f, 0.0f, width);
 		if (t == MaterialGraph::RGBNode || t == MaterialGraph::ColorNode) {
 			return m_Editor->ColorField(node.NodeID, 0, node.Value, width, 46.0f);
 		}
 		return false;
+	}
+
+	// Blender curve widget: channel buttons, click to add, drag to move, double-click to delete
+	bool MaterialGraphPanel::DrawCurveBody(Node& node) {
+		bool changed = false;
+		const float width = ImGui::CalcItemWidth();
+		const std::string& t = node.TypeName;
+		std::vector<std::string> channels;
+		float lo = 0.0f, hi = 1.0f;
+		if (t == MaterialGraph::RGBCurvesNode) channels = { "C", "R", "G", "B" };
+		else if (t == MaterialGraph::VectorCurvesNode) { channels = { "X", "Y", "Z" }; lo = -1.0f; hi = 1.0f; }
+		else channels = { "V" };
+
+		std::string& channel = node.Properties["Channel"];
+		if (std::find(channels.begin(), channels.end(), channel) == channels.end()) channel = channels[0];
+		if (channels.size() > 1) {
+			for (size_t i = 0; i < channels.size(); i++) {
+				if (i) ImGui::SameLine(0.0f, 2.0f);
+				const bool active = channel == channels[i];
+				if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.28f, 0.45f, 0.70f, 1.0f));
+				if (ImGui::Button(channels[i].c_str(), ImVec2(28.0f, 0.0f))) channel = channels[i];
+				if (active) ImGui::PopStyleColor();
+			}
+		}
+
+		const std::string key = "Curve " + channel;
+		auto points = MaterialGraph::ParseCurve(node.Properties[key]);
+		const ImVec2 p0 = ImGui::GetCursorScreenPos();
+		const ImVec2 size(width, width * 0.8f);
+		const ImVec2 p1(p0.x + size.x, p0.y + size.y);
+		auto toScreen = [&](float x, float y) { return ImVec2(p0.x + (x - lo) / (hi - lo) * size.x, p1.y - (y - lo) / (hi - lo) * size.y); };
+		auto toCurve = [&](ImVec2 s) {
+			return glm::vec2(std::clamp(lo + (s.x - p0.x) / size.x * (hi - lo), lo, hi), std::clamp(lo + (p1.y - s.y) / size.y * (hi - lo), lo, hi));
+		};
+
+		ImGui::InvisibleButton("##curve", size);
+		const bool hovered = ImGui::IsItemHovered();
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		dl->AddRectFilled(p0, p1, IM_COL32(32, 32, 32, 255), 3.0f);
+		for (int i = 1; i < 4; i++) {
+			const float fx = p0.x + size.x * i / 4.0f, fy = p0.y + size.y * i / 4.0f;
+			dl->AddLine(ImVec2(fx, p0.y), ImVec2(fx, p1.y), IM_COL32(60, 60, 60, 255));
+			dl->AddLine(ImVec2(p0.x, fy), ImVec2(p1.x, fy), IM_COL32(60, 60, 60, 255));
+		}
+		const ImU32 col = channel == "R" || channel == "X" ? IM_COL32(230, 80, 80, 255) : channel == "G" || channel == "Y" ? IM_COL32(110, 210, 90, 255)
+			: channel == "B" || channel == "Z" ? IM_COL32(90, 140, 240, 255) : IM_COL32(220, 220, 220, 255);
+		ImVec2 prev;
+		for (int i = 0; i <= 64; i++) {
+			const float x = lo + (hi - lo) * i / 64.0f;
+			const ImVec2 sp = toScreen(x, std::clamp(MaterialGraph::EvaluateCurve(points, x), lo, hi));
+			if (i) dl->AddLine(prev, sp, col, 2.0f);
+			prev = sp;
+		}
+
+		// Interaction (state per node: which point is being dragged)
+		static Graph::ID s_DragNode = 0;
+		static int s_DragPoint = -1;
+		const ImVec2 mouse = ImGui::GetMousePos();
+		int hot = -1;
+		for (int i = 0; i < static_cast<int>(points.size()); i++) {
+			const ImVec2 sp = toScreen(points[i].X, points[i].Y);
+			if ((mouse.x - sp.x) * (mouse.x - sp.x) + (mouse.y - sp.y) * (mouse.y - sp.y) < 49.0f) hot = i;
+		}
+		if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && hot >= 0 && points.size() > 2) {
+			points.erase(points.begin() + hot);
+			changed = true;
+			s_DragPoint = -1;
+		}
+		else if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+			if (hot < 0) {
+				const glm::vec2 c = toCurve(mouse);
+				points.push_back({ c.x, c.y });
+				std::sort(points.begin(), points.end(), [](const auto& a, const auto& b) { return a.X < b.X; });
+				for (int i = 0; i < static_cast<int>(points.size()); i++) if (points[i].X == c.x && points[i].Y == c.y) hot = i;
+				changed = true;
+			}
+			s_DragNode = node.NodeID;
+			s_DragPoint = hot;
+		}
+		if (s_DragNode == node.NodeID && s_DragPoint >= 0 && s_DragPoint < static_cast<int>(points.size())) {
+			if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+				const glm::vec2 c = toCurve(mouse);
+				const float minX = s_DragPoint > 0 ? points[s_DragPoint - 1].X + 0.001f : lo;
+				const float maxX = s_DragPoint + 1 < static_cast<int>(points.size()) ? points[s_DragPoint + 1].X - 0.001f : hi;
+				const float nx = std::clamp(c.x, minX, maxX);
+				if (nx != points[s_DragPoint].X || c.y != points[s_DragPoint].Y) { points[s_DragPoint] = { nx, c.y }; changed = true; }
+			}
+			else s_DragPoint = -1;
+		}
+		for (int i = 0; i < static_cast<int>(points.size()); i++) {
+			const ImVec2 sp = toScreen(points[i].X, points[i].Y);
+			const bool sel = s_DragNode == node.NodeID && s_DragPoint == i;
+			dl->AddCircleFilled(sp, sel || i == hot ? 5.0f : 4.0f, sel ? IM_COL32(255, 255, 255, 255) : IM_COL32(20, 20, 20, 255));
+			dl->AddCircle(sp, sel || i == hot ? 5.0f : 4.0f, IM_COL32(230, 230, 230, 255), 0, 1.5f);
+		}
+		if (changed) node.Properties[key] = MaterialGraph::WriteCurve(points);
+		return changed;
+	}
+
+	bool MaterialGraphPanel::DrawNormalBody(Node& node) {
+		// Direction of the Normal node (Blender draws a sphere widget; here X/Y/Z)
+		bool changed = false;
+		const float width = ImGui::CalcItemWidth();
+		static const char* axes[] = { "X", "Y", "Z" };
+		for (int i = 0; i < 3; i++) {
+			ImGui::PushID(i);
+			changed |= UI::NodeGraphEditor::SliderField("##dir", axes[i], &node.Value[i], -1.0f, 1.0f, width);
+			ImGui::PopID();
+		}
+		return changed;
 	}
 
 	bool MaterialGraphPanel::DrawImageBody(Node& node) {

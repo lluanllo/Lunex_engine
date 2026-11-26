@@ -55,6 +55,8 @@ namespace Lunex {
 		bool DrawNodeBody(Graph::Node& node);
 		bool DrawImageBody(Graph::Node& node);
 		bool DrawRampBody(Graph::Node& node);
+		bool DrawCurveBody(Graph::Node& node);
+		bool DrawNormalBody(Graph::Node& node);
 
 		// Node Wrangler hooks
 		bool PreviewNode(Graph::NodeGraph& graph, Graph::ID node, int outputIndex);

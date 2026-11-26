@@ -12,6 +12,9 @@
 
 #include <glad/glad.h>
 
+#include <cstdlib>
+#include <fstream>
+
 namespace Lunex::MaterialGraph {
 
 	using namespace Graph;
@@ -36,9 +39,20 @@ layout(location = 0) out vec4 o_Color;
 #define LNX_NORMAL vec3(0.0, 0.0, 1.0)
 #define LNX_TBN mat3(1.0)
 #define LNX_VIEWPOS vec3(0.5, 0.5, 2.0)
+#define LNX_VIEW mat4(1.0)
+#define LNX_VIEWPROJ mat4(1.0)
+#define LNX_MODEL mat4(1.0)
+#define LNX_MODEL_INV mat4(1.0)
+#define LNX_OBJECT_ID 0.0
+#define LNX_OBJPOS LNX_POS
+
+vec3 lnx_light(vec3 albedo, float metallic, float roughness, float specular, vec3 N, float ao) {
+	vec3 L = normalize(vec3(0.4, 0.5, 0.8));
+	return albedo * (1.0 - metallic) * (0.25 + 0.75 * max(dot(N, L), 0.0)) * ao;
+}
 
 layout(std140, binding = 11) uniform GraphParams {
-	vec4 u_GraphParams[128];   // [0].x = time, [0].y = node to preview
+	vec4 u_GraphParams[512];   // [0].x = time, [0].y = node to preview
 };
 layout (binding = 0) uniform sampler2D u_GraphTex0;
 layout (binding = 1) uniform sampler2D u_GraphTex1;
@@ -94,16 +108,26 @@ void main() {
 
 		std::vector<ID> order;
 		CompiledGraph compiled = CompilePreviews(graph, order);
-		if (!compiled.IsValid() || order.empty()) { m_Index.clear(); return; }
+		// Previews tolerate graph errors (unsupported nodes output zero); only a missing body stops them
+		if (compiled.Code.empty() || order.empty()) { m_Index.clear(); return; }
+		if (!compiled.Errors.empty() && m_LastError != compiled.Errors.front()) {
+			m_LastError = compiled.Errors.front();
+			LNX_LOG_WARN("Node previews: {0}", m_LastError);
+		}
 
 		// Shader: only when the structure changed
 		if (compiled.CodeHash != m_CodeHash) {
+			if (std::getenv("LUNEX_DUMP_GRAPH_CODE")) std::ofstream("Cache/PreviewGraphCode.glsl") << compiled.Code;
 			m_CodeHash = compiled.CodeHash;
 			char name[64];
 			snprintf(name, sizeof(name), "NodePreview_%016llx", static_cast<unsigned long long>(compiled.CodeHash));
 			m_Shader = Shader::Create(name, MakeStage("VERTEX", compiled.Code), MakeStage("FRAGMENT", compiled.Code));
 			m_ShaderFailed = !m_Shader || !m_Shader->IsValid();
-			if (m_ShaderFailed) { LNX_LOG_WARN("Node previews: shader failed to compile"); m_Shader.reset(); }
+			if (m_ShaderFailed) {
+				LNX_LOG_WARN("Node previews: shader failed to compile (source saved to Cache/FailedPreviewShader.glsl)");
+				std::ofstream("Cache/FailedPreviewShader.glsl") << MakeStage("FRAGMENT", compiled.Code);
+				m_Shader.reset();
+			}
 		}
 		if (compiled.TexturePaths != m_Compiled.TexturePaths) m_Textures.clear();
 		m_Compiled = std::move(compiled);
@@ -114,21 +138,8 @@ void main() {
 
 		// Params, same layout as GraphRuntime (slot 0 = time / preview target)
 		m_Params.assign(kMaxGraphParams, glm::vec4(0.0f));
-		for (size_t i = 0; i < m_Compiled.Params.size() && i + 1 < kMaxGraphParams; i++) {
-			const ParamRef& ref = m_Compiled.Params[i];
-			const Node* node = graph.FindNodeDeep(ref.Node);
-			if (!node) continue;
-			glm::vec4 v(0.0f);
-			if (ref.RampStop >= 0) {
-				auto it = node->Properties.find("Stops");
-				const auto stops = ParseRamp(it != node->Properties.end() ? it->second : "");
-				if (ref.RampStop < static_cast<int>(stops.size()))
-					v = ref.RampPosition ? glm::vec4(stops[ref.RampStop].Position) : stops[ref.RampStop].Color;
-			}
-			else if (ref.Pin == 0) v = node->Value;
-			else if (const Pin* pin = graph.FindPinDeep(ref.Pin)) v = pin->DefaultValue;
-			m_Params[i + 1] = v;
-		}
+		for (size_t i = 0; i < m_Compiled.Params.size() && i + 1 < kMaxGraphParams; i++)
+			m_Params[i + 1] = EvaluateParam(graph, m_Compiled.Params[i]);
 
 		Render();
 	}

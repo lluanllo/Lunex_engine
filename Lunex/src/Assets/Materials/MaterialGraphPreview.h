@@ -16,6 +16,7 @@
 
 #include <glm/glm.hpp>
 
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -55,6 +56,7 @@ namespace Lunex {
 			uint64_t m_Version = 0;
 			uint64_t m_CodeHash = 0;
 			bool m_ShaderFailed = false;
+			std::string m_LastError;
 		};
 
 	}

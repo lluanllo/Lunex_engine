@@ -8,6 +8,7 @@
 #include "Log/Log.h"
 
 #include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <unordered_set>
@@ -25,12 +26,18 @@ namespace Lunex::MaterialGraph {
 struct LnxBSDF {
 	vec3 BaseColor; float Metallic; float Roughness; float Specular;
 	vec3 Emission; vec3 Normal; float AO; float Alpha; vec4 Subsurface;
+	float IOR; float Transmission; float Refract; vec3 SpecularTint;
+	float Coat; float CoatRoughness; float CoatIOR; vec3 CoatTint;
+	float Sheen; float SheenRoughness; vec3 SheenTint;
 };
 
 LnxBSDF lnx_bsdf_default() {
 	LnxBSDF b;
 	b.BaseColor = vec3(0.8); b.Metallic = 0.0; b.Roughness = 0.5; b.Specular = 0.5;
 	b.Emission = vec3(0.0); b.Normal = LNX_NORMAL; b.AO = 1.0; b.Alpha = 1.0; b.Subsurface = vec4(0.0);
+	b.IOR = 1.5; b.Transmission = 0.0; b.Refract = 1.0; b.SpecularTint = vec3(1.0);
+	b.Coat = 0.0; b.CoatRoughness = 0.03; b.CoatIOR = 1.5; b.CoatTint = vec3(1.0);
+	b.Sheen = 0.0; b.SheenRoughness = 0.5; b.SheenTint = vec3(1.0);
 	return b;
 }
 
@@ -46,6 +53,17 @@ LnxBSDF lnx_bsdf_mix(LnxBSDF a, LnxBSDF b, float t) {
 	r.AO = mix(a.AO, b.AO, t);
 	r.Alpha = mix(a.Alpha, b.Alpha, t);
 	r.Subsurface = mix(a.Subsurface, b.Subsurface, t);
+	r.IOR = mix(a.IOR, b.IOR, t);
+	r.Transmission = mix(a.Transmission, b.Transmission, t);
+	r.Refract = mix(a.Refract, b.Refract, t);
+	r.SpecularTint = mix(a.SpecularTint, b.SpecularTint, t);
+	r.Coat = mix(a.Coat, b.Coat, t);
+	r.CoatRoughness = mix(a.CoatRoughness, b.CoatRoughness, t);
+	r.CoatIOR = mix(a.CoatIOR, b.CoatIOR, t);
+	r.CoatTint = mix(a.CoatTint, b.CoatTint, t);
+	r.Sheen = mix(a.Sheen, b.Sheen, t);
+	r.SheenRoughness = mix(a.SheenRoughness, b.SheenRoughness, t);
+	r.SheenTint = mix(a.SheenTint, b.SheenTint, t);
 	return r;
 }
 
@@ -54,7 +72,16 @@ LnxBSDF lnx_bsdf_add(LnxBSDF a, LnxBSDF b) {
 	r.BaseColor = min(a.BaseColor + b.BaseColor, vec3(1.0));
 	r.Emission = a.Emission + b.Emission;
 	r.Alpha = max(a.Alpha, b.Alpha);
+	r.Coat = min(a.Coat + b.Coat, 1.0);
+	r.Sheen = min(a.Sheen + b.Sheen, 1.0);
+	r.Transmission = min(a.Transmission + b.Transmission, 1.0);
 	return r;
+}
+
+// Shader to RGB: lighting of a closure as a color (lnx_light is provided by the shader template)
+vec4 lnx_shader_to_rgb(LnxBSDF b) {
+	vec3 c = lnx_light(b.BaseColor * (1.0 - b.Transmission), b.Metallic, b.Roughness, b.Specular, normalize(b.Normal), b.AO) + b.Emission;
+	return vec4(c, b.Alpha);
 }
 
 float lnx_luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
@@ -457,6 +484,381 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 }
 )GLSL";
 
+
+	static const char* kLibNodes = R"GLSL(
+// ---------------- Blender 4.x node library (textures, converters, vectors) ----------------
+float lnx_hash_u(uvec4 q) {
+	uint h = q.x * 0x9E3779B1u ^ q.y * 0x85EBCA77u ^ q.z * 0xC2B2AE3Du ^ q.w * 0x27D4EB2Fu;
+	h ^= h >> 15; h *= 0x2C1B3C6Du; h ^= h >> 12; h *= 0x297A2D39u; h ^= h >> 15;
+	return float(h) / 4294967295.0;
+}
+float lnx_hash14(vec4 p) { return lnx_hash_u(floatBitsToUint(p)); }
+
+// Signed gradient noise in 1-4 dimensions (4D: the W axis shifts the 3D domain)
+float lnx_snoise(vec3 p, float w, int dims) {
+	if (dims == 1) return lnx_gnoise(vec3(w, 0.37, 0.71));
+	if (dims == 2) return lnx_gnoise(vec3(p.xy, 0.0));
+	if (dims == 4) return lnx_gnoise(p + vec3(w * 0.731, w * 1.379, w * 0.537));
+	return lnx_gnoise(p);
+}
+
+// Blender fractal noise: 0 Multifractal, 1 Ridged, 2 Hybrid, 3 fBM, 4 Hetero Terrain
+float lnx_fractal(vec3 p, float w, int dims, float detail, float roughness, float lacunarity, float offset, float gain, int type, bool normalizeFbm) {
+	detail = clamp(detail, 0.0, 15.0);
+	roughness = max(roughness, 0.0);
+	int n = int(detail);
+	float rmd = detail - floor(detail);
+	if (type == 3) {
+		float fscale = 1.0, amp = 1.0, maxamp = 0.0, sum = 0.0;
+		for (int i = 0; i <= 15; i++) {
+			if (i > n) break;
+			sum += lnx_snoise(p * fscale, w * fscale, dims) * amp;
+			maxamp += amp; amp *= roughness; fscale *= lacunarity;
+		}
+		if (rmd != 0.0) {
+			float sum2 = sum + lnx_snoise(p * fscale, w * fscale, dims) * amp;
+			return normalizeFbm ? mix(0.5 * sum / maxamp + 0.5, 0.5 * sum2 / (maxamp + amp) + 0.5, rmd) : mix(sum, sum2, rmd);
+		}
+		return normalizeFbm ? 0.5 * sum / maxamp + 0.5 : sum;
+	}
+	if (type == 0) {
+		float value = 1.0, pwr = 1.0;
+		for (int i = 0; i <= 15; i++) {
+			if (i > n) break;
+			value *= (pwr * lnx_snoise(p, w, dims) + 1.0); pwr *= roughness; p *= lacunarity; w *= lacunarity;
+		}
+		if (rmd != 0.0) value *= (rmd * pwr * lnx_snoise(p, w, dims) + 1.0);
+		return value;
+	}
+	if (type == 4) {
+		float pwr = roughness;
+		float value = offset + lnx_snoise(p, w, dims);
+		p *= lacunarity; w *= lacunarity;
+		for (int i = 1; i <= 15; i++) {
+			if (i > n) break;
+			float inc = (lnx_snoise(p, w, dims) + offset) * pwr * value;
+			value += inc; pwr *= roughness; p *= lacunarity; w *= lacunarity;
+		}
+		if (rmd != 0.0) value += rmd * (lnx_snoise(p, w, dims) + offset) * pwr * value;
+		return value;
+	}
+	if (type == 2) {
+		float pwr = 1.0, value = 0.0, weight = 1.0;
+		for (int i = 0; i <= 15; i++) {
+			if (i > n || weight <= 0.001) break;
+			weight = min(weight, 1.0);
+			float signal = (lnx_snoise(p, w, dims) + offset) * pwr;
+			pwr *= roughness; value += weight * signal; weight *= gain * signal; p *= lacunarity; w *= lacunarity;
+		}
+		if (rmd != 0.0 && weight > 0.001) { weight = min(weight, 1.0); value += rmd * weight * (lnx_snoise(p, w, dims) + offset) * pwr; }
+		return value;
+	}
+	// Ridged multifractal
+	float pwr = roughness;
+	float signal = offset - abs(lnx_snoise(p, w, dims));
+	signal *= signal;
+	float value = signal, weight = 1.0;
+	for (int i = 1; i <= 15; i++) {
+		if (i > n) break;
+		p *= lacunarity; w *= lacunarity;
+		weight = clamp(signal * gain, 0.0, 1.0);
+		signal = offset - abs(lnx_snoise(p, w, dims));
+		signal *= signal; signal *= weight;
+		value += signal * pwr; pwr *= roughness;
+	}
+	return value;
+}
+
+vec4 lnx_noise4(vec3 p, float w, int dims, float scale, float detail, float roughness, float lacunarity, float offset, float gain, float distortion, int type, bool normalizeFbm) {
+	p *= scale; w *= scale;
+	if (distortion != 0.0) {
+		p += vec3(lnx_snoise(p + vec3(13.5, 2.1, 7.7), w, dims), lnx_snoise(p + vec3(-7.1, 3.3, 1.9), w, dims), lnx_snoise(p + vec3(3.3, -9.2, 5.4), w, dims)) * distortion;
+		w += lnx_snoise(p + vec3(1.7, 9.2, 3.1), w, dims) * distortion;
+	}
+	float f = lnx_fractal(p, w, dims, detail, roughness, lacunarity, offset, gain, type, normalizeFbm);
+	vec3 c = vec3(f,
+		lnx_fractal(p + vec3(5.2, 1.3, 7.7), w + 3.1, dims, detail, roughness, lacunarity, offset, gain, type, normalizeFbm),
+		lnx_fractal(p + vec3(1.7, 9.2, 3.1), w + 6.7, dims, detail, roughness, lacunarity, offset, gain, type, normalizeFbm));
+	return vec4(c, f);
+}
+
+// ---- Voronoi (F1, F2, Smooth F1, Distance to Edge, N-Sphere Radius; Euclidean/Manhattan/Chebychev/Minkowski) ----
+float lnx_vdist(vec3 a, int metric, float e) {
+	a = abs(a);
+	if (metric == 1) return a.x + a.y + a.z;
+	if (metric == 2) return max(a.x, max(a.y, a.z));
+	if (metric == 3) return pow(pow(a.x, e) + pow(a.y, e) + pow(a.z, e), 1.0 / max(e, 1e-4));
+	return length(a);
+}
+
+void lnx_voronoi_cell(vec3 p, float randomness, int feature, int metric, float exponent, float smoothness, bool isFlat,
+                      out float dist, out vec3 col, out vec3 pos, out float radius) {
+	vec3 cell = floor(p);
+	vec3 local = p - cell;
+	randomness = clamp(randomness, 0.0, 1.0);
+	float d1 = 8.0, d2 = 8.0;
+	vec3 p1 = vec3(0.0), c1 = cell, p2 = vec3(0.0);
+	int zr = isFlat ? 0 : 1;
+	if (feature == 2) {
+		// Smooth F1 (Blender)
+		float s = clamp(smoothness * 0.5, 0.0, 0.5);
+		float sd = 8.0; vec3 sc = vec3(0.0), sp = vec3(0.0); float h = -1.0;
+		int zr2 = isFlat ? 0 : 2;
+		for (int z = -zr2; z <= zr2; z++) for (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) {
+			vec3 off = vec3(float(x), float(y), float(z));
+			vec3 pt = off + lnx_hash33(cell + off) * randomness;
+			if (isFlat) pt.z = 0.0;
+			float d = lnx_vdist(pt - local, metric, exponent);
+			h = h == -1.0 ? 1.0 : smoothstep(0.0, 1.0, 0.5 + 0.5 * (sd - d) / max(s, 1e-5));
+			float corr = s * h * (1.0 - h);
+			sd = mix(sd, d, h) - corr;
+			corr /= 1.0 + 3.0 * s;
+			sc = mix(sc, lnx_hash33(cell + off + vec3(7.31, 1.17, 3.53)), h) - corr;
+			sp = mix(sp, pt, h) - corr;
+		}
+		dist = sd; col = sc; pos = cell + sp; radius = 0.0;
+		return;
+	}
+	if (feature == 3) {
+		// Distance to edge
+		vec3 toClosest = vec3(0.0); float minD = 8.0;
+		for (int z = -zr; z <= zr; z++) for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+			vec3 off = vec3(float(x), float(y), float(z));
+			vec3 v = off + lnx_hash33(cell + off) * randomness - local;
+			if (isFlat) v.z = 0.0;
+			float d = dot(v, v);
+			if (d < minD) { minD = d; toClosest = v; }
+		}
+		minD = 8.0;
+		for (int z = -zr; z <= zr; z++) for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+			vec3 off = vec3(float(x), float(y), float(z));
+			vec3 v = off + lnx_hash33(cell + off) * randomness - local;
+			if (isFlat) v.z = 0.0;
+			vec3 perp = v - toClosest;
+			if (dot(perp, perp) > 0.0001) minD = min(minD, dot((toClosest + v) * 0.5, normalize(perp)));
+		}
+		dist = minD; col = vec3(0.0); pos = vec3(0.0); radius = 0.0;
+		return;
+	}
+	for (int z = -zr; z <= zr; z++) for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+		vec3 off = vec3(float(x), float(y), float(z));
+		vec3 pt = off + lnx_hash33(cell + off) * randomness;
+		if (isFlat) pt.z = 0.0;
+		float d = lnx_vdist(pt - local, metric, exponent);
+		if (d < d1) { d2 = d1; p2 = p1; d1 = d; p1 = pt; c1 = cell + off; }
+		else if (d < d2) { d2 = d; p2 = pt; }
+	}
+	if (feature == 1) { dist = d2; col = lnx_hash33(cell + p2 + vec3(7.31, 1.17, 3.53)); pos = cell + p2; }
+	else { dist = d1; col = lnx_hash33(c1 + vec3(7.31, 1.17, 3.53)); pos = cell + p1; }
+	radius = 0.5 * distance(p1, p2);
+}
+
+void lnx_voronoi4(vec3 p, float w, int dims, float scale, float detail, float roughness, float lacunarity, float smoothness, float exponent,
+                  float randomness, int feature, int metric, bool normalizeOut,
+                  out float dist, out vec3 col, out vec3 pos, out float wout, out float radius) {
+	if (dims == 1) p = vec3(w, 0.0, 0.0);
+	else if (dims == 4) p += vec3(w * 0.731, w * 1.379, w * 0.537);
+	bool isFlat = dims <= 2;
+	if (isFlat) p.z = 0.0;
+	p *= scale;
+	float d0; vec3 col0, pos0; float r0;
+	lnx_voronoi_cell(p, randomness, feature, metric, exponent, smoothness, isFlat, d0, col0, pos0, r0);
+	dist = d0; col = col0; pos = pos0 / max(scale, 1e-5); radius = r0; wout = w;
+	detail = clamp(detail, 0.0, 15.0);
+	if (detail > 0.0 && feature <= 2) {
+		float amp = 1.0, maxAmp = 1.0, fscale = lacunarity;
+		float sumD = d0; vec3 sumC = col0;
+		for (int i = 1; i <= 15; i++) {
+			if (float(i) > detail) break;
+			amp *= roughness;
+			float d; vec3 c, ps; float r;
+			lnx_voronoi_cell(p * fscale, randomness, feature, metric, exponent, smoothness, isFlat, d, c, ps, r);
+			sumD += d * amp; sumC += c * amp; maxAmp += amp; fscale *= lacunarity;
+		}
+		dist = normalizeOut ? sumD / maxAmp : sumD / maxAmp * 1.0;
+		col = sumC / maxAmp;
+	}
+	if (normalizeOut && feature != 3) dist = clamp(dist / (feature == 1 ? 1.5 : 1.0), 0.0, 1.0);
+}
+
+)GLSL";
+
+	static const char* kLibNodes2 = R"GLSL(
+// ---- Wave (Blender 4.x) ----
+float lnx_wave4(vec3 p, float scale, float distortion, float detail, float detailScale, float detailRough, float phase, int type, int dir, int profile) {
+	p = (p * scale + 0.000001) * 0.999999;
+	float n;
+	if (type == 0) {
+		if (dir == 0) n = p.x * 20.0; else if (dir == 1) n = p.y * 20.0; else if (dir == 2) n = p.z * 20.0; else n = (p.x + p.y + p.z) * 10.0;
+	}
+	else {
+		vec3 rp = p;
+		if (dir == 0) rp *= vec3(0.0, 1.0, 1.0); else if (dir == 1) rp *= vec3(1.0, 0.0, 1.0); else if (dir == 2) rp *= vec3(1.0, 1.0, 0.0);
+		n = length(rp) * 20.0;
+	}
+	n += phase;
+	if (distortion != 0.0) n += distortion * (lnx_fbm(p * detailScale, detail, detailRough) * 2.0 - 1.0);
+	if (profile == 0) return 0.5 + 0.5 * sin(n - 1.5707963);
+	n /= 6.2831853;
+	if (profile == 1) return n - floor(n);
+	return abs(n - floor(n + 0.5)) * 2.0;
+}
+
+float lnx_gradient4(vec3 p, int type) {
+	float r;
+	if (type == 0) r = p.x;
+	else if (type == 1) { r = max(p.x, 0.0); r *= r; }
+	else if (type == 2) { r = clamp(p.x, 0.0, 1.0); float t = r * r; r = 3.0 * t - 2.0 * t * r; }
+	else if (type == 3) r = (p.x + p.y) * 0.5;
+	else if (type == 4) r = max(0.999999 - length(p), 0.0);
+	else if (type == 5) { r = max(0.999999 - length(p), 0.0); r *= r; }
+	else r = atan(p.y, p.x) / 6.2831853 + 0.5;
+	return clamp(r, 0.0, 1.0);
+}
+
+// ---- Brick (Blender) ----
+float lnx_brick_noise(uint n) {
+	n = (n + 1013u) & 0x7fffffffu;
+	n = (n >> 13u) ^ n;
+	uint nn = (n * (n * n * 60493u + 19990303u) + 1376312589u) & 0x7fffffffu;
+	return 0.5 * (float(nn) / 1073741824.0);
+}
+vec2 lnx_brick(vec3 p, float mortarSize, float mortarSmooth, float bias, float brickWidth, float rowHeight,
+               float offsetAmount, int offsetFreq, float squashAmount, int squashFreq) {
+	int rownum = int(floor(p.y / rowHeight));
+	float offset = 0.0;
+	if (offsetFreq != 0 && squashFreq != 0) {
+		brickWidth *= ((rownum % squashFreq) != 0) ? 1.0 : squashAmount;
+		offset = ((rownum % offsetFreq) != 0) ? 0.0 : (brickWidth * offsetAmount);
+	}
+	int bricknum = int(floor((p.x + offset) / brickWidth));
+	float x = (p.x + offset) - brickWidth * float(bricknum);
+	float y = p.y - rowHeight * float(rownum);
+	float tint = clamp(lnx_brick_noise(uint((rownum << 16) + (bricknum & 0xFFFF))) + bias, 0.0, 1.0);
+	float minDist = min(min(x, y), min(brickWidth - x, rowHeight - y));
+	if (minDist >= mortarSize) return vec2(tint, 0.0);
+	if (mortarSmooth == 0.0) return vec2(tint, 1.0);
+	minDist = 1.0 - minDist / mortarSize;
+	return vec2(tint, smoothstep(0.0, mortarSmooth, minDist));
+}
+
+// ---- Magic (Blender) ----
+vec4 lnx_magic(vec3 p, float scale, float distortion, int depth) {
+	p = mod(p * scale, 6.28318530718);
+	float x = sin((p.x + p.y + p.z) * 5.0);
+	float y = cos((-p.x + p.y - p.z) * 5.0);
+	float z = -cos((-p.x - p.y + p.z) * 5.0);
+	if (depth > 0) { x *= distortion; y *= distortion; z *= distortion; y = -cos(x - y + z); y *= distortion;
+	if (depth > 1) { x = cos(x - y - z); x *= distortion;
+	if (depth > 2) { z = sin(-x - y - z); z *= distortion;
+	if (depth > 3) { x = -cos(-x + y - z); x *= distortion;
+	if (depth > 4) { y = -sin(-x + y + z); y *= distortion;
+	if (depth > 5) { y = -cos(-x + y + z); y *= distortion;
+	if (depth > 6) { x = cos(x + y + z); x *= distortion;
+	if (depth > 7) { z = sin(x + y - z); z *= distortion;
+	if (depth > 8) { x = -cos(-x - y + z); x *= distortion;
+	if (depth > 9) { y = -sin(x - y + z); y *= distortion; } } } } } } } } } }
+	if (distortion != 0.0) { distortion *= 2.0; x /= distortion; y /= distortion; z /= distortion; }
+	vec3 c = vec3(0.5 - x, 0.5 - y, 0.5 - z);
+	return vec4(c, (c.x + c.y + c.z) / 3.0);
+}
+
+// ---- Gabor (sparse convolution approximation) ----
+vec3 lnx_gabor(vec3 p, float scale, float frequency, float anisotropy, vec3 orientation, bool is3D) {
+	p *= scale;
+	if (!is3D) p.z = 0.0;
+	vec3 cell = floor(p);
+	float re = 0.0, im = 0.0;
+	int zr = is3D ? 1 : 0;
+	for (int z = -zr; z <= zr; z++) for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+		vec3 c = cell + vec3(float(x), float(y), float(z));
+		for (int k = 0; k < 2; k++) {
+			vec3 h = lnx_hash33(c + vec3(float(k) * 17.3, 3.1, 7.7));
+			vec3 center = c + h;
+			if (!is3D) center.z = 0.0;
+			vec3 d = p - center;
+			float g = exp(-3.14159265 * dot(d, d));
+			vec3 rnd = normalize(lnx_hash33(c + vec3(5.3, float(k), 1.9)) * 2.0 - 1.0);
+			if (!is3D) rnd.z = 0.0;
+			vec3 dir = normalize(mix(rnd, normalize(orientation), clamp(anisotropy, 0.0, 1.0)) + vec3(1e-5));
+			float ph = 6.28318530718 * frequency * dot(d, dir);
+			float weight = h.z * 2.0 - 1.0;
+			re += weight * g * cos(ph);
+			im += weight * g * sin(ph);
+		}
+	}
+	float intensity = sqrt(re * re + im * im);
+	return vec3(clamp(re * 0.5 + 0.5, 0.0, 1.0), atan(im, re) / 6.28318530718 + 0.5, intensity);
+}
+
+// ---- Sky (Nishita-like analytic approximation) ----
+vec3 lnx_sky(vec3 dir, float sunSize, float sunIntensity, float elevation, float rotation, float air, float dust, float ozone, bool disc) {
+	dir = normalize(dir);
+	float el = radians(elevation), rot = radians(rotation);
+	vec3 sun = normalize(vec3(cos(el) * sin(rot), sin(el), cos(el) * cos(rot)));
+	float h = max(dir.y, 0.0);
+	vec3 zenith = vec3(0.10, 0.28, 0.75) * (0.6 + 0.4 * air) * mix(vec3(1.0), vec3(0.85, 0.9, 1.0), clamp(ozone * 0.5, 0.0, 1.0));
+	vec3 horizon = vec3(0.75, 0.85, 1.0) * (1.0 + dust * 0.08);
+	vec3 col = mix(horizon, zenith, pow(h, 0.45));
+	float sd = max(dot(dir, sun), 0.0);
+	col += vec3(1.0, 0.75, 0.5) * pow(sd, 8.0) * 0.35 * dust;
+	col *= clamp(sun.y * 2.5 + 0.35, 0.03, 1.0);
+	if (sun.y < 0.2) col = mix(col, col * vec3(1.0, 0.55, 0.35), clamp(1.0 - sun.y * 5.0, 0.0, 1.0) * 0.6);
+	if (dir.y < 0.0) col = mix(col, vec3(0.08, 0.07, 0.06), clamp(-dir.y * 6.0, 0.0, 1.0));
+	if (disc && dot(dir, sun) > cos(radians(max(sunSize, 0.05)) * 0.5)) col += vec3(1.0, 0.95, 0.85) * 20.0;
+	return col * sunIntensity;
+}
+
+// Equirectangular / mirror ball lookup (engine is Y-up, Blender is Z-up)
+vec2 lnx_env_uv(vec3 d, int projection) {
+	d = normalize(d);
+	vec3 b = vec3(d.x, -d.z, d.y);
+	if (projection == 1) {
+		b.y -= 1.0;
+		float div = 2.0 * sqrt(max(-0.5 * b.y, 0.0));
+		if (div > 0.0) b /= div;
+		return vec2(0.5 * (b.x + 1.0), 0.5 * (b.z + 1.0));
+	}
+	return vec2(-atan(b.y, b.x) / 6.28318530718 + 0.5, atan(b.z, length(b.xy)) / 3.14159265359 + 0.5);
+}
+
+// ---- Converters ----
+vec3 lnx_blackbody(float t) {
+	t = clamp(t, 800.0, 12000.0) / 100.0;
+	vec3 c;
+	c.r = t <= 66.0 ? 1.0 : clamp(1.29293618606 * pow(t - 60.0, -0.1332047592), 0.0, 1.0);
+	c.g = t <= 66.0 ? clamp(0.39008157876 * log(t) - 0.63184144378, 0.0, 1.0) : clamp(1.12989086089 * pow(t - 60.0, -0.0755148492), 0.0, 1.0);
+	c.b = t >= 66.0 ? 1.0 : (t <= 19.0 ? 0.0 : clamp(0.54320678911 * log(t - 10.0) - 1.19625408914, 0.0, 1.0));
+	return lnx_srgb_to_linear(c);
+}
+
+vec3 lnx_wavelength(float w) {
+	vec3 c;
+	if (w < 440.0) c = vec3(-(w - 440.0) / 60.0, 0.0, 1.0);
+	else if (w < 490.0) c = vec3(0.0, (w - 440.0) / 50.0, 1.0);
+	else if (w < 510.0) c = vec3(0.0, 1.0, -(w - 510.0) / 20.0);
+	else if (w < 580.0) c = vec3((w - 510.0) / 70.0, 1.0, 0.0);
+	else if (w < 645.0) c = vec3(1.0, -(w - 645.0) / 65.0, 0.0);
+	else c = vec3(1.0, 0.0, 0.0);
+	float f = w < 420.0 ? 0.3 + 0.7 * (w - 380.0) / 40.0 : (w > 700.0 ? 0.3 + 0.7 * (780.0 - w) / 80.0 : 1.0);
+	return lnx_srgb_to_linear(clamp(c * f, 0.0, 1.0));
+}
+
+// Monotone cubic curve segment: a/b = (x, y, tangent, 0)
+float lnx_hermite(vec4 a, vec4 b, float x) {
+	float h = max(b.x - a.x, 1e-6);
+	float t = clamp((x - a.x) / h, 0.0, 1.0);
+	float t2 = t * t, t3 = t2 * t;
+	return (2.0 * t3 - 3.0 * t2 + 1.0) * a.y + (t3 - 2.0 * t2 + t) * h * a.z + (-2.0 * t3 + 3.0 * t2) * b.y + (t3 - t2) * h * b.z;
+}
+
+vec3 lnx_rotate_axis(vec3 v, vec3 axis, float angle) {
+	axis = length(axis) > 0.0 ? normalize(axis) : vec3(0.0, 0.0, 1.0);
+	float c = cos(angle), s = sin(angle);
+	return v * c + cross(axis, v) * s + axis * dot(axis, v) * (1.0 - c);
+}
+)GLSL";
+
 	// ============================================================================
 	// CODE GENERATOR
 	// ============================================================================
@@ -523,8 +925,14 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 				: m_Graph(graph), m_Out(out), m_Body(body), m_GroupInputs(inputs) {}
 
 			std::string Surface() {
-				if (const Node* out = m_Graph.FindNodeByType(MaterialOutput))
-					return In(*out, "Surface", T::BSDF);
+				if (const Node* out = m_Graph.FindNodeByType(MaterialOutput)) {
+					const std::string surface = In(*out, "Surface", T::BSDF);
+					const Pin* disp = out->FindInput("Displacement");
+					if (!disp || !m_Graph.GetLinkInto(disp->PinID)) return surface;
+					Line("LnxBSDF lnx_surface = " + surface + ";");
+					Line("lnx_surface.Normal = lnx_bump(1.0, 1.0, dot(" + In(*out, "Displacement", T::Vec3) + ", LNX_NORMAL), normalize(lnx_surface.Normal), false);");
+					return "lnx_surface";
+				}
 				if (const Node* legacy = m_Graph.FindNodeByType(OutputNode))
 					return LegacyOutput(*legacy);
 				m_Out.Errors.push_back("The graph has no Material Output node");
@@ -597,6 +1005,32 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 			}
 
 			bool Toggle(const Node& n, const char* key) { return Prop(n, key, "0") == "1"; }
+
+			// A socket that matters at runtime: linked, or its value past `threshold`
+			bool PinActive(const Node& n, const char* name, float threshold, bool greater) {
+				const Pin* p = n.FindInput(name);
+				if (!p) return false;
+				if (m_Graph.GetLinkInto(p->PinID)) return true;
+				return greater ? p->DefaultValue.x > threshold : p->DefaultValue.x < threshold;
+			}
+
+			// Curve lookup (RGB / Vector / Float Curves): points live in the params UBO as (x, y, tangent)
+			std::string Curve(const Node& n, const std::string& key, const std::string& x) {
+				auto it = n.Properties.find(key);
+				const auto points = ParseCurve(it != n.Properties.end() ? it->second : "");
+				std::vector<std::string> P;
+				for (int i = 0; i < static_cast<int>(points.size()); i++) {
+					ParamRef ref{ n.NodeID, 0, i, false };
+					ref.Curve = key;
+					P.push_back(ParamExpr(AddParam(ref), T::Vec4));
+				}
+				const std::string v = "n" + std::to_string(n.NodeID) + "_cv" + std::to_string(m_CurveCounter++);
+				Line("float " + v + " = " + P[0] + ".y;");
+				Line("{ float cx = " + x + ";");
+				for (size_t i = 0; i + 1 < P.size(); i++) Line("if (cx > " + P[i] + ".x) " + v + " = lnx_hermite(" + P[i] + ", " + P[i + 1] + ", cx);");
+				Line("if (cx >= " + P.back() + ".x) " + v + " = " + P.back() + ".y; }");
+				return v;
+			}
 
 			std::string Var(const Node& n, const std::string& outName) {
 				for (size_t i = 0; i < n.Outputs.size(); i++)
@@ -686,17 +1120,40 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 				// ---------------- Shaders ----------------
 				if (t == PrincipledBSDF) {
 					const std::string b = Var(n, "BSDF");
-					std::string code = "LnxBSDF " + b + ";\n";
-					code += "\t" + b + ".BaseColor = " + In(n, "Base Color", T::Vec3) + ";\n";
-					code += "\t" + b + ".Metallic = clamp(" + In(n, "Metallic", T::Float) + ", 0.0, 1.0);\n";
-					code += "\t" + b + ".Roughness = clamp(" + In(n, "Roughness", T::Float) + ", 0.0, 1.0);\n";
-					code += "\t" + b + ".Specular = clamp(" + In(n, "Specular", T::Float) + ", 0.0, 1.0);\n";
-					code += "\t" + b + ".Alpha = " + In(n, "Alpha", T::Float) + ";\n";
-					code += "\t" + b + ".Normal = normalize(" + In(n, "Normal", T::Vec3, "LNX_NORMAL") + ");\n";
-					code += "\t" + b + ".AO = clamp(" + In(n, "Ambient Occlusion", T::Float) + ", 0.0, 1.0);\n";
-					code += "\t" + b + ".Subsurface = vec4(" + In(n, "Subsurface Color", T::Vec3) + ", clamp(" + In(n, "Subsurface Weight", T::Float) + ", 0.0, 1.0));\n";
-					code += "\t" + b + ".Emission = " + In(n, "Emission Color", T::Vec3) + " * " + In(n, "Emission Strength", T::Float) + ";";
-					Line(code);
+					Line("LnxBSDF " + b + " = lnx_bsdf_default();");
+					Line(b + ".BaseColor = max(" + In(n, "Base Color", T::Vec3) + ", vec3(0.0));");
+					Line(b + ".Metallic = clamp(" + In(n, "Metallic", T::Float) + ", 0.0, 1.0);");
+					Line(b + ".Roughness = clamp(" + In(n, "Roughness", T::Float) + ", 0.0, 1.0);");
+					Line(b + ".IOR = max(" + In(n, "IOR", T::Float) + ", 1.0);");
+					// Blender 4: F0 from IOR, scaled by "IOR Level" (0.5 = physical)
+					Line("{ float f0 = (" + b + ".IOR - 1.0) / (" + b + ".IOR + 1.0); f0 *= f0; " + b + ".Specular = clamp(f0 / 0.08 * " + In(n, "Specular", T::Float) + " * 2.0, 0.0, 12.5); }");
+					Line(b + ".SpecularTint = max(" + In(n, "Specular Tint", T::Vec3) + ", vec3(0.0));");
+					Line(b + ".Alpha = clamp(" + In(n, "Alpha", T::Float) + ", 0.0, 1.0);");
+					Line(b + ".Normal = normalize(" + In(n, "Normal", T::Vec3, "LNX_NORMAL") + ");");
+					Line(b + ".AO = clamp(" + In(n, "Ambient Occlusion", T::Float) + ", 0.0, 1.0);");
+					// Subsurface color: the explicit "Subsurface Color" when linked / edited, else the Base Color
+					// tinted by the per-channel radius (Blender 4 has no separate SSS color)
+					const Pin* sc = n.FindInput("Subsurface Color");
+					const bool customSss = sc && (m_Graph.GetLinkInto(sc->PinID) || glm::length(sc->DefaultValue - glm::vec4(1.0f, 0.35f, 0.25f, 1.0f)) > 1e-3f);
+					std::string sssColor;
+					if (customSss) sssColor = In(n, "Subsurface Color", T::Vec3);
+					else {
+						const std::string r = "n" + std::to_string(n.NodeID) + "_rad";
+						Line("vec3 " + r + " = max(" + In(n, "Subsurface Radius", T::Vec3) + ", vec3(0.0));");
+						sssColor = b + ".BaseColor * (" + r + " / max(max(" + r + ".x, " + r + ".y), max(" + r + ".z, 1e-4)))";
+					}
+					Line(b + ".Subsurface = vec4(" + sssColor + ", clamp(" + In(n, "Subsurface Weight", T::Float) + ", 0.0, 1.0));");
+					Line(b + ".Transmission = clamp(" + In(n, "Transmission Weight", T::Float) + ", 0.0, 1.0);");
+					Line(b + ".Coat = clamp(" + In(n, "Coat Weight", T::Float) + ", 0.0, 1.0);");
+					Line(b + ".CoatRoughness = clamp(" + In(n, "Coat Roughness", T::Float) + ", 0.0, 1.0);");
+					Line(b + ".CoatIOR = max(" + In(n, "Coat IOR", T::Float) + ", 1.0);");
+					Line(b + ".CoatTint = max(" + In(n, "Coat Tint", T::Vec3) + ", vec3(0.0));");
+					Line(b + ".Sheen = clamp(" + In(n, "Sheen Weight", T::Float) + ", 0.0, 1.0);");
+					Line(b + ".SheenRoughness = clamp(" + In(n, "Sheen Roughness", T::Float) + ", 0.0, 1.0);");
+					Line(b + ".SheenTint = max(" + In(n, "Sheen Tint", T::Vec3) + ", vec3(0.0));");
+					Line(b + ".Emission = " + In(n, "Emission Color", T::Vec3) + " * " + In(n, "Emission Strength", T::Float) + ";");
+					m_Transmission |= PinActive(n, "Transmission Weight", 0.001f, true);
+					m_PartialAlpha |= PinActive(n, "Alpha", 0.999f, false);
 					RegisterOut(n, "BSDF", T::BSDF);
 					return;
 				}
@@ -716,22 +1173,118 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 					Decl(n, "Shader", T::BSDF, "lnx_bsdf_add(" + In(n, "Shader A", T::BSDF) + ", " + In(n, "Shader B", T::BSDF) + ")");
 					return;
 				}
+				// Simple closures: start from the default BSDF and set what they define
+				auto closure = [&](const char* outName) {
+					const std::string b = Var(n, outName);
+					Line("LnxBSDF " + b + " = lnx_bsdf_default();");
+					if (const Pin* np = n.FindInput("Normal")) { (void)np; Line(b + ".Normal = normalize(" + In(n, "Normal", T::Vec3, "LNX_NORMAL") + ");"); }
+					RegisterOut(n, outName, T::BSDF);
+					return b;
+				};
+				if (t == DiffuseBSDF) {
+					const std::string b = closure("BSDF");
+					Line(b + ".BaseColor = " + In(n, "Color", T::Vec3) + "; " + b + ".Specular = 0.0; " + b + ".Roughness = 1.0;");
+					return;
+				}
+				if (t == GlossyBSDF) {
+					const std::string b = closure("BSDF");
+					Line(b + ".BaseColor = " + In(n, "Color", T::Vec3) + "; " + b + ".Metallic = 1.0; " + b + ".Roughness = clamp(" + In(n, "Roughness", T::Float) + ", 0.0, 1.0);");
+					return;
+				}
+				if (t == MetallicBSDF) {
+					const std::string b = closure("BSDF");
+					Line(b + ".BaseColor = " + In(n, "Base Color", T::Vec3) + "; " + b + ".Metallic = 1.0; " + b + ".Roughness = clamp(" + In(n, "Roughness", T::Float) + ", 0.0, 1.0);");
+					Line(b + ".SpecularTint = " + In(n, "Edge Tint", T::Vec3) + ";");
+					return;
+				}
+				if (t == GlassBSDF || t == RefractionBSDF) {
+					const std::string b = closure("BSDF");
+					Line(b + ".BaseColor = " + In(n, "Color", T::Vec3) + "; " + b + ".Roughness = clamp(" + In(n, "Roughness", T::Float) + ", 0.0, 1.0);");
+					Line(b + ".IOR = max(" + In(n, "IOR", T::Float) + ", 1.0); " + b + ".Transmission = 1.0; " + b + ".Refract = 1.0;");
+					if (t == GlassBSDF) Line("{ float f0 = (" + b + ".IOR - 1.0) / (" + b + ".IOR + 1.0); " + b + ".Specular = f0 * f0 / 0.08; }");
+					else Line(b + ".Specular = 0.0;");
+					m_Transmission = true;
+					return;
+				}
+				if (t == TransparentBSDF || t == RayPortalBSDF) {
+					const std::string b = closure("BSDF");
+					Line(b + ".BaseColor = " + In(n, "Color", T::Vec3) + "; " + b + ".Specular = 0.0; " + b + ".Roughness = 0.0;");
+					Line(b + ".Transmission = 1.0; " + b + ".Refract = 0.0; " + b + ".IOR = 1.0;");
+					m_Transmission = true;
+					return;
+				}
+				if (t == TranslucentBSDF) {
+					const std::string b = closure("BSDF");
+					Line(b + ".BaseColor = " + In(n, "Color", T::Vec3) + "; " + b + ".Specular = 0.0; " + b + ".Roughness = 1.0;");
+					Line(b + ".Subsurface = vec4(vec3(1.0), 1.0);");
+					return;
+				}
+				if (t == SubsurfaceBSDF) {
+					const std::string b = closure("BSSRDF");
+					const std::string r = "n" + std::to_string(n.NodeID) + "_rad";
+					Line(b + ".BaseColor = " + In(n, "Color", T::Vec3) + "; " + b + ".Roughness = clamp(" + In(n, "Roughness", T::Float) + ", 0.0, 1.0);");
+					Line("vec3 " + r + " = max(" + In(n, "Radius", T::Vec3) + ", vec3(0.0));");
+					Line(b + ".Subsurface = vec4(" + b + ".BaseColor * (" + r + " / max(max(" + r + ".x, " + r + ".y), max(" + r + ".z, 1e-4))), 1.0);");
+					return;
+				}
+				if (t == SheenBSDF) {
+					const std::string b = closure("BSDF");
+					Line(b + ".BaseColor = vec3(0.0); " + b + ".Specular = 0.0; " + b + ".Sheen = 1.0;");
+					Line(b + ".SheenTint = " + In(n, "Color", T::Vec3) + "; " + b + ".SheenRoughness = clamp(" + In(n, "Roughness", T::Float) + ", 0.0, 1.0);");
+					return;
+				}
+				if (t == ToonBSDF) {
+					const std::string b = closure("BSDF");
+					Line(b + ".BaseColor = " + In(n, "Color", T::Vec3) + ";");
+					if (Op(n, "Component") == 1) Line(b + ".Metallic = 1.0; " + b + ".Roughness = clamp(" + In(n, "Size", T::Float) + " * 0.5, 0.0, 1.0);");
+					else Line(b + ".Specular = 0.0; " + b + ".Roughness = 1.0;");
+					return;
+				}
+				if (t == HairBSDF) {
+					const std::string b = closure("BSDF");
+					Line(b + ".BaseColor = " + In(n, "Color", T::Vec3) + "; " + b + ".Roughness = clamp(" + In(n, "Roughness U", T::Float) + ", 0.0, 1.0);");
+					return;
+				}
+				if (t == PrincipledHair) {
+					const std::string b = closure("BSDF");
+					Line(b + ".BaseColor = " + In(n, "Color", T::Vec3) + " * " + In(n, "Tint", T::Vec3) + "; " + b + ".Roughness = clamp(" + In(n, "Roughness", T::Float) + ", 0.0, 1.0);");
+					Line(b + ".Coat = clamp(" + In(n, "Coat", T::Float) + ", 0.0, 1.0);");
+					return;
+				}
+				if (t == SpecularBSDF) {
+					const std::string b = closure("BSDF");
+					const std::string s = "n" + std::to_string(n.NodeID) + "_spec";
+					Line(b + ".BaseColor = " + In(n, "Base Color", T::Vec3) + "; " + b + ".Roughness = clamp(" + In(n, "Roughness", T::Float) + ", 0.0, 1.0);");
+					Line("vec3 " + s + " = max(" + In(n, "Specular", T::Vec3) + ", vec3(0.0));");
+					Line(b + ".Specular = lnx_luma(" + s + ") / 0.08; " + b + ".SpecularTint = " + s + " / max(lnx_luma(" + s + "), 1e-4);");
+					Line(b + ".Emission = " + In(n, "Emissive Color", T::Vec3) + ";");
+					Line(b + ".Alpha = 1.0 - clamp(" + In(n, "Transparency", T::Float) + ", 0.0, 1.0);");
+					Line(b + ".Coat = clamp(" + In(n, "Clear Coat", T::Float) + ", 0.0, 1.0); " + b + ".CoatRoughness = clamp(" + In(n, "Clear Coat Roughness", T::Float) + ", 0.0, 1.0);");
+					Line(b + ".AO = clamp(" + In(n, "Ambient Occlusion", T::Float) + ", 0.0, 1.0);");
+					m_PartialAlpha |= PinActive(n, "Transparency", 0.001f, true);
+					return;
+				}
+				if (t == HoldoutShader) {
+					const std::string b = closure("Holdout");
+					Line(b + ".BaseColor = vec3(0.0); " + b + ".Specular = 0.0; " + b + ".Roughness = 1.0;");
+					return;
+				}
+				if (t == PrincipledVolume || t == VolumeAbsorption || t == VolumeScatter) {
+					// No volumetrics in the raster engine: plugged into a surface it shows its color
+					const std::string b = closure("Volume");
+					Line(b + ".BaseColor = " + In(n, "Color", T::Vec3) + ";");
+					return;
+				}
+				if (t == ShaderToRGB) {
+					const std::string c = "n" + std::to_string(n.NodeID) + "_s2r";
+					Line("vec4 " + c + " = lnx_shader_to_rgb(" + In(n, "Shader", T::BSDF) + ");");
+					Decl(n, "Color", T::Vec4, "vec4(" + c + ".rgb, 1.0)");
+					Decl(n, "Alpha", T::Float, c + ".a");
+					m_ShaderToRGB = true;
+					return;
+				}
 
 				// ---------------- Input ----------------
-				if (t == TexCoordNode) {
-					Decl(n, "UV", T::Vec3, "vec3(LNX_UV, 0.0)");
-					Decl(n, "Generated", T::Vec3, "LNX_POS");
-					Decl(n, "Normal", T::Vec3, "LNX_NORMAL");
-					Decl(n, "Reflection", T::Vec3, "reflect(-lnx_view_dir(), LNX_NORMAL)");
-					return;
-				}
-				if (t == GeometryNode) {
-					Decl(n, "Position", T::Vec3, "LNX_POS");
-					Decl(n, "Normal", T::Vec3, "LNX_NORMAL");
-					Decl(n, "Tangent", T::Vec3, "normalize(LNX_TBN[0])");
-					Decl(n, "Incoming", T::Vec3, "lnx_view_dir()");
-					return;
-				}
 				if (t == ValueNode || t == FloatNode) {
 					const int slot = AddParam({ n.NodeID, 0 });
 					RegisterName(n, slot);
@@ -796,31 +1349,6 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 					}
 					return;
 				}
-				if (t == NoiseTexture) {
-					std::string v = In(n, "Vector", T::Vec3, "LNX_POS");
-					if (Prop(n, "Dimensions", "3D") == "2D") v = "vec3((" + v + ").xy, 0.0)";
-					Line("vec4 " + id + "_n = lnx_noise_tex(" + v + ", " + In(n, "Scale", T::Float) + ", " + In(n, "Detail", T::Float) + ", " +
-						In(n, "Roughness", T::Float) + ", " + In(n, "Distortion", T::Float) + ");");
-					Decl(n, "Fac", T::Float, id + "_n.w");
-					Decl(n, "Color", T::Vec4, "vec4(" + id + "_n.rgb, 1.0)");
-					return;
-				}
-				if (t == VoronoiTexture) {
-					Line("float " + id + "_d; vec3 " + id + "_c; vec3 " + id + "_p;");
-					Line("lnx_voronoi(" + In(n, "Vector", T::Vec3, "LNX_POS") + ", " + In(n, "Scale", T::Float) + ", " + In(n, "Randomness", T::Float) + ", " +
-						std::to_string(Op(n, "Feature")) + ", " + id + "_d, " + id + "_c, " + id + "_p);");
-					Decl(n, "Distance", T::Float, id + "_d");
-					Decl(n, "Color", T::Vec4, "vec4(" + id + "_c, 1.0)");
-					Decl(n, "Position", T::Vec3, id + "_p");
-					return;
-				}
-				if (t == WaveTexture) {
-					Line("float " + id + "_w = lnx_wave(" + In(n, "Vector", T::Vec3, "LNX_POS") + ", " + In(n, "Scale", T::Float) + ", " + In(n, "Distortion", T::Float) + ", " +
-						In(n, "Detail", T::Float) + ", " + In(n, "Phase Offset", T::Float) + ", " + std::to_string(Op(n, "Type")) + ", " + std::to_string(Op(n, "Profile")) + ");");
-					Decl(n, "Color", T::Vec4, "vec4(vec3(" + id + "_w), 1.0)");
-					Decl(n, "Fac", T::Float, id + "_w");
-					return;
-				}
 				if (t == CheckerTexture) {
 					Line("float " + id + "_f;");
 					Line("vec4 " + id + "_c = lnx_checker(" + In(n, "Vector", T::Vec3, "LNX_POS") + ", " + In(n, "Color1", T::Vec4) + ", " + In(n, "Color2", T::Vec4) + ", " +
@@ -829,13 +1357,6 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 					Decl(n, "Fac", T::Float, id + "_f");
 					return;
 				}
-				if (t == GradientTexture) {
-					Line("float " + id + "_g = lnx_gradient(" + In(n, "Vector", T::Vec3, "vec3(LNX_UV, 0.0)") + ", " + std::to_string(Op(n, "Type")) + ");");
-					Decl(n, "Color", T::Vec4, "vec4(vec3(" + id + "_g), 1.0)");
-					Decl(n, "Fac", T::Float, id + "_g");
-					return;
-				}
-
 				// ---------------- Color ----------------
 				if (t == MixNode) {
 					const std::string type = Prop(n, "Data Type", "Color");
@@ -995,6 +1516,312 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 					return;
 				}
 
+				// ---------------- Input (Blender 4.x) ----------------
+				if (t == TexCoordNode) {
+					Decl(n, "Generated", T::Vec3, "LNX_OBJPOS");
+					Decl(n, "Normal", T::Vec3, "normalize(transpose(mat3(LNX_MODEL)) * LNX_NORMAL)");
+					Decl(n, "UV", T::Vec3, "vec3(LNX_UV, 0.0)");
+					Decl(n, "Object", T::Vec3, "LNX_OBJPOS");
+					Decl(n, "Camera", T::Vec3, "(LNX_VIEW * vec4(LNX_POS, 1.0)).xyz");
+					Line("vec4 " + id + "_clip = LNX_VIEWPROJ * vec4(LNX_POS, 1.0);");
+					Decl(n, "Window", T::Vec3, "vec3(" + id + "_clip.xy / max(" + id + "_clip.w, 1e-6) * 0.5 + 0.5, 0.0)");
+					Decl(n, "Reflection", T::Vec3, "reflect(-lnx_view_dir(), LNX_NORMAL)");
+					return;
+				}
+				if (t == GeometryNode) {
+					Decl(n, "Position", T::Vec3, "LNX_POS");
+					Decl(n, "Normal", T::Vec3, "LNX_NORMAL");
+					Decl(n, "Tangent", T::Vec3, "normalize(LNX_TBN[0])");
+					Line("vec3 " + id + "_tn = normalize(cross(dFdx(LNX_POS), dFdy(LNX_POS)));");
+					Decl(n, "True Normal", T::Vec3, "(dot(" + id + "_tn, LNX_NORMAL) < 0.0 ? -" + id + "_tn : " + id + "_tn)");
+					Decl(n, "Incoming", T::Vec3, "lnx_view_dir()");
+					Decl(n, "Parametric", T::Vec3, "vec3(fract(LNX_UV), 0.0)");
+					Decl(n, "Backfacing", T::Float, "(gl_FrontFacing ? 0.0 : 1.0)");
+					Decl(n, "Pointiness", T::Float, "0.5");
+					Decl(n, "Random Per Island", T::Float, "0.0");
+					return;
+				}
+				if (t == AmbientOcclusionNode) {
+					Decl(n, "Color", T::Vec4, In(n, "Color", T::Vec4));
+					Decl(n, "AO", T::Float, "1.0");
+					return;
+				}
+				if (t == AttributeNode) {
+					std::string name = Prop(n, "Name");
+					for (char& c : name) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+					std::string v = "vec3(0.0)";
+					if (name == "uvmap" || name == "uv" || name == "uv0" || name == "texcoord") v = "vec3(LNX_UV, 0.0)";
+					else if (name == "position" || name == "p") v = "LNX_POS";
+					else if (name == "normal" || name == "n") v = "LNX_NORMAL";
+					Decl(n, "Vector", T::Vec3, v);
+					Decl(n, "Color", T::Vec4, "vec4(" + Var(n, "Vector") + ", 1.0)");
+					Decl(n, "Fac", T::Float, "lnx_avg(" + Var(n, "Vector") + ")");
+					Decl(n, "Alpha", T::Float, "1.0");
+					return;
+				}
+				if (t == BevelNode) {
+					Decl(n, "Normal", T::Vec3, "normalize(" + In(n, "Normal", T::Vec3, "LNX_NORMAL") + ")");
+					return;
+				}
+				if (t == CameraDataNode) {
+					Line("vec3 " + id + "_v = (LNX_VIEW * vec4(LNX_POS, 1.0)).xyz;");
+					Decl(n, "View Vector", T::Vec3, "normalize(" + id + "_v)");
+					Decl(n, "View Z Depth", T::Float, "-" + id + "_v.z");
+					Decl(n, "View Distance", T::Float, "length(" + id + "_v)");
+					return;
+				}
+				if (t == ColorAttributeNode) {
+					Decl(n, "Color", T::Vec4, "vec4(1.0)");
+					Decl(n, "Alpha", T::Float, "1.0");
+					return;
+				}
+				if (t == LightPathNode) {
+					for (const auto& o : n.Outputs) {
+						std::string v = "0.0";
+						if (o.Name == "Is Camera Ray") v = "1.0";
+						else if (o.Name == "Ray Length") v = "length(LNX_POS - LNX_VIEWPOS)";
+						Decl(n, o.Name, T::Float, v);
+					}
+					return;
+				}
+				if (t == ObjectInfoNode) {
+					Decl(n, "Location", T::Vec3, "LNX_MODEL[3].xyz");
+					Decl(n, "Color", T::Vec4, "vec4(1.0)");
+					Decl(n, "Alpha", T::Float, "1.0");
+					Decl(n, "Object Index", T::Float, "LNX_OBJECT_ID");
+					Decl(n, "Material Index", T::Float, "0.0");
+					Decl(n, "Random", T::Float, "lnx_hash14(vec4(LNX_OBJECT_ID, LNX_MODEL[3].xyz))");
+					return;
+				}
+				if (t == CurvesInfoNode || t == ParticleInfoNode || t == PointInfoNode || t == VolumeInfoNode) {
+					for (const auto& o : n.Outputs) Decl(n, o.Name, TypeOf(o.Type), Conv("0.0", T::Float, TypeOf(o.Type)));
+					return;
+				}
+				if (t == TangentNode) {
+					if (Prop(n, "Direction Type", "UV Map") == "UV Map") Decl(n, "Tangent", T::Vec3, "normalize(LNX_TBN[0])");
+					else {
+						const int axis = Op(n, "Axis");
+						const std::string a = axis == 0 ? "vec3(1.0, 0.0, 0.0)" : axis == 1 ? "vec3(0.0, 1.0, 0.0)" : "vec3(0.0, 0.0, 1.0)";
+						Decl(n, "Tangent", T::Vec3, "normalize(cross(mat3(LNX_MODEL) * " + a + ", LNX_POS - LNX_MODEL[3].xyz) + vec3(1e-6))");
+					}
+					return;
+				}
+				if (t == UVMapNode) { Decl(n, "UV", T::Vec3, "vec3(LNX_UV, 0.0)"); return; }
+				if (t == WireframeNode) { Decl(n, "Fac", T::Float, "0.0"); return; }
+				if (t == AOVOutput) return;
+
+				// ---------------- Texture (Blender 4.x) ----------------
+				if (t == NoiseTexture) {
+					const int dims = std::max(1, Op(n, "Dimensions") + 1);
+					const int type = Op(n, "Type");
+					const std::string v = Visible(n, "Vector") ? In(n, "Vector", T::Vec3, "LNX_OBJPOS") : "vec3(0.0)";
+					const std::string w = Visible(n, "W") ? In(n, "W", T::Float) : "0.0";
+					const std::string offset = Visible(n, "Offset") ? In(n, "Offset", T::Float) : "0.0";
+					const std::string gain = Visible(n, "Gain") ? In(n, "Gain", T::Float) : "1.0";
+					Line("vec4 " + id + "_n = lnx_noise4(" + v + ", " + w + ", " + std::to_string(dims) + ", " + In(n, "Scale", T::Float) + ", " +
+						In(n, "Detail", T::Float) + ", " + In(n, "Roughness", T::Float) + ", " + In(n, "Lacunarity", T::Float) + ", " + offset + ", " + gain + ", " +
+						In(n, "Distortion", T::Float) + ", " + std::to_string(type) + ", " + (Prop(n, "Normalize", "1") == "1" ? "true" : "false") + ");");
+					Decl(n, "Fac", T::Float, id + "_n.w");
+					Decl(n, "Color", T::Vec4, "vec4(" + id + "_n.rgb, 1.0)");
+					return;
+				}
+				if (t == VoronoiTexture) {
+					const int dims = std::max(1, Op(n, "Dimensions") + 1);
+					const std::string v = Visible(n, "Vector") ? In(n, "Vector", T::Vec3, "LNX_OBJPOS") : "vec3(0.0)";
+					const std::string w = Visible(n, "W") ? In(n, "W", T::Float) : "0.0";
+					Line("float " + id + "_d; vec3 " + id + "_c; vec3 " + id + "_p; float " + id + "_w; float " + id + "_r;");
+					Line("lnx_voronoi4(" + v + ", " + w + ", " + std::to_string(dims) + ", " + In(n, "Scale", T::Float) + ", " + In(n, "Detail", T::Float) + ", " +
+						In(n, "Roughness", T::Float) + ", " + In(n, "Lacunarity", T::Float) + ", " + In(n, "Smoothness", T::Float) + ", " + In(n, "Exponent", T::Float) + ", " +
+						In(n, "Randomness", T::Float) + ", " + std::to_string(Op(n, "Feature")) + ", " + std::to_string(Op(n, "Distance")) + ", " +
+						(Prop(n, "Normalize", "0") == "1" ? "true" : "false") + ", " + id + "_d, " + id + "_c, " + id + "_p, " + id + "_w, " + id + "_r);");
+					Decl(n, "Distance", T::Float, id + "_d");
+					Decl(n, "Color", T::Vec4, "vec4(" + id + "_c, 1.0)");
+					Decl(n, "Position", T::Vec3, id + "_p");
+					Decl(n, "W", T::Float, id + "_w");
+					Decl(n, "Radius", T::Float, id + "_r");
+					return;
+				}
+				if (t == WaveTexture) {
+					Line("float " + id + "_w = lnx_wave4(" + In(n, "Vector", T::Vec3, "LNX_OBJPOS") + ", " + In(n, "Scale", T::Float) + ", " + In(n, "Distortion", T::Float) + ", " +
+						In(n, "Detail", T::Float) + ", " + In(n, "Detail Scale", T::Float) + ", " + In(n, "Detail Roughness", T::Float) + ", " + In(n, "Phase Offset", T::Float) + ", " +
+						std::to_string(Op(n, "Type")) + ", " + std::to_string(Op(n, "Direction")) + ", " + std::to_string(Op(n, "Profile")) + ");");
+					Decl(n, "Color", T::Vec4, "vec4(vec3(" + id + "_w), 1.0)");
+					Decl(n, "Fac", T::Float, id + "_w");
+					return;
+				}
+				if (t == GradientTexture) {
+					Line("float " + id + "_g = lnx_gradient4(" + In(n, "Vector", T::Vec3, "LNX_OBJPOS") + ", " + std::to_string(Op(n, "Type")) + ");");
+					Decl(n, "Color", T::Vec4, "vec4(vec3(" + id + "_g), 1.0)");
+					Decl(n, "Fac", T::Float, id + "_g");
+					return;
+				}
+				if (t == BrickTexture) {
+					auto num = [&](const char* key, const char* fallback) { return Lit(static_cast<float>(std::atof(Prop(n, key, fallback).c_str()))); };
+					auto inum = [&](const char* key, const char* fallback) { return std::to_string(std::max(0, std::atoi(Prop(n, key, fallback).c_str()))); };
+					Line("vec2 " + id + "_b = lnx_brick(" + In(n, "Vector", T::Vec3, "LNX_OBJPOS") + " * " + In(n, "Scale", T::Float) + ", " + In(n, "Mortar Size", T::Float) + ", " +
+						In(n, "Mortar Smooth", T::Float) + ", " + In(n, "Bias", T::Float) + ", " + In(n, "Brick Width", T::Float) + ", " + In(n, "Row Height", T::Float) + ", " +
+						num("Offset", "0.5") + ", " + inum("Offset Frequency", "2") + ", " + num("Squash", "1.0") + ", " + inum("Squash Frequency", "2") + ");");
+					Line("vec4 " + id + "_c1 = " + In(n, "Color1", T::Vec4) + ";");
+					Line("if (" + id + "_b.y != 1.0) " + id + "_c1 = mix(" + id + "_c1, " + In(n, "Color2", T::Vec4) + ", " + id + "_b.x);");
+					Decl(n, "Color", T::Vec4, "mix(" + id + "_c1, " + In(n, "Mortar", T::Vec4) + ", " + id + "_b.y)");
+					Decl(n, "Fac", T::Float, id + "_b.y");
+					return;
+				}
+				if (t == EnvironmentTexture) {
+					const std::string path = Prop(n, "Path");
+					const std::string dir = In(n, "Vector", T::Vec3, "-lnx_view_dir()");
+					std::string sample = "vec4(1.0, 0.0, 1.0, 1.0)";
+					if (!path.empty()) {
+						const int tex = AddTexture(path);
+						if (tex >= 0) {
+							std::string space = Prop(n, "Color Space");
+							if (space.empty()) space = "sRGB";
+							const int cs = space == "sRGB" ? 0 : space == "Linear Rec.709" ? 1 : 2;
+							sample = "lnx_image_post(lnx_image_sample(u_GraphTex" + std::to_string(tex) + ", lnx_env_uv(" + dir + ", " + std::to_string(Op(n, "Projection")) + "), 0, " +
+								std::to_string(Op(n, "Interpolation")) + "), " + std::to_string(cs) + ", 0)";
+						}
+					}
+					Decl(n, "Color", T::Vec4, sample);
+					return;
+				}
+				if (t == GaborTexture) {
+					const bool is3D = Prop(n, "Type", "2D") == "3D";
+					const std::string orient = is3D ? In(n, "Orientation 3D", T::Vec3)
+						: "vec3(cos(" + In(n, "Orientation", T::Float) + "), sin(" + In(n, "Orientation", T::Float) + "), 0.0)";
+					Line("vec3 " + id + "_g = lnx_gabor(" + In(n, "Vector", T::Vec3, "LNX_OBJPOS") + ", " + In(n, "Scale", T::Float) + ", " + In(n, "Frequency", T::Float) + ", " +
+						In(n, "Anisotropy", T::Float) + ", " + orient + ", " + (is3D ? "true" : "false") + ");");
+					Decl(n, "Value", T::Float, id + "_g.x");
+					Decl(n, "Phase", T::Float, id + "_g.y");
+					Decl(n, "Intensity", T::Float, id + "_g.z");
+					return;
+				}
+				if (t == IESTexture) { Decl(n, "Fac", T::Float, In(n, "Strength", T::Float)); return; }
+				if (t == MagicTexture) {
+					Line("vec4 " + id + "_m = lnx_magic(" + In(n, "Vector", T::Vec3, "LNX_OBJPOS") + ", " + In(n, "Scale", T::Float) + ", " + In(n, "Distortion", T::Float) + ", " +
+						std::to_string(std::clamp(std::atoi(Prop(n, "Depth", "2").c_str()), 0, 10)) + ");");
+					Decl(n, "Color", T::Vec4, "vec4(" + id + "_m.rgb, 1.0)");
+					Decl(n, "Fac", T::Float, id + "_m.w");
+					return;
+				}
+				if (t == PointDensityTexture) {
+					Decl(n, "Color", T::Vec4, "vec4(0.0, 0.0, 0.0, 1.0)");
+					Decl(n, "Density", T::Float, "0.0");
+					return;
+				}
+				if (t == SkyTexture) {
+					Decl(n, "Color", T::Vec4, "vec4(lnx_sky(" + In(n, "Vector", T::Vec3, "-lnx_view_dir()") + ", " + In(n, "Sun Size", T::Float) + ", " + In(n, "Sun Intensity", T::Float) + ", " +
+						In(n, "Sun Elevation", T::Float) + ", " + In(n, "Sun Rotation", T::Float) + ", " + In(n, "Air", T::Float) + ", " + In(n, "Dust", T::Float) + ", " +
+						In(n, "Ozone", T::Float) + ", " + (Prop(n, "Sun Disc", "1") == "1" ? "true" : "false") + "), 1.0)");
+					return;
+				}
+				if (t == WhiteNoiseTexture) {
+					const int dims = Op(n, "Dimensions") + 1;
+					const std::string v = Visible(n, "Vector") ? In(n, "Vector", T::Vec3, "LNX_OBJPOS") : "vec3(0.0)";
+					const std::string w = Visible(n, "W") ? In(n, "W", T::Float) : "0.0";
+					std::string p;
+					if (dims == 1) p = "vec4(" + w + ", 0.0, 0.0, 0.0)";
+					else if (dims == 2) p = "vec4((" + v + ").xy, 0.0, 0.0)";
+					else if (dims == 3) p = "vec4(" + v + ", 0.0)";
+					else p = "vec4(" + v + ", " + w + ")";
+					Line("vec4 " + id + "_p = " + p + ";");
+					Decl(n, "Value", T::Float, "lnx_hash14(" + id + "_p)");
+					Decl(n, "Color", T::Vec4, "vec4(lnx_hash14(" + id + "_p + vec4(1.0, 0.0, 0.0, 0.0)), lnx_hash14(" + id + "_p + vec4(0.0, 2.0, 0.0, 0.0)), lnx_hash14(" + id + "_p + vec4(0.0, 0.0, 3.0, 0.0)), 1.0)");
+					return;
+				}
+
+				// ---------------- Color (Blender 4.x) ----------------
+				if (t == LightFalloffNode) {
+					Line("float " + id + "_r = length(LNX_POS - LNX_VIEWPOS);");
+					Line("float " + id + "_s = " + In(n, "Strength", T::Float) + ";");
+					Line("{ float sm = " + In(n, "Smooth", T::Float) + "; if (sm > 0.0) " + id + "_s *= (" + id + "_r * " + id + "_r) / (sm + " + id + "_r * " + id + "_r); }");
+					Decl(n, "Quadratic", T::Float, id + "_s");
+					Decl(n, "Linear", T::Float, id + "_s * " + id + "_r");
+					Decl(n, "Constant", T::Float, id + "_s * " + id + "_r * " + id + "_r");
+					return;
+				}
+				if (t == RGBCurvesNode) {
+					Line("vec4 " + id + "_in = " + In(n, "Color", T::Vec4) + ";");
+					Line("vec3 " + id + "_o = " + id + "_in.rgb;");
+					const char* ch[3] = { "Curve R", "Curve G", "Curve B" };
+					const char* sw[3] = { "r", "g", "b" };
+					for (int i = 0; i < 3; i++) {
+						const std::string c = Curve(n, "Curve C", id + "_in." + sw[i]);
+						Line(id + "_o." + sw[i] + " = " + Curve(n, ch[i], c) + ";");
+					}
+					Decl(n, "Color", T::Vec4, "vec4(mix(" + id + "_in.rgb, " + id + "_o, clamp(" + In(n, "Fac", T::Float) + ", 0.0, 1.0)), " + id + "_in.a)");
+					return;
+				}
+
+				// ---------------- Vector (Blender 4.x) ----------------
+				if (t == DisplacementNode) {
+					std::string N = In(n, "Normal", T::Vec3, "LNX_NORMAL");
+					Decl(n, "Displacement", T::Vec3, "(" + In(n, "Height", T::Float) + " - " + In(n, "Midlevel", T::Float) + ") * " + In(n, "Scale", T::Float) + " * normalize(" + N + ")");
+					return;
+				}
+				if (t == VectorDisplacementNode) {
+					Line("vec3 " + id + "_v = (" + In(n, "Vector", T::Vec3) + " - vec3(" + In(n, "Midlevel", T::Float) + ")) * " + In(n, "Scale", T::Float) + ";");
+					const int space = Op(n, "Space");
+					if (space == 0) Decl(n, "Displacement", T::Vec3, "LNX_TBN * " + id + "_v");
+					else if (space == 1) Decl(n, "Displacement", T::Vec3, "mat3(LNX_MODEL) * " + id + "_v");
+					else Decl(n, "Displacement", T::Vec3, id + "_v");
+					return;
+				}
+				if (t == NormalNode) {
+					const int slot = AddParam({ n.NodeID, 0 });
+					Line("vec3 " + id + "_dir = normalize(" + ParamExpr(slot, T::Vec3) + " + vec3(0.0, 0.0, 1e-6));");
+					Decl(n, "Normal", T::Vec3, id + "_dir");
+					Decl(n, "Dot", T::Float, "dot(" + In(n, "Normal", T::Vec3) + ", " + id + "_dir)");
+					return;
+				}
+				if (t == VectorCurvesNode) {
+					Line("vec3 " + id + "_in = " + In(n, "Vector", T::Vec3) + ";");
+					const std::string x = Curve(n, "Curve X", id + "_in.x");
+					const std::string y = Curve(n, "Curve Y", id + "_in.y");
+					const std::string z = Curve(n, "Curve Z", id + "_in.z");
+					Decl(n, "Vector", T::Vec3, "mix(" + id + "_in, vec3(" + x + ", " + y + ", " + z + "), clamp(" + In(n, "Fac", T::Float) + ", 0.0, 1.0))");
+					return;
+				}
+				if (t == VectorRotateNode) {
+					const int type = Op(n, "Type");
+					const bool inv = Prop(n, "Invert", "0") == "1";
+					Line("vec3 " + id + "_c = " + In(n, "Center", T::Vec3) + ";");
+					Line("vec3 " + id + "_v = " + In(n, "Vector", T::Vec3) + " - " + id + "_c;");
+					std::string r;
+					if (type == 4) {
+						Line("mat3 " + id + "_m = lnx_euler(" + In(n, "Rotation", T::Vec3) + ");");
+						r = (inv ? "transpose(" + id + "_m)" : id + "_m") + " * " + id + "_v";
+					}
+					else {
+						const std::string axis = type == 0 ? In(n, "Axis", T::Vec3) : type == 1 ? "vec3(1.0, 0.0, 0.0)" : type == 2 ? "vec3(0.0, 1.0, 0.0)" : "vec3(0.0, 0.0, 1.0)";
+						r = "lnx_rotate_axis(" + id + "_v, " + axis + ", " + std::string(inv ? "-" : "") + In(n, "Angle", T::Float) + ")";
+					}
+					Decl(n, "Vector", T::Vec3, r + " + " + id + "_c");
+					return;
+				}
+				if (t == VectorTransformNode) {
+					const int type = Op(n, "Type"), from = Op(n, "Convert From"), to = Op(n, "Convert To");
+					Line("vec3 " + id + "_v = " + In(n, "Vector", T::Vec3) + ";");
+					const std::string w = type == 0 ? "1.0" : "0.0";
+					// to world
+					if (from == 1) Line(id + "_v = " + std::string(type == 2 ? "normalize(mat3(transpose(LNX_MODEL_INV)) * " + id + "_v)" : "(LNX_MODEL * vec4(" + id + "_v, " + w + ")).xyz") + ";");
+					else if (from == 2) Line(id + "_v = (inverse(LNX_VIEW) * vec4(" + id + "_v, " + w + ")).xyz;");
+					// world to target
+					if (to == 1) Line(id + "_v = " + std::string(type == 2 ? "normalize(mat3(transpose(LNX_MODEL)) * " + id + "_v)" : "(LNX_MODEL_INV * vec4(" + id + "_v, " + w + ")).xyz") + ";");
+					else if (to == 2) Line(id + "_v = (LNX_VIEW * vec4(" + id + "_v, " + w + ")).xyz;");
+					Decl(n, "Vector", T::Vec3, id + "_v");
+					return;
+				}
+
+				// ---------------- Converter (Blender 4.x) ----------------
+				if (t == BlackbodyNode) { Decl(n, "Color", T::Vec4, "vec4(lnx_blackbody(" + In(n, "Temperature", T::Float) + "), 1.0)"); return; }
+				if (t == WavelengthNode) { Decl(n, "Color", T::Vec4, "vec4(lnx_wavelength(" + In(n, "Wavelength", T::Float) + "), 1.0)"); return; }
+				if (t == FloatCurveNode) {
+					Line("float " + id + "_in = " + In(n, "Value", T::Float) + ";");
+					const std::string v = Curve(n, "Curve V", id + "_in");
+					Decl(n, "Value", T::Float, "mix(" + id + "_in, " + v + ", clamp(" + In(n, "Factor", T::Float) + ", 0.0, 1.0))");
+					return;
+				}
+
 				// ---------------- Legacy ----------------
 				if (t == MultiplyNode) {
 					Decl(n, "Result", T::Vec4, In(n, "A", T::Vec4) + " * " + In(n, "B", T::Vec4));
@@ -1026,6 +1853,9 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 					const std::string expr = groupOut ? child.In(*groupOut, o.Name.c_str(), type) : Conv("0.0", T::Float, type);
 					Decl(n, o.Name, type, expr);
 				}
+				m_Transmission |= child.m_Transmission;
+				m_PartialAlpha |= child.m_PartialAlpha;
+				m_ShaderToRGB |= child.m_ShaderToRGB;
 			}
 
 			// Records a variable declared manually (multi-line nodes)
@@ -1065,6 +1895,12 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 			std::string m_OwnBody;
 			std::string& m_Body;
 			const Bindings* m_GroupInputs = nullptr;
+			int m_CurveCounter = 0;
+		public:
+			// What the surface needs from the renderer (set while generating)
+			bool m_Transmission = false;   // transmission / glass / transparent closures
+			bool m_PartialAlpha = false;   // alpha below 1 (or driven by a link)
+			bool m_ShaderToRGB = false;    // needs real lighting inside the material shader
 			std::unordered_map<ID, std::string> m_OutVars;
 			std::unordered_map<ID, T> m_OutTypes;
 			std::unordered_set<ID> m_Done, m_Visiting;
@@ -1082,11 +1918,22 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 		Generator gen(graph, out);
 		const std::string surface = gen.Surface();
 
+		// Render path: sorted transparent pass for transmission / blended alpha, forward for Shader to RGB
+		std::string method = "Auto";
+		if (const Node* o = graph.FindNodeByType(MaterialOutput)) {
+			auto it = o->Properties.find("Render Method");
+			if (it != o->Properties.end() && !it->second.empty()) method = it->second;
+		}
+		out.Blended = gen.m_Transmission || method == "Blended" || (method == "Auto" && gen.m_PartialAlpha);
+		out.Forward = out.Blended || gen.m_ShaderToRGB;
+
 		std::string code;
 		code.reserve(32 * 1024);
 		code += kLibCore;
 		code += kLibImage;
 		code += kLibNoise;
+		code += kLibNodes;
+		code += kLibNodes2;
 		code += kLibMath;
 		code += "\nLnxBSDF lnx_evaluate_graph() {\n";
 		code += gen.Body();
@@ -1102,7 +1949,7 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 		order.clear();
 		std::string select;
 		for (const auto& n : graph.GetNodes()) {
-			if (n.Outputs.empty() || n.IsReroute() || n.TypeName == MaterialOutput || n.TypeName == GroupOutputType) continue;
+			if (n.Outputs.empty() || n.IsReroute() || n.TypeName == MaterialOutput || n.TypeName == OutputNode || n.TypeName == GroupOutputType) continue;
 			const std::string expr = gen.PreviewExpr(n);
 			select += "\tif (target == " + std::to_string(order.size()) + ") return " + expr + ";\n";
 			order.push_back(n.NodeID);
@@ -1112,6 +1959,8 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 		code += kLibCore;
 		code += kLibImage;
 		code += kLibNoise;
+		code += kLibNodes;
+		code += kLibNodes2;
 		code += kLibMath;
 		code += "\nvec4 lnx_preview(int target) {\n";
 		code += gen.Body();
@@ -1122,6 +1971,29 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 		return out;
 	}
 
+	glm::vec4 EvaluateParam(const NodeGraph& graph, const ParamRef& ref) {
+		const Node* node = graph.FindNodeDeep(ref.Node);
+		if (!node) return glm::vec4(0.0f);
+		if (!ref.Curve.empty()) {
+			auto it = node->Properties.find(ref.Curve);
+			const auto points = ParseCurve(it != node->Properties.end() ? it->second : "");
+			const auto tangents = CurveTangents(points);
+			if (ref.RampStop >= 0 && ref.RampStop < static_cast<int>(points.size()))
+				return glm::vec4(points[ref.RampStop].X, points[ref.RampStop].Y, tangents[ref.RampStop], 0.0f);
+			return glm::vec4(0.0f);
+		}
+		if (ref.RampStop >= 0) {
+			auto it = node->Properties.find("Stops");
+			const auto stops = ParseRamp(it != node->Properties.end() ? it->second : "");
+			if (ref.RampStop < static_cast<int>(stops.size()))
+				return ref.RampPosition ? glm::vec4(stops[ref.RampStop].Position) : stops[ref.RampStop].Color;
+			return glm::vec4(0.0f);
+		}
+		if (ref.Pin == 0) return node->Value;
+		if (const Pin* pin = graph.FindPinDeep(ref.Pin)) return pin->DefaultValue;
+		return glm::vec4(0.0f);
+	}
+
 	uint32_t SlotForTexture(int index) {
 		return index < 8 ? static_cast<uint32_t>(index) : static_cast<uint32_t>(12 + (index - 8));
 	}
@@ -1130,7 +2002,7 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 	// SHADER SOURCE
 	// ============================================================================
 
-	std::string BuildShaderSource(const std::string& templatePath, const std::string& graphCode, const char* stageDefine) {
+	std::string BuildShaderSource(const std::string& templatePath, const std::string& graphCode, const char* stageDefine, const char* extraDefine) {
 		std::ifstream in(templatePath, std::ios::binary);
 		if (!in) {
 			LNX_LOG_ERROR("MaterialGraph: shader template not found: {0}", templatePath);
@@ -1150,7 +2022,9 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 
 		const size_t version = src.find("#version");
 		const size_t eol = version == std::string::npos ? 0 : src.find('\n', version) + 1;
-		src.insert(eol, std::string("#define ") + stageDefine + "\n#define LNX_MATERIAL_GRAPH\n");
+		std::string defines = std::string("#define ") + stageDefine + "\n#define LNX_MATERIAL_GRAPH\n";
+		if (extraDefine && *extraDefine) defines += std::string("#define ") + extraDefine + "\n";
+		src.insert(eol, defines);
 		return src;
 	}
 
@@ -1167,30 +2041,34 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 		const bool texturesChanged = compiled.TexturePaths != m_Compiled.TexturePaths;
 		m_Compiled = std::move(compiled);
 		if (codeChanged) {
-			m_Deferred.reset(); m_Forward.reset();
-			m_DeferredTried = m_ForwardTried = false;
+			for (int i = 0; i < 3; i++) { m_Shaders[i].reset(); m_Tried[i] = false; }
 			m_ShaderFailed = false;
 		}
 		if (texturesChanged) m_Textures.clear();
 		m_ParamsVersion = 0;   // force a params refresh
 	}
 
-	Ref<Shader> GraphRuntime::GetOrCreateShader(bool deferred) {
-		Ref<Shader>& shader = deferred ? m_Deferred : m_Forward;
-		bool& tried = deferred ? m_DeferredTried : m_ForwardTried;
-		if (shader || tried) return shader;
-		tried = true;
+	Ref<Shader> GraphRuntime::GetOrCreateShader(Mode mode) {
+		const int m = static_cast<int>(mode);
+		Ref<Shader>& shader = m_Shaders[m];
+		if (shader || m_Tried[m]) return shader;
+		m_Tried[m] = true;
 
-		const char* tmpl = deferred ? "assets/shaders/Deferred_Geometry.glsl" : "assets/shaders/Mesh3D.glsl";
-		const std::string vs = BuildShaderSource(tmpl, m_Compiled.Code, "VERTEX");
-		const std::string fs = BuildShaderSource(tmpl, m_Compiled.Code, "FRAGMENT");
+		const char* tmpl = mode == Mode::Deferred ? "assets/shaders/Deferred_Geometry.glsl" : "assets/shaders/Mesh3D.glsl";
+		const char* extra = mode == Mode::ForwardHDR ? "LNX_FORWARD_HDR" : nullptr;
+		const std::string vs = BuildShaderSource(tmpl, m_Compiled.Code, "VERTEX", extra);
+		const std::string fs = BuildShaderSource(tmpl, m_Compiled.Code, "FRAGMENT", extra);
 		if (vs.empty() || fs.empty()) { m_ShaderFailed = true; return nullptr; }
 
+		static const char* suffix[] = { "D", "F", "H" };
 		char name[64];
-		snprintf(name, sizeof(name), "MaterialGraph_%016llx_%s", static_cast<unsigned long long>(m_Compiled.CodeHash), deferred ? "D" : "F");
+		snprintf(name, sizeof(name), "MaterialGraph_%016llx_%s", static_cast<unsigned long long>(m_Compiled.CodeHash), suffix[m]);
 		shader = Shader::Create(name, vs, fs);
 		if (!shader || !shader->IsValid()) {
-			LNX_LOG_ERROR("Material graph shader failed to compile ({0})", deferred ? "deferred" : "forward");
+			LNX_LOG_ERROR("Material graph shader failed to compile ({0}); source saved to Cache/FailedMaterialShader.glsl", suffix[m]);
+			std::error_code ec;
+			std::filesystem::create_directories("Cache", ec);
+			std::ofstream("Cache/FailedMaterialShader.glsl") << fs;
 			shader.reset();
 			m_ShaderFailed = true;
 		}
@@ -1198,32 +2076,19 @@ vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
 	}
 
 	Ref<Shader> GraphRuntime::Bind(bool deferred, const NodeGraph& graph, const std::unordered_map<std::string, glm::vec4>* overrides) {
+		return Bind(deferred ? Mode::Deferred : Mode::Forward, graph, overrides);
+	}
+
+	Ref<Shader> GraphRuntime::Bind(Mode mode, const NodeGraph& graph, const std::unordered_map<std::string, glm::vec4>* overrides) {
 		if (!m_Compiled.IsValid()) return nullptr;
-		Ref<Shader> shader = GetOrCreateShader(deferred);
+		Ref<Shader> shader = GetOrCreateShader(mode);
 		if (!shader) return nullptr;
 
 		// ---- Params (refresh only when the graph changed) ----
 		if (m_ParamsVersion != graph.GetVersion() || m_Params.empty()) {
 			m_Params.assign(kMaxGraphParams, glm::vec4(0.0f));
-			for (size_t i = 0; i < m_Compiled.Params.size() && i + 1 < kMaxGraphParams; i++) {
-				const ParamRef& ref = m_Compiled.Params[i];
-				const Node* node = graph.FindNodeDeep(ref.Node);
-				if (!node) continue;
-				glm::vec4 v(0.0f);
-				if (ref.RampStop >= 0) {
-					auto it = node->Properties.find("Stops");
-					const auto stops = ParseRamp(it != node->Properties.end() ? it->second : "");
-					if (ref.RampStop < static_cast<int>(stops.size()))
-						v = ref.RampPosition ? glm::vec4(stops[ref.RampStop].Position) : stops[ref.RampStop].Color;
-				}
-				else if (ref.Pin == 0) {
-					v = node->Value;
-				}
-				else if (const Pin* pin = graph.FindPinDeep(ref.Pin)) {
-					v = pin->DefaultValue;
-				}
-				m_Params[i + 1] = v;
-			}
+			for (size_t i = 0; i < m_Compiled.Params.size() && i + 1 < kMaxGraphParams; i++)
+				m_Params[i + 1] = EvaluateParam(graph, m_Compiled.Params[i]);
 			m_ParamsVersion = graph.GetVersion();
 		}
 

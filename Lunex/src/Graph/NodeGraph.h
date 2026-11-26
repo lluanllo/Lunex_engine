@@ -61,6 +61,7 @@ namespace Lunex::Graph {
 		bool HideValue = false;           // no inline editor (e.g. Normal: implicit geometry normal)
 		std::string StringValue;          // String inputs (blueprints)
 		std::string Label;                // display name when it differs from Name (unique key)
+		std::string Panel;                // collapsible group in the node UI (Blender panels: "Coat", "Sheen"...)
 
 		const std::string& DisplayName() const { return Label.empty() ? Name : Label; }
 	};
@@ -121,6 +122,13 @@ namespace Lunex::Graph {
 		std::vector<std::string> Options;
 	};
 
+	// Numeric value stored in Node::Properties[Key] (Blender node properties that are not sockets)
+	struct NodeNumberProperty {
+		std::string Key;
+		float Min = 0.0f, Max = 0.0f;
+		bool IsInt = false;
+	};
+
 	struct NodeTypeInfo {
 		std::string TypeName;
 		std::string Title;
@@ -132,6 +140,7 @@ namespace Lunex::Graph {
 		bool HiddenInMenu = false;                   // legacy types kept only for loading old files
 		std::vector<NodeEnumProperty> Enums;
 		std::vector<std::string> Toggles;            // checkboxes stored as "1"/"0" in Properties
+		std::vector<NodeNumberProperty> Numbers;     // sliders stored as text in Properties
 		std::string Description;
 		// Optional: hide sockets that the current operation does not use (Blender-style)
 		std::function<bool(const Node&, const Pin&)> PinVisible;
