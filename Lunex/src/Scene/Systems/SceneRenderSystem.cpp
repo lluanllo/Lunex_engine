@@ -1,6 +1,9 @@
 #include "stpch.h"
 #include "SceneRenderSystem.h"
 #include "ParticleSystem.h"
+#include "Rendering/RenderSystem.h"
+#include "Core/JobSystem/JobSystem.h"
+#include "Core/FrameProfiler.h"
 
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
@@ -55,14 +58,15 @@ namespace Lunex {
 		Renderer3D::UpdateLights(m_Context->OwningScene);
 		
 		// Update shadow maps BEFORE BeginScene (BeginScene binds atlas for reading)
-		Renderer3D::UpdateShadows(m_Context->OwningScene, camera);
-		
+		{ ProfileScope scope("Shadow maps", true); Renderer3D::UpdateShadows(m_Context->OwningScene, camera); }
+
 		if (DeferredRenderer::IsEnabled()) {
 			// ========================================
 			// DEFERRED PATH: Only geometry pass here.
 			// Skybox, grid, sprites, billboards, gizmos render AFTER
 			// the lighting pass via RenderPostLighting().
 			// ========================================
+			ProfileScope scope("Geometry (G-Buffer)", true);
 			DeferredRenderer::BeginScene(camera);
 			DeferredRenderer::BeginGeometryPass();
 			RenderMeshes(camera, camera.GetViewMatrix());
@@ -207,10 +211,11 @@ namespace Lunex {
 		Renderer3D::UpdateLights(m_Context->OwningScene);
 		
 		// Update shadow maps BEFORE BeginScene (BeginScene binds atlas for reading)
-		Renderer3D::UpdateShadows(m_Context->OwningScene, camera, cameraTransform);
-		
+		{ ProfileScope scope("Shadow maps", true); Renderer3D::UpdateShadows(m_Context->OwningScene, camera, cameraTransform); }
+
 		if (DeferredRenderer::IsEnabled()) {
 			// Deferred path: only geometry pass here
+			ProfileScope scope("Geometry (G-Buffer)", true);
 			DeferredRenderer::BeginScene(camera, cameraTransform);
 			DeferredRenderer::BeginGeometryPass();
 			RenderMeshes(camera, cameraTransform);
@@ -270,10 +275,27 @@ namespace Lunex {
 
 	void SceneRenderSystem::RenderMeshes(const Camera& camera, const glm::mat4& cameraTransform) {
 		auto view = m_Context->Registry->view<TransformComponent, MeshComponent>();
-		for (auto entity : view) {
+
+		// Draw collection: world transforms are computed on the job workers when enabled
+		// (read-only registry access); submission stays on the GL thread.
+		std::vector<entt::entity> entities(view.begin(), view.end());
+		std::vector<glm::mat4> worldTransforms(entities.size());
+		const bool parallel = RenderSystem::GetConfig().EnableParallelDrawCollection &&
+			JobSystem::IsInitialized() && entities.size() >= 64;
+		if (parallel) {
+			auto counter = JobSystem::Get().ParallelFor(0, static_cast<uint32_t>(entities.size()),
+				[&](uint32_t i) { worldTransforms[i] = GetWorldTransform(entities[i]); }, 32);
+			JobSystem::Get().Wait(counter);
+		}
+		else {
+			for (size_t i = 0; i < entities.size(); i++) worldTransforms[i] = GetWorldTransform(entities[i]);
+		}
+
+		for (size_t index = 0; index < entities.size(); index++) {
+			const entt::entity entity = entities[index];
 			Entity e = { entity, m_Context->OwningScene };
 			auto& mesh = view.get<MeshComponent>(entity);
-			glm::mat4 worldTransform = GetWorldTransform(entity);
+			const glm::mat4& worldTransform = worldTransforms[index];
 
 			// Skinning palette from the AnimatorComponent (if any)
 			const std::vector<glm::mat4>* bones = nullptr;

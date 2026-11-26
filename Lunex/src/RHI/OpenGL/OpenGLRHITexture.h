@@ -230,6 +230,10 @@ namespace RHI {
 	public:
 		OpenGLRHITexture2D(const TextureDesc& desc, const void* initialData = nullptr);
 		virtual ~OpenGLRHITexture2D();
+
+		// Live 2D textures and their estimated GPU memory (Stats panel)
+		static uint32_t GetLiveCount();
+		static uint64_t GetLiveBytes();
 		
 		// RHIResource
 		RHIHandle GetNativeHandle() const override { return static_cast<RHIHandle>(m_TextureID); }

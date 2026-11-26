@@ -1,4 +1,5 @@
 #include "stpch.h"
+#include <atomic>
 #include "OpenGLRHITexture.h"
 #include "OpenGLRHIDevice.h"
 #include "Log/Log.h"
@@ -41,6 +42,11 @@ namespace RHI {
 	// OPENGL RHI TEXTURE 2D IMPLEMENTATION
 	// ============================================================================
 	
+	static std::atomic<uint32_t> s_LiveCount{ 0 };
+	static std::atomic<uint64_t> s_LiveBytes{ 0 };
+	uint32_t OpenGLRHITexture2D::GetLiveCount() { return s_LiveCount.load(); }
+	uint64_t OpenGLRHITexture2D::GetLiveBytes() { return s_LiveBytes.load(); }
+
 	OpenGLRHITexture2D::OpenGLRHITexture2D(const TextureDesc& desc, const void* initialData) {
 		m_Desc = desc;
 		
@@ -57,6 +63,7 @@ namespace RHI {
 			// Track deallocation
 			if (auto* device = dynamic_cast<OpenGLRHIDevice*>(RHIDevice::Get())) {
 				device->TrackDeallocation(GetGPUMemorySize());
+				s_LiveCount--; s_LiveBytes -= GetGPUMemorySize();
 			}
 			glDeleteTextures(1, &m_TextureID);
 		}
@@ -92,6 +99,7 @@ namespace RHI {
 		// Track allocation
 		if (auto* device = dynamic_cast<OpenGLRHIDevice*>(RHIDevice::Get())) {
 			device->TrackAllocation(GetGPUMemorySize());
+			s_LiveCount++; s_LiveBytes += GetGPUMemorySize();
 		}
 	}
 	

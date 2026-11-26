@@ -12,6 +12,7 @@
 #include "Renderer/Shadows/ShadowSystem.h"
 #include "Renderer/GridRenderer.h"
 #include "Renderer/PostProcess/PostProcessRenderer.h"
+#include "Renderer/Deferred/DeferredRenderer.h"
 #include "Rendering/RenderSystem.h"
 #include "Renderer/Pipeline/RenderPipeline.h"
 #include "Project/ProjectManager.h"
@@ -248,10 +249,11 @@ namespace Lunex {
 		}
 
 		if (BeginSettingsPanel("Performance", false)) {
-			bool parallelPasses = RenderSystem::IsParallelPassesEnabled();
-			if (PropertyCheckbox("Parallel Passes", parallelPasses, "Enable parallel render pass execution"))
-				RenderSystem::SetParallelPassesEnabled(parallelPasses);
-			PropertyCheckbox("Parallel Draw Collection", config.EnableParallelDrawCollection, "Enable parallel entity iteration for draw commands");
+			PropertyCheckbox("Parallel Draw Collection", config.EnableParallelDrawCollection,
+				"Compute mesh world transforms on the job workers (scenes with 64+ meshes). GL submission stays on the main thread.");
+			bool culling = DeferredRenderer::IsFrustumCullingEnabled();
+			if (PropertyCheckbox("Frustum Culling", culling, "Skip submeshes outside the camera view"))
+				DeferredRenderer::SetFrustumCullingEnabled(culling);
 			EndSettingsPanel();
 		}
 	}
