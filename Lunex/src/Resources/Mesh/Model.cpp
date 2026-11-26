@@ -54,7 +54,9 @@ namespace Lunex {
 			aiProcess_OptimizeMeshes |
 			aiProcess_LimitBoneWeights;   // at most 4 bone influences per vertex
 
-		if (!isGLTF) {
+		// Textures are loaded flipped (stbi_set_flip_vertically_on_load(1), OpenGL convention), so
+		// OBJ/FBX/DAE UVs (origin bottom-left) are already right; glTF UVs (origin top-left) must flip.
+		if (isGLTF) {
 			flags |= aiProcess_FlipUVs;
 		}
 
