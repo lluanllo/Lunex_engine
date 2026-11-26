@@ -43,7 +43,7 @@ namespace Lunex {
 
 		// Soft round sprite used when no texture is set
 		Ref<Texture2D> DefaultSprite() {
-			static Ref<Texture2D> s_Sprite = [] {
+			static Ref<Texture2D>& s_Sprite = *new Ref<Texture2D>([] {
 				constexpr uint32_t N = 64;
 				std::vector<uint32_t> pixels(N * N);
 				for (uint32_t y = 0; y < N; y++)
@@ -56,7 +56,7 @@ namespace Lunex {
 				auto tex = Texture2D::Create(N, N);
 				tex->SetData(pixels.data(), N * N * 4);
 				return tex;
-			}();
+			}());
 			return s_Sprite;
 		}
 
@@ -75,7 +75,7 @@ namespace Lunex {
 				}
 			}
 			if (!ps.RuntimeMesh && ps.Mode == PSC::RenderMode::Mesh) {
-				static Ref<Model> s_Cube = Model::CreateCube();
+				static Ref<Model>& s_Cube = *new Ref<Model>(Model::CreateCube());
 				ps.RuntimeMesh = s_Cube;
 			}
 			if (ps.LoadedMaterialPath != ps.MaterialPath) {
@@ -302,8 +302,8 @@ namespace Lunex {
 	// ============================================================================
 
 	void ParticleSystem::SubmitMeshParticles(Scene* scene, entt::registry& registry, bool deferred) {
-		static MeshComponent s_Mesh;
-		static MaterialComponent s_Material;
+		static MeshComponent& s_Mesh = *new MeshComponent();   // leaked: no GL teardown after the context
+		static MaterialComponent& s_Material = *new MaterialComponent();
 
 		auto view = registry.view<PSC>();
 		for (auto handle : view) {

@@ -554,7 +554,7 @@ namespace Lunex::MaterialGraph {
 		Ref<Texture2D> LoadTexture(const std::string& path, const Ref<Texture2D>& current, const std::string& currentPath) {
 			if (path.empty()) return nullptr;
 			if (current && currentPath == path) return current;
-			static std::unordered_map<std::string, Ref<Texture2D>> cache;
+			static auto& cache = *new std::unordered_map<std::string, Ref<Texture2D>>();   // leaked on purpose (GL objects outlive the context otherwise)
 			auto& slot = cache[path];
 			if (!slot || !slot->IsLoaded()) slot = Texture2D::Create(path);
 			return (slot && slot->IsLoaded()) ? slot : nullptr;

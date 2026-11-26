@@ -1055,7 +1055,8 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 		}
 
 		static const auto s_Start = std::chrono::steady_clock::now();
-		static Ref<UniformBuffer> s_ParamsUBO = UniformBuffer::Create(sizeof(glm::vec4) * kMaxGraphParams, kGraphParamsBinding);
+		// GL-owning statics are leaked on purpose: destroying them after the context is gone crashes at exit
+		static Ref<UniformBuffer>& s_ParamsUBO = *new Ref<UniformBuffer>(UniformBuffer::Create(sizeof(glm::vec4) * kMaxGraphParams, kGraphParamsBinding));
 
 		const float time = std::chrono::duration<float>(std::chrono::steady_clock::now() - s_Start).count();
 		if (overrides && !overrides->empty()) {
@@ -1076,7 +1077,7 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 
 		// ---- Textures ----
 		if (m_Textures.size() != m_Compiled.TexturePaths.size()) {
-			static std::unordered_map<std::string, Ref<Texture2D>> s_Cache;
+			static auto& s_Cache = *new std::unordered_map<std::string, Ref<Texture2D>>();
 			m_Textures.clear();
 			for (const auto& path : m_Compiled.TexturePaths) {
 				auto& cached = s_Cache[path];
@@ -1084,12 +1085,12 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 				m_Textures.push_back(cached && cached->IsLoaded() ? cached : nullptr);
 			}
 		}
-		static Ref<Texture2D> s_White = [] {
+		static Ref<Texture2D>& s_White = *new Ref<Texture2D>([] {
 			auto t = Texture2D::Create(1, 1);
 			uint32_t white = 0xFFFFFFFF;
 			t->SetData(&white, sizeof(white));
 			return t;
-		}();
+		}());
 		for (size_t i = 0; i < m_Textures.size(); i++)
 			(m_Textures[i] ? m_Textures[i] : s_White)->Bind(SlotForTexture(static_cast<int>(i)));
 
