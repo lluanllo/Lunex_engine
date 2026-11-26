@@ -113,7 +113,7 @@ namespace Lunex {
 		ImGui::SeparatorText("Selected");
 		if (const Node* node = graph.FindNode(m_Editor->GetSelectedNode())) {
 			ImGui::TextUnformatted(node->Title.c_str());
-			const NodeTypeInfo* info = graph.GetRegistry() ? graph.GetRegistry()->Get(node->TypeName) : nullptr;
+			const NodeTypeInfo* info = graph.GetTypeInfo(node->TypeName);
 			if (info) {
 				ImGui::TextDisabled("%s", info->Category.c_str());
 				if (!info->Description.empty()) ImGui::TextWrapped("%s", info->Description.c_str());

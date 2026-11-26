@@ -65,6 +65,23 @@ namespace Lunex::Graph {
 		const std::string& DisplayName() const { return Label.empty() ? Name : Label; }
 	};
 
+	class NodeGraph;
+
+	// ---- Built-in node types, available in every graph (not part of a domain registry) ----
+	inline constexpr const char* RerouteType = "Graph.Reroute";          // pass-through point on a link
+	inline constexpr const char* GroupType = "Graph.Group";              // node group (owns a subgraph)
+	inline constexpr const char* GroupInputType = "Graph.GroupInput";    // inside a group: its inputs
+	inline constexpr const char* GroupOutputType = "Graph.GroupOutput";  // inside a group: its outputs
+	inline constexpr const char* NewSocketPin = "__new";                 // virtual socket that grows the group interface
+
+	// Socket of a group interface (Blender "group sockets")
+	struct InterfaceSocket {
+		std::string Name;
+		PinType Type = PinType::Float;
+		glm::vec4 Default{ 0.0f };
+		glm::vec2 Range{ 0.0f };
+	};
+
 	struct Node {
 		ID NodeID = 0;
 		std::string TypeName;             // registry key, e.g. "Material.TextureSample"
@@ -76,6 +93,12 @@ namespace Lunex::Graph {
 		// Node-specific data (constant values, texture path, ...)
 		glm::vec4 Value{ 0.0f };
 		std::map<std::string, std::string> Properties;
+
+		// Graph.Group only: the nodes inside the group
+		std::shared_ptr<NodeGraph> Subgraph;
+
+		bool IsReroute() const { return TypeName == RerouteType; }
+		bool IsGroup() const { return TypeName == GroupType; }
 
 		Pin* FindInput(const std::string& name);
 		Pin* FindOutput(const std::string& name);
@@ -127,10 +150,16 @@ namespace Lunex::Graph {
 
 	class NodeGraph {
 	public:
-		explicit NodeGraph(const NodeRegistry* registry = nullptr) : m_Registry(registry) {}
+		explicit NodeGraph(const NodeRegistry* registry = nullptr) : m_Registry(registry), m_Counter(std::make_shared<ID>(1)) {}
+		// Deep copy: group subgraphs are cloned (the copy gets its own ID counter)
+		NodeGraph(const NodeGraph& other);
+		NodeGraph& operator=(const NodeGraph& other);
 
-		void SetRegistry(const NodeRegistry* registry) { m_Registry = registry; }
+		void SetRegistry(const NodeRegistry* registry);
 		const NodeRegistry* GetRegistry() const { return m_Registry; }
+		// Domain registry first, then the built-in types (reroute, groups)
+		const NodeTypeInfo* GetTypeInfo(const std::string& typeName) const;
+		static const NodeRegistry& GetBuiltinRegistry();
 
 		// ---- Nodes ----
 		Node* AddNode(const std::string& typeName, const glm::vec2& position = glm::vec2(0.0f));
@@ -158,8 +187,38 @@ namespace Lunex::Graph {
 		const Link* GetLinkInto(ID inputPin) const;
 		const std::vector<Link>& GetLinks() const { return m_Links; }
 
-		// Follow the link into an input: returns the source node/pin (or nulls)
+		// Follow the link into an input: returns the source node/pin (or nulls). Reroutes are walked through.
 		std::pair<const Node*, const Pin*> GetSource(ID inputPin) const;
+		// Every input fed by an output (reroutes walked through)
+		std::vector<std::pair<const Node*, const Pin*>> GetTargets(ID outputPin) const;
+
+		// ---- Groups ----
+		// Interface of this graph when it is the subgraph of a group node
+		std::vector<InterfaceSocket>& GetInterfaceInputs() { return m_InterfaceInputs; }
+		std::vector<InterfaceSocket>& GetInterfaceOutputs() { return m_InterfaceOutputs; }
+		const std::vector<InterfaceSocket>& GetInterfaceInputs() const { return m_InterfaceInputs; }
+		const std::vector<InterfaceSocket>& GetInterfaceOutputs() const { return m_InterfaceOutputs; }
+		// Adds an interface socket (unique name) and refreshes the Group Input/Output nodes
+		std::string AddInterfaceSocket(bool input, const std::string& name, PinType type, const glm::vec4& def = glm::vec4(0.0f), const glm::vec2& range = glm::vec2(0.0f));
+		void RemoveInterfaceSocket(bool input, size_t index);
+		// Rebuilds Group Input / Group Output pins from the interface (keeps pin IDs by name)
+		void SyncInterfaceNodes();
+		// Rebuilds a group node's pins from its subgraph interface (keeps pin IDs / defaults by name)
+		void SyncGroupNode(Node& group);
+		// Syncs every group node of this graph and of every nested subgraph
+		void SyncGroupsDeep();
+		// Empty subgraph sharing this graph's ID space, with Group Input / Output nodes
+		std::shared_ptr<NodeGraph> CreateSubgraph();
+		// Ctrl+G: moves `nodes` into a new group node (links crossing the selection become sockets). Returns the group node ID.
+		ID MakeGroup(const std::vector<ID>& nodes);
+		// Ctrl+Alt+G: puts the group's nodes back into this graph
+		bool Ungroup(ID groupNode);
+
+		// Lookups through every nested group (IDs are unique in the whole tree)
+		Node* FindNodeDeep(ID nodeID);
+		const Node* FindNodeDeep(ID nodeID) const;
+		Pin* FindPinDeep(ID pinID);
+		const Pin* FindPinDeep(ID pinID) const;
 
 		// ---- Change tracking ----
 		uint64_t GetVersion() const { return m_Version; }
@@ -170,13 +229,18 @@ namespace Lunex::Graph {
 		bool Deserialize(const YAML::Node& node);
 
 	private:
-		ID NextID() { return m_NextID++; }
+		ID NextID() { return (*m_Counter)++; }
 		void AssignPinIDs(Node& node);
+		void BuildBuiltinPins(Node& node);
+		void SetCounterDeep(const std::shared_ptr<ID>& counter);
+		ID MaxIDDeep() const;
+		bool DeserializeInto(const YAML::Node& data);
 
 		const NodeRegistry* m_Registry = nullptr;
 		std::vector<Node> m_Nodes;
 		std::vector<Link> m_Links;
-		ID m_NextID = 1;
+		std::shared_ptr<ID> m_Counter;          // shared by a graph and all its subgraphs
+		std::vector<InterfaceSocket> m_InterfaceInputs, m_InterfaceOutputs;
 		uint64_t m_Version = 1;
 	};
 

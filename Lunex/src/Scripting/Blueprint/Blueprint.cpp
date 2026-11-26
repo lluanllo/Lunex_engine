@@ -52,13 +52,15 @@ namespace Lunex::Blueprint {
 			Value In(const Node& n, const char* name) {
 				const Pin* pin = n.FindInput(name);
 				if (!pin) return {};
-				if (const Link* link = G.GetLinkInto(pin->PinID)) {
-					const Node* src = G.FindPinOwner(link->FromPin);
-					if (src && IsPure(*src)) {
+				if (G.GetLinkInto(pin->PinID)) {
+					// Reroutes are walked through
+					const auto [src, srcPin] = G.GetSource(pin->PinID);
+					if (!src || !srcPin) return {};
+					if (IsPure(*src)) {
 						auto it = Impls().find(src->TypeName);
 						if (it != Impls().end() && --Budget > 0) it->second(*this, *src, "");
 					}
-					auto v = Out.find(link->FromPin);
+					auto v = Out.find(srcPin->PinID);
 					return v != Out.end() ? v->second : Value{};
 				}
 				Value v;
@@ -94,12 +96,8 @@ namespace Lunex::Blueprint {
 			void Then(const Node& n, const char* execOut = "Then") {
 				const Pin* out = n.FindOutput(execOut);
 				if (!out) return;
-				for (const auto& link : G.GetLinks()) {
-					if (link.FromPin != out->PinID) continue;
-					const Node* target = G.FindPinOwner(link.ToPin);
-					const Pin* entered = G.FindPin(link.ToPin);
+				for (const auto& [target, entered] : G.GetTargets(out->PinID))
 					if (target && entered) Run(*target, entered->Name);
-				}
 			}
 
 			void Run(const Node& n, const std::string& entered) {
