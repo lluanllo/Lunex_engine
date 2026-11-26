@@ -294,6 +294,119 @@ namespace Lunex {
 		return "";
 	}
 
+	// ============================================================================
+	// TYPE ICONS (vector, Blender outliner style: readable without knowing the colors)
+	// ============================================================================
+
+	namespace {
+		enum class EntityGlyph { Empty, Group, Camera, Sun, PointLight, SpotLight, Mesh, SkinnedMesh, Sprite, Particles, Environment };
+
+		EntityGlyph GlyphOf(Entity entity) {
+			if (entity.HasComponent<GroupComponent>()) return EntityGlyph::Group;
+			if (entity.HasComponent<CameraComponent>()) return EntityGlyph::Camera;
+			if (entity.HasComponent<LightComponent>()) {
+				auto& light = entity.GetComponent<LightComponent>();
+				switch (light.GetType()) {
+					case LightType::Directional: return EntityGlyph::Sun;
+					case LightType::Spot: return EntityGlyph::SpotLight;
+					default: return EntityGlyph::PointLight;
+				}
+			}
+			if (entity.HasComponent<AnimatorComponent>()) return EntityGlyph::SkinnedMesh;
+			if (entity.HasComponent<MeshComponent>()) return EntityGlyph::Mesh;
+			if (entity.HasComponent<ParticleSystemComponent>()) return EntityGlyph::Particles;
+			if (entity.HasComponent<SpriteRendererComponent>() || entity.HasComponent<CircleRendererComponent>()) return EntityGlyph::Sprite;
+			if (entity.HasComponent<EnvironmentComponent>()) return EntityGlyph::Environment;
+			return EntityGlyph::Empty;
+		}
+
+		ImU32 GlyphColor(EntityGlyph g) {
+			switch (g) {
+				case EntityGlyph::Group:       return IM_COL32(232, 178, 72, 255);
+				case EntityGlyph::Camera:      return IM_COL32(150, 190, 255, 255);
+				case EntityGlyph::Sun:
+				case EntityGlyph::PointLight:
+				case EntityGlyph::SpotLight:   return IM_COL32(255, 214, 90, 255);
+				case EntityGlyph::Mesh:        return IM_COL32(255, 150, 60, 255);
+				case EntityGlyph::SkinnedMesh: return IM_COL32(190, 130, 255, 255);
+				case EntityGlyph::Sprite:      return IM_COL32(110, 210, 150, 255);
+				case EntityGlyph::Particles:   return IM_COL32(240, 120, 220, 255);
+				case EntityGlyph::Environment: return IM_COL32(120, 200, 230, 255);
+				default:                       return IM_COL32(170, 170, 170, 255);
+			}
+		}
+
+		void DrawGlyph(ImDrawList* dl, EntityGlyph g, ImVec2 p, float s) {
+			const ImU32 c = GlyphColor(g);
+			const float t = std::max(1.2f, s * 0.09f);   // stroke
+			auto P = [&](float x, float y) { return ImVec2(p.x + x * s, p.y + y * s); };
+			switch (g) {
+				case EntityGlyph::Group:   // folder
+					dl->AddRectFilled(P(0.05f, 0.22f), P(0.45f, 0.38f), c, 1.5f);
+					dl->AddRectFilled(P(0.05f, 0.32f), P(0.95f, 0.85f), c, 2.0f);
+					break;
+				case EntityGlyph::Camera:  // body + lens
+					dl->AddRectFilled(P(0.05f, 0.30f), P(0.65f, 0.78f), c, 2.0f);
+					dl->AddTriangleFilled(P(0.62f, 0.54f), P(0.97f, 0.28f), P(0.97f, 0.80f), c);
+					break;
+				case EntityGlyph::Sun: {   // disc + rays
+					const ImVec2 o = P(0.5f, 0.5f);
+					dl->AddCircleFilled(o, s * 0.2f, c);
+					for (int i = 0; i < 8; i++) {
+						const float a = i * 3.14159265f / 4.0f;
+						dl->AddLine(ImVec2(o.x + std::cos(a) * s * 0.31f, o.y + std::sin(a) * s * 0.31f),
+							ImVec2(o.x + std::cos(a) * s * 0.46f, o.y + std::sin(a) * s * 0.46f), c, t);
+					}
+					break;
+				}
+				case EntityGlyph::PointLight:   // bulb
+					dl->AddCircleFilled(P(0.5f, 0.40f), s * 0.30f, c);
+					dl->AddRectFilled(P(0.36f, 0.66f), P(0.64f, 0.90f), c, 1.5f);
+					break;
+				case EntityGlyph::SpotLight:    // cone
+					dl->AddRectFilled(P(0.38f, 0.08f), P(0.62f, 0.28f), c, 1.5f);
+					dl->AddTriangleFilled(P(0.5f, 0.22f), P(0.10f, 0.92f), P(0.90f, 0.92f), (c & 0x00FFFFFF) | 0x99000000);
+					break;
+				case EntityGlyph::Mesh: {  // cube (isometric)
+					const ImVec2 top = P(0.5f, 0.06f), l = P(0.08f, 0.28f), r = P(0.92f, 0.28f), mid = P(0.5f, 0.50f);
+					const ImVec2 bl = P(0.08f, 0.74f), br = P(0.92f, 0.74f), bot = P(0.5f, 0.96f);
+					dl->AddQuadFilled(top, r, mid, l, c);
+					dl->AddQuadFilled(l, mid, bot, bl, (c & 0x00FFFFFF) | 0xC0000000);
+					dl->AddQuadFilled(mid, r, br, bot, (c & 0x00FFFFFF) | 0x80000000);
+					break;
+				}
+				case EntityGlyph::SkinnedMesh: {   // bone
+					dl->AddLine(P(0.28f, 0.72f), P(0.72f, 0.28f), c, s * 0.18f);
+					dl->AddCircleFilled(P(0.20f, 0.70f), s * 0.13f, c); dl->AddCircleFilled(P(0.30f, 0.82f), s * 0.13f, c);
+					dl->AddCircleFilled(P(0.70f, 0.18f), s * 0.13f, c); dl->AddCircleFilled(P(0.82f, 0.30f), s * 0.13f, c);
+					break;
+				}
+				case EntityGlyph::Sprite:  // picture
+					dl->AddRect(P(0.06f, 0.14f), P(0.94f, 0.86f), c, 1.5f, 0, t);
+					dl->AddTriangleFilled(P(0.16f, 0.78f), P(0.42f, 0.44f), P(0.66f, 0.78f), c);
+					dl->AddCircleFilled(P(0.70f, 0.36f), s * 0.09f, c);
+					break;
+				case EntityGlyph::Particles:
+					dl->AddCircleFilled(P(0.25f, 0.70f), s * 0.13f, c);
+					dl->AddCircleFilled(P(0.55f, 0.35f), s * 0.11f, c);
+					dl->AddCircleFilled(P(0.80f, 0.72f), s * 0.09f, c);
+					dl->AddCircleFilled(P(0.30f, 0.22f), s * 0.07f, c);
+					break;
+				case EntityGlyph::Environment:   // globe
+					dl->AddCircle(P(0.5f, 0.5f), s * 0.42f, c, 0, t);
+					dl->AddLine(P(0.08f, 0.5f), P(0.92f, 0.5f), c, t);
+					dl->AddBezierQuadratic(P(0.5f, 0.08f), P(0.22f, 0.5f), P(0.5f, 0.92f), c, t);
+					dl->AddBezierQuadratic(P(0.5f, 0.08f), P(0.78f, 0.5f), P(0.5f, 0.92f), c, t);
+					break;
+				default:   // empty: axes
+					dl->AddLine(P(0.5f, 0.08f), P(0.5f, 0.92f), c, t);
+					dl->AddLine(P(0.08f, 0.5f), P(0.92f, 0.5f), c, t);
+					dl->AddLine(P(0.22f, 0.78f), P(0.78f, 0.22f), c, t);
+					break;
+			}
+		}
+	}
+
 	void SceneHierarchyPanel::DrawEntityNode(Entity entity, int depth) {
 		using namespace UI;
 		
@@ -388,23 +501,10 @@ namespace Lunex {
 		if (isSelected)
 			flags |= ImGuiTreeNodeFlags_Selected;
 
-		// Draw icon
-		Ref<Texture2D> icon = m_EntityIcon;
-		if (entity.HasComponent<GroupComponent>()) icon = m_GroupIcon ? m_GroupIcon : m_EntityIcon;
-		else if (entity.HasComponent<CameraComponent>()) icon = m_CameraIcon ? m_CameraIcon : m_EntityIcon;
-		else if (entity.HasComponent<LightComponent>()) icon = m_LightIcon ? m_LightIcon : m_EntityIcon;
-		else if (entity.HasComponent<MeshComponent>()) icon = m_MeshIcon ? m_MeshIcon : m_EntityIcon;
-		else if (entity.HasComponent<SpriteRendererComponent>()) icon = m_SpriteIcon ? m_SpriteIcon : m_EntityIcon;
-
+		// Type icon (vector glyph)
 		ImVec2 iconPos = ImVec2(cursorScreenPos.x + indentOffset, cursorScreenPos.y + (itemHeight - m_Style.IconSize) * 0.5f);
-		if (icon) {
-			drawList->AddImage(
-				(ImTextureID)(intptr_t)icon->GetRendererID(),
-				iconPos, ImVec2(iconPos.x + m_Style.IconSize, iconPos.y + m_Style.IconSize),
-				ImVec2(0, 1), ImVec2(1, 0)
-			);
-		}
-		
+		DrawGlyph(drawList, GlyphOf(entity), iconPos, m_Style.IconSize);
+
 		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + m_Style.IconSize + 4.0f);
 		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (itemHeight - ImGui::GetFrameHeight()) * 0.5f);
 
