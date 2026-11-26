@@ -100,6 +100,7 @@ layout(location = 2) out vec4 gEmissionAO;         // RT2
 layout(location = 3) out vec4 gPositionSpecular;   // RT3
 layout(location = 4) out int  gEntityID;           // RT4
 layout(location = 5) out vec4 gSubsurface;         // RT5: color.rgb + amount
+layout(location = 6) out vec4 gCoatSheen;          // RT6: coat weight, coat roughness, sheen weight, sheen roughness
 
 struct VertexOutput {
 	vec3 FragPos;
@@ -179,7 +180,7 @@ vec2 MaterialUV() {
 #define LNX_VIEWPOS u_ViewPos
 
 layout(std140, binding = 11) uniform GraphParams {
-	vec4 u_GraphParams[128];   // [0].x = time
+	vec4 u_GraphParams[512];   // [0].x = time
 };
 layout (binding = 0) uniform sampler2D u_GraphTex0;
 layout (binding = 1) uniform sampler2D u_GraphTex1;
@@ -193,6 +194,22 @@ layout (binding = 12) uniform sampler2D u_GraphTex8;
 layout (binding = 13) uniform sampler2D u_GraphTex9;
 layout (binding = 14) uniform sampler2D u_GraphTex10;
 layout (binding = 15) uniform sampler2D u_GraphTex11;
+
+// Engine data for the node graph (same blocks as the vertex stage; instanced to avoid name clashes)
+layout(std140, binding = 0) uniform Camera { mat4 u_ViewProjection; mat4 u_View; mat4 u_Projection; vec3 u_ViewPos; float _cameraPad; } lnx_cam;
+layout(std140, binding = 1) uniform Transform { mat4 u_Transform; mat4 u_NormalMatrix; int u_EntityID; int u_Skinned; int u_DebugBone; } lnx_xf;
+#define LNX_VIEW lnx_cam.u_View
+#define LNX_VIEWPROJ lnx_cam.u_ViewProjection
+#define LNX_MODEL lnx_xf.u_Transform
+#define LNX_MODEL_INV transpose(lnx_xf.u_NormalMatrix)
+#define LNX_OBJECT_ID float(lnx_xf.u_EntityID)
+#define LNX_OBJPOS (LNX_MODEL_INV * vec4(LNX_POS, 1.0)).xyz
+
+// Shader to RGB in the deferred pass: simple key light (materials using it render in the forward pass)
+vec3 lnx_light(vec3 albedo, float metallic, float roughness, float specular, vec3 N, float ao) {
+	vec3 L = normalize(vec3(0.4, 0.8, 0.3));
+	return albedo * (1.0 - metallic) * (0.25 + 0.75 * max(dot(N, L), 0.0)) * ao;
+}
 
 // @LNX_GRAPH_CODE@
 
@@ -213,9 +230,10 @@ void main() {
 	gAlbedoMetallic   = vec4(albedo, metallic);
 	gNormalRoughness  = vec4(normalize(m.Normal) * 0.5 + 0.5, max(m.Roughness, 0.045));
 	gEmissionAO       = vec4(emission, clamp(m.AO, 0.0, 1.0));
-	gPositionSpecular = vec4(Input.FragPos, clamp(m.Specular, 0.0, 1.0));
+	gPositionSpecular = vec4(Input.FragPos, clamp(m.Specular, 0.0, 12.5));   // > 1 for high IOR (F0 = 0.08 * specular)
 	gEntityID         = v_EntityID;
 	gSubsurface       = subsurface;
+	gCoatSheen        = vec4(clamp(m.Coat, 0.0, 1.0), clamp(m.CoatRoughness, 0.0, 1.0), clamp(m.Sheen, 0.0, 1.0), clamp(m.SheenRoughness, 0.0, 1.0));
 }
 
 #else
@@ -396,6 +414,7 @@ void main() {
 	gPositionSpecular = vec4(Input.FragPos, specular);
 	gEntityID         = v_EntityID;
 	gSubsurface       = (v_DebugWeight >= 0.0) ? vec4(0.0) : u_SubsurfaceColorAmount;
+	gCoatSheen        = vec4(0.0, 0.03, 0.0, 0.5);
 }
 
 #endif // LNX_MATERIAL_GRAPH

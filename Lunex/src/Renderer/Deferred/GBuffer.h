@@ -32,7 +32,8 @@ namespace Lunex {
 		PositionSpecular = 3,  // RT3: Position.xyz + Specular
 		EntityID        = 4,   // RT4: EntityID (R32I)
 		Subsurface      = 5,   // RT5: Subsurface color.rgb + amount (RGBA8)
-		Count           = 6
+		CoatSheen       = 6,   // RT6: coat weight, coat roughness, sheen weight, sheen roughness (RGBA8)
+		Count           = 7
 	};
 
 	/**

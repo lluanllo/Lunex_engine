@@ -39,6 +39,7 @@ layout (binding = 2) uniform sampler2D gEmissionAO;
 layout (binding = 3) uniform sampler2D gPositionSpecular;
 layout (binding = 4) uniform sampler2D gDepth;
 layout (binding = 5) uniform sampler2D gSubsurface;   // color.rgb + amount
+layout (binding = 6) uniform sampler2D gCoatSheen;    // coat, coat roughness, sheen, sheen roughness
 
 // ============ CAMERA UBO ============
 layout(std140, binding = 0) uniform Camera {
@@ -366,6 +367,59 @@ float CalculatePointShadow(int shadowIndex, vec3 fragPos, vec3 normal, vec3 ligh
 }
 
 
+// ============ COAT / SHEEN (Principled BSDF layers) ============
+float g_CoatWeight = 0.0, g_CoatRoughness = 0.03, g_SheenWeight = 0.0, g_SheenRoughness = 0.5;
+vec3 g_CoatTint = vec3(1.0), g_SheenTint = vec3(1.0), g_SpecularTint = vec3(1.0);
+
+// Charlie sheen distribution + Neubelt visibility (Estevez & Kulla)
+float D_Charlie(float roughness, float NdotH) {
+	float a = max(roughness * roughness, 1e-3);
+	float invR = 1.0 / a;
+	float sin2h = max(1.0 - NdotH * NdotH, 0.0078125);
+	return (2.0 + invR) * pow(sin2h, invR * 0.5) / (2.0 * PI);
+}
+float V_Neubelt(float NdotV, float NdotL) {
+	return clamp(1.0 / (4.0 * (NdotL + NdotV - NdotL * NdotV)), 0.0, 1.0);
+}
+
+// Direct light: sheen on top of the base, then a clear coat (GGX, IOR 1.5) that attenuates what is below
+vec3 LayerLobes(vec3 base, float NdotV, float NdotL, float NdotH, float VdotH) {
+	vec3 result = base;
+	if (g_SheenWeight > 0.0) {
+		vec3 sheen = g_SheenTint * g_SheenWeight * D_Charlie(g_SheenRoughness, NdotH) * V_Neubelt(NdotV, NdotL);
+		result = result * (1.0 - g_SheenWeight * 0.2) + sheen;
+	}
+	if (g_CoatWeight > 0.0) {
+		float cr = max(g_CoatRoughness, 0.03);
+		float Fc = F_Schlick(VdotH, vec3(0.04)).x * g_CoatWeight;
+		float coat = D_GGX(NdotH, cr) * V_SmithGGXCorrelated(NdotV, NdotL, cr) * Fc;
+		result = result * (1.0 - Fc) * mix(vec3(1.0), g_CoatTint, g_CoatWeight) + vec3(coat);
+	}
+	return result;
+}
+
+// Environment light for the same layers
+vec3 LayerAmbient(vec3 base, vec3 N, vec3 V, float ao) {
+	if (g_SheenWeight <= 0.0 && g_CoatWeight <= 0.0) return base;
+	float NdotV = max(dot(N, V), 1e-4);
+	float cosR = cos(u_IBLRotation), sinR = sin(u_IBLRotation);
+	vec3 result = base;
+	if (g_SheenWeight > 0.0) {
+		vec3 rn = vec3(cosR * N.x - sinR * N.z, N.y, sinR * N.x + cosR * N.z);
+		vec3 irr = (u_UseIBL != 0) ? texture(u_IrradianceMap, rn).rgb * u_IBLIntensity : vec3(0.35);
+		result = result * (1.0 - g_SheenWeight * 0.2) + irr * g_SheenTint * g_SheenWeight * 0.2 * ao;
+	}
+	if (g_CoatWeight > 0.0) {
+		float cr = max(g_CoatRoughness, 0.03);
+		float Fc = (0.04 + 0.96 * pow(1.0 - NdotV, 5.0)) * g_CoatWeight;
+		vec3 R = reflect(-V, N);
+		vec3 rr = vec3(cosR * R.x - sinR * R.z, R.y, sinR * R.x + cosR * R.z);
+		vec3 env = (u_UseIBL != 0) ? textureLod(u_PrefilteredMap, rr, cr * MAX_REFLECTION_LOD).rgb * u_IBLIntensity : vec3(0.35);
+		result = result * (1.0 - Fc) * mix(vec3(1.0), g_CoatTint, g_CoatWeight) + env * Fc * ao;
+	}
+	return result;
+}
+
 // ============ SUBSURFACE SCATTERING (approximate) ============
 // Wrap diffuse lets light bleed past the terminator; the transmission term
 // (Barre-Brisebois/Bouchard "fast translucency") lights thin parts from behind.
@@ -481,7 +535,7 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 		
 		float microOcclusion = mix(1.0, ao, 0.5);
 		radiance *= attenuation * shadowFactor;
-		Lo += (diffuse + spec) * radiance * NdotL * microOcclusion;
+		Lo += LayerLobes(diffuse + spec, NdotV, NdotL, NdotH, VdotH) * radiance * NdotL * microOcclusion;
 	}
 	
 	return Lo;
@@ -583,6 +637,9 @@ void main() {
 	F0 = mix(F0, albedo, metallic);
 	
 	vec4 subsurface = texture(gSubsurface, v_TexCoords);
+	vec4 coatSheen = texture(gCoatSheen, v_TexCoords);
+	g_CoatWeight = coatSheen.r; g_CoatRoughness = coatSheen.g;
+	g_SheenWeight = coatSheen.b; g_SheenRoughness = coatSheen.a;
 	vec3 directLighting = CalculateDirectLighting(N, V, F0, albedo, metallic, roughness, fragPos, ao, viewDepth,
 	                                              subsurface.rgb, subsurface.a);
 	
@@ -592,6 +649,7 @@ void main() {
 	} else {
 		ambient = CalculateFallbackAmbient(N, V, F0, albedo, metallic, roughness, ao);
 	}
+	ambient = LayerAmbient(ambient, N, V, ao);
 	
 	// Emission contribution
 	vec3 emissiveContribution = vec3(0.0);

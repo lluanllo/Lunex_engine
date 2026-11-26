@@ -18,6 +18,7 @@ namespace Lunex {
 			FramebufferTextureFormat::RGBA16F,      // RT3: Position.xyz + Specular
 			FramebufferTextureFormat::RED_INTEGER,  // RT4: EntityID
 			FramebufferTextureFormat::RGBA8,        // RT5: Subsurface color + amount
+			FramebufferTextureFormat::RGBA8,        // RT6: Coat / sheen
 			FramebufferTextureFormat::Depth         // Depth24Stencil8
 		};
 

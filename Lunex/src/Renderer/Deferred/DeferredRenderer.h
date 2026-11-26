@@ -85,6 +85,13 @@ namespace Lunex {
 		static void ExecuteLightingPass(const Ref<Framebuffer>& targetFramebuffer);
 
 		/**
+		 * @brief Forward pass after the lighting pass + sky: graph materials with transmission /
+		 * blended alpha (sorted back to front, screen-space refraction from a mipmapped copy of
+		 * the opaque scene) and Shader to RGB materials. Also writes their entity IDs for picking.
+		 */
+		static void RenderForwardPass();
+
+		/**
 		 * @brief Execute post-processing (bloom, vignette, chromatic aberration, tone mapping)
 		 * Must be called AFTER all overlays (skybox, grid, sprites, etc.) have been rendered
 		 * into the target framebuffer, so bloom can sample the complete scene.

@@ -23,6 +23,9 @@
 
 #include <glm/gtc/type_ptr.hpp>
 
+#include <algorithm>
+#include <cmath>
+
 namespace Lunex {
 
 	// ============================================================================
@@ -137,6 +140,23 @@ namespace Lunex {
 
 		// ========== STATISTICS ==========
 		DeferredRenderer::Statistics Stats;
+
+		// ========== FORWARD / TRANSPARENT PASS ==========
+		struct ForwardItem {
+			glm::mat4 Transform{ 1.0f };
+			MeshComponent* Mesh = nullptr;
+			Ref<MaterialAsset> Asset;
+			Ref<MaterialInstance> Instance;   // null for imported per-submesh materials
+			int Submesh = -1;                 // -1 = whole model
+			int EntityID = -1;
+			std::vector<glm::mat4> Bones;
+			bool HasBones = false;
+			bool Blended = false;
+			float Distance = 0.0f;
+		};
+		std::vector<ForwardItem> ForwardQueue;
+		Ref<Framebuffer> LastTarget;
+		uint32_t SceneCopyTex = 0, SceneCopyFBO = 0, SceneCopyW = 0, SceneCopyH = 0;
 	};
 
 	static DeferredRendererData s_Data;
@@ -284,6 +304,7 @@ namespace Lunex {
 			return;
 		}
 
+		s_Data.ForwardQueue.clear();
 		s_Data.GBuffer.Bind();
 
 		// G-Buffer targets store data in alpha (metallic, roughness, AO, specular): blending
@@ -378,6 +399,27 @@ namespace Lunex {
 		return runtime->Bind(true, *asset->GetNodeGraph(), instance ? &instance->GetGraphParameters() : nullptr);
 	}
 
+	static bool IsForwardMaterial(const Ref<MaterialAsset>& asset) {
+		if (!asset || !asset->GetNodeGraph()) return false;
+		MaterialGraph::GraphRuntime* runtime = asset->GetGraphRuntime();
+		return runtime && runtime->IsForward();
+	}
+
+	static void QueueForward(const glm::mat4& transform, MeshComponent& meshComponent, const Ref<MaterialAsset>& asset,
+	                         const Ref<MaterialInstance>& instance, int submesh, int entityID, const std::vector<glm::mat4>* bones) {
+		DeferredRendererData::ForwardItem item;
+		item.Transform = transform;
+		item.Mesh = &meshComponent;
+		item.Asset = asset;
+		item.Instance = instance;
+		item.Submesh = submesh;
+		item.EntityID = entityID;
+		if (bones) { item.Bones = *bones; item.HasBones = true; }
+		item.Blended = asset->GetGraphRuntime()->IsBlended();
+		item.Distance = glm::length(glm::vec3(transform[3]) - s_Data.CameraPosition);
+		s_Data.ForwardQueue.push_back(std::move(item));
+	}
+
 	static bool IsSubmeshCulled(const Ref<Mesh>& mesh, const glm::mat4& transform) {
 		// Skinned meshes deform beyond their bind-pose bounds: never cull them
 		if (!s_Data.FrustumCullingEnabled || mesh->IsSkinned()) return false;
@@ -390,12 +432,17 @@ namespace Lunex {
 
 	// Imported models: one material per submesh. `fallback` binds the entity material when a
 	// submesh has none (may be null -> default material).
-	static void DrawPerSubmeshMaterials(const glm::mat4& transform, MeshComponent& meshComponent, MaterialInstance* fallback) {
+	static void DrawPerSubmeshMaterials(const glm::mat4& transform, MeshComponent& meshComponent, MaterialInstance* fallback,
+	                                    int entityID, const std::vector<glm::mat4>* bones) {
 		const auto& meshes = meshComponent.MeshModel->GetMeshes();
 		for (size_t i = 0; i < meshes.size(); i++) {
 			if (IsSubmeshCulled(meshes[i], transform)) continue;
 
 			Ref<MaterialAsset> submeshMaterial = meshComponent.GetSubmeshMaterial(static_cast<uint32_t>(i));
+			if (submeshMaterial && IsForwardMaterial(submeshMaterial)) {
+				QueueForward(transform, meshComponent, submeshMaterial, nullptr, static_cast<int>(i), entityID, bones);
+				continue;
+			}
 			if (submeshMaterial) {
 				FillMaterialBuffer(submeshMaterial->GetUniformData());
 				if (Ref<Shader> graphShader = BindGraphMaterial(submeshMaterial, nullptr)) {
@@ -436,7 +483,13 @@ namespace Lunex {
 
 		// Imported per-submesh materials only while no material was assigned to the entity
 		if (meshComponent.HasPerSubmeshMaterials() && materialComponent.IsDefaultMaterial()) {
-			DrawPerSubmeshMaterials(transform, meshComponent, materialComponent.Instance.get());
+			DrawPerSubmeshMaterials(transform, meshComponent, materialComponent.Instance.get(), entityID, bones);
+			return;
+		}
+
+		// Glass / transmission / blended alpha / Shader to RGB: drawn after the lighting pass
+		if (IsForwardMaterial(materialComponent.Instance->GetBaseAsset())) {
+			QueueForward(transform, meshComponent, materialComponent.Instance->GetBaseAsset(), materialComponent.Instance, -1, entityID, bones);
 			return;
 		}
 
@@ -475,7 +528,7 @@ namespace Lunex {
 		s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(DeferredRendererData::MaterialUniformData));
 
 		if (meshComponent.HasPerSubmeshMaterials()) {
-			DrawPerSubmeshMaterials(transform, meshComponent, nullptr);
+			DrawPerSubmeshMaterials(transform, meshComponent, nullptr, entityID, bones);
 			return;
 		}
 
@@ -506,6 +559,7 @@ namespace Lunex {
 		}
 
 		// Bind the target framebuffer (scene FB)
+		s_Data.LastTarget = targetFramebuffer;
 		targetFramebuffer->Bind();
 
 		auto* cmdList = RHI::GetImmediateCommandList();
@@ -559,6 +613,7 @@ namespace Lunex {
 			auto posSpec = rhiFB->GetColorAttachment(static_cast<uint32_t>(GBufferAttachment::PositionSpecular));
 			auto depth = rhiFB->GetDepthAttachment();
 			auto subsurface = rhiFB->GetColorAttachment(static_cast<uint32_t>(GBufferAttachment::Subsurface));
+			auto coatSheen = rhiFB->GetColorAttachment(static_cast<uint32_t>(GBufferAttachment::CoatSheen));
 
 			if (albedoMet)   albedoMet->Bind(0);
 			if (normalRough) normalRough->Bind(1);
@@ -566,6 +621,7 @@ namespace Lunex {
 			if (posSpec)     posSpec->Bind(3);
 			if (depth)       depth->Bind(4);
 			if (subsurface)  subsurface->Bind(5);
+			if (coatSheen)   coatSheen->Bind(6);
 		}
 
 		// Draw full-screen quad (6 vertices = 2 triangles)
@@ -600,6 +656,146 @@ namespace Lunex {
 		}
 
 		targetFramebuffer->Bind();
+	}
+
+	// ============================================================================
+	// FORWARD / TRANSPARENT PASS
+	// ============================================================================
+
+	static void DrawForwardItem(const DeferredRendererData::ForwardItem& item) {
+		const auto& meshes = item.Mesh->MeshModel->GetMeshes();
+		auto draw = [&](const Ref<Mesh>& mesh) {
+			mesh->DrawGeometry();
+			s_Data.Stats.GeometryDrawCalls++;
+			s_Data.Stats.MeshCount++;
+			s_Data.Stats.TriangleCount += static_cast<uint32_t>(mesh->GetIndices().size()) / 3;
+		};
+		if (item.Submesh >= 0) {
+			if (item.Submesh < static_cast<int>(meshes.size())) draw(meshes[item.Submesh]);
+			return;
+		}
+		for (const auto& mesh : meshes)
+			if (!IsSubmeshCulled(mesh, item.Transform)) draw(mesh);
+	}
+
+	void DeferredRenderer::RenderForwardPass() {
+		LNX_PROFILE_FUNCTION();
+		auto& queue = s_Data.ForwardQueue;
+		if (queue.empty() || !s_Data.LastTarget) return;
+
+		const Ref<Framebuffer>& target = s_Data.LastTarget;
+		const uint32_t w = target->GetSpecification().Width, h = target->GetSpecification().Height;
+		auto* glTarget = dynamic_cast<RHI::OpenGLRHIFramebuffer*>(target->GetRHIFramebuffer());
+		if (!glTarget || w == 0 || h == 0) return;
+
+		// 1. Opaque scene (lit + sky), mipmapped: what refraction sees through glass
+		const bool anyBlended = std::any_of(queue.begin(), queue.end(), [](const auto& i) { return i.Blended; });
+		if (anyBlended) {
+			if (s_Data.SceneCopyW != w || s_Data.SceneCopyH != h) {
+				if (s_Data.SceneCopyTex) glDeleteTextures(1, &s_Data.SceneCopyTex);
+				if (!s_Data.SceneCopyFBO) glCreateFramebuffers(1, &s_Data.SceneCopyFBO);
+				glCreateTextures(GL_TEXTURE_2D, 1, &s_Data.SceneCopyTex);
+				const GLsizei levels = 1 + static_cast<GLsizei>(std::floor(std::log2(static_cast<float>(std::max(w, h)))));
+				glTextureStorage2D(s_Data.SceneCopyTex, levels, GL_RGBA16F, w, h);
+				glTextureParameteri(s_Data.SceneCopyTex, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+				glTextureParameteri(s_Data.SceneCopyTex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				glTextureParameteri(s_Data.SceneCopyTex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTextureParameteri(s_Data.SceneCopyTex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				glNamedFramebufferTexture(s_Data.SceneCopyFBO, GL_COLOR_ATTACHMENT0, s_Data.SceneCopyTex, 0);
+				s_Data.SceneCopyW = w;
+				s_Data.SceneCopyH = h;
+			}
+			glNamedFramebufferReadBuffer(glTarget->GetFramebufferID(), GL_COLOR_ATTACHMENT0);
+			glBlitNamedFramebuffer(glTarget->GetFramebufferID(), s_Data.SceneCopyFBO, 0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+			glGenerateTextureMipmap(s_Data.SceneCopyTex);
+		}
+
+		// 2. Opaque forward materials first, then blended ones back to front
+		std::stable_sort(queue.begin(), queue.end(), [](const auto& a, const auto& b) {
+			if (a.Blended != b.Blended) return !a.Blended;
+			return a.Blended && a.Distance > b.Distance;
+		});
+
+		// 3. Draw into the scene target (color + entity ID when it has one)
+		target->Bind();
+		uint32_t colorAttachments = 0;
+		for (const auto& a : target->GetSpecification().Attachments.Attachments)
+			if (a.TextureFormat != FramebufferTextureFormat::DEPTH24STENCIL8) colorAttachments++;
+		auto* cmdList = RHI::GetImmediateCommandList();
+		if (cmdList) {
+			cmdList->SetViewport(0.0f, 0.0f, static_cast<float>(w), static_cast<float>(h));
+			if (colorAttachments >= 2) cmdList->SetDrawBuffers({ 0, 1 });
+			else cmdList->SetDrawBuffers({ 0 });
+		}
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LEQUAL);
+
+		// UBOs / textures the previous passes (sky, previews) may have replaced
+		s_Data.CameraUniformBuffer->SetData(&s_Data.CameraBuffer, sizeof(DeferredRendererData::CameraData));
+		ShadowSystem::Get().BindForSceneRendering();
+		{
+			auto environment = SkyboxRenderer::GetGlobalEnvironment();
+			if (environment && environment->IsLoaded()) Renderer3D::BindEnvironment(environment);
+			else Renderer3D::UnbindEnvironment();
+		}
+		if (s_Data.SceneCopyTex) glBindTextureUnit(16, s_Data.SceneCopyTex);
+
+		for (const auto& item : queue) {
+			MaterialGraph::GraphRuntime* runtime = item.Asset->GetGraphRuntime();
+			if (!runtime || !item.Mesh || !item.Mesh->MeshModel) continue;
+			if (item.Blended) {
+				glEnable(GL_BLEND);
+				glBlendFunci(0, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);   // premultiplied
+				glDepthMask(GL_FALSE);
+			}
+			else {
+				glDisable(GL_BLEND);
+				glDepthMask(GL_TRUE);
+			}
+			UploadTransform(item.Transform, *item.Mesh->MeshModel, item.EntityID, item.HasBones ? &item.Bones : nullptr);
+			if (item.Instance) FillMaterialBuffer(item.Instance->GetUniformData());
+			else FillMaterialBuffer(item.Asset->GetUniformData());
+			Ref<Shader> shader = runtime->Bind(MaterialGraph::GraphRuntime::Mode::ForwardHDR, *item.Asset->GetNodeGraph(),
+				item.Instance ? &item.Instance->GetGraphParameters() : nullptr);
+			if (!shader) continue;
+			DrawForwardItem(item);
+		}
+		glDisable(GL_BLEND);
+		glDepthMask(GL_TRUE);
+
+		// 4. Entity IDs into the G-Buffer (picking reads it): visible parts of the forward objects
+		auto* glGBuffer = s_Data.GBuffer.GetFramebuffer() ? dynamic_cast<RHI::OpenGLRHIFramebuffer*>(s_Data.GBuffer.GetFramebuffer()->GetRHIFramebuffer()) : nullptr;
+		if (glGBuffer && s_Data.GeometryShader && s_Data.GeometryShader->IsValid()) {
+			const GLuint fbo = glGBuffer->GetFramebufferID();
+			const GLenum idOnly[7] = { GL_NONE, GL_NONE, GL_NONE, GL_NONE, GL_COLOR_ATTACHMENT4, GL_NONE, GL_NONE };
+			const GLenum all[7] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3,
+				GL_COLOR_ATTACHMENT4, GL_COLOR_ATTACHMENT5, GL_COLOR_ATTACHMENT6 };
+			glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+			glNamedFramebufferDrawBuffers(fbo, 7, idOnly);
+			glViewport(0, 0, s_Data.GBuffer.GetWidth(), s_Data.GBuffer.GetHeight());
+			glDepthMask(GL_FALSE);
+			memset(&s_Data.MaterialBuffer, 0, sizeof(DeferredRendererData::MaterialUniformData));
+			s_Data.MaterialBuffer.Color = glm::vec4(1.0f);
+			s_Data.MaterialBuffer.UVTilingOffset = glm::vec4(1.0f, 1.0f, 0.0f, 0.0f);
+			s_Data.MaterialUniformBuffer->SetData(&s_Data.MaterialBuffer, sizeof(DeferredRendererData::MaterialUniformData));
+			s_Data.GeometryShader->Bind();
+			for (int slot = 0; slot < 8; slot++) Texture2D::UnbindSlot(slot);
+			for (const auto& item : queue) {
+				if (!item.Mesh || !item.Mesh->MeshModel) continue;
+				UploadTransform(item.Transform, *item.Mesh->MeshModel, item.EntityID, item.HasBones ? &item.Bones : nullptr);
+				const auto& meshes = item.Mesh->MeshModel->GetMeshes();
+				if (item.Submesh >= 0) { if (item.Submesh < static_cast<int>(meshes.size())) meshes[item.Submesh]->DrawGeometry(); }
+				else for (const auto& mesh : meshes) mesh->DrawGeometry();
+			}
+			glNamedFramebufferDrawBuffers(fbo, 7, all);
+			glDepthMask(GL_TRUE);
+		}
+		glDepthFunc(GL_LESS);
+		target->Bind();
+		if (cmdList) {
+			cmdList->SetViewport(0.0f, 0.0f, static_cast<float>(w), static_cast<float>(h));
+			if (colorAttachments >= 2) cmdList->SetDrawBuffers({ 0, 1 });
+		}
 	}
 
 	// ============================================================================

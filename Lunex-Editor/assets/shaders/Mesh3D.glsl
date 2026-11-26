@@ -582,6 +582,59 @@ vec3 GetLightIntensity(vec3 color, float intensity, float distance, float radius
 // Output: directional shadow factor for IBL modulation
 float g_DirectionalShadowFactor = 1.0;
 
+// ============ COAT / SHEEN (Principled BSDF layers) ============
+float g_CoatWeight = 0.0, g_CoatRoughness = 0.03, g_SheenWeight = 0.0, g_SheenRoughness = 0.5;
+vec3 g_CoatTint = vec3(1.0), g_SheenTint = vec3(1.0), g_SpecularTint = vec3(1.0);
+
+// Charlie sheen distribution + Neubelt visibility (Estevez & Kulla)
+float D_Charlie(float roughness, float NdotH) {
+	float a = max(roughness * roughness, 1e-3);
+	float invR = 1.0 / a;
+	float sin2h = max(1.0 - NdotH * NdotH, 0.0078125);
+	return (2.0 + invR) * pow(sin2h, invR * 0.5) / (2.0 * PI);
+}
+float V_Neubelt(float NdotV, float NdotL) {
+	return clamp(1.0 / (4.0 * (NdotL + NdotV - NdotL * NdotV)), 0.0, 1.0);
+}
+
+// Direct light: sheen on top of the base, then a clear coat (GGX, IOR 1.5) that attenuates what is below
+vec3 LayerLobes(vec3 base, float NdotV, float NdotL, float NdotH, float VdotH) {
+	vec3 result = base;
+	if (g_SheenWeight > 0.0) {
+		vec3 sheen = g_SheenTint * g_SheenWeight * D_Charlie(g_SheenRoughness, NdotH) * V_Neubelt(NdotV, NdotL);
+		result = result * (1.0 - g_SheenWeight * 0.2) + sheen;
+	}
+	if (g_CoatWeight > 0.0) {
+		float cr = max(g_CoatRoughness, 0.03);
+		float Fc = F_Schlick(VdotH, vec3(0.04)).x * g_CoatWeight;
+		float coat = D_GGX(NdotH, cr) * V_SmithGGXCorrelated(NdotV, NdotL, cr) * Fc;
+		result = result * (1.0 - Fc) * mix(vec3(1.0), g_CoatTint, g_CoatWeight) + vec3(coat);
+	}
+	return result;
+}
+
+// Environment light for the same layers
+vec3 LayerAmbient(vec3 base, vec3 N, vec3 V, float ao) {
+	if (g_SheenWeight <= 0.0 && g_CoatWeight <= 0.0) return base;
+	float NdotV = max(dot(N, V), 1e-4);
+	float cosR = cos(u_IBLRotation), sinR = sin(u_IBLRotation);
+	vec3 result = base;
+	if (g_SheenWeight > 0.0) {
+		vec3 rn = vec3(cosR * N.x - sinR * N.z, N.y, sinR * N.x + cosR * N.z);
+		vec3 irr = (u_UseIBL != 0) ? texture(u_IrradianceMap, rn).rgb * u_IBLIntensity : vec3(0.35);
+		result = result * (1.0 - g_SheenWeight * 0.2) + irr * g_SheenTint * g_SheenWeight * 0.2 * ao;
+	}
+	if (g_CoatWeight > 0.0) {
+		float cr = max(g_CoatRoughness, 0.03);
+		float Fc = (0.04 + 0.96 * pow(1.0 - NdotV, 5.0)) * g_CoatWeight;
+		vec3 R = reflect(-V, N);
+		vec3 rr = vec3(cosR * R.x - sinR * R.z, R.y, sinR * R.x + cosR * R.z);
+		vec3 env = (u_UseIBL != 0) ? textureLod(u_PrefilteredMap, rr, cr * MAX_REFLECTION_LOD).rgb * u_IBLIntensity : vec3(0.35);
+		result = result * (1.0 - Fc) * mix(vec3(1.0), g_CoatTint, g_CoatWeight) + env * Fc * ao;
+	}
+	return result;
+}
+
 // ============ SUBSURFACE SCATTERING (approximate) ============
 // Wrap diffuse lets light bleed past the terminator; the transmission term
 // (Barre-Brisebois/Bouchard "fast translucency") lights thin parts from behind.
@@ -738,7 +791,7 @@ vec3 CalculateDirectLighting(vec3 N, vec3 V, vec3 F0, vec3 albedo, float metalli
 		
 		// ========== ACCUMULATE LIGHTING (shadow applied to radiance) ==========
 		radiance *= attenuation * shadowFactor;
-		Lo += (diffuse + specular) * radiance * NdotL * microOcclusion;
+		Lo += LayerLobes(diffuse + specular, NdotV, NdotL, NdotH, VdotH) * radiance * NdotL * microOcclusion;
 	}
 	
 	return Lo;
@@ -846,7 +899,7 @@ vec3 ACESFilm(vec3 x) {
 #define LNX_VIEWPOS u_ViewPos
 
 layout(std140, binding = 11) uniform GraphParams {
-	vec4 u_GraphParams[128];   // [0].x = time
+	vec4 u_GraphParams[512];   // [0].x = time
 };
 layout (binding = 0) uniform sampler2D u_GraphTex0;
 layout (binding = 1) uniform sampler2D u_GraphTex1;
@@ -861,21 +914,51 @@ layout (binding = 13) uniform sampler2D u_GraphTex9;
 layout (binding = 14) uniform sampler2D u_GraphTex10;
 layout (binding = 15) uniform sampler2D u_GraphTex11;
 
+// Engine data for the node graph (same blocks as the vertex stage; instanced to avoid name clashes)
+layout(std140, binding = 0) uniform Camera { mat4 u_ViewProjection; mat4 u_View; mat4 u_Projection; vec3 u_ViewPos; float _cameraPad; } lnx_cam;
+layout(std140, binding = 1) uniform Transform { mat4 u_Transform; mat4 u_NormalMatrix; int u_EntityID; int u_Skinned; int u_DebugBone; } lnx_xf;
+#define LNX_VIEW lnx_cam.u_View
+#define LNX_VIEWPROJ lnx_cam.u_ViewProjection
+#define LNX_MODEL lnx_xf.u_Transform
+#define LNX_MODEL_INV transpose(lnx_xf.u_NormalMatrix)
+#define LNX_OBJECT_ID float(lnx_xf.u_EntityID)
+#define LNX_OBJPOS (LNX_MODEL_INV * vec4(LNX_POS, 1.0)).xyz
+#ifdef LNX_FORWARD_HDR
+layout (binding = 16) uniform sampler2D u_SceneColor;   // opaque scene (mipmapped) for refraction
+#endif
+
+// Shader to RGB: full lighting of a closure (forward pass)
+vec3 lnx_light(vec3 albedo, float metallic, float roughness, float specular, vec3 N, float ao) {
+	vec3 V = normalize(u_ViewPos - Input.FragPos);
+	roughness = max(roughness, MIN_ROUGHNESS);
+	vec3 F0 = mix(vec3(MIN_DIELECTRIC_F0 * specular * 2.0), albedo, metallic);
+	vec3 c = CalculateDirectLighting(N, V, F0, albedo, metallic, roughness, Input.FragPos, ao);
+	c += (u_UseIBL != 0) ? CalculateIBLAmbient(N, V, F0, albedo, metallic, roughness, ao) : CalculateFallbackAmbient(N, V, F0, albedo, metallic, roughness, ao);
+	return c;
+}
+
 // @LNX_GRAPH_CODE@
 #endif
 
 void main() {
 #ifdef LNX_MATERIAL_GRAPH
 	LnxBSDF gm = lnx_evaluate_graph();
-	if (gm.Alpha < 0.5) discard;
-	vec3 albedo = pow(max(gm.BaseColor, vec3(0.0)), vec3(2.2));   // forward path expects sRGB-authored colors
-	float alpha = 1.0;
-	vec3 N = normalize(gm.Normal);
+#ifndef LNX_FORWARD_HDR
+	if (gm.Alpha < 0.5) discard;   // previews: alpha clip
+#endif
 	float metallic = clamp(gm.Metallic, 0.0, 1.0);
+	float transmission = clamp(gm.Transmission, 0.0, 1.0) * (1.0 - metallic);
+	vec3 baseColor = max(gm.BaseColor, vec3(0.0));     // node colors are linear (image nodes decode sRGB)
+	vec3 albedo = baseColor * (1.0 - transmission);    // transmitted light replaces the diffuse part
+	float alpha = clamp(gm.Alpha, 0.0, 1.0);
+	vec3 N = normalize(gm.Normal);
 	float roughness = max(clamp(gm.Roughness, 0.0, 1.0), MIN_ROUGHNESS);
-	float specular = clamp(gm.Specular, 0.0, 1.0);
+	float specular = max(gm.Specular, 0.0);
 	float ao = clamp(gm.AO, 0.0, 1.0);
 	g_Subsurface = gm.Subsurface;
+	g_CoatWeight = clamp(gm.Coat, 0.0, 1.0); g_CoatRoughness = gm.CoatRoughness; g_CoatTint = gm.CoatTint;
+	g_SheenWeight = clamp(gm.Sheen, 0.0, 1.0); g_SheenRoughness = gm.SheenRoughness; g_SheenTint = gm.SheenTint;
+	g_SpecularTint = gm.SpecularTint;
 #else
 	// ========== TEXTURE SAMPLING ==========
 	
@@ -999,6 +1082,9 @@ void main() {
 	
 	vec3 F0 = vec3(MIN_DIELECTRIC_F0 * specular * 2.0);
 	F0 = mix(F0, albedo, metallic);
+#ifdef LNX_MATERIAL_GRAPH
+	F0 = mix(vec3(MIN_DIELECTRIC_F0 * specular * 2.0) * g_SpecularTint, baseColor, metallic);
+#endif
 	
 	vec3 directLighting = CalculateDirectLighting(N, V, F0, albedo, metallic, roughness, Input.FragPos, ao);
 	
@@ -1008,6 +1094,7 @@ void main() {
 	} else {
 		ambient = CalculateFallbackAmbient(N, V, F0, albedo, metallic, roughness, ao);
 	}
+	ambient = LayerAmbient(ambient, N, V, ao);
 	
 	// ========== EMISSION ==========
 	
@@ -1066,15 +1153,41 @@ void main() {
 		color += skyTint;
 	}
 	
+	// ========== TRANSMISSION (glass / refraction / transparent BSDF) ==========
+#ifdef LNX_MATERIAL_GRAPH
+	if (transmission > 0.0) {
+		vec3 dir = gm.Refract > 0.5 ? refract(-V, N, 1.0 / max(gm.IOR, 1.0001)) : -V;
+		if (dot(dir, dir) < 1e-6) dir = reflect(-V, N);   // total internal reflection
+		vec3 Fv = F_Schlick(max(dot(N, V), 0.0), F0);
+#ifdef LNX_FORWARD_HDR
+		// Screen-space refraction: the opaque scene seen through the surface, blurred by roughness
+		vec4 clip = lnx_cam.u_ViewProjection * vec4(Input.FragPos + dir * 0.35, 1.0);
+		vec2 uv = clamp(clip.xy / max(clip.w, 1e-4) * 0.5 + 0.5, vec2(0.001), vec2(0.999));
+		vec3 behind = textureLod(u_SceneColor, uv, roughness * 6.0).rgb;
+#else
+		// Previews: refract the environment
+		vec3 behind = (u_UseIBL != 0) ? textureLod(u_PrefilteredMap, dir, roughness * MAX_REFLECTION_LOD).rgb * u_IBLIntensity : vec3(0.5);
+#endif
+		color += behind * baseColor * transmission * (1.0 - Fv);
+	}
+#endif
+
+#ifdef LNX_FORWARD_HDR
+	// Transparent / forward pass: linear HDR, premultiplied alpha (blend ONE, ONE_MINUS_SRC_ALPHA)
+	if (v_DebugWeight >= 0.0) { FragColor = vec4(WeightHeatmap(v_DebugWeight), 1.0); o_EntityID = v_EntityID; return; }
+	FragColor = vec4(color * alpha, alpha);
+	o_EntityID = v_EntityID;
+#else
 	// Tone mapping
 	color = ACESFilm(color);
-	
+
 	// Gamma correction
 	color = pow(color, vec3(1.0 / 2.2));
-	
+
 	if (v_DebugWeight >= 0.0) { FragColor = vec4(WeightHeatmap(v_DebugWeight), 1.0); o_EntityID = v_EntityID; return; }
 	FragColor = vec4(color, alpha);
 	o_EntityID = v_EntityID;
+#endif
 }
 
 #endif

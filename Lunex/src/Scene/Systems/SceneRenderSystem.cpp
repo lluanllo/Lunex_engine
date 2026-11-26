@@ -136,6 +136,9 @@ namespace Lunex {
 		if (m_Settings.RenderSkybox) {
 			SkyboxRenderer::RenderGlobalSkybox(camera);
 		}
+
+		// Glass / transmission / blended materials (they refract the lit scene + sky)
+		{ ProfileScope scope("Transparent / forward", true); DeferredRenderer::RenderForwardPass(); }
 		
 		// Sprites that are part of the scene should also be affected by bloom
 		Renderer2D::BeginScene(camera);
@@ -195,6 +198,9 @@ namespace Lunex {
 		if (m_Settings.RenderSkybox) {
 			SkyboxRenderer::RenderGlobalSkybox(camera, cameraTransform);
 		}
+
+		// Glass / transmission / blended materials
+		DeferredRenderer::RenderForwardPass();
 		
 		// 2D sprites (affected by bloom)
 		Renderer2D::BeginScene(camera, cameraTransform);
