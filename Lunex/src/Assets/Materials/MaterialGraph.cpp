@@ -4,6 +4,7 @@
 #include "MaterialAsset.h"
 #include "Renderer/Texture.h"
 
+#include <filesystem>
 #include <sstream>
 #include <unordered_map>
 
@@ -51,6 +52,21 @@ namespace Lunex::MaterialGraph {
 		bool MathUsesC(const std::string& op) {
 			return op == "Multiply Add" || op == "Compare" || op == "Smooth Minimum" || op == "Smooth Maximum" || op == "Wrap";
 		}
+	}
+
+	std::string GuessColorSpace(const std::string& path) {
+		std::string stem = std::filesystem::path(path).stem().string();
+		for (char& c : stem) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+		for (char& c : stem) if (c == '-' || c == '.' || c == ' ') c = '_';
+		std::vector<std::string> tokens;
+		std::stringstream ss(stem);
+		for (std::string t; std::getline(ss, t, '_');) if (!t.empty()) tokens.push_back(t);
+		static const char* data[] = { "normal", "nor", "nrm", "norm", "nrml", "normalgl", "normaldx", "rough", "roughness", "rgh",
+			"metal", "metallic", "metalness", "mtl", "ao", "occlusion", "ambientocclusion", "height", "disp", "displacement", "bump",
+			"orm", "arm", "rma", "mra", "mask", "gloss", "glossiness", "spec", "specular", "opacity", "alpha", "data", "packed", "id" };
+		for (const auto& t : tokens)
+			for (const char* d : data) if (t == d) return "Non-Color";
+		return "sRGB";
 	}
 
 	// ============================================================================
@@ -139,8 +155,17 @@ namespace Lunex::MaterialGraph {
 				n.Inputs = { Implicit("Vector", PinType::Vec3) };
 				n.Properties["Path"] = "";
 				n.Properties["Interpolation"] = "Linear";
+				n.Value.x = 0.0f;   // box projection blend
+				// "Color Space" is left unset on purpose: guessed from the file name until the user picks one
 			});
-			img.Enums = { { "Interpolation", { "Linear", "Closest" } } };
+			img.Enums = {
+				{ "Interpolation", { "Linear", "Closest", "Cubic" } },
+				{ "Projection", { "Flat", "Box", "Sphere", "Tube" } },
+				{ "Extension", { "Repeat", "Extend", "Clip", "Mirror" } },
+				{ "Color Space", { "sRGB", "Linear Rec.709", "Non-Color" } },
+				{ "Alpha", { "Straight", "Premultiplied", "Channel Packed", "None" } },
+			};
+			img.Description = "Color Space: sRGB for colors (albedo, emission), Non-Color for data (normal, roughness, metallic, AO, height, packed ORM)";
 			auto& noise = reg(NoiseTexture, "Noise Texture", "Texture", kTexture, 170.0f, [](Node& n) {
 				n.Outputs = { Out("Fac", PinType::Float), Out("Color", PinType::Color) };
 				n.Inputs = { Implicit("Vector", PinType::Vec3), F("Scale", 5.0f), F("Detail", 2.0f, 0.0f, 15.0f), F("Roughness", 0.5f, 0.0f, 1.0f), F("Distortion", 0.0f) };
@@ -403,9 +428,10 @@ namespace Lunex::MaterialGraph {
 		bsdfIn("Subsurface Weight")->DefaultValue = glm::vec4(m.GetSubsurfaceAmount());
 
 		float y = 0.0f;
-		auto addImage = [&](const std::string& path) -> ID {
+		auto addImage = [&](const std::string& path, bool color = false) -> ID {
 			Node* t = graph->AddNode(ImageTexture, { -20.0f, y });
 			t->Properties["Path"] = path;
+			t->Properties["Color Space"] = color ? "sRGB" : "Non-Color";
 			y += 230.0f;
 			return t->NodeID;
 		};
@@ -436,7 +462,7 @@ namespace Lunex::MaterialGraph {
 		static const char* kChannel[] = { "Red", "Green", "Blue", "Alpha", "Red" };
 
 		if (m.HasAlbedoMap()) {
-			const ID tex = addImage(m.GetAlbedoPath());
+			const ID tex = addImage(m.GetAlbedoPath(), true);
 			if (glm::vec3(m.GetAlbedo()) != glm::vec3(1.0f)) {
 				Node* mixNode = graph->AddNode(MixNode, { 220.0f, graph->FindNode(tex)->Position.y });
 				mixNode->Properties["Blending"] = "Multiply";
@@ -460,7 +486,7 @@ namespace Lunex::MaterialGraph {
 		}
 		if (m.HasLayeredTexture()) {
 			const auto& cfg = m.GetLayeredTextureConfig();
-			const ID tex = addImage(cfg.Path);
+			const ID tex = addImage(cfg.Path);   // packed channels: Non-Color
 			if (cfg.UseForMetallic) linkScalar(tex, kChannel[(int)cfg.MetallicChannel], "Metallic", m.GetMetallicMultiplier());
 			if (cfg.UseForRoughness) linkScalar(tex, kChannel[(int)cfg.RoughnessChannel], "Roughness", m.GetRoughnessMultiplier());
 			if (cfg.UseForAO) linkScalar(tex, kChannel[(int)cfg.AOChannel], "Ambient Occlusion", m.GetAOMultiplier());
@@ -469,7 +495,7 @@ namespace Lunex::MaterialGraph {
 		if (m.HasRoughnessMap()) linkScalar(addImage(m.GetRoughnessPath()), "Red", "Roughness", m.GetRoughnessMultiplier());
 		if (m.HasSpecularMap()) linkScalar(addImage(m.GetSpecularPath()), "Red", "Specular", m.GetSpecularMultiplier());
 		if (m.HasAOMap()) linkScalar(addImage(m.GetAOPath()), "Red", "Ambient Occlusion", m.GetAOMultiplier());
-		if (m.HasEmissionMap()) link(addImage(m.GetEmissionPath()), "Color", bsdfID, "Emission Color");
+		if (m.HasEmissionMap()) link(addImage(m.GetEmissionPath(), true), "Color", bsdfID, "Emission Color");
 
 		graph->FindNode(bsdfID)->Position.y = std::max(0.0f, (y - 230.0f) * 0.5f - 150.0f);
 		graph->FindNode(outID)->Position.y = graph->FindNode(bsdfID)->Position.y;

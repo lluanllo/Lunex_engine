@@ -90,6 +90,9 @@ namespace Lunex {
 		std::vector<RampStop> ParseRamp(const std::string& text);
 		std::string WriteRamp(const std::vector<RampStop>& stops);
 
+		// Image Texture color space from the file name: "Non-Color" for data maps (normal, roughness, ORM...), else "sRGB"
+		std::string GuessColorSpace(const std::string& path);
+
 		// Build a graph (Principled BSDF + textures) reproducing the material's slider setup
 		std::shared_ptr<Graph::NodeGraph> CreateFromMaterial(const MaterialAsset& material);
 

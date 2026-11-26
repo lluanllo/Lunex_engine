@@ -45,15 +45,26 @@ namespace Lunex::UI {
 		NodeGraphEditor& operator=(const NodeGraphEditor&) = delete;
 
 		// Draws the canvas filling the current content region. Returns true when the graph changed.
+		// `graph` is the root graph: when a group is being edited, its subgraph is drawn instead.
 		bool Draw(Graph::NodeGraph& graph, const char* emptyHint = nullptr);
 
 		void RequestFrameAll() { m_FrameDelay = 2; }
 
-		// Selection (first selected node, 0 = none)
+		// Selection (first selected node, 0 = none) - the node lives in GetCurrentGraph()
 		Graph::ID GetSelectedNode() const { return m_SelectedNode; }
+
+		// Node groups (Ctrl+G make, Tab enter/exit, Ctrl+Alt+G ungroup)
+		bool EnableGroups = false;
+		Graph::NodeGraph* GetCurrentGraph() const { return m_CurrentGraph; }
+		bool IsInsideGroup() const { return !m_GroupPath.empty(); }
+		void ExitAllGroups() { m_GroupPath.clear(); }
+		// The graph being edited (root, or the subgraph of the entered group)
+		Graph::NodeGraph& ResolveCurrentGraph(Graph::NodeGraph& root);
 
 		// Custom node body, drawn between the drop-downs and the inputs. Return true if changed.
 		std::function<bool(Graph::Node&)> DrawNodeBody;
+		// Optional preview image at the bottom of a node (Node Wrangler "node preview"); width = inner width
+		std::function<void(Graph::Node&, float width)> DrawNodePreview;
 
 		// Node Wrangler hooks (domain specific; return true when the graph changed)
 		std::function<bool(Graph::NodeGraph&, Graph::ID node, int outputIndex)> OnPreviewNode;   // Ctrl+Shift+Click
@@ -69,6 +80,11 @@ namespace Lunex::UI {
 
 	private:
 		void DrawNode(Graph::NodeGraph& graph, Graph::Node& node, bool& changed);
+		void DrawReroute(Graph::NodeGraph& graph, Graph::Node& node, bool linked);
+		void HandleCanvasTools(Graph::NodeGraph& graph, bool& changed);
+		void DrawOverlays(Graph::NodeGraph& root);
+		// Link curve in canvas space (same easing as imgui-node-editor), `segments` + 1 points
+		void LinkCurve(const Graph::Link& link, std::vector<ImVec2>& points, int segments = 24) const;
 		bool DrawInputValue(Graph::Node& node, Graph::Pin& pin, float width);
 		void DrawSocket(const Graph::Pin& pin, bool connected, const ImVec2& center);
 		void HandleCreation(Graph::NodeGraph& graph, bool& changed);
@@ -111,6 +127,24 @@ namespace Lunex::UI {
 		bool m_SuppressContextMenu = false;
 		Graph::ID m_PreviewNode = 0;
 		int m_PreviewOutput = 0;
+
+		// Groups
+		std::vector<Graph::ID> m_GroupPath;            // group nodes entered, from the root
+		Graph::NodeGraph* m_CurrentGraph = nullptr;
+
+		// Canvas tools (canvas space points; overlays are drawn above the nodes after ed::End)
+		enum class Stroke { None, Knife, Reroute };
+		Stroke m_Stroke = Stroke::None;
+		std::vector<ImVec2> m_StrokePoints;
+		bool m_BoxSelecting = false;
+		ImVec2 m_BoxStart{ 0, 0 };
+		Graph::ID m_PressNode = 0;                     // node under the mouse when the left button went down
+		Graph::ID m_InsertLink = 0;                    // link highlighted for "drop node on link"
+		bool m_DraggingColor = false;
+		glm::vec4 m_DragColor{ 1.0f };
+		// Screen-space copies for the overlay pass
+		std::vector<ImVec2> m_ScreenStroke, m_ScreenInsert, m_ScreenLazy;
+		ImVec2 m_ScreenBoxA{ 0, 0 }, m_ScreenBoxB{ 0, 0 };
 	};
 
 } // namespace Lunex::UI

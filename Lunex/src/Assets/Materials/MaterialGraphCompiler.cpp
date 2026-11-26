@@ -386,6 +386,77 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 // ---------------- end of library ----------------
 )GLSL";
 
+
+	static const char* kLibImage = R"GLSL(
+// ---------------- Image texture (Blender: interpolation, projection, extension, color space, alpha) ----------------
+vec3 lnx_srgb_to_linear(vec3 c) {
+	c = max(c, vec3(0.0));
+	return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
+
+// Bicubic B-spline filtering with 4 bilinear taps
+vec4 lnx_texture_bicubic(sampler2D s, vec2 uv) {
+	vec2 size = vec2(textureSize(s, 0));
+	vec2 st = uv * size - 0.5;
+	vec2 i = floor(st), f = st - i;
+	vec2 f2 = f * f, f3 = f2 * f;
+	vec2 w0 = (1.0 / 6.0) * (-f3 + 3.0 * f2 - 3.0 * f + 1.0);
+	vec2 w1 = (1.0 / 6.0) * (3.0 * f3 - 6.0 * f2 + 4.0);
+	vec2 w2 = (1.0 / 6.0) * (-3.0 * f3 + 3.0 * f2 + 3.0 * f + 1.0);
+	vec2 w3 = (1.0 / 6.0) * f3;
+	vec2 g0 = w0 + w1, g1 = w2 + w3;
+	vec2 h0 = (w1 / g0) - 0.5 + i, h1 = (w3 / g1) + 1.5 + i;
+	vec4 t00 = texture(s, (vec2(h0.x, h0.y) + 0.5) / size), t10 = texture(s, (vec2(h1.x, h0.y) + 0.5) / size);
+	vec4 t01 = texture(s, (vec2(h0.x, h1.y) + 0.5) / size), t11 = texture(s, (vec2(h1.x, h1.y) + 0.5) / size);
+	return g0.y * (g0.x * t00 + g1.x * t10) + g1.y * (g0.x * t01 + g1.x * t11);
+}
+
+// ext: 0 Repeat, 1 Extend, 2 Clip, 3 Mirror   interp: 0 Linear, 1 Closest, 2 Cubic
+vec4 lnx_image_sample(sampler2D s, vec2 uv, int ext, int interp) {
+	vec2 raw = uv;
+	if (ext == 1) uv = clamp(uv, 0.0, 1.0);
+	else if (ext == 3) uv = 1.0 - abs(fract(uv * 0.5) * 2.0 - 1.0);
+	vec4 c;
+	if (interp == 1) {
+		vec2 sz = vec2(textureSize(s, 0));
+		vec2 p = (ext == 0) ? fract(uv) : clamp(uv, 0.0, 0.99999);
+		c = texelFetch(s, ivec2(p * sz), 0);
+	}
+	else if (interp == 2) c = lnx_texture_bicubic(s, uv);
+	else c = texture(s, uv);
+	if (ext == 2 && (any(lessThan(raw, vec2(0.0))) || any(greaterThan(raw, vec2(1.0))))) c = vec4(0.0);
+	return c;
+}
+
+// proj: 0 Flat, 1 Box (triplanar), 2 Sphere, 3 Tube
+vec4 lnx_image(sampler2D s, vec3 co, int proj, float blend, int ext, int interp) {
+	if (proj == 1) {
+		vec3 n = abs(normalize(LNX_NORMAL));
+		vec3 w = pow(n, vec3(mix(32.0, 1.0, clamp(blend, 0.0, 1.0))));
+		w /= max(w.x + w.y + w.z, 1e-5);
+		return lnx_image_sample(s, co.yz, ext, interp) * w.x + lnx_image_sample(s, co.xz, ext, interp) * w.y + lnx_image_sample(s, co.xy, ext, interp) * w.z;
+	}
+	vec2 uv = co.xy;
+	if (proj == 2) {
+		vec3 d = co - vec3(0.5);
+		uv = vec2(atan(d.y, d.x) / 6.28318530718 + 0.5, atan(d.z, length(d.xy)) / 3.14159265359 + 0.5);
+	}
+	else if (proj == 3) {
+		vec3 d = co - vec3(0.5);
+		uv = vec2(atan(d.y, d.x) / 6.28318530718 + 0.5, co.z);
+	}
+	return lnx_image_sample(s, uv, ext, interp);
+}
+
+// colorspace: 0 sRGB, 1 Linear, 2 Non-Color   alpha: 0 Straight, 1 Premultiplied, 2 Channel Packed, 3 None
+vec4 lnx_image_post(vec4 c, int colorspace, int alpha) {
+	if (alpha == 1 && c.a > 1e-5) c.rgb /= c.a;
+	if (alpha == 3) c.a = 1.0;
+	if (colorspace == 0) c.rgb = lnx_srgb_to_linear(c.rgb);
+	return c;
+}
+)GLSL";
+
 	// ============================================================================
 	// CODE GENERATOR
 	// ============================================================================
@@ -444,7 +515,12 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 
 		class Generator {
 		public:
-			Generator(const NodeGraph& graph, CompiledGraph& out) : m_Graph(graph), m_Out(out) {}
+			using Bindings = std::unordered_map<std::string, std::pair<std::string, T>>;
+
+			Generator(const NodeGraph& graph, CompiledGraph& out) : m_Graph(graph), m_Out(out), m_Body(m_OwnBody) {}
+			// Group subgraph: appends to the parent's body; Group Input sockets read `inputs`
+			Generator(const NodeGraph& graph, CompiledGraph& out, std::string& body, const Bindings* inputs)
+				: m_Graph(graph), m_Out(out), m_Body(body), m_GroupInputs(inputs) {}
 
 			std::string Surface() {
 				if (const Node* out = m_Graph.FindNodeByType(MaterialOutput))
@@ -456,6 +532,21 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 			}
 
 			const std::string& Body() const { return m_Body; }
+
+			// Node previews: vec4 of the node's first output (closures show base color + emission)
+			std::string PreviewExpr(const Node& n) {
+				Emit(n);
+				for (const auto& o : n.Outputs) {
+					if (o.Name == NewSocketPin) continue;
+					auto it = m_OutVars.find(o.PinID);
+					if (it == m_OutVars.end()) continue;
+					const T type = m_OutTypes[o.PinID];
+					if (type == T::BSDF) return "vec4(" + it->second + ".BaseColor + " + it->second + ".Emission, 1.0)";
+					if (type == T::Vec3 && o.Type == PinType::Vec3) return "vec4(" + it->second + ", 1.0)";
+					return Conv(it->second, type, T::Vec4);
+				}
+				return "vec4(0.0, 0.0, 0.0, 1.0)";
+			}
 
 		private:
 			// ---- Params / textures ----
@@ -495,7 +586,7 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 			}
 
 			int Op(const Node& n, const char* key) {
-				const NodeTypeInfo* info = m_Graph.GetRegistry() ? m_Graph.GetRegistry()->Get(n.TypeName) : nullptr;
+				const NodeTypeInfo* info = m_Graph.GetTypeInfo(n.TypeName);
 				if (!info) return 0;
 				const std::string value = Prop(n, key);
 				for (const auto& e : info->Enums) {
@@ -527,9 +618,8 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 				const Pin* pin = n.FindInput(name);
 				if (!pin) return Conv("0.0", T::Float, want);
 
-				if (const Link* link = m_Graph.GetLinkInto(pin->PinID)) {
-					const Node* src = m_Graph.FindPinOwner(link->FromPin);
-					const Pin* srcPin = m_Graph.FindPin(link->FromPin);
+				if (m_Graph.GetLinkInto(pin->PinID)) {
+					const auto [src, srcPin] = m_Graph.GetSource(pin->PinID);   // reroutes walked through
 					if (src && srcPin) {
 						Emit(*src);
 						auto it = m_OutVars.find(srcPin->PinID);
@@ -548,7 +638,7 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 			}
 
 			bool Visible(const Node& n, const char* pinName) {
-				const NodeTypeInfo* info = m_Graph.GetRegistry() ? m_Graph.GetRegistry()->Get(n.TypeName) : nullptr;
+				const NodeTypeInfo* info = m_Graph.GetTypeInfo(n.TypeName);
 				const Pin* p = n.FindInput(pinName);
 				return !(info && info->PinVisible && p) || info->PinVisible(n, *p);
 			}
@@ -569,6 +659,29 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 			void EmitNode(const Node& n) {
 				const std::string& t = n.TypeName;
 				const std::string id = "n" + std::to_string(n.NodeID);
+
+				// ---------------- Groups ----------------
+				if (t == GroupType) {
+					EmitGroup(n);
+					return;
+				}
+				if (t == GroupInputType) {
+					for (const auto& o : n.Outputs) {
+						if (o.Name == NewSocketPin) continue;
+						const T type = TypeOf(o.Type);
+						std::string expr = Conv("0.0", T::Float, type);
+						if (m_GroupInputs) {
+							auto it = m_GroupInputs->find(o.Name);
+							if (it != m_GroupInputs->end()) expr = Conv(it->second.first, it->second.second, type);
+						}
+						Decl(n, o.Name, type, expr);
+					}
+					return;
+				}
+				if (t == RerouteType || t == GroupOutputType) {
+					for (const auto& o : n.Outputs) Decl(n, o.Name, TypeOf(o.Type), Conv("0.0", T::Float, TypeOf(o.Type)));
+					return;
+				}
 
 				// ---------------- Shaders ----------------
 				if (t == PrincipledBSDF) {
@@ -656,9 +769,17 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 						const int tex = AddTexture(path);
 						if (tex >= 0) {
 							const std::string s = "u_GraphTex" + std::to_string(tex);
-							sample = Prop(n, "Interpolation", "Linear") == "Closest"
-								? "texelFetch(" + s + ", ivec2(fract((" + uv + ").xy) * vec2(textureSize(" + s + ", 0))), 0)"
-								: "texture(" + s + ", (" + uv + ").xy)";
+							if (legacy) {
+								sample = "texture(" + s + ", (" + uv + ").xy)";
+							}
+							else {
+								std::string space = Prop(n, "Color Space");
+								if (space.empty()) space = GuessColorSpace(path);
+								const int cs = space == "sRGB" ? 0 : space == "Linear Rec.709" ? 1 : 2;
+								sample = "lnx_image_post(lnx_image(" + s + ", " + uv + ", " + std::to_string(Op(n, "Projection")) + ", " + Lit(n.Value.x) + ", " +
+									std::to_string(Op(n, "Extension")) + ", " + std::to_string(Op(n, "Interpolation")) + "), " +
+									std::to_string(cs) + ", " + std::to_string(Op(n, "Alpha")) + ")";
+							}
 						}
 					}
 					Line("vec4 " + id + "_s = " + sample + ";");
@@ -884,6 +1005,29 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 				for (const auto& out : n.Outputs) Decl(n, out.Name, TypeOf(out.Type), Conv("0.0", T::Float, TypeOf(out.Type)));
 			}
 
+			// Inlines a node group: its inputs become variables, the subgraph is generated in place
+			void EmitGroup(const Node& n) {
+				if (!n.Subgraph) {
+					for (const auto& o : n.Outputs) Decl(n, o.Name, TypeOf(o.Type), Conv("0.0", T::Float, TypeOf(o.Type)));
+					return;
+				}
+				Bindings bindings;
+				for (size_t i = 0; i < n.Inputs.size(); i++) {
+					const Pin& in = n.Inputs[i];
+					const T type = TypeOf(in.Type);
+					const std::string var = "n" + std::to_string(n.NodeID) + "_in" + std::to_string(i);
+					Line(std::string(GL(type)) + " " + var + " = " + In(n, in.Name.c_str(), type) + ";");
+					bindings[in.Name] = { var, type };
+				}
+				Generator child(*n.Subgraph, m_Out, m_Body, &bindings);
+				const Node* groupOut = n.Subgraph->FindNodeByType(GroupOutputType);
+				for (const auto& o : n.Outputs) {
+					const T type = TypeOf(o.Type);
+					const std::string expr = groupOut ? child.In(*groupOut, o.Name.c_str(), type) : Conv("0.0", T::Float, type);
+					Decl(n, o.Name, type, expr);
+				}
+			}
+
 			// Records a variable declared manually (multi-line nodes)
 			void RegisterOut(const Node& n, const char* outName, T type) {
 				if (const Pin* pin = n.FindOutput(outName)) {
@@ -918,7 +1062,9 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 
 			const NodeGraph& m_Graph;
 			CompiledGraph& m_Out;
-			std::string m_Body;
+			std::string m_OwnBody;
+			std::string& m_Body;
+			const Bindings* m_GroupInputs = nullptr;
 			std::unordered_map<ID, std::string> m_OutVars;
 			std::unordered_map<ID, T> m_OutTypes;
 			std::unordered_set<ID> m_Done, m_Visiting;
@@ -939,11 +1085,38 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 		std::string code;
 		code.reserve(32 * 1024);
 		code += kLibCore;
+		code += kLibImage;
 		code += kLibNoise;
 		code += kLibMath;
 		code += "\nLnxBSDF lnx_evaluate_graph() {\n";
 		code += gen.Body();
 		code += "\treturn " + surface + ";\n}\n";
+		out.Code = std::move(code);
+		out.CodeHash = HashString(out.Code);
+		return out;
+	}
+
+	CompiledGraph CompilePreviews(const NodeGraph& graph, std::vector<ID>& order) {
+		CompiledGraph out;
+		Generator gen(graph, out);
+		order.clear();
+		std::string select;
+		for (const auto& n : graph.GetNodes()) {
+			if (n.Outputs.empty() || n.IsReroute() || n.TypeName == MaterialOutput || n.TypeName == GroupOutputType) continue;
+			const std::string expr = gen.PreviewExpr(n);
+			select += "\tif (target == " + std::to_string(order.size()) + ") return " + expr + ";\n";
+			order.push_back(n.NodeID);
+		}
+		std::string code;
+		code.reserve(32 * 1024);
+		code += kLibCore;
+		code += kLibImage;
+		code += kLibNoise;
+		code += kLibMath;
+		code += "\nvec4 lnx_preview(int target) {\n";
+		code += gen.Body();
+		code += select;
+		code += "\treturn vec4(0.0, 0.0, 0.0, 1.0);\n}\n";
 		out.Code = std::move(code);
 		out.CodeHash = HashString(out.Code);
 		return out;
@@ -1034,7 +1207,7 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 			m_Params.assign(kMaxGraphParams, glm::vec4(0.0f));
 			for (size_t i = 0; i < m_Compiled.Params.size() && i + 1 < kMaxGraphParams; i++) {
 				const ParamRef& ref = m_Compiled.Params[i];
-				const Node* node = graph.FindNode(ref.Node);
+				const Node* node = graph.FindNodeDeep(ref.Node);
 				if (!node) continue;
 				glm::vec4 v(0.0f);
 				if (ref.RampStop >= 0) {
@@ -1046,7 +1219,7 @@ vec4 lnx_blend(int mode, float t, vec4 a, vec4 b, bool clampResult) {
 				else if (ref.Pin == 0) {
 					v = node->Value;
 				}
-				else if (const Pin* pin = graph.FindPin(ref.Pin)) {
+				else if (const Pin* pin = graph.FindPinDeep(ref.Pin)) {
 					v = pin->DefaultValue;
 				}
 				m_Params[i + 1] = v;

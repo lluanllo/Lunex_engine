@@ -56,6 +56,8 @@ namespace Lunex {
 		};
 
 		CompiledGraph Compile(const Graph::NodeGraph& graph);
+		// Every node of `graph` in one function: `vec4 lnx_preview(int target)`, target = index in `order`
+		CompiledGraph CompilePreviews(const Graph::NodeGraph& graph, std::vector<Graph::ID>& order);
 		uint32_t SlotForTexture(int index);
 
 		// GPU side of a graph material: GL programs (deferred + forward), textures and params

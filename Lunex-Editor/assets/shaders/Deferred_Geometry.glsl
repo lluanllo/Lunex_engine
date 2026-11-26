@@ -265,7 +265,8 @@ void main() {
 	float alpha = u_Color.a;
 	if (u_UseAlbedoMap != 0) {
 		vec4 texColor = texture(u_AlbedoMap, MaterialUV());
-		albedo = texColor.rgb * u_Color.rgb;
+		// Albedo maps are sRGB-encoded: decode to linear (same as the forward shader and Blender)
+		albedo = pow(max(texColor.rgb, vec3(0.0)), vec3(2.2)) * u_Color.rgb;
 		alpha *= texColor.a;
 	} else {
 		albedo = u_Color.rgb;
@@ -377,7 +378,7 @@ void main() {
 	if (u_EmissionIntensity > EPSILON) {
 		emission = u_EmissionColor * u_EmissionIntensity;
 		if (u_UseEmissionMap != 0) {
-			vec3 emissionTex = texture(u_EmissionMap, MaterialUV()).rgb;
+			vec3 emissionTex = pow(max(texture(u_EmissionMap, MaterialUV()).rgb, vec3(0.0)), vec3(2.2));
 			emission = emissionTex * u_EmissionColor * u_EmissionIntensity;
 		}
 	}

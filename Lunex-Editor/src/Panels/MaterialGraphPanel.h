@@ -14,6 +14,7 @@
 #include "Core/Core.h"
 #include "Assets/Materials/MaterialAsset.h"
 #include "Renderer/MaterialPreviewRenderer.h"
+#include "Assets/Materials/MaterialGraphPreview.h"
 #include "../UI/Graph/NodeGraphEditor.h"
 
 #include <filesystem>
@@ -64,6 +65,8 @@ namespace Lunex {
 		Ref<MaterialAsset> m_Material;
 		std::unique_ptr<UI::NodeGraphEditor> m_Editor;
 		Ref<MaterialPreviewRenderer> m_Preview;
+		std::unique_ptr<MaterialGraph::NodePreviewRenderer> m_NodePreviews;
+		bool m_ShowNodePreviews = true;
 		std::unordered_map<std::string, Ref<Texture2D>> m_Thumbnails;
 		std::vector<std::string> m_Messages;
 		SavedCallback m_OnSaved;

@@ -22,6 +22,23 @@ namespace Lunex {
 	MaterialGraphPanel::MaterialGraphPanel() {
 		m_Editor = std::make_unique<UI::NodeGraphEditor>("MaterialNodeEditor");
 		m_Editor->DrawNodeBody = [this](Node& node) { return DrawNodeBody(node); };
+		m_Editor->EnableGroups = true;
+		m_NodePreviews = std::make_unique<MaterialGraph::NodePreviewRenderer>(128);
+		m_Editor->DrawNodePreview = [this](Node& node, float width) {
+			if (!m_ShowNodePreviews) return;
+			// Like Blender's node previews: textures, colors, vectors, converters (not shaders / constants)
+			const std::string& t = node.TypeName;
+			if (t == MaterialGraph::ValueNode || t == MaterialGraph::RGBNode || t == MaterialGraph::TimeNode ||
+				t == MaterialGraph::FloatNode || t == MaterialGraph::ColorNode || node.IsGroup() ||
+				t == GroupInputType || t == GroupOutputType) return;
+			if (const NodeTypeInfo* info = MaterialGraph::GetRegistry().Get(t); info && (info->Category == "Shader" || info->Category == "Output")) return;
+			uint32_t tex = 0;
+			glm::vec2 uv0, uv1;
+			if (!m_NodePreviews->GetTile(node.NodeID, tex, uv0, uv1)) return;
+			const float s = std::min(width, 150.0f);
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (width - s) * 0.5f);
+			ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(s, s), ImVec2(uv0.x, uv0.y), ImVec2(uv1.x, uv1.y));
+		};
 		m_Editor->OnPreviewNode = [this](NodeGraph& g, ID node, int output) { return PreviewNode(g, node, output); };
 		m_Editor->OnTextureSetup = [this](NodeGraph& g, ID node) { return TextureSetup(g, node); };
 		m_Editor->OnPrincipledTextureSetup = [this](NodeGraph& g, ID node) { return PrincipledTextureSetup(g, node); };
@@ -77,6 +94,8 @@ namespace Lunex {
 		if (!IsOpen()) return;
 		m_Preview->Update(deltaTime);
 		m_Preview->RenderPreview(m_Material);
+		if (m_ShowNodePreviews)
+			if (auto graph = m_Material->GetNodeGraph()) m_NodePreviews->Update(m_Editor->ResolveCurrentGraph(*graph));
 	}
 
 	// ============================================================================
@@ -120,7 +139,7 @@ namespace Lunex {
 
 			// Shortcut hints (Blender status bar)
 			ImGui::SetCursorPos(ImVec2(10.0f, ImGui::GetCursorPosY() + 3.0f));
-			ImGui::TextDisabled("Shift+A Add | Ctrl+Shift+Click Preview | Ctrl+T Texture | Ctrl+Shift+T PBR textures | F Link selected | Ctrl+X Dissolve | Alt+RMB drag Lazy connect | Ctrl+H Hide sockets | Home Frame");
+			ImGui::TextDisabled("Shift+A Add | Ctrl+G Group, Tab enter/exit | Ctrl+RMB drag Cut links | Shift+RMB drag Reroute | Drop node on link: insert | Ctrl+Shift+Click Preview | Ctrl+T / Ctrl+Shift+T Textures | F Link | Ctrl+X Dissolve | Alt+RMB Lazy connect | Ctrl+H Hide sockets");
 		}
 		ImGui::End();
 		if (!open) Close();
@@ -154,9 +173,10 @@ namespace Lunex {
 			}
 		}
 
-		// Preview controls (right side)
+		// Preview controls (right side, or right after the status when the window is narrow)
 		const float right = ImGui::GetWindowContentRegionMax().x;
-		ImGui::SameLine(std::max(ImGui::GetCursorPosX() + 20.0f, right - 290.0f));
+		const float afterStatus = ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x + 20.0f;
+		ImGui::SameLine(std::max(afterStatus, right - 420.0f));
 		ImGui::TextDisabled("Preview");
 		ImGui::SameLine();
 		static const char* shapes[] = { "Sphere", "Cube", "Plane", "Cylinder" };
@@ -172,6 +192,8 @@ namespace Lunex {
 		}
 		ImGui::SameLine();
 		bool rotate = m_Preview->GetAutoRotate();
+		if (ImGui::Checkbox("Node previews", &m_ShowNodePreviews) && m_ShowNodePreviews) m_NodePreviews->Invalidate();
+		ImGui::SameLine();
 		if (ImGui::Checkbox("Rotate", &rotate)) m_Preview->SetAutoRotate(rotate);
 
 		ImGui::EndChild();
@@ -197,7 +219,7 @@ namespace Lunex {
 			ImGui::Dummy(ImVec2(w, w));
 
 		ImGui::Spacing();
-		if (auto graph = m_Material->GetNodeGraph()) DrawDetails(*graph);
+		if (auto graph = m_Material->GetNodeGraph()) DrawDetails(m_Editor->GetCurrentGraph() ? *m_Editor->GetCurrentGraph() : *graph);
 
 		if (!m_Messages.empty()) {
 			ImGui::Spacing();
@@ -209,6 +231,60 @@ namespace Lunex {
 	}
 
 	void MaterialGraphPanel::DrawDetails(NodeGraph& graph) {
+		auto root = m_Material->GetNodeGraph();
+		auto commit = [&] {
+			graph.Touch();
+			if (root && root.get() != &graph) { root->SyncGroupsDeep(); root->Touch(); }
+			OnGraphChanged();
+		};
+
+		// ---- Group interface (while editing a group): sockets of the group node ----
+		if (m_Editor->IsInsideGroup()) {
+			ImGui::SeparatorText("Group Interface");
+			bool ifaceChanged = false;
+			static const char* kTypes[] = { "Float", "Vec3", "Color", "Shader" };
+			static const PinType kTypeValues[] = { PinType::Float, PinType::Vec3, PinType::Color, PinType::Shader };
+			auto socketList = [&](bool inputs) {
+				auto& sockets = inputs ? graph.GetInterfaceInputs() : graph.GetInterfaceOutputs();
+				ImGui::TextDisabled(inputs ? "Inputs" : "Outputs");
+				int remove = -1;
+				for (size_t i = 0; i < sockets.size(); i++) {
+					InterfaceSocket& sock = sockets[i];
+					ImGui::PushID(static_cast<int>(i) + (inputs ? 0 : 1000));
+					char buf[64];
+					strncpy_s(buf, sock.Name.c_str(), sizeof(buf) - 1);
+					ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+					if (ImGui::InputText("##name", buf, sizeof(buf), ImGuiInputTextFlags_EnterReturnsTrue) && buf[0]) {
+						// Rename keeps the links: rename the pins of the Group Input / Output node too
+						if (Node* io = graph.FindNodeByType(inputs ? GroupInputType : GroupOutputType))
+							if (Pin* pin = inputs ? io->FindOutput(sock.Name) : io->FindInput(sock.Name)) pin->Name = buf;
+						sock.Name = buf;
+						ifaceChanged = true;
+					}
+					ImGui::SameLine();
+					int type = 0;
+					for (int t = 0; t < 4; t++) if (kTypeValues[t] == sock.Type) type = t;
+					ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 26.0f);
+					if (ImGui::Combo("##type", &type, kTypes, 4)) { sock.Type = kTypeValues[type]; ifaceChanged = true; }
+					ImGui::SameLine();
+					if (ImGui::SmallButton("x")) remove = static_cast<int>(i);
+					if (inputs && sock.Type == PinType::Float)
+						ifaceChanged |= UI::NodeGraphEditor::SliderField("##def", "Default", &sock.Default.x, sock.Range.x, sock.Range.y, ImGui::GetContentRegionAvail().x);
+					else if (inputs && sock.Type == PinType::Color)
+						ifaceChanged |= ImGui::ColorEdit4("Default", glm::value_ptr(sock.Default), ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs);
+					ImGui::PopID();
+				}
+				if (remove >= 0) { graph.RemoveInterfaceSocket(inputs, static_cast<size_t>(remove)); ifaceChanged = true; }
+				if (ImGui::SmallButton(inputs ? "+ Input" : "+ Output")) { graph.AddInterfaceSocket(inputs, inputs ? "Input" : "Output", PinType::Float); ifaceChanged = true; }
+			};
+			socketList(true);
+			ImGui::Spacing();
+			socketList(false);
+			ImGui::TextDisabled("Tip: drag a link onto the empty socket of Group Input/Output.");
+			if (ifaceChanged) { graph.SyncInterfaceNodes(); commit(); }
+			ImGui::Spacing();
+		}
+
 		ImGui::SeparatorText("Node");
 		Node* node = graph.FindNode(m_Editor->GetSelectedNode());
 		if (!node) {
@@ -220,8 +296,15 @@ namespace Lunex {
 			return;
 		}
 
-		const NodeTypeInfo* info = graph.GetRegistry() ? graph.GetRegistry()->Get(node->TypeName) : nullptr;
-		ImGui::TextUnformatted(node->Title.c_str());
+		const NodeTypeInfo* info = graph.GetTypeInfo(node->TypeName);
+		if (node->IsGroup()) {
+			char buf[64];
+			strncpy_s(buf, node->Title.c_str(), sizeof(buf) - 1);
+			ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+			if (ImGui::InputText("##groupname", buf, sizeof(buf)) && buf[0]) { node->Title = buf; commit(); }
+			ImGui::TextDisabled("Tab: edit the group   Ctrl+Alt+G: ungroup");
+		}
+		else ImGui::TextUnformatted(node->Title.c_str());
 		if (info && !info->Description.empty()) ImGui::TextDisabled("%s", info->Description.c_str());
 		ImGui::Spacing();
 
@@ -230,11 +313,13 @@ namespace Lunex {
 		ImGui::PushID(static_cast<int>(node->NodeID));
 		if (info) {
 			for (const auto& e : info->Enums) {
-				std::string& value = node->Properties[e.Key];
+				auto found = node->Properties.find(e.Key);
+				const std::string value = (found != node->Properties.end() && !found->second.empty()) ? found->second : (e.Options.empty() ? "" : e.Options[0]);
+				ImGui::TextDisabled("%s", e.Key.c_str());
 				ImGui::SetNextItemWidth(width);
 				if (ImGui::BeginCombo(("##" + e.Key).c_str(), value.c_str())) {
 					for (const auto& o : e.Options)
-						if (ImGui::Selectable(o.c_str(), o == value)) { value = o; changed = true; }
+						if (ImGui::Selectable(o.c_str(), o == value)) { node->Properties[e.Key] = o; changed = true; }
 					ImGui::EndCombo();
 				}
 			}
@@ -274,7 +359,7 @@ namespace Lunex {
 			ImGui::PopID();
 		}
 		ImGui::PopID();
-		if (changed) { graph.Touch(); OnGraphChanged(); }
+		if (changed) commit();
 	}
 
 	// ============================================================================
@@ -395,6 +480,8 @@ namespace Lunex {
 			if (!socket) { LNX_LOG_WARN("Principled setup: could not classify {0}", file); continue; }
 			Node* img = g.AddNode(MaterialGraph::ImageTexture, { base.x - 520.0f, y });
 			img->Properties["Path"] = file;
+			// Node Wrangler: every map lands in its correct color space (only Base Color / Emission stay sRGB)
+			img->Properties["Color Space"] = (std::string(socket) == "Base Color" || std::string(socket) == "Emission Color") ? "sRGB" : "Non-Color";
 			const ID imgID = img->NodeID;
 			vectorPins.push_back(img->FindInput("Vector")->PinID);
 			const ID color = g.FindNode(imgID)->FindOutput("Color")->PinID;
@@ -455,8 +542,7 @@ namespace Lunex {
 		if (t == MaterialGraph::ValueNode || t == MaterialGraph::FloatNode)
 			return UI::NodeGraphEditor::SliderField("##value", "", &node.Value.x, 0.0f, 0.0f, width);
 		if (t == MaterialGraph::RGBNode || t == MaterialGraph::ColorNode) {
-			m_Editor->ColorField(node.NodeID, 0, node.Value, width, 46.0f);
-			return false;
+			return m_Editor->ColorField(node.NodeID, 0, node.Value, width, 46.0f);
 		}
 		return false;
 	}
@@ -506,6 +592,13 @@ namespace Lunex {
 		}
 		ImGui::EndGroup();
 		ImGui::SetCursorScreenPos(ImVec2(p.x, p.y + size + 4.0f));
+
+		// New image: data maps (normal, roughness, ORM...) default to Non-Color, colors to sRGB
+		if (changed && !path.empty()) node.Properties["Color Space"] = MaterialGraph::GuessColorSpace(path);
+		else if (!path.empty() && !node.Properties.count("Color Space")) node.Properties["Color Space"] = MaterialGraph::GuessColorSpace(path);
+
+		if (auto proj = node.Properties.find("Projection"); proj != node.Properties.end() && proj->second == "Box")
+			changed |= UI::NodeGraphEditor::SliderField("##blend", "Blend", &node.Value.x, 0.0f, 1.0f, width);
 		ImGui::Dummy(ImVec2(width, 0.0f));
 		return changed;
 	}
