@@ -398,8 +398,10 @@ namespace Lunex::UI {
 		};
 
 		// ---- Outputs (top, right aligned) ----
+		const bool hideUnused = node.Properties.count("__hide") && node.Properties.at("__hide") == "1";
 		for (auto& pin : node.Outputs) {
 			if (!IsPinVisible(info, node, pin)) continue;
+			if (hideUnused && !linked.count(pin.PinID)) continue;
 			const float y = ImGui::GetCursorScreenPos().y;
 			const char* name = pin.DisplayName().c_str();
 			const float tw = ImGui::CalcTextSize(name).x;
@@ -491,6 +493,7 @@ namespace Lunex::UI {
 		// ---- Inputs ----
 		for (auto& pin : node.Inputs) {
 			if (!IsPinVisible(info, node, pin)) continue;
+			if (hideUnused && !linked.count(pin.PinID)) continue;
 			const float y = ImGui::GetCursorScreenPos().y;
 			const bool isLinked = linked.count(pin.PinID) > 0;
 			socketRow(pin, false, y);
@@ -660,12 +663,75 @@ namespace Lunex::UI {
 				}
 			}
 		}
-		// F: frame selection (or everything), Home: frame everything
-		if (ImGui::IsKeyPressed(ImGuiKey_F, false)) {
+		// ---- Node Wrangler ----
+		std::vector<ID> ids;
+		for (auto id : selected) ids.push_back(id.Get());
+		// F / Shift+F: make links between the selected nodes (Shift replaces existing links)
+		if (!io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F, false) && ids.size() >= 2) {
+			if (MakeLinks(graph, ids, io.KeyShift)) changed = true;
+		}
+		// Ctrl+X: dissolve (delete and keep the flow connected)
+		if (io.KeyCtrl && !io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_X, false)) {
+			for (ID id : ids) if (DissolveNode(graph, id)) changed = true;
+		}
+		// Alt+S: swap the links of the first two connected inputs
+		if (io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
+			for (ID id : ids) if (SwapInputs(graph, id)) changed = true;
+		}
+		// Ctrl+H: hide / show unused sockets
+		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_H, false)) {
+			for (ID id : ids) if (Node* n = graph.FindNode(id)) {
+				std::string& h = n->Properties["__hide"];
+				h = h == "1" ? "0" : "1";
+				changed = true;
+			}
+		}
+		// Ctrl+T / Ctrl+Shift+T: texture setups (domain specific, e.g. materials)
+		if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_T, false) && ids.size() == 1) {
+			if (io.KeyShift) { if (OnPrincipledTextureSetup && OnPrincipledTextureSetup(graph, ids[0])) changed = true; }
+			else if (OnTextureSetup && OnTextureSetup(graph, ids[0])) changed = true;
+			m_PositionsDirty = true;
+		}
+		// Home: frame everything, Period: frame selection (Blender)
+		if (ImGui::IsKeyPressed(ImGuiKey_Home, false)) ed::NavigateToContent();
+		if (ImGui::IsKeyPressed(ImGuiKey_Period, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadDecimal, false)) {
 			if (!selected.empty()) ed::NavigateToSelection(false);
 			else ed::NavigateToContent();
 		}
-		if (ImGui::IsKeyPressed(ImGuiKey_Home, false)) ed::NavigateToContent();
+
+		// Ctrl+Shift+Click: preview the node's output (cycles through outputs)
+		if (io.KeyCtrl && io.KeyShift && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+			const ed::NodeId hovered = ed::GetHoveredNode();
+			if (hovered && OnPreviewNode) {
+				const ID nodeID = hovered.Get();
+				m_PreviewOutput = (m_PreviewNode == nodeID) ? m_PreviewOutput + 1 : 0;
+				m_PreviewNode = nodeID;
+				if (OnPreviewNode(graph, nodeID, m_PreviewOutput)) { changed = true; m_PositionsDirty = true; }
+			}
+		}
+
+		// Alt + right-drag from one node to another: lazy connect
+		if (io.KeyAlt && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+			const ed::NodeId hovered = ed::GetHoveredNode();
+			m_LazyFrom = hovered ? hovered.Get() : 0;
+		}
+		if (m_LazyFrom) {
+			if (ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+				const ImVec2 a = ed::GetNodePosition(ed::NodeId(m_LazyFrom));
+				const ImVec2 size = ed::GetNodeSize(ed::NodeId(m_LazyFrom));
+				const ImVec2 from(a.x + size.x, a.y + size.y * 0.5f);
+				ImGui::GetWindowDrawList()->AddLine(from, ImGui::GetMousePos(), IM_COL32(255, 200, 80, 220), 2.0f);
+			}
+			else {
+				const ed::NodeId target = ed::GetHoveredNode();
+				if (target && target.Get() != m_LazyFrom) {
+					std::vector<ID> pair = { m_LazyFrom, target.Get() };
+					if (MakeLinks(graph, pair, false, true)) changed = true;
+				}
+				m_LazyFrom = 0;
+				m_SuppressContextMenu = true;
+			}
+		}
 	}
 
 	Node* NodeGraphEditor::SpawnNode(NodeGraph& graph, const std::string& typeName) {
@@ -749,6 +815,80 @@ namespace Lunex::UI {
 		return added;
 	}
 
+	// ============================================================================
+	// NODE WRANGLER OPERATIONS
+	// ============================================================================
+
+	bool NodeGraphEditor::MakeLinks(NodeGraph& graph, std::vector<ID> nodes, bool replace, bool keepOrder) {
+		// Left to right by position (lazy connect keeps from -> to)
+		if (!keepOrder) {
+			std::sort(nodes.begin(), nodes.end(), [&](ID a, ID b) {
+				const Node* na = graph.FindNode(a); const Node* nb = graph.FindNode(b);
+				return (na ? na->Position.x : 0.0f) < (nb ? nb->Position.x : 0.0f);
+			});
+		}
+		bool any = false;
+		for (size_t i = 0; i + 1 < nodes.size(); i++) {
+			Node* from = graph.FindNode(nodes[i]);
+			Node* to = graph.FindNode(nodes[i + 1]);
+			if (!from || !to) continue;
+			const NodeTypeInfo* toInfo = InfoOf(graph, *to);
+			// Exact type first, then any compatible type
+			for (int pass = 0; pass < 2 && from; pass++) {
+				bool done = false;
+				for (const auto& out : from->Outputs) {
+					for (const auto& in : to->Inputs) {
+						if (!IsPinVisible(toInfo, *to, in)) continue;
+						if (!replace && graph.GetLinkInto(in.PinID)) continue;
+						if (pass == 0 ? out.Type != in.Type : !graph.CanConnect(out.PinID, in.PinID)) continue;
+						if (graph.Connect(out.PinID, in.PinID)) { any = done = true; break; }
+					}
+					if (done) break;
+				}
+				if (done) break;
+			}
+		}
+		return any;
+	}
+
+	bool NodeGraphEditor::DissolveNode(NodeGraph& graph, ID nodeID) {
+		const Node* node = graph.FindNode(nodeID);
+		if (!node) return false;
+		const NodeTypeInfo* info = InfoOf(graph, *node);
+		if (info && info->Unique) return false;
+
+		// Upstream source: the first linked input (flow first for blueprints)
+		ID source = 0;
+		for (int pass = 0; pass < 2 && !source; pass++)
+			for (const auto& in : node->Inputs) {
+				if (pass == 0 && in.Type != PinType::Flow) continue;
+				if (const Link* l = graph.GetLinkInto(in.PinID)) { source = l->FromPin; break; }
+			}
+		// Downstream targets of every output
+		std::vector<ID> targets;
+		for (const auto& out : node->Outputs)
+			for (const auto& l : graph.GetLinks()) if (l.FromPin == out.PinID) targets.push_back(l.ToPin);
+
+		graph.RemoveNode(nodeID);
+		ed::DeleteNode(ed::NodeId(nodeID));
+		if (source) for (ID t : targets) if (graph.CanConnect(source, t)) graph.Connect(source, t);
+		return true;
+	}
+
+	bool NodeGraphEditor::SwapInputs(NodeGraph& graph, ID nodeID) {
+		Node* node = graph.FindNode(nodeID);
+		if (!node) return false;
+		std::vector<std::pair<ID, ID>> linkedInputs;   // input pin, source pin
+		for (const auto& in : node->Inputs)
+			if (const Link* l = graph.GetLinkInto(in.PinID)) linkedInputs.push_back({ in.PinID, l->FromPin });
+		if (linkedInputs.size() < 2) return false;
+		const auto a = linkedInputs[0], b = linkedInputs[1];
+		if (!graph.CanConnect(b.second, a.first) || !graph.CanConnect(a.second, b.first)) return false;
+		graph.Connect(b.second, a.first);
+		graph.Connect(a.second, b.first);
+		return true;
+	}
+
 	void NodeGraphEditor::DrawPopups(NodeGraph& graph, bool& changed) {
 		// Mouse position in canvas space must be read before suspending
 		const ImVec2 canvasMouse = ImGui::GetMousePos();
@@ -757,7 +897,14 @@ namespace Lunex::UI {
 
 		ed::NodeId contextNode = 0;
 		ed::LinkId contextLink = 0;
-		if (ed::ShowNodeContextMenu(&contextNode)) {
+		const bool suppress = m_SuppressContextMenu || ImGui::GetIO().KeyAlt;
+		m_SuppressContextMenu = false;
+		if (suppress) {
+			// Alt+RMB is lazy connect: swallow the menus it would open
+			ed::NodeId n; ed::LinkId l;
+			ed::ShowNodeContextMenu(&n); ed::ShowLinkContextMenu(&l); ed::ShowBackgroundContextMenu();
+		}
+		else if (ed::ShowNodeContextMenu(&contextNode)) {
 			ImGui::OpenPopup("##NodeContext");
 			ImGui::GetStateStorage()->SetInt(ImGui::GetID("##ctxnode"), static_cast<int>(contextNode.Get()));
 		}

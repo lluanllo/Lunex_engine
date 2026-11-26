@@ -22,6 +22,9 @@ namespace Lunex {
 	MaterialGraphPanel::MaterialGraphPanel() {
 		m_Editor = std::make_unique<UI::NodeGraphEditor>("MaterialNodeEditor");
 		m_Editor->DrawNodeBody = [this](Node& node) { return DrawNodeBody(node); };
+		m_Editor->OnPreviewNode = [this](NodeGraph& g, ID node, int output) { return PreviewNode(g, node, output); };
+		m_Editor->OnTextureSetup = [this](NodeGraph& g, ID node) { return TextureSetup(g, node); };
+		m_Editor->OnPrincipledTextureSetup = [this](NodeGraph& g, ID node) { return PrincipledTextureSetup(g, node); };
 		m_Preview = CreateRef<MaterialPreviewRenderer>();
 		m_Preview->SetResolution(m_PreviewSize, m_PreviewSize);
 		m_Preview->SetAutoRotate(true);
@@ -117,7 +120,7 @@ namespace Lunex {
 
 			// Shortcut hints (Blender status bar)
 			ImGui::SetCursorPos(ImVec2(10.0f, ImGui::GetCursorPosY() + 3.0f));
-			ImGui::TextDisabled("Shift+A Add   |   Drag a connected input: detach   |   X / Del Delete   |   Shift+D Duplicate   |   F Frame   |   Middle mouse Pan   |   Ctrl+S Save");
+			ImGui::TextDisabled("Shift+A Add | Ctrl+Shift+Click Preview | Ctrl+T Texture | Ctrl+Shift+T PBR textures | F Link selected | Ctrl+X Dissolve | Alt+RMB drag Lazy connect | Ctrl+H Hide sockets | Home Frame");
 		}
 		ImGui::End();
 		if (!open) Close();
@@ -272,6 +275,165 @@ namespace Lunex {
 		}
 		ImGui::PopID();
 		if (changed) { graph.Touch(); OnGraphChanged(); }
+	}
+
+	// ============================================================================
+	// NODE WRANGLER (material hooks)
+	// ============================================================================
+
+	namespace {
+		std::string Lower(std::string s) { for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c))); return s; }
+
+		// Texture Coordinate -> Mapping chain feeding `vectorPin`
+		void AddMappingChain(NodeGraph& g, ID vectorPin, glm::vec2 at) {
+			Node* tc = g.AddNode(MaterialGraph::TexCoordNode, { at.x - 420.0f, at.y });
+			const ID tcID = tc->NodeID;
+			Node* mapping = g.AddNode(MaterialGraph::MappingNode, { at.x - 220.0f, at.y });
+			const ID mapID = mapping->NodeID;
+			g.Connect(g.FindNode(tcID)->FindOutput("UV")->PinID, g.FindNode(mapID)->FindInput("Vector")->PinID);
+			g.Connect(g.FindNode(mapID)->FindOutput("Vector")->PinID, vectorPin);
+		}
+
+		std::vector<std::string> OpenImagesDialog() {
+			return FileDialogs::OpenFiles(
+				"Images (*.png;*.jpg;*.jpeg;*.tga;*.bmp)\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0",
+				"Principled texture setup: select the PBR textures");
+		}
+	}
+
+	bool MaterialGraphPanel::PreviewNode(NodeGraph& g, ID nodeID, int outputIndex) {
+		Node* node = g.FindNode(nodeID);
+		Node* output = g.FindNodeByType(MaterialGraph::MaterialOutput);
+		if (!node || !output || node == output || node->Outputs.empty()) return false;
+		if (node->Properties.count("__viewer")) return false;
+		const Pin& out = node->Outputs[static_cast<size_t>(outputIndex) % node->Outputs.size()];
+		const ID outPin = out.PinID;
+		const ID surface = output->FindInput("Surface")->PinID;
+
+		if (out.Type == Graph::PinType::Shader) {
+			g.Connect(outPin, surface);
+		}
+		else {
+			// Viewer: an Emission shader showing the value (created once, like Node Wrangler)
+			Node* viewer = nullptr;
+			for (auto& n : g.GetNodes()) if (n.Properties.count("__viewer")) { viewer = &n; break; }
+			if (!viewer) {
+				const glm::vec2 at = output->Position + glm::vec2(0.0f, 160.0f);
+				viewer = g.AddNode(MaterialGraph::EmissionShader, at);
+				viewer->Title = "Viewer";
+				viewer->Properties["__viewer"] = "1";
+			}
+			const ID viewerID = viewer->NodeID;
+			g.Connect(outPin, g.FindNode(viewerID)->FindInput("Color")->PinID);
+			g.Connect(g.FindNode(viewerID)->FindOutput("Emission")->PinID, g.FindNodeByType(MaterialGraph::MaterialOutput)->FindInput("Surface")->PinID);
+		}
+		OnGraphChanged();
+		return true;
+	}
+
+	bool MaterialGraphPanel::TextureSetup(NodeGraph& g, ID nodeID) {
+		Node* node = g.FindNode(nodeID);
+		if (!node) return false;
+		const glm::vec2 at = node->Position;
+
+		// Texture node selected: give it Texture Coordinate + Mapping
+		if (Pin* vec = node->FindInput("Vector"); vec && !g.GetLinkInto(vec->PinID)) {
+			AddMappingChain(g, vec->PinID, at);
+			OnGraphChanged();
+			return true;
+		}
+		// Shader / other node: Image Texture (+ mapping) into its first free color input
+		ID target = 0;
+		for (const auto& in : node->Inputs)
+			if (in.Type == Graph::PinType::Color && !g.GetLinkInto(in.PinID)) { target = in.PinID; break; }
+		if (!target) return false;
+		Node* img = g.AddNode(MaterialGraph::ImageTexture, { at.x - 300.0f, at.y });
+		const ID imgID = img->NodeID;
+		g.Connect(g.FindNode(imgID)->FindOutput("Color")->PinID, target);
+		AddMappingChain(g, g.FindNode(imgID)->FindInput("Vector")->PinID, g.FindNode(imgID)->Position);
+		OnGraphChanged();
+		return true;
+	}
+
+	bool MaterialGraphPanel::PrincipledTextureSetup(NodeGraph& g, ID nodeID) {
+		Node* bsdf = g.FindNode(nodeID);
+		if (!bsdf || bsdf->TypeName != MaterialGraph::PrincipledBSDF) return false;
+		const std::vector<std::string> files = OpenImagesDialog();
+		if (files.empty()) return false;
+
+		// Name keywords -> socket (Node Wrangler conventions)
+		struct Rule { const char* Socket; std::vector<const char*> Tags; };
+		static const std::vector<Rule> rules = {
+			{ "Base Color", { "diffuse", "diff", "albedo", "base", "basecolor", "col", "color", "colour" } },
+			{ "Normal", { "normal", "nor", "nrm", "nrml", "norm" } },
+			{ "Roughness", { "roughness", "rough", "rgh" } },
+			{ "Metallic", { "metallic", "metalness", "metal", "mtl" } },
+			{ "Ambient Occlusion", { "ao", "ambient", "occlusion" } },
+			{ "Specular", { "specularity", "specular", "spec", "spc" } },
+			{ "Emission Color", { "emission", "emissive", "emit" } },
+			{ "Alpha", { "alpha", "opacity" } },
+			{ "Height", { "displacement", "displace", "disp", "dsp", "height", "heightmap", "bump" } },
+		};
+		auto classify = [&](const std::string& path) -> const char* {
+			std::string stem = Lower(std::filesystem::path(path).stem().string());
+			for (char& c : stem) if (c == '-' || c == '.' || c == ' ') c = '_';
+			std::vector<std::string> tokens;
+			size_t start = 0;
+			for (size_t i = 0; i <= stem.size(); i++)
+				if (i == stem.size() || stem[i] == '_') { if (i > start) tokens.push_back(stem.substr(start, i - start)); start = i + 1; }
+			for (const auto& rule : rules)
+				for (const auto& t : tokens)
+					for (const char* tag : rule.Tags) if (t == tag) return rule.Socket;
+			return nullptr;
+		};
+
+		const glm::vec2 base = bsdf->Position;
+		float y = base.y;
+		std::vector<ID> vectorPins;
+		for (const auto& file : files) {
+			const char* socket = classify(file);
+			if (!socket) { LNX_LOG_WARN("Principled setup: could not classify {0}", file); continue; }
+			Node* img = g.AddNode(MaterialGraph::ImageTexture, { base.x - 520.0f, y });
+			img->Properties["Path"] = file;
+			const ID imgID = img->NodeID;
+			vectorPins.push_back(img->FindInput("Vector")->PinID);
+			const ID color = g.FindNode(imgID)->FindOutput("Color")->PinID;
+			const ID bsdfID = nodeID;   // AddNode may reallocate: never keep Node* across it
+			const std::string s = socket;
+			if (s == "Normal") {
+				Node* nm = g.AddNode(MaterialGraph::NormalMapNode, { base.x - 220.0f, y });
+				const ID nmID = nm->NodeID;
+				g.Connect(color, g.FindNode(nmID)->FindInput("Color")->PinID);
+				g.Connect(g.FindNode(nmID)->FindOutput("Normal")->PinID, g.FindNode(bsdfID)->FindInput("Normal")->PinID);
+			}
+			else if (s == "Height") {
+				Node* bump = g.AddNode(MaterialGraph::BumpNode, { base.x - 220.0f, y });
+				const ID bumpID = bump->NodeID;
+				g.Connect(color, g.FindNode(bumpID)->FindInput("Height")->PinID);
+				if (!g.GetLinkInto(g.FindNode(bsdfID)->FindInput("Normal")->PinID))
+					g.Connect(g.FindNode(bumpID)->FindOutput("Normal")->PinID, g.FindNode(bsdfID)->FindInput("Normal")->PinID);
+			}
+			else if (s == "Alpha") {
+				g.Connect(g.FindNode(imgID)->FindOutput("Alpha")->PinID, g.FindNode(bsdfID)->FindInput("Alpha")->PinID);
+			}
+			else if (Pin* in = g.FindNode(bsdfID)->FindInput(socket)) {
+				g.Connect(color, in->PinID);
+				if (s == "Emission Color") g.FindNode(bsdfID)->FindInput("Emission Strength")->DefaultValue = glm::vec4(1.0f);
+			}
+			bsdf = g.FindNode(bsdfID);
+			y += 260.0f;
+		}
+		if (vectorPins.empty()) return false;
+
+		// One shared Texture Coordinate + Mapping for every texture
+		Node* tc = g.AddNode(MaterialGraph::TexCoordNode, { base.x - 960.0f, base.y });
+		const ID tcID = tc->NodeID;
+		Node* mapping = g.AddNode(MaterialGraph::MappingNode, { base.x - 760.0f, base.y });
+		const ID mapID = mapping->NodeID;
+		g.Connect(g.FindNode(tcID)->FindOutput("UV")->PinID, g.FindNode(mapID)->FindInput("Vector")->PinID);
+		for (ID v : vectorPins) g.Connect(g.FindNode(mapID)->FindOutput("Vector")->PinID, v);
+		OnGraphChanged();
+		return true;
 	}
 
 	// ============================================================================

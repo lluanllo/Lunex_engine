@@ -14,8 +14,11 @@
  *    it, on empty space to remove it), like Blender
  *  - Shift+A / right-click: add menu with categories + search. Releasing a new link on
  *    empty space opens the menu and connects the new node.
- *  - X / Delete: delete, Shift+D: duplicate, F: frame, Home: frame all,
+ *  - X / Delete: delete, Shift+D: duplicate, Period: frame selected, Home: frame all,
  *    middle mouse: pan, wheel: zoom
+ *  - Node Wrangler: F / Shift+F make links, Ctrl+X dissolve, Alt+RMB drag lazy connect,
+ *    Alt+S swap inputs, Ctrl+H hide unused sockets, Ctrl+Shift+Click preview output,
+ *    Ctrl+T / Ctrl+Shift+T texture setups (hooks provided by the owning panel)
  */
 
 #include "Graph/NodeGraph.h"
@@ -52,6 +55,11 @@ namespace Lunex::UI {
 		// Custom node body, drawn between the drop-downs and the inputs. Return true if changed.
 		std::function<bool(Graph::Node&)> DrawNodeBody;
 
+		// Node Wrangler hooks (domain specific; return true when the graph changed)
+		std::function<bool(Graph::NodeGraph&, Graph::ID node, int outputIndex)> OnPreviewNode;   // Ctrl+Shift+Click
+		std::function<bool(Graph::NodeGraph&, Graph::ID node)> OnTextureSetup;                   // Ctrl+T
+		std::function<bool(Graph::NodeGraph&, Graph::ID node)> OnPrincipledTextureSetup;         // Ctrl+Shift+T
+
 		// Opens a popup at the mouse (popups can't be opened from inside the canvas directly)
 		void RequestPopup(std::function<bool(Graph::NodeGraph&)> content);
 
@@ -69,6 +77,9 @@ namespace Lunex::UI {
 		void DrawPopups(Graph::NodeGraph& graph, bool& changed);
 		bool DrawAddMenu(Graph::NodeGraph& graph);
 		Graph::Node* SpawnNode(Graph::NodeGraph& graph, const std::string& typeName);
+		bool MakeLinks(Graph::NodeGraph& graph, std::vector<Graph::ID> nodes, bool replace, bool keepOrder = false);
+		bool DissolveNode(Graph::NodeGraph& graph, Graph::ID node);
+		bool SwapInputs(Graph::NodeGraph& graph, Graph::ID node);
 
 		ax::NodeEditor::EditorContext* m_Context = nullptr;
 		std::string m_ID;
@@ -94,6 +105,12 @@ namespace Lunex::UI {
 		bool m_Creating = false;
 		Graph::ID m_DragStartPin = 0;
 		Graph::ID m_DetachSource = 0;
+
+		// Node Wrangler state
+		Graph::ID m_LazyFrom = 0;
+		bool m_SuppressContextMenu = false;
+		Graph::ID m_PreviewNode = 0;
+		int m_PreviewOutput = 0;
 	};
 
 } // namespace Lunex::UI
