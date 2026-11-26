@@ -197,6 +197,12 @@ namespace Lunex {
 			out << YAML::EndMap;
 		}
 
+		if (entity.HasComponent<BlueprintComponent>()) {
+			out << YAML::Key << "BlueprintComponent" << YAML::BeginMap;
+			out << YAML::Key << "Blueprint" << YAML::Value << entity.GetComponent<BlueprintComponent>().BlueprintPath;
+			out << YAML::EndMap;
+		}
+
 		if (entity.HasComponent<ParticleSystemComponent>()) {
 			auto& ps = entity.GetComponent<ParticleSystemComponent>();
 			out << YAML::Key << "ParticleSystemComponent" << YAML::BeginMap;
@@ -556,8 +562,6 @@ namespace Lunex {
 			out << YAML::EndSeq;
 			
 			out << YAML::Key << "AutoCompile" << YAML::Value << scriptComponent.AutoCompile;
-			if (!scriptComponent.BlueprintPath.empty())
-				out << YAML::Key << "Blueprint" << YAML::Value << scriptComponent.BlueprintPath;
 			
 			out << YAML::EndMap; // ScriptComponent
 		}
@@ -904,6 +908,11 @@ namespace Lunex {
 				if (auto groupComponent = entity["GroupComponent"]) {
 					auto& group = deserializedEntity.AddComponent<GroupComponent>();
 					if (groupComponent["Expanded"]) group.Expanded = groupComponent["Expanded"].as<bool>();
+				}
+
+				if (auto blueprint = entity["BlueprintComponent"]) {
+					auto& bp = deserializedEntity.AddOrReplaceComponent<BlueprintComponent>();
+					if (blueprint["Blueprint"]) bp.BlueprintPath = blueprint["Blueprint"].as<std::string>();
 				}
 
 				if (auto particles = entity["ParticleSystemComponent"]) {
@@ -1316,7 +1325,9 @@ namespace Lunex {
 				auto scriptComponent = entity["ScriptComponent"];
 				if (scriptComponent) {
 					auto& script = deserializedEntity.AddComponent<ScriptComponent>();
-					if (scriptComponent["Blueprint"]) script.BlueprintPath = scriptComponent["Blueprint"].as<std::string>();
+					// Older files kept the blueprint inside the Script component
+					if (scriptComponent["Blueprint"] && !entity["BlueprintComponent"])
+						deserializedEntity.AddOrReplaceComponent<BlueprintComponent>().BlueprintPath = scriptComponent["Blueprint"].as<std::string>();
 					
 					// ===== DESERIALIZAR MÚLTIPLES SCRIPTS =====
 					if (scriptComponent["Scripts"] && scriptComponent["Scripts"].IsSequence()) {

@@ -60,6 +60,7 @@ namespace Lunex {
 		void DrawCharacterController3DComponent(Entity entity);
 		void DrawAnimatorComponent(Entity entity);
 		void DrawParticleSystemComponent(Entity entity);
+		void DrawBlueprintComponent(Entity entity);
 
 		template<typename T>
 		void DisplayAddComponentEntry(const std::string& entryName);

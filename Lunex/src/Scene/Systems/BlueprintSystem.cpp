@@ -24,17 +24,17 @@ namespace Lunex {
 
 		// Collect first: OnStart graphs may create entities
 		std::vector<entt::entity> owners;
-		auto view = m_Context->Registry->view<ScriptComponent>();
+		auto view = m_Context->Registry->view<BlueprintComponent>();
 		for (auto e : view)
-			if (!view.get<ScriptComponent>(e).BlueprintPath.empty()) owners.push_back(e);
+			if (!view.get<BlueprintComponent>(e).BlueprintPath.empty()) owners.push_back(e);
 
 		for (auto e : owners) {
 			if (!m_Context->Registry->valid(e)) continue;
-			auto& sc = m_Context->Registry->get<ScriptComponent>(e);
+			auto& sc = m_Context->Registry->get<BlueprintComponent>(e);
 			auto asset = Blueprint::BlueprintAsset::GetOrLoad(Resolve(sc.BlueprintPath));
 			if (!asset) { LNX_LOG_WARN("Blueprint not found: {0}", sc.BlueprintPath); continue; }
 			auto instance = std::make_shared<Blueprint::Instance>(asset);
-			sc.BlueprintRuntime = instance;
+			sc.Runtime = instance;
 			instance->Start(scene, Entity{ e, scene });
 		}
 		m_Running = true;
@@ -42,8 +42,8 @@ namespace Lunex {
 
 	void BlueprintSystem::OnRuntimeStop() {
 		if (m_Context && m_Context->Registry) {
-			auto view = m_Context->Registry->view<ScriptComponent>();
-			for (auto e : view) view.get<ScriptComponent>(e).BlueprintRuntime.reset();
+			auto view = m_Context->Registry->view<BlueprintComponent>();
+			for (auto e : view) view.get<BlueprintComponent>(e).Runtime.reset();
 		}
 		m_Running = false;
 	}
@@ -53,10 +53,10 @@ namespace Lunex {
 		Scene* scene = m_Context->OwningScene;
 
 		std::vector<std::pair<entt::entity, std::shared_ptr<Blueprint::Instance>>> running;
-		auto view = m_Context->Registry->view<ScriptComponent>();
+		auto view = m_Context->Registry->view<BlueprintComponent>();
 		for (auto e : view) {
-			auto& sc = view.get<ScriptComponent>(e);
-			if (sc.BlueprintRuntime) running.emplace_back(e, std::static_pointer_cast<Blueprint::Instance>(sc.BlueprintRuntime));
+			auto& bc = view.get<BlueprintComponent>(e);
+			if (bc.Runtime) running.emplace_back(e, std::static_pointer_cast<Blueprint::Instance>(bc.Runtime));
 		}
 		for (auto& [e, instance] : running) {
 			if (!m_Context->Registry->valid(e)) continue;   // destroyed by another blueprint this frame

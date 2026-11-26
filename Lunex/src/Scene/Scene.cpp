@@ -22,6 +22,7 @@
 #include "Scene/Systems/AnimationSystem.h"
 #include "Scene/Systems/ParticleSystem.h"
 #include "Scene/Systems/BlueprintSystem.h"
+#include "Core/FrameProfiler.h"
 
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
@@ -109,6 +110,7 @@ namespace Lunex {
 	void Scene::UpdateSystems(Timestep ts, SceneMode mode) {
 		for (auto& system : m_Systems) {
 			if (system->IsEnabled() && system->IsActiveInMode(mode)) {
+				ProfileScope scope(system->GetName().c_str());
 				system->OnUpdate(ts, mode);
 			}
 		}
@@ -526,6 +528,10 @@ namespace Lunex {
 
 	template<>
 	void Scene::OnComponentAdded<ParticleSystemComponent>(Entity entity, ParticleSystemComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<BlueprintComponent>(Entity entity, BlueprintComponent& component) {
 	}
 
 	// ========================================

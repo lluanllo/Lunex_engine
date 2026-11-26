@@ -181,6 +181,7 @@ namespace Lunex {
 			DisplayAddComponentEntry<LightComponent>("Light");
 			DisplayAddComponentEntry<AnimatorComponent>("Animator");
 			DisplayAddComponentEntry<ParticleSystemComponent>("Particle System");
+			DisplayAddComponentEntry<BlueprintComponent>("Blueprint");
 
 			Separator();
 			{
@@ -223,6 +224,7 @@ namespace Lunex {
 		DrawMeshComponent(entity);
 		DrawAnimatorComponent(entity);
 		DrawParticleSystemComponent(entity);
+		DrawBlueprintComponent(entity);
 		DrawMaterialComponent(entity);
 		DrawLightComponent(entity);
 		DrawRigidbody2DComponent(entity);
@@ -377,12 +379,9 @@ namespace Lunex {
 		}
 	}
 
-	void PropertiesPanel::DrawScriptComponent(Entity entity) {
+	void PropertiesPanel::DrawBlueprintComponent(Entity entity) {
 		using namespace UI;
-		
-		ComponentDrawer::Draw<ScriptComponent>("Script", entity, [entity](auto& component) mutable {
-			// ---- Visual script (blueprint) ----
-			ComponentDrawer::DrawSectionHeader("", "Blueprint");
+		ComponentDrawer::Draw<BlueprintComponent>("Blueprint", entity, [entity](auto& component) mutable {
 			ComponentDrawer::BeginIndent();
 			{
 				auto resolve = [](const std::string& stored) {
@@ -430,6 +429,13 @@ namespace Lunex {
 			}
 			ComponentDrawer::EndIndent();
 
+		});
+	}
+
+	void PropertiesPanel::DrawScriptComponent(Entity entity) {
+		using namespace UI;
+		
+		ComponentDrawer::Draw<ScriptComponent>("Script", entity, [](auto& component) {
 			ComponentDrawer::DrawSectionHeader("", "C++ Scripts");
 			ComponentDrawer::BeginIndent();
 
