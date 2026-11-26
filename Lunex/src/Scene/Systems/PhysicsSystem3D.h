@@ -81,6 +81,10 @@ namespace Lunex {
 		void ShutdownPhysics();
 		
 		void CreateRigidBodies();
+		void CreateBodyFor(entt::entity e);
+		void CreatePendingBodies();
+		static void DestroyBody(struct Rigidbody3DComponent& rb3d);
+		void OnRigidbodyDestroyed(entt::registry& registry, entt::entity e);
 		void SyncTransformsFromPhysics();
 		void PushTransformsToPhysics();
 void ClampVelocities();

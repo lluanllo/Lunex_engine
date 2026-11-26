@@ -36,11 +36,14 @@ namespace Lunex {
 		
 		InitializePhysics();
 		CreateRigidBodies();
+		m_Context->Registry->on_destroy<Rigidbody3DComponent>().connect<&PhysicsSystem3D::OnRigidbodyDestroyed>(this);
 		
 		LNX_LOG_INFO("PhysicsSystem3D started (mode: {0})", SceneModeToString(mode));
 	}
 
 	void PhysicsSystem3D::OnRuntimeStop() {
+		if (m_Context && m_Context->Registry)
+			m_Context->Registry->on_destroy<Rigidbody3DComponent>().disconnect<&PhysicsSystem3D::OnRigidbodyDestroyed>(this);
 		CleanupRuntimeBodies();
 		ShutdownPhysics();
 		
@@ -49,6 +52,8 @@ namespace Lunex {
 
 	void PhysicsSystem3D::OnUpdate(Timestep ts, SceneMode mode) {
 		if (!IsActiveInMode(mode) || !m_Initialized) return;
+
+		CreatePendingBodies();
 
 		// Apply transform edits made by scripts / editor since the last step
 		PushTransformsToPhysics();
@@ -129,11 +134,38 @@ namespace Lunex {
 		if (!m_Context || !m_Context->Registry) return;
 		
 		auto view = m_Context->Registry->view<TransformComponent, Rigidbody3DComponent>();
-		for (auto e : view) {
-			Entity entity = { e, m_Context->OwningScene };
-			
-			auto& transform = view.get<TransformComponent>(e);
-			auto& rb3d = view.get<Rigidbody3DComponent>(e);
+		for (auto e : view) CreateBodyFor(e);
+	}
+
+	// Bodies for entities spawned while running (particles, prefabs instantiated by scripts)
+	void PhysicsSystem3D::CreatePendingBodies() {
+		auto view = m_Context->Registry->view<TransformComponent, Rigidbody3DComponent>();
+		for (auto e : view)
+			if (!view.get<Rigidbody3DComponent>(e).RuntimeBody) CreateBodyFor(e);
+	}
+
+	void PhysicsSystem3D::DestroyBody(Rigidbody3DComponent& rb3d) {
+		if (rb3d.RuntimeBody) {
+			RigidBodyComponent* body = static_cast<RigidBodyComponent*>(rb3d.RuntimeBody);
+			body->Destroy(PhysicsCore::Get().GetWorld());
+			delete body;
+			rb3d.RuntimeBody = nullptr;
+		}
+		if (rb3d.RuntimeCollider) {
+			delete static_cast<ColliderComponent*>(rb3d.RuntimeCollider);
+			rb3d.RuntimeCollider = nullptr;
+		}
+	}
+
+	void PhysicsSystem3D::OnRigidbodyDestroyed(entt::registry& registry, entt::entity e) {
+		// Entity destroyed while running: its body must leave the world with it
+		if (m_Initialized) DestroyBody(registry.get<Rigidbody3DComponent>(e));
+	}
+
+	void PhysicsSystem3D::CreateBodyFor(entt::entity e) {
+		{
+			auto& transform = m_Context->Registry->get<TransformComponent>(e);
+			auto& rb3d = m_Context->Registry->get<Rigidbody3DComponent>(e);
 			
 			// Create collider
 			ColliderComponent* collider = new ColliderComponent();
