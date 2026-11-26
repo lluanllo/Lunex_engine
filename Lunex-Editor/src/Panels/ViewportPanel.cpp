@@ -13,6 +13,8 @@
  */
 
 #include "ViewportPanel.h"
+
+#include <algorithm>
 #include "ContentBrowserPanel.h"
 #include "AnimationEditorPanel.h"
 #include "Core/Application.h"
@@ -61,7 +63,7 @@ namespace Lunex {
 		Ref<Framebuffer> framebuffer, 
 		Ref<Framebuffer> cameraPreviewFramebuffer,
 		SceneHierarchyPanel& hierarchyPanel,
-		const EditorCamera& editorCamera, 
+		EditorCamera& editorCamera, 
 		Entity selectedEntity, 
 		int gizmoType,
 		ToolbarPanel& toolbarPanel, 
@@ -122,6 +124,10 @@ namespace Lunex {
 			else {
 				m_GizmoWasUsing = false;
 			}
+
+			// Navigation gizmo (edit / simulate)
+			if (sceneState != SceneState::Play) RenderNavigationGizmo(editorCamera);
+			else m_OverNavGizmo = false;
 
 			// Camera preview overlay
 			if (cameraPreviewFramebuffer && selectedEntity && selectedEntity.HasComponent<CameraComponent>()) {
@@ -560,6 +566,101 @@ namespace Lunex {
 	// ============================================================================
 	// CAMERA PREVIEW OVERLAY
 	// ============================================================================
+
+	// ============================================================================
+	// NAVIGATION GIZMO (Blender)
+	// ============================================================================
+
+	void ViewportPanel::RenderNavigationGizmo(EditorCamera& camera) {
+		using VA = EditorCamera::ViewAxis;
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		const float R = 46.0f;
+		const ImVec2 c(m_ViewportBounds[1].x - R - 22.0f, m_ViewportBounds[0].y + R + 22.0f);
+		const ImVec2 mouse = ImGui::GetIO().MousePos;
+		const float md = std::sqrt((mouse.x - c.x) * (mouse.x - c.x) + (mouse.y - c.y) * (mouse.y - c.y));
+		const bool overCircle = m_ViewportHovered && md < R + 12.0f;
+
+		// Axes in view space
+		const glm::mat3 view = glm::mat3(camera.GetViewMatrix());
+		struct Axis { glm::vec3 Dir; ImU32 Color; const char* Label; VA View; bool Positive; ImVec2 Pos; float Depth; };
+		const ImU32 colX = IM_COL32(255, 54, 83, 255), colY = IM_COL32(139, 220, 0, 255), colZ = IM_COL32(40, 144, 255, 255);
+		Axis axes[6] = {
+			{ { 1, 0, 0 }, colX, "X", VA::Right, true },  { { -1, 0, 0 }, colX, "", VA::Left, false },
+			{ { 0, 1, 0 }, colY, "Y", VA::Top, true },    { { 0, -1, 0 }, colY, "", VA::Bottom, false },
+			{ { 0, 0, 1 }, colZ, "Z", VA::Front, true },  { { 0, 0, -1 }, colZ, "", VA::Back, false },
+		};
+		for (auto& a : axes) {
+			const glm::vec3 v = view * a.Dir;
+			a.Pos = ImVec2(c.x + v.x * R * 0.78f, c.y - v.y * R * 0.78f);
+			a.Depth = v.z;
+		}
+		// Hovered bubble (front-most wins)
+		int hovered = -1;
+		float bestDepth = -10.0f;
+		for (int i = 0; i < 6; i++) {
+			const float dx = mouse.x - axes[i].Pos.x, dy = mouse.y - axes[i].Pos.y;
+			if (m_ViewportHovered && dx * dx + dy * dy < 11.0f * 11.0f && axes[i].Depth > bestDepth) { hovered = i; bestDepth = axes[i].Depth; }
+		}
+
+		// Background disc while hovered / dragging
+		if (overCircle || m_NavDragging) dl->AddCircleFilled(c, R + 12.0f, IM_COL32(255, 255, 255, 28), 48);
+
+		// Back to front
+		int order[6] = { 0, 1, 2, 3, 4, 5 };
+		std::sort(order, order + 6, [&](int a, int b) { return axes[a].Depth < axes[b].Depth; });
+		for (int k = 0; k < 6; k++) {
+			const Axis& a = axes[order[k]];
+			const bool hot = hovered == order[k];
+			if (a.Positive) {
+				dl->AddLine(c, a.Pos, a.Color, 2.5f);
+				dl->AddCircleFilled(a.Pos, 10.0f, a.Color, 24);
+				if (hot) dl->AddCircle(a.Pos, 11.0f, IM_COL32(255, 255, 255, 255), 24, 2.0f);
+				const ImVec2 ts = ImGui::CalcTextSize(a.Label);
+				dl->AddText(ImVec2(a.Pos.x - ts.x * 0.5f, a.Pos.y - ts.y * 0.5f), IM_COL32(20, 20, 20, 255), a.Label);
+			}
+			else {
+				const ImU32 dim = (a.Color & 0x00FFFFFF) | 0x70000000;
+				dl->AddCircleFilled(a.Pos, 9.0f, hot ? a.Color : dim, 24);
+				dl->AddCircle(a.Pos, 9.0f, a.Color, 24, 1.5f);
+				if (hot) {
+					const char* neg = order[k] == 1 ? "-X" : order[k] == 3 ? "-Y" : "-Z";
+					const ImVec2 ts = ImGui::CalcTextSize(neg);
+					dl->AddText(ImVec2(a.Pos.x - ts.x * 0.5f, a.Pos.y - ts.y * 0.5f), IM_COL32(255, 255, 255, 255), neg);
+				}
+			}
+		}
+
+		// Perspective / orthographic toggle under the gizmo
+		const ImVec2 bc(c.x, c.y + R + 34.0f);
+		const float bd = std::sqrt((mouse.x - bc.x) * (mouse.x - bc.x) + (mouse.y - bc.y) * (mouse.y - bc.y));
+		const bool overButton = m_ViewportHovered && bd < 14.0f;
+		dl->AddCircleFilled(bc, 14.0f, overButton ? IM_COL32(90, 90, 90, 230) : IM_COL32(50, 50, 50, 200), 24);
+		if (camera.IsOrthographic()) {
+			dl->AddRect(ImVec2(bc.x - 6, bc.y - 6), ImVec2(bc.x + 6, bc.y + 6), IM_COL32(230, 230, 230, 255), 0.0f, 0, 1.5f);
+		}
+		else {
+			dl->AddQuad(ImVec2(bc.x - 4, bc.y - 6), ImVec2(bc.x + 4, bc.y - 6), ImVec2(bc.x + 7, bc.y + 6), ImVec2(bc.x - 7, bc.y + 6), IM_COL32(230, 230, 230, 255), 1.5f);
+		}
+		if (overButton) ImGui::SetTooltip(camera.IsOrthographic() ? "Switch to perspective (Numpad 5)" : "Switch to orthographic (Numpad 5)");
+
+		// View name (top left, like Blender)
+		dl->AddText(ImVec2(m_ViewportBounds[0].x + 56.0f, m_ViewportBounds[0].y + 10.0f), IM_COL32(230, 230, 230, 200), camera.GetViewName());
+
+		// Interaction
+		m_OverNavGizmo = overCircle || overButton || m_NavDragging;
+		if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && overButton) camera.ToggleOrthographic();
+		if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && overCircle) m_NavDragging = true;
+		if (m_NavDragging) {
+			const ImVec2 delta = ImGui::GetIO().MouseDelta;
+			if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 3.0f) && (delta.x != 0.0f || delta.y != 0.0f))
+				camera.Orbit(delta.x * 0.01f, delta.y * 0.01f);
+			if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+				// A click (no drag) on a bubble snaps to that axis view
+				if (hovered >= 0 && !ImGui::IsMouseDragPastThreshold(ImGuiMouseButton_Left, 3.0f)) camera.SnapToAxis(axes[hovered].View);
+				m_NavDragging = false;
+			}
+		}
+	}
 
 	void ViewportPanel::RenderCameraPreview(Ref<Framebuffer> previewFramebuffer, Entity selectedEntity) {
 		using namespace UI;

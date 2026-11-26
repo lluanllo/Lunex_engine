@@ -39,7 +39,7 @@ namespace Lunex {
 			Ref<Framebuffer> framebuffer, 
 			Ref<Framebuffer> cameraPreviewFramebuffer,
 			SceneHierarchyPanel& hierarchyPanel,
-			const EditorCamera& editorCamera, 
+			EditorCamera& editorCamera, 
 			Entity selectedEntity, 
 			int gizmoType,
 			ToolbarPanel& toolbarPanel, 
@@ -51,6 +51,8 @@ namespace Lunex {
 		// State queries
 		bool IsViewportFocused() const { return m_ViewportFocused; }
 		bool IsViewportHovered() const { return m_ViewportHovered; }
+		// Mouse over the navigation gizmo (top right): clicks there must not pick entities
+		bool IsOverNavigationGizmo() const { return m_OverNavGizmo; }
 		glm::vec2 GetViewportSize() const { return m_ViewportSize; }
 		const glm::vec2* GetViewportBounds() const { return m_ViewportBounds; }
 
@@ -82,6 +84,8 @@ namespace Lunex {
 			GizmoSettingsPanel& gizmoSettings
 		);
 		void RenderCameraPreview(Ref<Framebuffer> previewFramebuffer, Entity selectedEntity);
+		// Blender-style axes gizmo: click an axis to snap the view, drag to orbit, toggle persp/ortho
+		void RenderNavigationGizmo(EditorCamera& camera);
 		
 	private:
 		// Viewport state
@@ -92,6 +96,8 @@ namespace Lunex {
 
 		// Gizmo state (for multi-selection delta tracking)
 		bool m_GizmoWasUsing = false;
+		bool m_OverNavGizmo = false;
+		bool m_NavDragging = false;
 		glm::mat4 m_GizmoPreviousTransform = glm::mat4(1.0f);
 		glm::vec3 m_GizmoCachedPivot = glm::vec3(0.0f);
 		

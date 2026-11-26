@@ -1160,6 +1160,40 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 			FocusSelectedEntity();
 		}
 
+		// Numpad views (Blender): 1/3/7 front/right/top (Ctrl: opposite), 5 persp/ortho, 9 opposite,
+		// 2/4/6/8 orbit, 0 view from the selected camera, . frame selection
+		if (m_SceneState != SceneState::Play && (m_ViewportPanel.IsViewportHovered() || m_ViewportPanel.IsViewportFocused()) &&
+			!ImGui::GetIO().WantTextInput) {
+			using VA = EditorCamera::ViewAxis;
+			const bool ctrl = Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl);
+			const float step = glm::radians(15.0f);
+			switch (e.GetKeyCode()) {
+				case Key::KP1: m_EditorCamera.SnapToAxis(ctrl ? VA::Back : VA::Front); break;
+				case Key::KP3: m_EditorCamera.SnapToAxis(ctrl ? VA::Left : VA::Right); break;
+				case Key::KP7: m_EditorCamera.SnapToAxis(ctrl ? VA::Bottom : VA::Top); break;
+				case Key::KP9: m_EditorCamera.ViewOpposite(); break;
+				case Key::KP5: m_EditorCamera.ToggleOrthographic(); break;
+				case Key::KP4: m_EditorCamera.Orbit(-step, 0.0f); break;
+				case Key::KP6: m_EditorCamera.Orbit(step, 0.0f); break;
+				case Key::KP8: m_EditorCamera.Orbit(0.0f, -step); break;
+				case Key::KP2: m_EditorCamera.Orbit(0.0f, step); break;
+				case Key::KPDecimal: FocusSelectedEntity(); break;
+				case Key::KP0: {
+					Entity cam = m_SceneHierarchyPanel.GetSelectedEntity();
+					if (!cam || !cam.HasComponent<CameraComponent>()) {
+						// Like Blender: the scene's primary camera
+						cam = m_ActiveScene->GetPrimaryCameraEntity();
+					}
+					if (cam && cam.HasComponent<CameraComponent>()) {
+						const glm::mat4 world = m_ActiveScene->GetWorldTransform(cam);
+						m_EditorCamera.SetFromTransform(glm::vec3(world[3]), -glm::normalize(glm::vec3(world[2])));
+					}
+					break;
+				}
+				default: break;
+			}
+		}
+
 		// Process through InputManager
 		InputManager::Get().OnKeyPressed(static_cast<KeyCode>(e.GetKeyCode()), modifiers);
 
@@ -1215,7 +1249,8 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 		// ✅ MULTI-SELECTION RAY PICKING (Blender-style)
 		if (e.GetMouseButton() == Mouse::ButtonLeft) {
 			auto* animEditor = AnimationEditorPanel::GetActive();
-			if (m_ViewportPanel.IsViewportHovered() && !ImGuizmo::IsOver() && !(animEditor && animEditor->IsHoveringJoint())) {
+			if (m_ViewportPanel.IsViewportHovered() && !ImGuizmo::IsOver() && !m_ViewportPanel.IsOverNavigationGizmo() &&
+				!(animEditor && animEditor->IsHoveringJoint())) {
 				// ✅ Use Input system for modifier detection
 				bool shiftPressed = Input::IsKeyPressed(Key::LeftShift) || Input::IsKeyPressed(Key::RightShift);
 				bool ctrlPressed = Input::IsKeyPressed(Key::LeftControl) || Input::IsKeyPressed(Key::RightControl);

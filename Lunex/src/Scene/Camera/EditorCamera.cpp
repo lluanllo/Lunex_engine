@@ -23,8 +23,112 @@ namespace Lunex {
 	}
 	
 	void EditorCamera::UpdateProjection() {
-		m_AspectRatio = m_ViewportWidth / m_ViewportHeight;
-		m_Projection = glm::perspective(glm::radians(m_FOV), m_AspectRatio, m_NearClip, m_FarClip);
+		m_AspectRatio = m_ViewportWidth / std::max(m_ViewportHeight, 1.0f);
+		if (m_Orthographic) {
+			const float h = m_OrthoSize, w = h * m_AspectRatio;
+			m_Projection = glm::ortho(-w, w, -h, h, m_NearClip, m_FarClip);
+		}
+		else {
+			m_Projection = glm::perspective(glm::radians(m_FOV), m_AspectRatio, m_NearClip, m_FarClip);
+		}
+	}
+
+	// ============================================================================
+	// VIEWS (numpad / navigation gizmo)
+	// ============================================================================
+
+	namespace {
+		constexpr float kHalfPi = 1.57079632679f;
+		constexpr float kPi = 3.14159265359f;
+		float WrapAngle(float a) { while (a > kPi) a -= 2.0f * kPi; while (a < -kPi) a += 2.0f * kPi; return a; }
+	}
+
+	glm::vec3 EditorCamera::GetFocalPoint() const {
+		return m_Position + GetForwardDirection() * (m_Distance + m_OrthoBack);
+	}
+
+	void EditorCamera::SetOrthographic(bool ortho) {
+		if (ortho == m_Orthographic) return;
+		const glm::vec3 focal = GetFocalPoint();
+		const float tanHalf = std::tan(glm::radians(m_FOV) * 0.5f);
+		if (ortho) {
+			m_OrthoSize = std::max(0.01f, m_Distance * tanHalf);
+			m_OrthoBack = std::max(200.0f, m_Distance * 4.0f);   // eye pulled back: nothing near the focal point gets clipped
+		}
+		else {
+			m_Distance = std::max(0.05f, m_OrthoSize / tanHalf);
+			m_OrthoBack = 0.0f;
+		}
+		m_Orthographic = ortho;
+		m_Position = focal - GetForwardDirection() * (m_Distance + m_OrthoBack);
+		UpdateProjection();
+		UpdateView();
+	}
+
+	void EditorCamera::SnapToAxis(ViewAxis axis) {
+		float pitch = 0.0f, yaw = 0.0f;
+		switch (axis) {
+			case ViewAxis::Front:  pitch = 0.0f; yaw = 0.0f; break;         // from +Z looking -Z
+			case ViewAxis::Back:   pitch = 0.0f; yaw = kPi; break;
+			case ViewAxis::Right:  pitch = 0.0f; yaw = -kHalfPi; break;     // from +X
+			case ViewAxis::Left:   pitch = 0.0f; yaw = kHalfPi; break;
+			case ViewAxis::Top:    pitch = kHalfPi; yaw = 0.0f; break;      // from +Y, -Z up on screen
+			case ViewAxis::Bottom: pitch = -kHalfPi; yaw = 0.0f; break;
+			default: return;
+		}
+		if (!m_Orthographic) { SetOrthographic(true); m_AutoOrtho = true; }
+		m_AnimFocal = GetFocalPoint();
+		m_FromPitch = m_Pitch;
+		m_FromYaw = m_Yaw;
+		m_ToPitch = pitch;
+		m_ToYaw = m_Yaw + WrapAngle(yaw - m_Yaw);
+		m_AnimT = 0.0f;
+		m_Animating = true;
+		m_AxisView = axis;
+	}
+
+	void EditorCamera::Orbit(float yawDelta, float pitchDelta) {
+		const glm::vec3 focal = GetFocalPoint();
+		m_Animating = false;
+		if (m_AxisView != ViewAxis::None && m_AutoOrtho && m_Orthographic) {
+			SetOrthographic(false);
+			m_AutoOrtho = false;
+		}
+		m_AxisView = ViewAxis::None;
+		m_Yaw += yawDelta;
+		m_Pitch = glm::clamp(m_Pitch + pitchDelta, -kHalfPi, kHalfPi);
+		m_Position = focal - GetForwardDirection() * (m_Distance + m_OrthoBack);
+		UpdateView();
+	}
+
+	void EditorCamera::ViewOpposite() {
+		switch (m_AxisView) {
+			case ViewAxis::Front: SnapToAxis(ViewAxis::Back); return;
+			case ViewAxis::Back: SnapToAxis(ViewAxis::Front); return;
+			case ViewAxis::Right: SnapToAxis(ViewAxis::Left); return;
+			case ViewAxis::Left: SnapToAxis(ViewAxis::Right); return;
+			case ViewAxis::Top: SnapToAxis(ViewAxis::Bottom); return;
+			case ViewAxis::Bottom: SnapToAxis(ViewAxis::Top); return;
+			default: Orbit(kPi, 0.0f); return;
+		}
+	}
+
+	const char* EditorCamera::GetViewName() const {
+		static const char* names[] = { "User", "Front", "Back", "Right", "Left", "Top", "Bottom" };
+		static char buf[48];
+		snprintf(buf, sizeof(buf), "%s %s", names[static_cast<int>(m_AxisView)], m_Orthographic ? "Orthographic" : "Perspective");
+		return buf;
+	}
+
+	void EditorCamera::SetFromTransform(const glm::vec3& position, const glm::vec3& forward) {
+		if (m_Orthographic) { SetOrthographic(false); m_AutoOrtho = false; }
+		m_Animating = false;
+		m_AxisView = ViewAxis::None;
+		const glm::vec3 d = glm::normalize(forward);
+		m_Position = position;
+		m_Pitch = std::asin(glm::clamp(-d.y, -1.0f, 1.0f));
+		m_Yaw = std::atan2(d.x, -d.z);
+		UpdateView();
 	}
 	
 	void EditorCamera::UpdateView() {
@@ -57,6 +161,16 @@ namespace Lunex {
 	
 	void EditorCamera::OnUpdate(Timestep ts) {
 		auto& inputMgr = InputManager::Get();
+
+		// Smooth view transition (numpad / gizmo snaps)
+		if (m_Animating) {
+			m_AnimT = std::min(1.0f, m_AnimT + static_cast<float>(ts) / 0.18f);
+			const float k = m_AnimT * m_AnimT * (3.0f - 2.0f * m_AnimT);
+			m_Pitch = glm::mix(m_FromPitch, m_ToPitch, k);
+			m_Yaw = glm::mix(m_FromYaw, m_ToYaw, k);
+			m_Position = m_AnimFocal - GetForwardDirection() * (m_Distance + m_OrthoBack);
+			if (m_AnimT >= 1.0f) m_Animating = false;
+		}
 		GLFWwindow* window = static_cast<GLFWwindow*>(Application::Get().GetWindow().GetNativeWindow());
 		
 		bool wasFlyCameraActive = m_IsFlyCameraActive;
@@ -75,6 +189,13 @@ namespace Lunex {
 			glm::vec2 delta = (mouse - m_InitialMousePosition) * 0.003f;
 			m_InitialMousePosition = mouse;
 			
+			// Rotating leaves an axis view (and its automatic orthographic projection)
+			if (delta != glm::vec2(0.0f) && m_AxisView != ViewAxis::None) {
+				m_AxisView = ViewAxis::None;
+				m_Animating = false;
+				if (m_AutoOrtho && m_Orthographic) SetOrthographic(false);
+				m_AutoOrtho = false;
+			}
 			MouseRotate(delta);
 			
 			float moveSpeed = 5.0f * ts;
@@ -127,6 +248,12 @@ namespace Lunex {
 	
 	bool EditorCamera::OnMouseScroll(MouseScrolledEvent& e) {
 		float delta = e.GetYOffset();
+		if (m_Orthographic) {
+			// Orthographic zoom = view size
+			m_OrthoSize = glm::clamp(m_OrthoSize * std::pow(0.88f, delta), 0.01f, 5000.0f);
+			UpdateProjection();
+			return false;
+		}
 		float moveSpeed = 2.0f;
 		
 		m_Position += GetForwardDirection() * delta * moveSpeed;
@@ -144,7 +271,7 @@ namespace Lunex {
 	void EditorCamera::MouseRotate(const glm::vec2& delta) {
 		m_Yaw += delta.x * RotationSpeed();
 		m_Pitch += delta.y * RotationSpeed();
-		m_Pitch = glm::clamp(m_Pitch, -89.0f, 89.0f);
+		m_Pitch = glm::clamp(m_Pitch, -1.5707963f, 1.5707963f);   // radians
 	}
 	
 	void EditorCamera::MouseZoom(float delta) {

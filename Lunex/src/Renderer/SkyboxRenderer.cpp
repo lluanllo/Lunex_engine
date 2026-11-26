@@ -139,8 +139,16 @@ namespace Lunex {
 	
 	void SkyboxRenderer::RenderInternal(const EnvironmentMap& environment, 
 										 const glm::mat4& view, 
-										 const glm::mat4& projection) {
+										 const glm::mat4& projectionIn) {
 		LNX_PROFILE_FUNCTION();
+
+		// Orthographic views (editor numpad views): the sky only depends on the direction, so draw it
+		// with a perspective projection of the same aspect (an ortho cube would show as a small square)
+		glm::mat4 projection = projectionIn;
+		if (projectionIn[3][3] == 1.0f && projectionIn[2][3] == 0.0f) {
+			const float aspect = projectionIn[1][1] / projectionIn[0][0];
+			projection = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 10.0f);
+		}
 		
 		if (!environment.IsLoaded() || !environment.GetEnvironmentMap()) {
 			return;

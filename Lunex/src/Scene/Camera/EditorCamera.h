@@ -71,6 +71,23 @@ namespace Lunex {
 		// ========== FLY CAMERA STATE ==========
 		bool IsFlyCameraActive() const { return m_IsFlyCameraActive; }
 		void SetAllowFlyCamera(bool allow) { m_AllowFlyCamera = allow; }
+
+		// ========== VIEWS (Blender numpad / navigation gizmo) ==========
+		enum class ViewAxis { None = 0, Front, Back, Right, Left, Top, Bottom };
+		// Animated snap to an axis view around the focal point; switches to orthographic (auto perspective)
+		void SnapToAxis(ViewAxis axis);
+		// Rotate around the focal point (radians); leaves an axis view (back to perspective if auto)
+		void Orbit(float yawDelta, float pitchDelta);
+		void ViewOpposite();
+		void SetOrthographic(bool ortho);
+		void ToggleOrthographic() { SetOrthographic(!m_Orthographic); m_AutoOrtho = false; }
+		bool IsOrthographic() const { return m_Orthographic; }
+		ViewAxis GetAxisView() const { return m_AxisView; }
+		const char* GetViewName() const;
+		// Point the camera orbits around (in front of the camera at the orbit distance)
+		glm::vec3 GetFocalPoint() const;
+		// Copy a world transform (e.g. a scene camera): position + look direction
+		void SetFromTransform(const glm::vec3& position, const glm::vec3& forward);
 		
 		// ========== VIEW DATA (AAA Architecture) ==========
 		/**
@@ -117,6 +134,17 @@ namespace Lunex {
 		bool m_IsFlyCameraActive = false;
 		bool m_AllowFlyCamera = false;
 		bool m_IsPanning = false;
+
+		// Views
+		bool m_Orthographic = false;
+		bool m_AutoOrtho = false;          // entered ortho by snapping to an axis: rotating goes back to perspective
+		float m_OrthoSize = 5.0f;          // half height of the view in world units
+		float m_OrthoBack = 0.0f;          // ortho eye pulled back by this much (nothing gets clipped)
+		ViewAxis m_AxisView = ViewAxis::None;
+		bool m_Animating = false;
+		float m_AnimT = 0.0f;
+		float m_FromPitch = 0.0f, m_FromYaw = 0.0f, m_ToPitch = 0.0f, m_ToYaw = 0.0f;
+		glm::vec3 m_AnimFocal{ 0.0f };
 	};
 	
 } // namespace Lunex
