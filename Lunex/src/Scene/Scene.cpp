@@ -20,6 +20,8 @@
 #include "Scene/Systems/ScriptSystem.h"
 #include "Scene/Systems/SceneRenderSystem.h"
 #include "Scene/Systems/AnimationSystem.h"
+#include "Scene/Systems/ParticleSystem.h"
+#include "Scene/Systems/BlueprintSystem.h"
 
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
@@ -34,7 +36,6 @@ namespace Lunex {
 		m_Context.OwningScene = this;
 		m_Context.Mode = SceneMode::Edit;
 		
-		// Initialize AAA systems
 		InitializeSystems();
 	}
 
@@ -72,6 +73,16 @@ namespace Lunex {
 		auto animationSystem = std::make_unique<AnimationSystem>();
 		animationSystem->OnAttach(m_Context);
 		m_Systems.push_back(std::move(animationSystem));
+
+		// Blueprint System (priority: 100) - visual scripts, next to the C++ scripts
+		auto blueprintSystem = std::make_unique<BlueprintSystem>();
+		blueprintSystem->OnAttach(m_Context);
+		m_Systems.push_back(std::move(blueprintSystem));
+
+		// Particle System (priority: 300) - after physics so physics particles follow their bodies
+		auto particleSystem = std::make_unique<ParticleSystem>();
+		particleSystem->OnAttach(m_Context);
+		m_Systems.push_back(std::move(particleSystem));
 
 		// Render System (priority: 1000)
 		auto renderSystem = std::make_unique<SceneRenderSystem>();
@@ -511,6 +522,10 @@ namespace Lunex {
 
 	template<>
 	void Scene::OnComponentAdded<GroupComponent>(Entity entity, GroupComponent& component) {
+	}
+
+	template<>
+	void Scene::OnComponentAdded<ParticleSystemComponent>(Entity entity, ParticleSystemComponent& component) {
 	}
 
 	// ========================================

@@ -197,6 +197,18 @@ namespace Lunex {
 			out << YAML::EndMap;
 		}
 
+		if (entity.HasComponent<ParticleSystemComponent>()) {
+			auto& ps = entity.GetComponent<ParticleSystemComponent>();
+			out << YAML::Key << "ParticleSystemComponent" << YAML::BeginMap;
+#define LNX_EMIT_FIELD(name) out << YAML::Key << #name << YAML::Value << ps.name;
+			LNX_PARTICLE_FIELDS(LNX_EMIT_FIELD)
+#undef LNX_EMIT_FIELD
+			out << YAML::Key << "Shape" << YAML::Value << static_cast<int>(ps.Shape);
+			out << YAML::Key << "Mode" << YAML::Value << static_cast<int>(ps.Mode);
+			out << YAML::Key << "Simulation" << YAML::Value << static_cast<int>(ps.Simulation);
+			out << YAML::EndMap;
+		}
+
 		if (entity.HasComponent<AnimatorComponent>()) {
 			out << YAML::Key << "AnimatorComponent";
 			out << YAML::BeginMap;
@@ -544,6 +556,8 @@ namespace Lunex {
 			out << YAML::EndSeq;
 			
 			out << YAML::Key << "AutoCompile" << YAML::Value << scriptComponent.AutoCompile;
+			if (!scriptComponent.BlueprintPath.empty())
+				out << YAML::Key << "Blueprint" << YAML::Value << scriptComponent.BlueprintPath;
 			
 			out << YAML::EndMap; // ScriptComponent
 		}
@@ -890,6 +904,16 @@ namespace Lunex {
 				if (auto groupComponent = entity["GroupComponent"]) {
 					auto& group = deserializedEntity.AddComponent<GroupComponent>();
 					if (groupComponent["Expanded"]) group.Expanded = groupComponent["Expanded"].as<bool>();
+				}
+
+				if (auto particles = entity["ParticleSystemComponent"]) {
+					auto& ps = deserializedEntity.AddComponent<ParticleSystemComponent>();
+#define LNX_READ_FIELD(name) if (particles[#name]) ps.name = particles[#name].as<std::decay_t<decltype(ps.name)>>();
+					LNX_PARTICLE_FIELDS(LNX_READ_FIELD)
+#undef LNX_READ_FIELD
+					if (particles["Shape"]) ps.Shape = static_cast<ParticleSystemComponent::EmitterShape>(particles["Shape"].as<int>());
+					if (particles["Mode"]) ps.Mode = static_cast<ParticleSystemComponent::RenderMode>(particles["Mode"].as<int>());
+					if (particles["Simulation"]) ps.Simulation = static_cast<ParticleSystemComponent::SimulationMode>(particles["Simulation"].as<int>());
 				}
 
 				auto animatorComponent = entity["AnimatorComponent"];
@@ -1292,6 +1316,7 @@ namespace Lunex {
 				auto scriptComponent = entity["ScriptComponent"];
 				if (scriptComponent) {
 					auto& script = deserializedEntity.AddComponent<ScriptComponent>();
+					if (scriptComponent["Blueprint"]) script.BlueprintPath = scriptComponent["Blueprint"].as<std::string>();
 					
 					// ===== DESERIALIZAR MÚLTIPLES SCRIPTS =====
 					if (scriptComponent["Scripts"] && scriptComponent["Scripts"].IsSequence()) {

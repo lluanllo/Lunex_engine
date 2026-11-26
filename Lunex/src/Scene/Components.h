@@ -1085,6 +1085,10 @@ namespace Lunex {
 		std::vector<bool> ScriptLoadedStates;          // Estado de carga de cada script
 		
 		bool AutoCompile = true;         // Auto-compilar al entrar en Play mode
+
+		// Visual script (.lublueprint) run by the BlueprintSystem alongside the C++ scripts
+		std::string BlueprintPath;
+		std::shared_ptr<void> BlueprintRuntime;   // runtime instance (not serialized, not copied)
 		
 		// Public variable values edited in the inspector (one map per script, name -> value)
 		std::vector<std::unordered_map<std::string, ScriptFieldValue>> FieldOverrides;
@@ -1099,6 +1103,7 @@ namespace Lunex {
 			, CompiledDLLPaths(other.CompiledDLLPaths)
 			, ScriptLoadedStates(other.ScriptPaths.size(), false)
 			, AutoCompile(other.AutoCompile)
+			, BlueprintPath(other.BlueprintPath)
 			, FieldOverrides(other.FieldOverrides)
 			, ScriptPluginInstances(other.ScriptPaths.size(), nullptr)
 		{
@@ -1336,6 +1341,119 @@ namespace Lunex {
 		}
 	};
 
+	// ========================================================================
+	// PARTICLE SYSTEM
+	// ========================================================================
+
+	/**
+	 * Emitter of particles. A particle can be a camera-facing sprite, a .lumesh model
+	 * (with any material, including node-graph materials) or a .luprefab instance.
+	 *
+	 * Simulation:
+	 *  - Simple:  CPU integration (gravity, drag, ground bounce). Cheap, thousands of particles.
+	 *  - Physics: every particle is a real entity with Rigidbody3D + collider simulated by
+	 *             Bullet (prefabs keep their own physics components). Use for debris, splashes...
+	 * Scripts/blueprints drive it with Emit / Play / Stop / SetRate.
+	 */
+	struct ParticleSystemComponent {
+		enum class EmitterShape { Point = 0, Sphere, Box, Cone };
+		enum class RenderMode { Billboard = 0, Mesh, Prefab };
+		enum class SimulationMode { Simple = 0, Physics };
+
+		// ---- Emission ----
+		bool PlayOnStart = true;
+		bool PreviewInEditor = true;     // simulate in Edit mode (Simple + Billboard/Mesh only)
+		bool Looping = true;
+		float Duration = 5.0f;           // seconds per cycle (when not looping, emission stops after it)
+		float Rate = 20.0f;              // particles per second
+		int Burst = 0;                   // particles emitted at once when the cycle starts
+		int MaxParticles = 500;
+		bool WorldSpace = true;          // particles stay where they were born when the emitter moves
+
+		// ---- Shape ----
+		EmitterShape Shape = EmitterShape::Cone;
+		float ShapeRadius = 0.25f;
+		glm::vec3 BoxSize{ 1.0f };
+		float ConeAngle = 25.0f;         // degrees around the emitter's +Y
+
+		// ---- Particle (min/max ranges) ----
+		glm::vec2 Lifetime{ 1.5f, 2.5f };
+		glm::vec2 Speed{ 2.0f, 4.0f };
+		glm::vec2 StartSize{ 0.15f, 0.3f };
+		float EndSizeScale = 0.2f;       // size multiplier at the end of the life
+		glm::vec2 AngularSpeed{ -90.0f, 90.0f };   // degrees/second
+		glm::vec4 StartColor{ 1.0f, 0.9f, 0.6f, 1.0f };
+		glm::vec4 EndColor{ 1.0f, 0.3f, 0.1f, 0.0f };
+
+		// ---- Forces ----
+		float GravityScale = 0.3f;       // x world gravity (-9.81 Y)
+		float Drag = 0.2f;
+		bool CollideWithGround = false;
+		float GroundHeight = 0.0f;
+		float Bounce = 0.4f;
+
+		// ---- Rendering ----
+		RenderMode Mode = RenderMode::Billboard;
+		SimulationMode Simulation = SimulationMode::Simple;
+		std::string TexturePath;         // billboard sprite (empty = soft disc)
+		std::string MeshPath;            // .lumesh for Mesh mode
+		std::string MaterialPath;        // .lumat for Mesh mode (empty = default material)
+		std::string PrefabPath;          // .luprefab for Prefab mode
+		bool AdditiveBlend = false;
+		float ParticleMass = 0.2f;       // Physics mode
+
+		// ---- Runtime (not serialized) ----
+		struct Particle {
+			glm::vec3 Position{ 0.0f };
+			glm::vec3 Velocity{ 0.0f };
+			float Age = 0.0f;
+			float Life = 1.0f;
+			float Size = 0.2f;
+			float Rotation = 0.0f;
+			float AngularSpeed = 0.0f;
+			glm::vec4 Color{ 1.0f };
+			uint64_t Entity = 0;         // spawned entity UUID (Physics / Prefab modes)
+		};
+		std::vector<Particle> Particles;
+		bool Playing = false;
+		float CycleTime = 0.0f;
+		float EmitAccumulator = 0.0f;
+		bool BurstPending = true;
+		int PendingEmit = 0;             // Emit(n) requests from scripts/blueprints
+		uint32_t RandomState = 0x9E3779B9u;
+		std::string LoadedMeshPath, LoadedMaterialPath, LoadedTexturePath, LoadedPrefabPath;
+		Ref<Model> RuntimeMesh;
+		Ref<MaterialInstance> RuntimeMaterial;
+		Ref<Texture2D> RuntimeTexture;
+		Ref<void> RuntimePrefab;         // Ref<Prefab> (kept opaque to avoid a dependency here)
+
+		void Play() { Playing = true; CycleTime = 0.0f; BurstPending = true; }
+		void Stop() { Playing = false; }
+		void Emit(int count) { PendingEmit += std::max(count, 0); }
+		void Clear() { Particles.clear(); }
+
+		ParticleSystemComponent() = default;
+		ParticleSystemComponent(const ParticleSystemComponent& other) { *this = other; }
+		ParticleSystemComponent& operator=(const ParticleSystemComponent& other) {
+			if (this == &other) return *this;
+			// Copy settings only: a copy (Play mode scene, duplicate) starts with no live particles
+			PlayOnStart = other.PlayOnStart; PreviewInEditor = other.PreviewInEditor; Looping = other.Looping;
+			Duration = other.Duration; Rate = other.Rate; Burst = other.Burst; MaxParticles = other.MaxParticles;
+			WorldSpace = other.WorldSpace; Shape = other.Shape; ShapeRadius = other.ShapeRadius; BoxSize = other.BoxSize;
+			ConeAngle = other.ConeAngle; Lifetime = other.Lifetime; Speed = other.Speed; StartSize = other.StartSize;
+			EndSizeScale = other.EndSizeScale; AngularSpeed = other.AngularSpeed; StartColor = other.StartColor;
+			EndColor = other.EndColor; GravityScale = other.GravityScale; Drag = other.Drag;
+			CollideWithGround = other.CollideWithGround; GroundHeight = other.GroundHeight; Bounce = other.Bounce;
+			Mode = other.Mode; Simulation = other.Simulation; TexturePath = other.TexturePath; MeshPath = other.MeshPath;
+			MaterialPath = other.MaterialPath; PrefabPath = other.PrefabPath; AdditiveBlend = other.AdditiveBlend;
+			ParticleMass = other.ParticleMass;
+			return *this;
+		}
+	};
+
+	// Serialized fields of ParticleSystemComponent (enums are handled separately)
+#define LNX_PARTICLE_FIELDS(F) 	F(PlayOnStart) F(PreviewInEditor) F(Looping) F(Duration) F(Rate) F(Burst) F(MaxParticles) F(WorldSpace) 	F(ShapeRadius) F(BoxSize) F(ConeAngle) F(Lifetime) F(Speed) F(StartSize) F(EndSizeScale) F(AngularSpeed) 	F(StartColor) F(EndColor) F(GravityScale) F(Drag) F(CollideWithGround) F(GroundHeight) F(Bounce) 	F(TexturePath) F(MeshPath) F(MaterialPath) F(PrefabPath) F(AdditiveBlend) F(ParticleMass)
+
 	template<typename... Component>
 	struct ComponentGroup
 	{
@@ -1349,5 +1467,6 @@ namespace Lunex {
 		CapsuleCollider3DComponent, CylinderCollider3DComponent, ConeCollider3DComponent,
 		MeshCollider3DComponent, CharacterController3DComponent,
 		MeshComponent, MaterialComponent, LightComponent, TextureComponent, ScriptComponent,
-		RelationshipComponent, EnvironmentComponent, AnimatorComponent, GroupComponent>;
+		RelationshipComponent, EnvironmentComponent, AnimatorComponent, GroupComponent,
+		ParticleSystemComponent>;
 }

@@ -5,6 +5,7 @@
 
 #include "stpch.h"
 #include "ContentBrowserPanel.h"
+#include "BlueprintEditorPanel.h"
 #include "Events/Event.h"
 #include "Events/FileDropEvent.h"
 #include "Assets/Materials/MaterialRegistry.h"
@@ -513,6 +514,12 @@ namespace Lunex {
 			if (MenuItem("New Material")) {
 				CreateNewMaterial();
 			}
+			if (MenuItem("New Blueprint")) {
+				std::filesystem::path path = m_CurrentDirectory / "NewBlueprint.lublueprint";
+				for (int i = 1; std::filesystem::exists(path); i++) path = m_CurrentDirectory / ("NewBlueprint_" + std::to_string(i) + ".lublueprint");
+				Blueprint::BlueprintAsset::CreateNew(path);
+				if (auto* editor = BlueprintEditorPanel::Get()) editor->Open(path);
+			}
 			
 			Separator();
 			
@@ -712,6 +719,9 @@ namespace Lunex {
 			
 			if (ext == ".luanim") {
 				if (m_OnAnimationOpenCallback) m_OnAnimationOpenCallback(path);
+			}
+			else if (ext == ".lublueprint") {
+				if (auto* editor = BlueprintEditorPanel::Get()) editor->Open(path);
 			}
 			else if (ext == ".lumat") {
 				if (m_OnMaterialOpenCallback) {

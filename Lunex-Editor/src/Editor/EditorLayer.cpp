@@ -1034,6 +1034,7 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 		m_ContentBrowserPanel.OnImGuiRender();
 		m_MaterialEditorPanel.OnImGuiRender();
 		m_MaterialGraphPanel.OnImGuiRender();
+		m_BlueprintEditorPanel.OnImGuiRender();
 		{
 			// Animation editor follows the selection (only rigged entities retarget it)
 			m_AnimationEditorPanel.SetContext(m_SceneState == SceneState::Edit ? m_ActiveScene : nullptr);

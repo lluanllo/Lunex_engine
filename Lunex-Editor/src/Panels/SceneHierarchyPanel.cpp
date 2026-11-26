@@ -100,6 +100,12 @@ namespace Lunex {
 			if (MenuItem("Empty Entity"))
 				m_Context->CreateEntity("Empty Entity");
 
+			if (MenuItem("Particle System")) {
+				Entity particles = m_Context->CreateEntity("Particle System");
+				particles.AddComponent<ParticleSystemComponent>();
+				SelectEntity(particles, true);
+			}
+
 			// Folder-like group (Blender collection): wraps the selection, or starts empty
 			if (ImGui::MenuItem(m_SelectedEntities.empty() ? "Group" : "Group Selection", "Ctrl+G")) {
 				if (!m_SelectedEntities.empty()) GroupSelection();

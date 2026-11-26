@@ -10,6 +10,7 @@
 #include "PropertiesPanel.h"
 #include "ContentBrowserPanel.h"
 #include "AnimationEditorPanel.h"
+#include "BlueprintEditorPanel.h"
 #include "Assets/Animation/AnimationAsset.h"
 #include "Project/Project.h"
 
@@ -179,6 +180,7 @@ namespace Lunex {
 			DisplayAddComponentEntry<MeshComponent>("Mesh Renderer");
 			DisplayAddComponentEntry<LightComponent>("Light");
 			DisplayAddComponentEntry<AnimatorComponent>("Animator");
+			DisplayAddComponentEntry<ParticleSystemComponent>("Particle System");
 
 			Separator();
 			{
@@ -220,6 +222,7 @@ namespace Lunex {
 		DrawCircleRendererComponent(entity);
 		DrawMeshComponent(entity);
 		DrawAnimatorComponent(entity);
+		DrawParticleSystemComponent(entity);
 		DrawMaterialComponent(entity);
 		DrawLightComponent(entity);
 		DrawRigidbody2DComponent(entity);
@@ -377,7 +380,56 @@ namespace Lunex {
 	void PropertiesPanel::DrawScriptComponent(Entity entity) {
 		using namespace UI;
 		
-		ComponentDrawer::Draw<ScriptComponent>("Script", entity, [](auto& component) {
+		ComponentDrawer::Draw<ScriptComponent>("Script", entity, [entity](auto& component) mutable {
+			// ---- Visual script (blueprint) ----
+			ComponentDrawer::DrawSectionHeader("", "Blueprint");
+			ComponentDrawer::BeginIndent();
+			{
+				auto resolve = [](const std::string& stored) {
+					std::filesystem::path p(stored);
+					if (p.is_relative() && Project::GetActive()) p = Project::GetActiveAssetDirectory() / p;
+					return p;
+				};
+				if (component.BlueprintPath.empty()) {
+					TextWrapped("Script this entity with nodes (events, flow, transform, physics, materials, particles...).", TextVariant::Muted);
+					if (ButtonBlock("Create Blueprint", ButtonVariant::Primary)) {
+						std::filesystem::path path = BlueprintEditorPanel::CreateForEntity(entity.GetComponent<TagComponent>().Tag);
+						std::filesystem::path stored = path;
+						if (Project::GetActive()) {
+							std::error_code ec;
+							auto rel = std::filesystem::relative(path, Project::GetActiveAssetDirectory(), ec);
+							if (!ec && !rel.empty()) stored = rel;
+						}
+						component.BlueprintPath = stored.generic_string();
+						if (auto* editor = BlueprintEditorPanel::Get()) editor->Open(path);
+					}
+				}
+				else {
+					TextStyled(std::filesystem::path(component.BlueprintPath).filename().string(), TextVariant::Primary);
+					if (ButtonBlock("Edit Blueprint", ButtonVariant::Primary)) {
+						if (auto* editor = BlueprintEditorPanel::Get()) editor->Open(resolve(component.BlueprintPath));
+					}
+					if (Button("Remove Blueprint", ButtonVariant::Default, ButtonSize::Small)) component.BlueprintPath.clear();
+				}
+				// Drop an existing .lublueprint from the Content Browser
+				if (ImGui::BeginDragDropTarget()) {
+					if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+						auto* data = static_cast<const ContentBrowserPayload*>(payload->Data);
+						if (std::string(data->Extension) == ".lublueprint") {
+							std::filesystem::path p(data->FilePath);
+							if (Project::GetActive()) {
+								std::error_code ec;
+								auto rel = std::filesystem::relative(p, Project::GetActiveAssetDirectory(), ec);
+								if (!ec && !rel.empty()) p = rel;
+							}
+							component.BlueprintPath = p.generic_string();
+						}
+					}
+					ImGui::EndDragDropTarget();
+				}
+			}
+			ComponentDrawer::EndIndent();
+
 			ComponentDrawer::DrawSectionHeader("", "C++ Scripts");
 			ComponentDrawer::BeginIndent();
 
@@ -652,6 +704,149 @@ namespace Lunex {
 	// CIRCLE RENDERER COMPONENT
 	// ============================================================================
 	
+	// ============================================================================
+	// PARTICLE SYSTEM COMPONENT
+	// ============================================================================
+
+	namespace {
+		// Asset slot: shows the file name, accepts a drop from the Content Browser
+		bool ParticleAssetField(const char* label, std::string& path, std::initializer_list<const char*> extensions) {
+			using namespace UI;
+			bool changed = false;
+			BeginPropertyRow(label);
+			const std::string shown = path.empty() ? std::string("(drop asset)") : std::filesystem::path(path).filename().string();
+			ImGui::PushID(label);
+			const float clearW = path.empty() ? 0.0f : ImGui::GetFrameHeight();
+			ImGui::Button(shown.c_str(), ImVec2(ImGui::GetContentRegionAvail().x - clearW - (clearW > 0 ? 4.0f : 0.0f), 0));
+			if (ImGui::BeginDragDropTarget()) {
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+					auto* data = static_cast<const ContentBrowserPayload*>(payload->Data);
+					std::string ext = data->Extension;
+					std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+					for (const char* e : extensions) {
+						if (ext != e) continue;
+						std::filesystem::path p(data->FilePath);
+						if (Project::GetActive()) {
+							std::error_code ec;
+							auto rel = std::filesystem::relative(p, Project::GetActiveAssetDirectory(), ec);
+							if (!ec && !rel.empty() && rel.native()[0] != '.') p = rel;
+						}
+						path = p.generic_string();
+						changed = true;
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
+			if (!path.empty()) {
+				ImGui::SameLine(0, 4);
+				if (ImGui::Button("x", ImVec2(clearW, 0))) { path.clear(); changed = true; }
+			}
+			ImGui::PopID();
+			EndPropertyRow();
+			return changed;
+		}
+
+		bool PropertyRange(const char* label, glm::vec2& range, float speed, const char* tooltip) {
+			using namespace UI;
+			glm::vec2 v = range;
+			if (PropertyVec2(label, v, speed, tooltip)) { range = glm::vec2(std::min(v.x, v.y), std::max(v.x, v.y)); return true; }
+			return false;
+		}
+
+		bool PropertyRGBA(const char* label, glm::vec4& color) {
+			UI::Color c(color);
+			if (UI::PropertyColor4(label, c)) { color = glm::vec4(c.r, c.g, c.b, c.a); return true; }
+			return false;
+		}
+	}
+
+	void PropertiesPanel::DrawParticleSystemComponent(Entity entity) {
+		using namespace UI;
+		using PSC = ParticleSystemComponent;
+
+		ComponentDrawer::Draw<PSC>("Particle System", entity, [](auto& ps) {
+			// Live controls
+			{
+				if (Button(ps.Playing ? "Stop" : "Play", ButtonVariant::Primary, ButtonSize::Small)) { if (ps.Playing) ps.Stop(); else ps.Play(); }
+				SameLine();
+				if (Button("Burst x10", ButtonVariant::Default, ButtonSize::Small)) ps.Emit(10);
+				SameLine();
+				if (Button("Clear", ButtonVariant::Default, ButtonSize::Small)) ps.Clear();
+				SameLine();
+				TextStyled(std::to_string(ps.Particles.size()) + " alive", TextVariant::Muted);
+			}
+
+			ComponentDrawer::DrawSectionHeader("", "Emission");
+			ComponentDrawer::BeginIndent();
+			PropertyCheckbox("Play On Start", ps.PlayOnStart);
+			PropertyCheckbox("Preview In Editor", ps.PreviewInEditor, "Simulate in Edit mode (simple simulation, no entities)");
+			PropertyCheckbox("Looping", ps.Looping);
+			PropertyFloat("Duration", ps.Duration, 0.05f, 0.1f, 600.0f, "Seconds per emission cycle");
+			PropertyFloat("Rate", ps.Rate, 0.5f, 0.0f, 10000.0f, "Particles per second");
+			float burst = static_cast<float>(ps.Burst);
+			if (PropertyFloat("Burst", burst, 1.0f, 0.0f, 10000.0f, "Particles emitted when each cycle starts")) ps.Burst = static_cast<int>(burst);
+			float maxP = static_cast<float>(ps.MaxParticles);
+			if (PropertyFloat("Max Particles", maxP, 10.0f, 1.0f, 100000.0f)) ps.MaxParticles = std::max(1, static_cast<int>(maxP));
+			PropertyCheckbox("World Space", ps.WorldSpace, "Particles stay where they were born when the emitter moves");
+			ComponentDrawer::EndIndent();
+
+			ComponentDrawer::DrawSectionHeader("", "Shape");
+			ComponentDrawer::BeginIndent();
+			static const char* shapes[] = { "Point", "Sphere", "Box", "Cone" };
+			int shape = static_cast<int>(ps.Shape);
+			if (PropertyDropdown("Shape", shape, shapes, 4)) ps.Shape = static_cast<PSC::EmitterShape>(shape);
+			if (ps.Shape == PSC::EmitterShape::Box) PropertyVec3("Size", ps.BoxSize, 0.05f);
+			else if (ps.Shape != PSC::EmitterShape::Point) PropertyFloat("Radius", ps.ShapeRadius, 0.01f, 0.0f, 1000.0f);
+			if (ps.Shape == PSC::EmitterShape::Cone) PropertySlider("Angle", ps.ConeAngle, 0.0f, 90.0f, "%.0f deg");
+			ComponentDrawer::EndIndent();
+
+			ComponentDrawer::DrawSectionHeader("", "Particles");
+			ComponentDrawer::BeginIndent();
+			PropertyRange("Lifetime", ps.Lifetime, 0.05f, "Min / max seconds");
+			PropertyRange("Speed", ps.Speed, 0.05f, "Min / max initial speed");
+			PropertyRange("Start Size", ps.StartSize, 0.01f, "Min / max size");
+			PropertySlider("End Size", ps.EndSizeScale, 0.0f, 3.0f, "%.2fx", "Size multiplier at the end of the life");
+			PropertyRange("Spin", ps.AngularSpeed, 1.0f, "Min / max degrees per second");
+			PropertyRGBA("Start Color", ps.StartColor);
+			PropertyRGBA("End Color", ps.EndColor);
+			ComponentDrawer::EndIndent();
+
+			ComponentDrawer::DrawSectionHeader("", "Forces");
+			ComponentDrawer::BeginIndent();
+			PropertyFloat("Gravity Scale", ps.GravityScale, 0.01f, -10.0f, 10.0f);
+			PropertyFloat("Drag", ps.Drag, 0.01f, 0.0f, 20.0f);
+			PropertyCheckbox("Collide With Ground", ps.CollideWithGround, "Simple simulation: bounce on a horizontal plane");
+			if (ps.CollideWithGround) {
+				PropertyFloat("Ground Height", ps.GroundHeight, 0.05f, -10000.0f, 10000.0f);
+				PropertySlider("Bounce", ps.Bounce, 0.0f, 1.0f);
+			}
+			ComponentDrawer::EndIndent();
+
+			ComponentDrawer::DrawSectionHeader("", "Render");
+			ComponentDrawer::BeginIndent();
+			static const char* modes[] = { "Billboard", "Mesh (.lumesh)", "Prefab (.luprefab)" };
+			int mode = static_cast<int>(ps.Mode);
+			if (PropertyDropdown("Particle", mode, modes, 3, "What every particle is")) ps.Mode = static_cast<PSC::RenderMode>(mode);
+			static const char* sims[] = { "Simple (CPU)", "Physics (Rigidbody)" };
+			int sim = static_cast<int>(ps.Simulation);
+			if (PropertyDropdown("Simulation", sim, sims, 2, "Physics spawns real Rigidbody entities (Play mode)")) ps.Simulation = static_cast<PSC::SimulationMode>(sim);
+			if (ps.Mode == PSC::RenderMode::Billboard) {
+				ParticleAssetField("Texture", ps.TexturePath, { ".png", ".jpg", ".jpeg", ".tga" });
+				PropertyCheckbox("Additive", ps.AdditiveBlend, "Additive blending (fire, sparks, magic)");
+			}
+			else if (ps.Mode == PSC::RenderMode::Mesh) {
+				ParticleAssetField("Mesh", ps.MeshPath, { ".lumesh" });
+				ParticleAssetField("Material", ps.MaterialPath, { ".lumat" });
+			}
+			else {
+				ParticleAssetField("Prefab", ps.PrefabPath, { ".luprefab" });
+				TextWrapped("Each particle instantiates the prefab (with its rigidbodies, colliders and scripts) in Play mode.", TextVariant::Muted);
+			}
+			if (ps.Simulation == PSC::SimulationMode::Physics) PropertyFloat("Particle Mass", ps.ParticleMass, 0.01f, 0.001f, 1000.0f);
+			ComponentDrawer::EndIndent();
+		});
+	}
+
 	void PropertiesPanel::DrawAnimatorComponent(Entity entity) {
 		using namespace UI;
 
