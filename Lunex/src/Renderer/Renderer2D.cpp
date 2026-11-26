@@ -229,6 +229,17 @@ namespace Lunex {
 		// (Previously cleared texture slots each batch causing unnecessary rebinding and potential ordering artifacts)
 	}
 	
+	// Particle-style batches: additive blending and/or no depth writes (set between flushes)
+	static bool s_AdditiveBlend = false;
+	static bool s_DepthWrite = true;
+	void Renderer2D::SetParticleBlending(bool additive, bool depthWrite) {
+		if (additive == s_AdditiveBlend && depthWrite == s_DepthWrite) return;
+		Flush();
+		StartBatch();
+		s_AdditiveBlend = additive;
+		s_DepthWrite = depthWrite;
+	}
+
 	void Renderer2D::Flush() {
 		auto* cmdList = RHI::GetImmediateCommandList();
 		if (!cmdList) return;
@@ -241,14 +252,18 @@ namespace Lunex {
 		glGetIntegerv(GL_BLEND_SRC_RGB, &prevSrc);
 		glGetIntegerv(GL_BLEND_DST_RGB, &prevDst);
 		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glBlendFunc(GL_SRC_ALPHA, s_AdditiveBlend ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
+		GLboolean prevDepthMask = GL_TRUE;
+		glGetBooleanv(GL_DEPTH_WRITEMASK, &prevDepthMask);
+		if (!s_DepthWrite) glDepthMask(GL_FALSE);
 		struct BlendRestore {
-			GLboolean Enabled; GLint Src, Dst;
+			GLboolean Enabled; GLint Src, Dst; GLboolean DepthMask;
 			~BlendRestore() {
 				glBlendFunc(static_cast<GLenum>(Src), static_cast<GLenum>(Dst));
 				if (!Enabled) glDisable(GL_BLEND);
+				glDepthMask(DepthMask);
 			}
-		} blendRestore{ blendWasEnabled, prevSrc, prevDst };
+		} blendRestore{ blendWasEnabled, prevSrc, prevDst, prevDepthMask };
 
 		if (s_Data.QuadIndexCount) {
 			uint32_t dataSize = (uint32_t)((uint8_t*)s_Data.QuadVertexBufferPtr - (uint8_t*)s_Data.QuadVertexBufferBase);

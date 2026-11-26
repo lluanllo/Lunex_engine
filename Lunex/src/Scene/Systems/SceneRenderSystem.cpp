@@ -1,5 +1,6 @@
 #include "stpch.h"
 #include "SceneRenderSystem.h"
+#include "ParticleSystem.h"
 
 #include "Scene/Components.h"
 #include "Scene/Entity.h"
@@ -85,6 +86,10 @@ namespace Lunex {
 			Renderer3D::BeginScene(camera);
 			RenderMeshes(camera, camera.GetViewMatrix());
 			Renderer3D::EndScene();
+
+			Renderer2D::BeginScene(camera);
+			ParticleSystem::DrawBillboards(m_Context->OwningScene, *m_Context->Registry, camera.GetPosition());
+			Renderer2D::EndScene();
 			
 			// Billboards & Gizmos (forward path renders them here)
 			if (m_Settings.RenderBillboards || m_Settings.RenderGizmos) {
@@ -132,6 +137,8 @@ namespace Lunex {
 		Renderer2D::BeginScene(camera);
 		RenderSprites(camera, camera.GetViewMatrix());
 		RenderCircles(camera, camera.GetViewMatrix());
+		// Particles before post-processing so bright/additive ones bloom
+		ParticleSystem::DrawBillboards(m_Context->OwningScene, *m_Context->Registry, camera.GetPosition());
 		Renderer2D::EndScene();
 	}
 
@@ -189,6 +196,7 @@ namespace Lunex {
 		Renderer2D::BeginScene(camera, cameraTransform);
 		RenderSprites(camera, cameraTransform);
 		RenderCircles(camera, cameraTransform);
+		ParticleSystem::DrawBillboards(m_Context->OwningScene, *m_Context->Registry, glm::vec3(cameraTransform[3]));
 		Renderer2D::EndScene();
 	}
 
@@ -223,6 +231,10 @@ namespace Lunex {
 			Renderer3D::BeginScene(camera, cameraTransform);
 			RenderMeshes(camera, cameraTransform);
 			Renderer3D::EndScene();
+
+			Renderer2D::BeginScene(camera, cameraTransform);
+			ParticleSystem::DrawBillboards(m_Context->OwningScene, *m_Context->Registry, glm::vec3(cameraTransform[3]));
+			Renderer2D::EndScene();
 		}
 	}
 
@@ -291,6 +303,9 @@ namespace Lunex {
 				}
 			}
 		}
+
+		// Mesh particles (Simple simulation; physics/prefab particles are entities)
+		ParticleSystem::SubmitMeshParticles(m_Context->OwningScene, *m_Context->Registry, DeferredRenderer::IsEnabled());
 	}
 
 	void SceneRenderSystem::RenderBillboards(const Camera& camera, const glm::vec3& cameraPosition) {

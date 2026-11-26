@@ -44,6 +44,9 @@ namespace Lunex  {
 			
 			static void DrawSprite(const glm::mat4& transform, SpriteRendererComponent& src, int entityID);
 			
+			// Particle batches: additive blending / no depth writes until reset (flushes on change)
+			static void SetParticleBlending(bool additive, bool depthWrite);
+
 			// Billboard rendering (always faces camera)
 			static void DrawBillboard(const glm::vec3& position, const Ref<Texture2D>& texture, 
 									  const glm::vec3& cameraPosition, float size = 0.5f, int entityID = -1);
