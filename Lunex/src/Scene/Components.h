@@ -391,6 +391,13 @@ namespace Lunex {
 		
 		// ========== CONSTRUCTORES ==========
 		
+		// True while the entity still uses the registry's default material: imported
+		// per-submesh materials are used then; an assigned material overrides them all.
+		bool IsDefaultMaterial() const {
+			return !Instance || !Instance->GetBaseAsset() ||
+				Instance->GetBaseAsset() == MaterialRegistry::Get().GetDefaultMaterial();
+		}
+
 		MaterialComponent() {
 			// Usar material por defecto del registry
 			auto defaultMaterial = MaterialRegistry::Get().GetDefaultMaterial();
@@ -1086,9 +1093,6 @@ namespace Lunex {
 		
 		bool AutoCompile = true;         // Auto-compilar al entrar en Play mode
 
-		// Visual script (.lublueprint) run by the BlueprintSystem alongside the C++ scripts
-		std::string BlueprintPath;
-		std::shared_ptr<void> BlueprintRuntime;   // runtime instance (not serialized, not copied)
 		
 		// Public variable values edited in the inspector (one map per script, name -> value)
 		std::vector<std::unordered_map<std::string, ScriptFieldValue>> FieldOverrides;
@@ -1103,7 +1107,6 @@ namespace Lunex {
 			, CompiledDLLPaths(other.CompiledDLLPaths)
 			, ScriptLoadedStates(other.ScriptPaths.size(), false)
 			, AutoCompile(other.AutoCompile)
-			, BlueprintPath(other.BlueprintPath)
 			, FieldOverrides(other.FieldOverrides)
 			, ScriptPluginInstances(other.ScriptPaths.size(), nullptr)
 		{
@@ -1342,6 +1345,20 @@ namespace Lunex {
 	};
 
 	// ========================================================================
+	// BLUEPRINT (visual scripting)
+	// ========================================================================
+
+	// Runs a .lublueprint node graph on this entity in Play mode (BlueprintSystem)
+	struct BlueprintComponent {
+		std::string BlueprintPath;                 // relative to the asset directory when possible
+		std::shared_ptr<void> Runtime;             // Blueprint::Instance (not serialized, not copied)
+
+		BlueprintComponent() = default;
+		BlueprintComponent(const BlueprintComponent& other) : BlueprintPath(other.BlueprintPath) {}
+		BlueprintComponent& operator=(const BlueprintComponent& other) { BlueprintPath = other.BlueprintPath; Runtime.reset(); return *this; }
+	};
+
+	// ========================================================================
 	// PARTICLE SYSTEM
 	// ========================================================================
 
@@ -1468,5 +1485,5 @@ namespace Lunex {
 		MeshCollider3DComponent, CharacterController3DComponent,
 		MeshComponent, MaterialComponent, LightComponent, TextureComponent, ScriptComponent,
 		RelationshipComponent, EnvironmentComponent, AnimatorComponent, GroupComponent,
-		ParticleSystemComponent>;
+		ParticleSystemComponent, BlueprintComponent>;
 }

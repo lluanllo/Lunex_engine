@@ -434,8 +434,8 @@ namespace Lunex {
 			return;
 
 
-		// Check if model has per-submesh materials from import
-		if (meshComponent.HasPerSubmeshMaterials()) {
+		// Imported per-submesh materials only while no material was assigned to the entity
+		if (meshComponent.HasPerSubmeshMaterials() && materialComponent.IsDefaultMaterial()) {
 			// Per-submesh rendering: each submesh gets its own imported material
 			const auto& meshes = meshComponent.MeshModel->GetMeshes();
 			

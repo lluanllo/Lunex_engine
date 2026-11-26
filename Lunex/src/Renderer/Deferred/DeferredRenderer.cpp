@@ -434,7 +434,8 @@ namespace Lunex {
 
 		UploadTransform(transform, *meshComponent.MeshModel, entityID, bones);
 
-		if (meshComponent.HasPerSubmeshMaterials()) {
+		// Imported per-submesh materials only while no material was assigned to the entity
+		if (meshComponent.HasPerSubmeshMaterials() && materialComponent.IsDefaultMaterial()) {
 			DrawPerSubmeshMaterials(transform, meshComponent, materialComponent.Instance.get());
 			return;
 		}
