@@ -156,7 +156,7 @@ namespace Lunex::UI {
 		ImGui::Columns(2, nullptr, false);
 		if (s_SplitLayout) {
 			// Blender property split: label right-aligned in the left 40%
-			const float colW = std::max(80.0f, ImGui::GetContentRegionAvail().x * 0.4f);
+			const float colW = std::max(120.0f, ImGui::GetContentRegionAvail().x * 0.45f);
 			ImGui::SetColumnWidth(0, colW);
 			const float textW = ImGui::CalcTextSize(shown.c_str()).x;
 			const float x = ImGui::GetCursorPosX() + std::max(0.0f, colW - textW - 12.0f);

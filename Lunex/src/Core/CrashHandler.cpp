@@ -15,7 +15,43 @@ namespace Lunex {
 
 #ifdef _WIN32
 	namespace {
+		// Heap-free unwind first: when the heap is corrupted, dbghelp (which allocates)
+		// may crash before printing anything. Offsets can be symbolized offline with the PDB.
+		void PrintRawStack(const CONTEXT& start) {
+			static bool s_Printing = false;
+			if (s_Printing) return;
+			s_Printing = true;
+			CONTEXT ctx = start;
+			fprintf(stderr, "---- raw stack (module+offset) ----\n");
+			for (int i = 0; i < 64 && ctx.Rip; i++) {
+				HMODULE mod = nullptr;
+				char name[MAX_PATH] = "?";
+				if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+					reinterpret_cast<LPCSTR>(ctx.Rip), &mod) && mod) {
+					GetModuleFileNameA(mod, name, MAX_PATH);
+				}
+				const char* base = strrchr(name, '\\');
+				fprintf(stderr, "  raw #%02d %s+0x%llx\n", i, base ? base + 1 : name,
+					static_cast<unsigned long long>(ctx.Rip - reinterpret_cast<DWORD64>(mod)));
+
+				DWORD64 imageBase = 0;
+				PRUNTIME_FUNCTION fe = RtlLookupFunctionEntry(ctx.Rip, &imageBase, nullptr);
+				if (!fe) {
+					ctx.Rip = *reinterpret_cast<DWORD64*>(ctx.Rsp);
+					ctx.Rsp += 8;
+				}
+				else {
+					void* handlerData = nullptr;
+					DWORD64 establisher = 0;
+					RtlVirtualUnwind(UNW_FLAG_NHANDLER, imageBase, ctx.Rip, fe, &ctx, &handlerData, &establisher, nullptr);
+				}
+			}
+			fflush(stderr);
+		}
+
 		LONG WINAPI OnUnhandledException(EXCEPTION_POINTERS* info) {
+			fprintf(stderr, "\n==== LUNEX CRASH (raw): exception 0x%08lX ====\n", info->ExceptionRecord->ExceptionCode);
+			PrintRawStack(*info->ContextRecord);
 			HANDLE process = GetCurrentProcess();
 			HANDLE thread = GetCurrentThread();
 			SymSetOptions(SYMOPT_LOAD_LINES | SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
@@ -73,8 +109,19 @@ namespace Lunex {
 	void CrashHandler::Install() {
 		SetUnhandledExceptionFilter(OnUnhandledException);
 	}
+
+	void CrashHandler::CheckHeap(const char* where) {
+		static bool reported = false;
+		if (reported) return;
+		if (!HeapValidate(GetProcessHeap(), 0, nullptr)) {
+			reported = true;
+			fprintf(stderr, "==== HEAP CORRUPTED before: %s ====\n", where);
+			fflush(stderr);
+		}
+	}
 #else
 	void CrashHandler::Install() {}
+	void CrashHandler::CheckHeap(const char*) {}
 #endif
 
 }

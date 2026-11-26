@@ -11,6 +11,8 @@ namespace Lunex {
 	class CrashHandler {
 	public:
 		static void Install();
+		// Debug aid: reports the first point where the process heap is found corrupted
+		static void CheckHeap(const char* where);
 	};
 
 }
