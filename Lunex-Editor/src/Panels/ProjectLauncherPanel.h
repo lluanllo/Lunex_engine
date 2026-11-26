@@ -66,6 +66,7 @@ namespace Lunex {
 
 	private:
 		bool m_IsOpen = false;
+		bool m_CommandLineChecked = false;   // "Lunex-Editor.exe <project.lunex>" skips the launcher
 		std::vector<RecentProject> m_Recent;
 		int m_Selected = -1;
 		char m_Filter[128] = "";

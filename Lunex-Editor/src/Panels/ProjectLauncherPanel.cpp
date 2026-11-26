@@ -5,6 +5,7 @@
 #include "Log/Log.h"
 #include "Project/ProjectThumbnail.h"
 #include "Utils/PlatformUtils.h"
+#include "Core/Application.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -180,6 +181,23 @@ namespace Lunex {
 
 	void ProjectLauncherPanel::OnImGuiRender() {
 		if (!m_IsOpen) return;
+
+		// A project file given on the command line opens directly, as if its card was clicked
+		if (!m_CommandLineChecked) {
+			m_CommandLineChecked = true;
+			const auto args = Application::Get().GetCommandLineArgs();
+			if (args.Count > 1 && m_OnOpenProject) {
+				const std::filesystem::path path = args[1];
+				std::ifstream in(path);
+				std::string firstLine;
+				std::getline(in, firstLine);
+				if (path.extension() == ".lunex" && firstLine.rfind("Project", 0) == 0) {
+					LNX_LOG_INFO("Opening project from command line: {0}", path.string());
+					m_OnOpenProject(path);
+					return;
+				}
+			}
+		}
 
 		const ImGuiViewport* vp = ImGui::GetMainViewport();
 		ImGui::SetNextWindowPos(vp->WorkPos);
