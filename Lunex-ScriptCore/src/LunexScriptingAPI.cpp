@@ -411,4 +411,66 @@ namespace Lunex {
         }
     }
 
+    // ========================================================================
+    // MaterialAPI Implementation
+    // ========================================================================
+
+    void MaterialAPI::SetColor(const Vec3& rgb, float alpha) {
+        const float c[4] = { rgb.x, rgb.y, rgb.z, alpha };
+        if (m_Context && m_Context->SetMaterialColor) m_Context->SetMaterialColor(m_Entity, c);
+    }
+
+    Vec3 MaterialAPI::GetColor() {
+        float c[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        if (m_Context && m_Context->GetMaterialColor) m_Context->GetMaterialColor(m_Entity, c);
+        return Vec3(c[0], c[1], c[2]);
+    }
+
+    void MaterialAPI::SetEmission(const Vec3& rgb, float intensity) {
+        const float c[3] = { rgb.x, rgb.y, rgb.z };
+        if (m_Context && m_Context->SetMaterialEmission) m_Context->SetMaterialEmission(m_Entity, c, intensity);
+    }
+
+    void MaterialAPI::SetFloat(const char* property, float value) {
+        if (m_Context && m_Context->SetMaterialFloat) m_Context->SetMaterialFloat(m_Entity, property, value);
+    }
+
+    float MaterialAPI::GetFloat(const char* property) {
+        return (m_Context && m_Context->GetMaterialFloat) ? m_Context->GetMaterialFloat(m_Entity, property) : 0.0f;
+    }
+
+    void MaterialAPI::SetParameter(const char* name, float value) {
+        const float v[4] = { value, value, value, value };
+        if (m_Context && m_Context->SetMaterialParameter) m_Context->SetMaterialParameter(m_Entity, name, v);
+    }
+
+    void MaterialAPI::SetParameter(const char* name, const Vec3& rgb) {
+        const float v[4] = { rgb.x, rgb.y, rgb.z, 1.0f };
+        if (m_Context && m_Context->SetMaterialParameter) m_Context->SetMaterialParameter(m_Entity, name, v);
+    }
+
+    void MaterialAPI::Reset() {
+        if (m_Context && m_Context->ResetMaterial) m_Context->ResetMaterial(m_Entity);
+    }
+
+    // ========================================================================
+    // ParticlesAPI Implementation
+    // ========================================================================
+
+    void ParticlesAPI::Emit(int count) {
+        if (m_Context && m_Context->EmitParticles) m_Context->EmitParticles(m_Entity, count);
+    }
+
+    void ParticlesAPI::Play() {
+        if (m_Context && m_Context->SetParticlesPlaying) m_Context->SetParticlesPlaying(m_Entity, true);
+    }
+
+    void ParticlesAPI::Stop() {
+        if (m_Context && m_Context->SetParticlesPlaying) m_Context->SetParticlesPlaying(m_Entity, false);
+    }
+
+    void ParticlesAPI::SetRate(float particlesPerSecond) {
+        if (m_Context && m_Context->SetParticleRate) m_Context->SetParticleRate(m_Entity, particlesPerSecond);
+    }
+
 } // namespace Lunex

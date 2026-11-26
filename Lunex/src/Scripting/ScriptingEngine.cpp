@@ -832,6 +832,79 @@ namespace Lunex {
 			if (ent.HasComponent<AnimatorComponent>()) ent.GetComponent<AnimatorComponent>().Stop();
 		};
 
+		// ---------------- Materials ----------------
+		// Every override goes to the entity's own MaterialInstance (cloned first if shared)
+		static auto materialOf = [](void* entity) -> MaterialInstance* {
+			if (!entity || !g_CurrentScene) return nullptr;
+			Entity ent{ static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity)), g_CurrentScene };
+			if (!ent.HasComponent<MaterialComponent>()) return nullptr;
+			auto& mc = ent.GetComponent<MaterialComponent>();
+			if (!mc.Instance) return nullptr;
+			if (mc.Instance.use_count() > 1) mc.Instance = mc.Instance->Clone();
+			return mc.Instance.get();
+		};
+
+		m_EngineContext->SetMaterialColor = [](void* entity, const float* rgba) {
+			if (auto* m = materialOf(entity); m && rgba) m->SetAlbedo(glm::vec4(rgba[0], rgba[1], rgba[2], rgba[3]), true);
+		};
+		m_EngineContext->GetMaterialColor = [](void* entity, float* out) {
+			if (auto* m = materialOf(entity); m && out) {
+				const glm::vec4 c = m->GetAlbedo();
+				out[0] = c.r; out[1] = c.g; out[2] = c.b; out[3] = c.a;
+			}
+		};
+		m_EngineContext->SetMaterialFloat = [](void* entity, const char* property, float value) {
+			auto* m = materialOf(entity);
+			if (!m || !property) return;
+			const std::string p = property;
+			if (p == "Metallic") m->SetMetallic(value, true);
+			else if (p == "Roughness") m->SetRoughness(value, true);
+			else if (p == "Specular") m->SetSpecular(value, true);
+			else if (p == "EmissionIntensity") m->SetEmissionIntensity(value, true);
+			else if (p == "NormalIntensity") m->SetNormalIntensity(value, true);
+			else m->SetGraphParameter(p, glm::vec4(value));   // unknown name: node-graph parameter
+		};
+		m_EngineContext->GetMaterialFloat = [](void* entity, const char* property) -> float {
+			auto* m = materialOf(entity);
+			if (!m || !property) return 0.0f;
+			const std::string p = property;
+			if (p == "Metallic") return m->GetMetallic();
+			if (p == "Roughness") return m->GetRoughness();
+			if (p == "Specular") return m->GetSpecular();
+			if (p == "EmissionIntensity") return m->GetEmissionIntensity();
+			if (p == "NormalIntensity") return m->GetNormalIntensity();
+			glm::vec4 v;
+			return m->GetGraphParameter(p, v) ? v.x : 0.0f;
+		};
+		m_EngineContext->SetMaterialEmission = [](void* entity, const float* rgb, float intensity) {
+			if (auto* m = materialOf(entity); m && rgb) {
+				m->SetEmissionColor(glm::vec3(rgb[0], rgb[1], rgb[2]), true);
+				m->SetEmissionIntensity(intensity, true);
+			}
+		};
+		m_EngineContext->SetMaterialParameter = [](void* entity, const char* name, const float* rgba) {
+			if (auto* m = materialOf(entity); m && name && rgba) m->SetGraphParameter(name, glm::vec4(rgba[0], rgba[1], rgba[2], rgba[3]));
+		};
+		m_EngineContext->ResetMaterial = [](void* entity) {
+			if (auto* m = materialOf(entity)) m->ResetOverrides();
+		};
+
+		// ---------------- Particles ----------------
+		static auto particlesOf = [](void* entity) -> ParticleSystemComponent* {
+			if (!entity || !g_CurrentScene) return nullptr;
+			Entity ent{ static_cast<entt::entity>(reinterpret_cast<uintptr_t>(entity)), g_CurrentScene };
+			return ent.HasComponent<ParticleSystemComponent>() ? &ent.GetComponent<ParticleSystemComponent>() : nullptr;
+		};
+		m_EngineContext->EmitParticles = [](void* entity, int count) {
+			if (auto* ps = particlesOf(entity)) ps->Emit(count);
+		};
+		m_EngineContext->SetParticlesPlaying = [](void* entity, bool playing) {
+			if (auto* ps = particlesOf(entity)) { if (playing) ps->Play(); else ps->Stop(); }
+		};
+		m_EngineContext->SetParticleRate = [](void* entity, float rate) {
+			if (auto* ps = particlesOf(entity)) ps->Rate = std::max(0.0f, rate);
+		};
+
 		m_EngineContext->RequestLoadScene = [](const char* scenePath) {
 			if (!scenePath) return;
 			std::scoped_lock lock(s_PendingSceneMutex);
@@ -840,7 +913,7 @@ namespace Lunex {
 
 		// CurrentEntity se establecerá cuando se cargue el script
 
-		for (int i = 0; i < 11; ++i) {
+		for (int i = 0; i < static_cast<int>(std::size(m_EngineContext->reserved)); ++i) {
 			m_EngineContext->reserved[i] = nullptr;
 		}
 	}

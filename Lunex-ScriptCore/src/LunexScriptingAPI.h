@@ -357,6 +357,49 @@ namespace Lunex {
     // Forward declaration
     struct EngineContext;
 
+    // Materials of an entity: changes are local to that entity (the asset is untouched).
+    // Example (wet look when a character enters water):
+    //     material.SetRoughness(0.08f); material.SetColor(Vec3(0.35f, 0.3f, 0.28f));
+    //     material.SetParameter("Wetness", 1.0f);   // node-graph material with a "Wetness" Value node
+    class MaterialAPI {
+    public:
+        MaterialAPI() : m_Context(nullptr), m_Entity(nullptr) {}
+        MaterialAPI(EngineContext* ctx, void* entity) : m_Context(ctx), m_Entity(entity) {}
+
+        void SetColor(const Vec3& rgb, float alpha = 1.0f);
+        Vec3 GetColor();
+        void SetMetallic(float v)   { SetFloat("Metallic", v); }
+        void SetRoughness(float v)  { SetFloat("Roughness", v); }
+        void SetSpecular(float v)   { SetFloat("Specular", v); }
+        float GetMetallic()         { return GetFloat("Metallic"); }
+        float GetRoughness()        { return GetFloat("Roughness"); }
+        void SetEmission(const Vec3& rgb, float intensity);
+        void SetFloat(const char* property, float value);
+        float GetFloat(const char* property);
+        void SetParameter(const char* name, float value);
+        void SetParameter(const char* name, const Vec3& rgb);
+        void Reset();
+
+    private:
+        EngineContext* m_Context;
+        void* m_Entity;
+    };
+
+    class ParticlesAPI {
+    public:
+        ParticlesAPI() : m_Context(nullptr), m_Entity(nullptr) {}
+        ParticlesAPI(EngineContext* ctx, void* entity) : m_Context(ctx), m_Entity(entity) {}
+
+        void Emit(int count);
+        void Play();
+        void Stop();
+        void SetRate(float particlesPerSecond);
+
+    private:
+        EngineContext* m_Context;
+        void* m_Entity;
+    };
+
     class TransformAPI {
     public:
         TransformAPI() : m_Context(nullptr), m_Entity(nullptr) {}
@@ -615,8 +658,24 @@ namespace Lunex {
         void (*PlayAnimation)(void* entity, int clipIndex);   // clipIndex < 0 = keep current clip
         void (*StopAnimation)(void* entity);
 
+        // === MATERIALS (per-entity overrides on the MaterialComponent instance) ===
+        // Float properties: "Metallic", "Roughness", "Specular", "EmissionIntensity", "NormalIntensity"
+        void (*SetMaterialColor)(void* entity, const float* rgba);
+        void (*GetMaterialColor)(void* entity, float* outRgba);
+        void (*SetMaterialFloat)(void* entity, const char* property, float value);
+        float (*GetMaterialFloat)(void* entity, const char* property);
+        void (*SetMaterialEmission)(void* entity, const float* rgb, float intensity);
+        // Node-graph materials: named Value / RGB nodes (rgba; a Value node reads [0])
+        void (*SetMaterialParameter)(void* entity, const char* name, const float* rgba);
+        void (*ResetMaterial)(void* entity);
+
+        // === PARTICLES (ParticleSystemComponent) ===
+        void (*EmitParticles)(void* entity, int count);
+        void (*SetParticlesPlaying)(void* entity, bool playing);
+        void (*SetParticleRate)(void* entity, float particlesPerSecond);
+
         // Reservado para expansion futura sin romper ABI
-        void* reserved[11];
+        void* reserved[1];
     };
 
     // ========================================================================
@@ -657,6 +716,8 @@ namespace Lunex {
             transform = TransformAPI(ctx, ctx->CurrentEntity);
             rigidbody = Rigidbody2DAPI(ctx, ctx->CurrentEntity);
             rigidbody3d = Rigidbody3DAPI(ctx, ctx->CurrentEntity);
+            material = MaterialAPI(ctx, ctx->CurrentEntity);
+            particles = ParticlesAPI(ctx, ctx->CurrentEntity);
             input = InputAPI(ctx);
             time = TimeAPI(ctx);
             debug = DebugAPI(ctx);
@@ -694,6 +755,8 @@ namespace Lunex {
         TransformAPI transform;
         Rigidbody2DAPI rigidbody;
         Rigidbody3DAPI rigidbody3d;
+        MaterialAPI material;
+        ParticlesAPI particles;
         InputAPI input;
         TimeAPI time;
         DebugAPI debug;
@@ -717,6 +780,8 @@ namespace Lunex {
         TransformAPI TransformOf(void* entity) { return TransformAPI(m_Context, entity); }
         Rigidbody2DAPI RigidbodyOf(void* entity) { return Rigidbody2DAPI(m_Context, entity); }
         Rigidbody3DAPI Rigidbody3DOf(void* entity) { return Rigidbody3DAPI(m_Context, entity); }
+        MaterialAPI MaterialOf(void* entity) { return MaterialAPI(m_Context, entity); }
+        ParticlesAPI ParticlesOf(void* entity) { return ParticlesAPI(m_Context, entity); }
 
         // The entity this script is attached to
         void* Self() const { return m_Self; }

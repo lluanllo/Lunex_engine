@@ -273,7 +273,7 @@ namespace Lunex {
             m_EngineContext.CurrentEntity = nullptr;
 
             // Reserved fields
-            for (int i = 0; i < 16; ++i)
+            for (int i = 0; i < static_cast<int>(std::size(m_EngineContext.reserved)); ++i)
             {
                 m_EngineContext.reserved[i] = nullptr;
             }
