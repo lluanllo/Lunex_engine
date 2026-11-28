@@ -127,6 +127,12 @@ namespace Lunex {
 		}
 	}
 
+	void FrameProfiler::ReportGpuTime(const char* name, float ms) {
+		if (ms < 0.0f) return;
+		Smoothed& s = g_Smoothed[name];
+		s.Gpu = Smooth(s.Gpu < 0.0f ? 0.0f : s.Gpu, ms);
+	}
+
 	float FrameProfiler::GetAverageMs() {
 		if (s_FrameTimes.empty()) return 0.0f;
 		const size_t n = std::min<size_t>(s_FrameTimes.size(), 60);

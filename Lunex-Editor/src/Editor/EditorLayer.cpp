@@ -973,6 +973,15 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 				view.View = m_EditorCamera.GetViewMatrix();
 				view.Projection = m_EditorCamera.GetProjection();
 				view.CameraPosition = m_EditorCamera.GetPosition();
+				// Selected entities and their children (a selected parent outlines its whole hierarchy)
+				std::vector<Entity> pending(m_SceneHierarchyPanel.GetSelectedEntities().begin(), m_SceneHierarchyPanel.GetSelectedEntities().end());
+				while (!pending.empty() && view.Selected.size() < 4096) {
+					Entity e = pending.back();
+					pending.pop_back();
+					if (!e) continue;
+					view.Selected.push_back(static_cast<int>(static_cast<uint32_t>(e)));
+					for (Entity child : m_ActiveScene->GetChildren(e)) pending.push_back(child);
+				}
 			}
 			if (mouseX >= 0 && mouseY >= 0 && mouseX < (int)viewportSize.x && mouseY < (int)viewportSize.y) {
 				view.PickX = mouseX;
@@ -1025,6 +1034,15 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 			counters.Triangles = static_cast<uint64_t>(deferred.TriangleCount) + stats3D.TriangleCount;
 			counters.DrawCalls2D = stats2D.DrawCalls;
 			counters.Quads2D = stats2D.QuadCount;
+			if (RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan) {
+				const auto& vk = VulkanSceneRenderer::Get().GetStats();
+				counters.GeometryDrawCalls = vk.DrawCalls + vk.ShadowDrawCalls;
+				counters.LightingDrawCalls = 0;
+				counters.Meshes = vk.Meshes;
+				counters.CulledMeshes = vk.Culled;
+				counters.Triangles = vk.Triangles;
+				FrameProfiler::ReportGpuTime("Vulkan scene", vk.GpuMs);
+			}
 			FrameProfiler::SetRenderCounters(counters);
 		}
 		FrameProfiler::Begin("Previews (materials, camera)", true);

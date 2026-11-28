@@ -43,6 +43,8 @@ namespace Lunex {
 
 		static void Begin(const char* name, bool gpu = false);
 		static void End();
+		// GPU time measured outside GL queries (e.g. Vulkan timestamps) for a section recorded this frame
+		static void ReportGpuTime(const char* name, float ms);
 
 		static const std::vector<Section>& GetSections() { return s_Results; }
 		static const std::vector<float>& GetFrameTimes() { return s_FrameTimes; }   // oldest first

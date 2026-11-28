@@ -40,8 +40,12 @@ layout(set = 0, binding = 0) uniform FrameData {
 	mat4 View; mat4 Proj; mat4 ViewProj; mat4 InvViewProj;
 	vec4 CamPos;
 	vec4 EnvParams;    // x intensity, y rotation, z has env, w max mip
-	ivec4 Counts;      // x lights
+	ivec4 Counts;      // x lights, z sun light index (-1 = none)
+	mat4 LightViewProj;
+	vec4 ShadowParams; // x enabled, y texel size (uv), z strength, w texel size (world)
+	vec4 OutlineColor;
 } F;
+layout(set = 0, binding = 5) uniform sampler2DShadow uShadow;
 struct Light { vec4 PosRange; vec4 DirType; vec4 Color; vec4 Cone; };
 layout(set = 0, binding = 1, std430) readonly buffer Lights { Light L[]; };
 layout(set = 0, binding = 2, std430) readonly buffer Bones { mat4 B[]; };
@@ -117,6 +121,26 @@ vec3 Env(vec3 d, float lod) {
 	return textureLod(uEnv, EnvUV(d), lod).rgb * F.EnvParams.x;
 }
 
+// Sun shadow: 5x5 PCF with hardware comparison (bilinear taps), normal offset against acne
+float SunShadow(vec3 N, vec3 Ld) {
+	float texel = F.ShadowParams.y;
+	vec3 p = vPos + N * F.ShadowParams.w * (1.5 - dot(N, Ld));
+	vec4 lp = F.LightViewProj * vec4(p, 1.0);
+	vec3 s = lp.xyz / lp.w;
+	vec2 uv = s.xy * 0.5 + 0.5;
+	float depth = s.z * 0.5 + 0.5;
+	if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))) || depth >= 1.0) return 1.0;
+	float sum = 0.0;
+	for (int y = -2; y <= 2; y++)
+		for (int x = -2; x <= 2; x++)
+			sum += texture(uShadow, vec3(uv + vec2(x, y) * texel, depth));
+	float lit = sum / 25.0;
+	// Fade out at the edge of the shadowed area
+	vec2 edge = min(uv, 1.0 - uv);
+	lit = mix(1.0, lit, clamp(min(edge.x, edge.y) * 20.0, 0.0, 1.0));
+	return mix(1.0, lit, F.ShadowParams.z);
+}
+
 void main() {
 	Material m = M[P.Material];
 	vec2 uv = vUV * m.UV.xy + m.UV.zw;
@@ -168,6 +192,7 @@ void main() {
 		}
 		float NdotL = max(dot(N, Ld), 0.0);
 		if (NdotL <= 0.0 || att <= 0.0) continue;
+		if (i == F.Counts.z && F.ShadowParams.x > 0.5) att *= SunShadow(N, Ld);
 		vec3 H = normalize(V + Ld);
 		vec3 Fs = F_Schlick(max(dot(V, H), 0.0), F0);
 		vec3 spec = D_GGX(max(dot(N, H), 0.0), roughness) * V_Smith(NdotV, NdotL, roughness) * Fs;
@@ -248,16 +273,67 @@ void main() {
 	if (alpha < 0.01) discard;
 	oColor = vec4(col, alpha);
 	vec4 clip = F.ViewProj * vec4(p, 1.0);
-	gl_FragDepth = (clip.z / clip.w) * 0.5 + 0.5;
+	// Slightly behind: geometry lying on y = 0 hides the grid instead of z-fighting with it
+	gl_FragDepth = min((clip.z / clip.w) * 0.5 + 0.5 + 2e-6, 1.0);
 }
 )GLSL";
 
-		std::vector<uint32_t> Compile(const std::string& source, shaderc_shader_kind kind, const char* name, bool skinned = false) {
+		// Depth-only pass from the sun
+		const char* kShadowVS = R"GLSL(
+layout(location = 0) in vec3 aPos;
+#ifdef SKINNED
+layout(location = 6) in ivec4 aBones;
+layout(location = 7) in vec4 aWeights;
+#endif
+void main() {
+	mat4 model = P.Model;
+#ifdef SKINNED
+	mat4 skin = aWeights.x * B[P.BoneOffset + aBones.x] + aWeights.y * B[P.BoneOffset + aBones.y] +
+	            aWeights.z * B[P.BoneOffset + aBones.z] + aWeights.w * B[P.BoneOffset + aBones.w];
+	if (aWeights.x + aWeights.y + aWeights.z + aWeights.w > 0.0) model = model * skin;
+#endif
+#ifdef MASK
+	gl_Position = F.ViewProj * (model * vec4(aPos, 1.0));
+#else
+	gl_Position = F.LightViewProj * (model * vec4(aPos, 1.0));
+#endif
+}
+)GLSL";
+
+		// Silhouette of the selected meshes (no depth test: hidden parts are outlined too)
+		const char* kMaskFS = R"GLSL(
+layout(location = 0) out vec4 oMask;
+void main() { oMask = vec4(1.0); }
+)GLSL";
+
+		// Selection outline: 2 px edge around the mask, drawn over the scene
+		const char* kOutlineFS = R"GLSL(
+layout(location = 0) in vec2 vNDC;
+layout(location = 0) out vec4 oColor;
+layout(set = 1, binding = 0) uniform sampler2D tMask;
+void main() {
+	ivec2 size = textureSize(tMask, 0);
+	ivec2 p = ivec2(gl_FragCoord.xy);
+	if (texelFetch(tMask, p, 0).r > 0.5) discard;
+	float hit = 0.0;
+	for (int y = -2; y <= 2; y++)
+		for (int x = -2; x <= 2; x++) {
+			if (x * x + y * y > 5) continue;
+			ivec2 q = clamp(p + ivec2(x, y), ivec2(0), size - 1);
+			hit = max(hit, texelFetch(tMask, q, 0).r);
+		}
+	if (hit < 0.5) discard;
+	oColor = F.OutlineColor;
+}
+)GLSL";
+
+		std::vector<uint32_t> Compile(const std::string& source, shaderc_shader_kind kind, const char* name, bool skinned = false, const char* define = nullptr) {
 			shaderc::Compiler compiler;
 			shaderc::CompileOptions options;
 			options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_3);
 			options.SetOptimizationLevel(shaderc_optimization_level_performance);
 			if (skinned) options.AddMacroDefinition("SKINNED");
+			if (define) options.AddMacroDefinition(define);
 			auto result = compiler.CompileGlslToSpv(source, kind, name, options);
 			if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
 				LNX_LOG_ERROR("Vulkan scene shader {0}: {1}", name, result.GetErrorMessage());
@@ -275,7 +351,11 @@ void main() {
 			glm::vec4 CamPos;
 			glm::vec4 EnvParams;
 			glm::ivec4 Counts;
+			glm::mat4 LightViewProj;
+			glm::vec4 ShadowParams;
+			glm::vec4 OutlineColor;
 		};
+		constexpr uint32_t kShadowSize = 4096;
 		struct GPULight { glm::vec4 PosRange, DirType, Color, Cone; };
 		struct GPUMaterial {
 			glm::vec4 Albedo;
@@ -356,6 +436,7 @@ void main() {
 			VkDescriptorSet Set0 = VK_NULL_HANDLE;
 			Buffer Readback;
 			bool ReadbackPending = false;
+			bool TimestampsPending = false;
 		};
 
 		struct Renderer {
@@ -364,11 +445,15 @@ void main() {
 			VkDescriptorSetLayout Set0Layout = VK_NULL_HANDLE, Set1Layout = VK_NULL_HANDLE;
 			VkPipelineLayout Layout = VK_NULL_HANDLE;
 			VkPipeline MeshPipe = VK_NULL_HANDLE, SkinnedPipe = VK_NULL_HANDLE, SkyPipe = VK_NULL_HANDLE, GridPipe = VK_NULL_HANDLE;
+			VkPipeline ShadowPipe = VK_NULL_HANDLE, ShadowSkinnedPipe = VK_NULL_HANDLE, OutlinePipe = VK_NULL_HANDLE;
+			VkPipeline MaskPipe = VK_NULL_HANDLE, MaskSkinnedPipe = VK_NULL_HANDLE;
+			Ref<VulkanTexture2D> Shadow;
 			VkDescriptorPool MaterialPool = VK_NULL_HANDLE;
+			VkQueryPool Timestamps = VK_NULL_HANDLE;    // 2 per frame in flight: start / end of the scene
 			std::unordered_map<size_t, VkDescriptorSet> MaterialSets;
 			FrameResources Frames[kFramesInFlight];
 
-			Ref<VulkanTexture2D> Color, Entity, Depth;
+			Ref<VulkanTexture2D> Color, Entity, Depth, Mask;
 			uint32_t Width = 0, Height = 0;
 
 			Ref<VulkanTexture2D> White, FlatNormal, Black;
@@ -391,13 +476,14 @@ void main() {
 			return m;
 		}
 
-		enum class PipeKind { Mesh, Sky, Grid };
+		enum class PipeKind { Mesh, Sky, Grid, Shadow, Mask, Outline };
 
 		VkPipeline CreatePipeline(VkShaderModule vs, VkShaderModule fs, PipeKind kind, bool skinned) {
 			auto& ctx = VulkanContext::Get();
 			VkPipelineShaderStageCreateInfo stages[2]{};
 			stages[0] = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, vs, "main" };
 			stages[1] = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, fs, "main" };
+			const bool geometry = kind == PipeKind::Mesh || kind == PipeKind::Shadow || kind == PipeKind::Mask;
 
 			VkVertexInputBindingDescription bindings[2] = {
 				{ 0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX },
@@ -413,11 +499,19 @@ void main() {
 				{ 7, 1, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(glm::ivec4) },
 			};
 			VkPipelineVertexInputStateCreateInfo vertex{ VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
+			// Shadow pass: position (+ bones) only
+			VkVertexInputAttributeDescription shadowAttrs[3] = { attrs[0], attrs[5], attrs[6] };
 			if (kind == PipeKind::Mesh) {
 				vertex.vertexBindingDescriptionCount = skinned ? 2 : 1;
 				vertex.pVertexBindingDescriptions = bindings;
 				vertex.vertexAttributeDescriptionCount = skinned ? 7 : 5;
 				vertex.pVertexAttributeDescriptions = attrs;
+			}
+			else if (kind == PipeKind::Shadow || kind == PipeKind::Mask) {
+				vertex.vertexBindingDescriptionCount = skinned ? 2 : 1;
+				vertex.pVertexBindingDescriptions = bindings;
+				vertex.vertexAttributeDescriptionCount = skinned ? 3 : 1;
+				vertex.pVertexAttributeDescriptions = shadowAttrs;
 			}
 			VkPipelineInputAssemblyStateCreateInfo ia{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
 			ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -428,24 +522,32 @@ void main() {
 			VkPipelineViewportStateCreateInfo vp{ VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
 			vp.viewportCount = 1;
 			vp.scissorCount = 1;
-			if (ctx.HasDepthClipControl() && kind == PipeKind::Mesh) vp.pNext = &clip;
+			if (ctx.HasDepthClipControl() && geometry) vp.pNext = &clip;
 
 			VkPipelineRasterizationStateCreateInfo rs{ VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
 			rs.polygonMode = VK_POLYGON_MODE_FILL;
 			rs.cullMode = VK_CULL_MODE_NONE;     // double sided like the deferred path
-			rs.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+			// Same rows as GL (positive viewport) but Vulkan's area formula has the opposite sign:
+			// GL's counter-clockwise front faces are clockwise here
+			rs.frontFace = VK_FRONT_FACE_CLOCKWISE;
 			rs.lineWidth = 1.0f;
+			if (kind == PipeKind::Shadow) {
+				rs.depthBiasEnable = VK_TRUE;
+				rs.depthBiasConstantFactor = 1.5f;
+				rs.depthBiasSlopeFactor = 2.0f;
+			}
 			VkPipelineMultisampleStateCreateInfo ms{ VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
 			ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 			VkPipelineDepthStencilStateCreateInfo ds{ VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
-			ds.depthTestEnable = VK_TRUE;
-			ds.depthWriteEnable = kind == PipeKind::Mesh ? VK_TRUE : VK_FALSE;
+			const bool noDepth = kind == PipeKind::Outline || kind == PipeKind::Mask;
+			ds.depthTestEnable = noDepth ? VK_FALSE : VK_TRUE;
+			ds.depthWriteEnable = geometry && !noDepth ? VK_TRUE : VK_FALSE;
 			ds.depthCompareOp = kind == PipeKind::Sky ? VK_COMPARE_OP_LESS_OR_EQUAL : VK_COMPARE_OP_LESS;
 
 			VkPipelineColorBlendAttachmentState blend[2]{};
 			blend[0].colorWriteMask = 0xF;
 			blend[1].colorWriteMask = kind == PipeKind::Grid ? 0 : VK_COLOR_COMPONENT_R_BIT;
-			if (kind == PipeKind::Grid) {
+			if (kind == PipeKind::Grid || kind == PipeKind::Outline) {
 				blend[0].blendEnable = VK_TRUE;
 				blend[0].srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
 				blend[0].dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -455,7 +557,7 @@ void main() {
 				blend[0].alphaBlendOp = VK_BLEND_OP_ADD;
 			}
 			VkPipelineColorBlendStateCreateInfo cb{ VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
-			cb.attachmentCount = 2;
+			cb.attachmentCount = kind == PipeKind::Shadow ? 0 : (kind == PipeKind::Outline || kind == PipeKind::Mask) ? 1 : 2;
 			cb.pAttachments = blend;
 			const VkDynamicState dyn[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
 			VkPipelineDynamicStateCreateInfo dynamic{ VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
@@ -464,13 +566,13 @@ void main() {
 
 			const VkFormat colors[2] = { VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R32_SINT };
 			VkPipelineRenderingCreateInfo rendering{ VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
-			rendering.colorAttachmentCount = 2;
+			rendering.colorAttachmentCount = cb.attachmentCount;
 			rendering.pColorAttachmentFormats = colors;
-			rendering.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
+			rendering.depthAttachmentFormat = noDepth ? VK_FORMAT_UNDEFINED : VK_FORMAT_D32_SFLOAT;
 
 			VkGraphicsPipelineCreateInfo info{ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
 			info.pNext = &rendering;
-			info.stageCount = 2;
+			info.stageCount = kind == PipeKind::Shadow ? 1 : 2;
 			info.pStages = stages;
 			info.pVertexInputState = &vertex;
 			info.pInputAssemblyState = &ia;
@@ -498,15 +600,16 @@ void main() {
 			const VkDevice dev = ctx.GetDevice();
 
 			// Set 0: frame UBO, lights, bones, materials, environment
-			VkDescriptorSetLayoutBinding b0[5] = {
+			VkDescriptorSetLayoutBinding b0[6] = {
 				{ 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
 				{ 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-				{ 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr },
+				{ 2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr },   // bones
 				{ 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
 				{ 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
 			};
 			VkDescriptorSetLayoutCreateInfo l0{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-			l0.bindingCount = 5;
+			l0.bindingCount = 6;
 			l0.pBindings = b0;
 			vkCreateDescriptorSetLayout(dev, &l0, nullptr, &r.Set0Layout);
 			// Set 1: material textures
@@ -533,16 +636,28 @@ void main() {
 			VkShaderModule fullVS = Module(Compile(common + kFullscreenVS, shaderc_vertex_shader, "fullscreen.vert"));
 			VkShaderModule skyFS = Module(Compile(common + kSkyFS, shaderc_fragment_shader, "sky.frag"));
 			VkShaderModule gridFS = Module(Compile(common + kGridFS, shaderc_fragment_shader, "grid.frag"));
-			if (!meshVS || !meshSkinVS || !meshFS || !fullVS || !skyFS || !gridFS) return false;
+			VkShaderModule shadowVS = Module(Compile(common + kShadowVS, shaderc_vertex_shader, "shadow.vert"));
+			VkShaderModule shadowSkinVS = Module(Compile(common + kShadowVS, shaderc_vertex_shader, "shadow_skinned.vert", true));
+			VkShaderModule outlineFS = Module(Compile(common + kOutlineFS, shaderc_fragment_shader, "outline.frag"));
+			VkShaderModule maskVS = Module(Compile(common + kShadowVS, shaderc_vertex_shader, "mask.vert", false, "MASK"));
+			VkShaderModule maskSkinVS = Module(Compile(common + kShadowVS, shaderc_vertex_shader, "mask_skinned.vert", true, "MASK"));
+			VkShaderModule maskFS = Module(Compile(common + kMaskFS, shaderc_fragment_shader, "mask.frag"));
+			if (!meshVS || !meshSkinVS || !meshFS || !fullVS || !skyFS || !gridFS || !shadowVS || !shadowSkinVS || !outlineFS || !maskVS || !maskSkinVS || !maskFS) return false;
 			r.MeshPipe = CreatePipeline(meshVS, meshFS, PipeKind::Mesh, false);
 			r.SkinnedPipe = CreatePipeline(meshSkinVS, meshFS, PipeKind::Mesh, true);
 			r.SkyPipe = CreatePipeline(fullVS, skyFS, PipeKind::Sky, false);
 			r.GridPipe = CreatePipeline(fullVS, gridFS, PipeKind::Grid, false);
-			for (VkShaderModule m : { meshVS, meshSkinVS, meshFS, fullVS, skyFS, gridFS }) vkDestroyShaderModule(dev, m, nullptr);
-			if (!r.MeshPipe || !r.SkinnedPipe || !r.SkyPipe || !r.GridPipe) return false;
+			r.ShadowPipe = CreatePipeline(shadowVS, VK_NULL_HANDLE, PipeKind::Shadow, false);
+			r.ShadowSkinnedPipe = CreatePipeline(shadowSkinVS, VK_NULL_HANDLE, PipeKind::Shadow, true);
+			r.OutlinePipe = CreatePipeline(fullVS, outlineFS, PipeKind::Outline, false);
+			r.MaskPipe = CreatePipeline(maskVS, maskFS, PipeKind::Mask, false);
+			r.MaskSkinnedPipe = CreatePipeline(maskSkinVS, maskFS, PipeKind::Mask, true);
+			for (VkShaderModule m : { meshVS, meshSkinVS, meshFS, fullVS, skyFS, gridFS, shadowVS, shadowSkinVS, outlineFS, maskVS, maskSkinVS, maskFS }) vkDestroyShaderModule(dev, m, nullptr);
+			if (!r.MeshPipe || !r.SkinnedPipe || !r.SkyPipe || !r.GridPipe || !r.ShadowPipe || !r.ShadowSkinnedPipe || !r.OutlinePipe || !r.MaskPipe || !r.MaskSkinnedPipe) return false;
+			r.Shadow = CreateRef<VulkanTexture2D>(RHI::TextureDesc::RenderTarget(kShadowSize, kShadowSize, RHI::TextureFormat::Depth32F));
 
 			const VkDescriptorPoolSize sizes[] = {
-				{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 8 }, { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 16 }, { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8 } };
+				{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 8 }, { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 16 }, { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 16 } };
 			for (auto& f : r.Frames) {
 				VkDescriptorPoolCreateInfo pool{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
 				pool.maxSets = 4;
@@ -557,6 +672,13 @@ void main() {
 			matPool.poolSizeCount = 1;
 			matPool.pPoolSizes = matSizes;
 			vkCreateDescriptorPool(dev, &matPool, nullptr, &r.MaterialPool);
+
+			if (ctx.GetProperties().limits.timestampComputeAndGraphics) {
+				VkQueryPoolCreateInfo query{ VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO };
+				query.queryType = VK_QUERY_TYPE_TIMESTAMP;
+				query.queryCount = 2 * kFramesInFlight;
+				vkCreateQueryPool(dev, &query, nullptr, &r.Timestamps);
+			}
 
 			r.White = SolidTexture(0xFFFFFFFF);
 			r.FlatNormal = SolidTexture(0xFFFF8080);
@@ -606,13 +728,14 @@ void main() {
 			if (r.Color && r.Width == w && r.Height == h) return;
 			r.Width = w;
 			r.Height = h;
-			if (r.Color) { r.Color->Resize(w, h); r.Entity->Resize(w, h); r.Depth->Resize(w, h); return; }
+			if (r.Color) { r.Color->Resize(w, h); r.Entity->Resize(w, h); r.Depth->Resize(w, h); r.Mask->Resize(w, h); return; }
 			RHI::TextureDesc color = RHI::TextureDesc::RenderTarget(w, h, RHI::TextureFormat::RGBA8);
 			RHI::TextureDesc entity = RHI::TextureDesc::RenderTarget(w, h, RHI::TextureFormat::R32I);
 			RHI::TextureDesc depth = RHI::TextureDesc::RenderTarget(w, h, RHI::TextureFormat::Depth32F);
 			r.Color = CreateRef<VulkanTexture2D>(color);
 			r.Entity = CreateRef<VulkanTexture2D>(entity);
 			r.Depth = CreateRef<VulkanTexture2D>(depth);
+			r.Mask = CreateRef<VulkanTexture2D>(RHI::TextureDesc::RenderTarget(w, h, RHI::TextureFormat::RGBA8));
 		}
 
 		GPUMesh* GetMesh(const Mesh& mesh) {
@@ -742,6 +865,15 @@ void main() {
 		const VkDevice dev = ctx.GetDevice();
 		FrameResources& fr = r.Frames[ctx.GetFrameIndex()];
 
+		// GPU time of the previous use of this frame slot (its fence was waited in BeginFrame)
+		const uint32_t firstQuery = 2 * ctx.GetFrameIndex();
+		if (fr.TimestampsPending && r.Timestamps) {
+			uint64_t ticks[2] = {};
+			if (vkGetQueryPoolResults(dev, r.Timestamps, firstQuery, 2, sizeof(ticks), ticks, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT) == VK_SUCCESS)
+				m_Stats.GpuMs = static_cast<float>(ticks[1] - ticks[0]) * ctx.GetProperties().limits.timestampPeriod * 1e-6f;
+			fr.TimestampsPending = false;
+		}
+
 		// Picking result of the previous use of this frame slot (its fence was waited in BeginFrame)
 		if (fr.ReadbackPending) {
 			std::memcpy(&m_PickedEntity, fr.Readback.Memory.Mapped, sizeof(int));
@@ -753,6 +885,8 @@ void main() {
 
 		// ---- Gather lights ----
 		std::vector<GPULight> lights;
+		int sunIndex = -1;
+		bool sunIsFlagged = false;
 		{
 			auto lightView = scene.GetAllEntitiesWith<TransformComponent, LightComponent>();
 			for (auto e : lightView) {
@@ -766,6 +900,11 @@ void main() {
 				l.DirType = glm::vec4(-glm::normalize(glm::vec3(world[2])), static_cast<float>(type));
 				l.Color = glm::vec4(lc.GetColor(), lc.GetIntensity());
 				l.Cone = glm::vec4(std::cos(glm::radians(lc.GetInnerConeAngle())), std::cos(glm::radians(lc.GetOuterConeAngle())), 0.0f, 0.0f);
+				// Shadowed sun: the light flagged as sun, else the first shadow-casting directional light
+				if (type == 0 && lc.GetCastShadows() && (sunIndex < 0 || (lc.IsSunLight() && !sunIsFlagged))) {
+					sunIndex = static_cast<int>(lights.size());
+					sunIsFlagged = lc.IsSunLight();
+				}
 				lights.push_back(l);
 				if (lights.size() >= 1024) break;
 			}
@@ -777,7 +916,7 @@ void main() {
 		const ViewFrustum frustum = ViewFrustum::FromViewProjection(viewProj);
 		std::vector<GPUMaterial> materials;
 		std::vector<glm::mat4> bones;
-		std::vector<DrawItem> draws;
+		std::vector<DrawItem> draws, casters;
 		materials.push_back({ glm::vec4(0.8f, 0.8f, 0.8f, 1.0f), glm::vec4(0, 0, 0, 1), glm::vec4(0.0f, 0.5f, 1.0f, 0.5f), {}, {}, glm::vec4(1, 1, 0, 0), glm::vec4(0, 0, 0, 1) });
 		VulkanTexture2D* none[7] = {};
 		const VkDescriptorSet defaultSet = MaterialSet(none);
@@ -811,11 +950,6 @@ void main() {
 			const auto& meshes = mc.MeshModel->GetMeshes();
 			for (size_t i = 0; i < meshes.size(); i++) {
 				const Ref<Mesh>& mesh = meshes[i];
-				if (!mesh->IsSkinned()) {
-					glm::vec3 mn, mx;
-					Mesh::TransformAABB(world, mesh->GetAABBMin(), mesh->GetAABBMax(), mn, mx);
-					if (!frustum.IntersectsAABB(mn, mx)) { m_Stats.Culled++; continue; }
-				}
 				const GPUMesh* g = GetMesh(*mesh);
 				if (!g) continue;
 				DrawItem d;
@@ -824,6 +958,13 @@ void main() {
 				d.Entity = static_cast<int>(e);
 				d.Skinned = hasBones && mesh->IsSkinned() && g->Bones.Handle;
 				d.BoneOffset = boneOffset;
+				// Off-screen meshes still cast shadows into the view
+				if (sunIndex >= 0 && view.Shadows) casters.push_back(d);
+				if (!mesh->IsSkinned()) {
+					glm::vec3 mn, mx;
+					Mesh::TransformAABB(world, mesh->GetAABBMin(), mesh->GetAABBMax(), mn, mx);
+					if (!frustum.IntersectsAABB(mn, mx)) { m_Stats.Culled++; continue; }
+				}
 				d.Material = entityMaterial;
 				d.Textures = entitySet;
 				if (perSubmesh) {
@@ -842,6 +983,46 @@ void main() {
 			if (a.Skinned != b.Skinned) return a.Skinned < b.Skinned;
 			return a.Textures < b.Textures;
 		});
+		std::sort(casters.begin(), casters.end(), [](const DrawItem& a, const DrawItem& b) { return a.Skinned < b.Skinned; });
+
+		// ---- Sun shadow matrix: ortho box around the first kShadowDistance meters of the view ----
+		glm::mat4 lightViewProj(1.0f);
+		float worldTexel = 0.0f;
+		const bool shadows = sunIndex >= 0 && view.Shadows && !casters.empty();
+		if (shadows) {
+			constexpr float kShadowDistance = 60.0f;
+			const glm::mat4 invVP = glm::inverse(viewProj);
+			glm::vec3 corners[8];
+			int c = 0;
+			for (int y = -1; y <= 1; y += 2)
+				for (int x = -1; x <= 1; x += 2) {
+					glm::vec4 n = invVP * glm::vec4(x, y, -1.0f, 1.0f);
+					glm::vec4 f = invVP * glm::vec4(x, y, 1.0f, 1.0f);
+					const glm::vec3 np = glm::vec3(n) / n.w, fp = glm::vec3(f) / f.w;
+					const float len = glm::length(fp - np);
+					corners[c++] = np;
+					corners[c++] = np + (fp - np) * std::min(1.0f, kShadowDistance / std::max(len, 1e-4f));
+				}
+			glm::vec3 center(0.0f);
+			for (const auto& p : corners) center += p;
+			center /= 8.0f;
+			float radius = 0.0f;
+			for (const auto& p : corners) radius = std::max(radius, glm::length(p - center));
+			radius = std::ceil(radius * 2.0f) * 0.5f;   // quantized: stable texel size while the camera moves
+			const glm::vec3 dir = glm::normalize(glm::vec3(lights[sunIndex].DirType));
+			const glm::vec3 up = std::abs(dir.y) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
+			constexpr float kBackDistance = 200.0f;      // casters between the sun and the view box
+			const glm::mat4 lightView = glm::lookAt(center - dir * (radius + kBackDistance), center, up);
+			glm::mat4 lightProj = glm::ortho(-radius, radius, -radius, radius, 0.0f, 2.0f * radius + kBackDistance);
+			// Snap to whole texels: no shimmering when the camera moves
+			glm::vec4 origin = lightProj * lightView * glm::vec4(0, 0, 0, 1);
+			origin *= static_cast<float>(kShadowSize) * 0.5f;
+			const glm::vec4 offset = (glm::round(origin) - origin) * (2.0f / static_cast<float>(kShadowSize));
+			lightProj[3][0] += offset.x;
+			lightProj[3][1] += offset.y;
+			lightViewProj = lightProj * lightView;
+			worldTexel = 2.0f * radius / static_cast<float>(kShadowSize);
+		}
 
 		// ---- Upload frame data ----
 		FrameUBO frame{};
@@ -852,7 +1033,10 @@ void main() {
 		frame.CamPos = glm::vec4(view.CameraPosition, 1.0f);
 		Ref<EnvironmentMap> envMap = SkyboxRenderer::GetGlobalEnvironment();
 		frame.EnvParams = glm::vec4(envMap ? envMap->GetIntensity() : 1.0f, envMap ? glm::radians(envMap->GetRotation()) : 0.0f, r.Env ? 1.0f : 0.0f, r.EnvMips);
-		frame.Counts = glm::ivec4(static_cast<int>(lights.size()), 0, 0, 0);
+		frame.Counts = glm::ivec4(static_cast<int>(lights.size()), 0, shadows ? sunIndex : -1, 0);
+		frame.LightViewProj = lightViewProj;
+		frame.ShadowParams = glm::vec4(shadows ? 1.0f : 0.0f, 1.0f / static_cast<float>(kShadowSize), 1.0f, worldTexel);
+		frame.OutlineColor = glm::vec4(1.0f, 0.55f, 0.1f, 1.0f);
 		if (bones.empty()) bones.push_back(glm::mat4(1.0f));
 		if (lights.empty()) lights.push_back({});
 
@@ -881,17 +1065,60 @@ void main() {
 		VulkanTexture2D* envTex = r.Env ? r.Env.get() : r.Black.get();
 		VkDescriptorImageInfo envInfo{ VulkanContext::Get().GetSampler(VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT),
 			envTex->GetView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-		VkWriteDescriptorSet writes[5] = {
+		VkDescriptorImageInfo shadowInfo{ VulkanContext::Get().GetSampler(VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, true),
+			r.Shadow->GetView(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL };
+		VkWriteDescriptorSet writes[6] = {
 			{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, fr.Set0, 0, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, nullptr, &bufs[0], nullptr },
 			{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, fr.Set0, 1, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &bufs[1], nullptr },
 			{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, fr.Set0, 2, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &bufs[2], nullptr },
 			{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, fr.Set0, 3, 0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, &bufs[3], nullptr },
 			{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, fr.Set0, 4, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &envInfo, nullptr, nullptr },
+			{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, fr.Set0, 5, 0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &shadowInfo, nullptr, nullptr },
 		};
-		vkUpdateDescriptorSets(dev, 5, writes, 0, nullptr);
+		vkUpdateDescriptorSets(dev, 6, writes, 0, nullptr);
 
 		// ---- Record ----
 		VkCommandBuffer cmd = ctx.GetCommandBuffer();
+		if (r.Timestamps) {
+			vkCmdResetQueryPool(cmd, r.Timestamps, firstQuery, 2);
+			vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_NONE, r.Timestamps, firstQuery);
+		}
+
+		// Sun shadow map (depth only)
+		if (shadows) {
+			r.Shadow->Transition(cmd, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+			VkRenderingAttachmentInfo shadowDepth{ VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
+			shadowDepth.imageView = r.Shadow->GetView();
+			shadowDepth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+			shadowDepth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			shadowDepth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+			shadowDepth.clearValue.depthStencil = { 1.0f, 0 };
+			VkRenderingInfo shadowPass{ VK_STRUCTURE_TYPE_RENDERING_INFO };
+			shadowPass.renderArea = { { 0, 0 }, { kShadowSize, kShadowSize } };
+			shadowPass.layerCount = 1;
+			shadowPass.pDepthAttachment = &shadowDepth;
+			vkCmdBeginRendering(cmd, &shadowPass);
+			VkViewport shadowViewport{ 0.0f, 0.0f, static_cast<float>(kShadowSize), static_cast<float>(kShadowSize), 0.0f, 1.0f };
+			VkRect2D shadowScissor{ { 0, 0 }, { kShadowSize, kShadowSize } };
+			vkCmdSetViewport(cmd, 0, 1, &shadowViewport);
+			vkCmdSetScissor(cmd, 0, 1, &shadowScissor);
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.Layout, 0, 1, &fr.Set0, 0, nullptr);
+			VkPipeline shadowBound = VK_NULL_HANDLE;
+			for (const DrawItem& d : casters) {
+				const VkPipeline pipeline = d.Skinned ? r.ShadowSkinnedPipe : r.ShadowPipe;
+				if (pipeline != shadowBound) { vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline); shadowBound = pipeline; }
+				PushData push{ d.Model, 0, d.Entity, d.BoneOffset, d.Skinned ? 1 : 0 };
+				vkCmdPushConstants(cmd, r.Layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+				VkBuffer vbs[2] = { d.Mesh->Vertices.Handle, d.Mesh->Bones.Handle };
+				VkDeviceSize offsets[2] = { 0, 0 };
+				vkCmdBindVertexBuffers(cmd, 0, d.Skinned ? 2 : 1, vbs, offsets);
+				vkCmdBindIndexBuffer(cmd, d.Mesh->Indices.Handle, 0, VK_INDEX_TYPE_UINT32);
+				vkCmdDrawIndexed(cmd, d.Mesh->IndexCount, 1, 0, 0, 0);
+				m_Stats.ShadowDrawCalls++;
+			}
+			vkCmdEndRendering(cmd);
+		}
+		r.Shadow->Transition(cmd, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
 		r.Color->Transition(cmd, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 		r.Entity->Transition(cmd, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 		r.Depth->Transition(cmd, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
@@ -920,7 +1147,7 @@ void main() {
 		rendering.pDepthAttachment = &depth;
 		vkCmdBeginRendering(cmd, &rendering);
 
-		// Positive height: NDC -1 -> row 0, so image rows (and triangle winding) match the GL framebuffer
+		// Positive height: NDC -1 -> row 0, so image rows match the GL framebuffer
 		VkViewport viewport{ 0.0f, 0.0f, static_cast<float>(view.Width), static_cast<float>(view.Height), 0.0f, 1.0f };
 		VkRect2D scissor{ { 0, 0 }, { view.Width, view.Height } };
 		vkCmdSetViewport(cmd, 0, 1, &viewport);
@@ -949,6 +1176,64 @@ void main() {
 		if (view.DrawGrid) { vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.GridPipe); vkCmdDraw(cmd, 3, 1, 0, 0); }
 		vkCmdEndRendering(cmd);
 
+		// Selection outline: mask of the selected meshes, then its edge over the image
+		bool anySelected = false;
+		for (const DrawItem& d : draws)
+			if (std::find(view.Selected.begin(), view.Selected.end(), d.Entity) != view.Selected.end()) { anySelected = true; break; }
+		if (anySelected) {
+			r.Mask->Transition(cmd, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+			VkRenderingAttachmentInfo maskTarget{ VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
+			maskTarget.imageView = r.Mask->GetView();
+			maskTarget.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			maskTarget.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			maskTarget.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+			VkRenderingInfo maskPass{ VK_STRUCTURE_TYPE_RENDERING_INFO };
+			maskPass.renderArea = rendering.renderArea;
+			maskPass.layerCount = 1;
+			maskPass.colorAttachmentCount = 1;
+			maskPass.pColorAttachments = &maskTarget;
+			vkCmdBeginRendering(cmd, &maskPass);
+			vkCmdSetViewport(cmd, 0, 1, &viewport);
+			vkCmdSetScissor(cmd, 0, 1, &scissor);
+			VkPipeline maskBound = VK_NULL_HANDLE;
+			for (const DrawItem& d : draws) {
+				if (std::find(view.Selected.begin(), view.Selected.end(), d.Entity) == view.Selected.end()) continue;
+				const VkPipeline pipeline = d.Skinned ? r.MaskSkinnedPipe : r.MaskPipe;
+				if (pipeline != maskBound) {
+					vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+					vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.Layout, 0, 1, &fr.Set0, 0, nullptr);
+					maskBound = pipeline;
+				}
+				PushData push{ d.Model, 0, d.Entity, d.BoneOffset, d.Skinned ? 1 : 0 };
+				vkCmdPushConstants(cmd, r.Layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+				VkBuffer vbs[2] = { d.Mesh->Vertices.Handle, d.Mesh->Bones.Handle };
+				VkDeviceSize offsets[2] = { 0, 0 };
+				vkCmdBindVertexBuffers(cmd, 0, d.Skinned ? 2 : 1, vbs, offsets);
+				vkCmdBindIndexBuffer(cmd, d.Mesh->Indices.Handle, 0, VK_INDEX_TYPE_UINT32);
+				vkCmdDrawIndexed(cmd, d.Mesh->IndexCount, 1, 0, 0, 0);
+			}
+			vkCmdEndRendering(cmd);
+			r.Mask->Transition(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+			VulkanTexture2D* maskTex[7] = { r.Mask.get() };
+			const VkDescriptorSet maskSet = MaterialSet(maskTex);
+			VkRenderingAttachmentInfo overlay = colors[0];
+			overlay.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+			VkRenderingInfo outlinePass{ VK_STRUCTURE_TYPE_RENDERING_INFO };
+			outlinePass.renderArea = rendering.renderArea;
+			outlinePass.layerCount = 1;
+			outlinePass.colorAttachmentCount = 1;
+			outlinePass.pColorAttachments = &overlay;
+			vkCmdBeginRendering(cmd, &outlinePass);
+			vkCmdSetViewport(cmd, 0, 1, &viewport);
+			vkCmdSetScissor(cmd, 0, 1, &scissor);
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.OutlinePipe);
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.Layout, 0, 1, &fr.Set0, 0, nullptr);
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.Layout, 1, 1, &maskSet, 0, nullptr);
+			vkCmdDraw(cmd, 3, 1, 0, 0);
+			vkCmdEndRendering(cmd);
+		}
+
 		// Entity under the mouse (read when this frame slot comes back)
 		if (view.PickX >= 0 && view.PickY >= 0 && view.PickX < static_cast<int>(view.Width) && view.PickY < static_cast<int>(view.Height)) {
 			r.Entity->Transition(cmd, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -966,6 +1251,10 @@ void main() {
 		r.Color->Transition(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		r.Entity->Transition(cmd, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		r.Depth->Transition(cmd, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+		if (r.Timestamps) {
+			vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, r.Timestamps, firstQuery + 1);
+			fr.TimestampsPending = true;
+		}
 
 		// Free geometry nobody drew for a while
 		if ((r.FrameCounter & 255) == 0) {

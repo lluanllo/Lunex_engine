@@ -337,7 +337,9 @@ namespace Lunex::RHI::Vk {
 
 	VkSampler VulkanTexture2D::GetDefaultSampler() const {
 		auto& ctx = VulkanContext::Get();
-		if (RHI::IsDepthFormat(m_Desc.Format)) return ctx.GetSampler(VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
+		const bool integer = m_Format == VK_FORMAT_R32_SINT || m_Format == VK_FORMAT_R32_UINT || m_Format == VK_FORMAT_R32G32_SINT ||
+			m_Format == VK_FORMAT_R32G32_UINT || m_Format == VK_FORMAT_R32G32B32A32_SINT || m_Format == VK_FORMAT_R32G32B32A32_UINT;
+		if (RHI::IsDepthFormat(m_Desc.Format) || integer) return ctx.GetSampler(VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
 		if (m_Desc.IsRenderTarget) return ctx.GetSampler(VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
 		return ctx.GetSampler(VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT, false, 8.0f);
 	}
