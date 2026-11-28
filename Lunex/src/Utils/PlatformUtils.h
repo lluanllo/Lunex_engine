@@ -14,4 +14,7 @@ namespace Lunex{
 			static std::string SaveFile(const char* filter);
 			static std::string SelectFolder();
 	};
+
+	// Starts a new instance of the running executable with `args`; the caller then closes this one
+	bool RestartApplication(const std::vector<std::string>& args);
 }

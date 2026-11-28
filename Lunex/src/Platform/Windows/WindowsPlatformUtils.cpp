@@ -27,6 +27,24 @@ namespace Lunex {
 		return std::string();
 	}
 
+	bool RestartApplication(const std::vector<std::string>& args) {
+		char exe[MAX_PATH] = {};
+		GetModuleFileNameA(nullptr, exe, MAX_PATH);
+		std::string cmd = std::string("\"") + exe + "\"";
+		for (const auto& a : args) cmd += " \"" + a + "\"";
+		char cwd[MAX_PATH] = {};
+		GetCurrentDirectoryA(MAX_PATH, cwd);
+		STARTUPINFOA si{};
+		si.cb = sizeof(si);
+		PROCESS_INFORMATION pi{};
+		std::vector<char> buffer(cmd.begin(), cmd.end());
+		buffer.push_back('\0');
+		if (!CreateProcessA(nullptr, buffer.data(), nullptr, nullptr, FALSE, 0, nullptr, cwd, &si, &pi)) return false;
+		CloseHandle(pi.hThread);
+		CloseHandle(pi.hProcess);
+		return true;
+	}
+
 	std::vector<std::string> FileDialogs::OpenFiles(const char* filter, const char* title) {
 		std::vector<std::string> files;
 		std::vector<char> buffer(32 * 1024, '\0');

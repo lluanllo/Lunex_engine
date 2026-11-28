@@ -2,6 +2,9 @@
 #include "Application.h"
 
 #include "Renderer/Renderer.h"
+#include "Core/JobSystem/JobSystem.h"
+#include "RHI/RHI.h"
+#include "RHI/Vulkan/VulkanContext.h"
 #include "Assets/Materials/MaterialRegistry.h"
 
 // NEW: Unified Asset System
@@ -29,6 +32,9 @@ namespace Lunex{
 		// ========================================
 		// WindowsWindow::Init creates GLFW window and OpenGL context
 		// GraphicsContext wraps the existing context
+		// Graphics API for this run (command line or saved preference); the window depends on it
+		const RHI::GraphicsAPI api = RHI::ResolveStartupAPI(args.Count, args.Args);
+		RHI::SetRequestedAPI(api);
 		m_Window = Window::Create(WindowProps(name));
 		m_Window->SetEventCallback(LNX_BIND_EVENT_FN(Application::OnEvent));
 		
@@ -37,8 +43,20 @@ namespace Lunex{
 		// ========================================
 		// Pass the GLFW window handle so RHI can use the existing context
 		auto* glfwWindow = static_cast<GLFWwindow*>(m_Window->GetNativeWindow());
-		if (!RHI::Initialize(RHI::GraphicsAPI::OpenGL, glfwWindow)) {
-			LNX_LOG_ERROR("Failed to initialize RHI!");
+		if (!RHI::Initialize(api, glfwWindow)) {
+			if (api == RHI::GraphicsAPI::Vulkan) {
+				// No usable Vulkan device: start with OpenGL instead of failing
+				LNX_LOG_ERROR("Vulkan could not be initialized, falling back to OpenGL");
+				RHI::SetPreferredAPI(RHI::GraphicsAPI::OpenGL);
+				RHI::SetRequestedAPI(RHI::GraphicsAPI::OpenGL);
+				m_Window = Window::Create(WindowProps(name));
+				m_Window->SetEventCallback(LNX_BIND_EVENT_FN(Application::OnEvent));
+				glfwWindow = static_cast<GLFWwindow*>(m_Window->GetNativeWindow());
+				if (!RHI::Initialize(RHI::GraphicsAPI::OpenGL, glfwWindow)) LNX_LOG_ERROR("Failed to initialize RHI!");
+			}
+			else {
+				LNX_LOG_ERROR("Failed to initialize RHI!");
+			}
 		}
 		
 		// Complete renderer initialization
@@ -76,6 +94,10 @@ namespace Lunex{
 		LNX_LOG_INFO("Unified Asset System shutdown");
 		
 		Renderer::Shutdown();
+
+		// Worker threads log while stopping: join them now, while the logger is still alive
+		// (left to static destruction they crashed spdlog on exit)
+		if (JobSystem::IsInitialized()) JobSystem::Shutdown();
 	}
 	
 	void Application::PushLayer(Layer* layer) {
@@ -121,6 +143,9 @@ namespace Lunex{
 			
 			// Update Asset System (hot-reload, async callbacks)
 			AssetManager::Update(timestep.GetSeconds());
+
+			// Vulkan: acquire the swapchain image and open the frame's command buffer before any rendering
+			if (RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan && !m_Minimized) RHI::Vk::VulkanContext::Get().BeginFrame();
 			
 			if (!m_Minimized) {
 				{
@@ -157,6 +182,7 @@ namespace Lunex{
 		}
 		m_Minimized = false;
 		Renderer::onWindowResize(e.GetWidth(), e.GetHeight());
+		if (RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan) RHI::Vk::VulkanContext::Get().OnResize(e.GetWidth(), e.GetHeight());
 		
 		return false;
 	}
