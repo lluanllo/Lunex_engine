@@ -306,7 +306,8 @@ namespace Lunex {
 		// Dispatch viewport resize event
 		DispatchEvent(SceneSystemEvent::ViewportResized(width, height));
 
-		// Resize our non-FixedAspectRatio cameras
+		// Resize our non-FixedAspectRatio cameras (not before the viewport has a size: 0/0 aspect)
+		if (width == 0 || height == 0) return;
 		auto view = m_Registry.view<CameraComponent>();
 		for (auto entity : view) {
 			auto& cameraComponent = view.get<CameraComponent>(entity);

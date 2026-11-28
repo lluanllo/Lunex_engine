@@ -26,7 +26,9 @@ namespace Lunex {
 	}
 	
 	void SceneCamera::SetViewportSize(uint32_t width, uint32_t height) {
-		LNX_CORE_ASSERT(width > 0 && height > 0);
+		// A zero-sized viewport (editor not laid out yet, minimized) keeps the previous aspect:
+		// 0/0 would be NaN and glm::perspective asserts on it
+		if (width == 0 || height == 0) return;
 		m_AspectRatio = (float)width / (float)height;
 		RecalculateProjection();
 	}
