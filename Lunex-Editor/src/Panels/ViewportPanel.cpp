@@ -694,7 +694,9 @@ namespace Lunex {
 		drawList->AddRectFilled(shadowMin, shadowMax, ViewportStyle::ShadowColor().ToImU32(), 6.0f);
 		
 		// Preview image
-		uint64_t textureID = previewFramebuffer->GetColorAttachmentRendererID();
+		uint64_t textureID = RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan
+			? VulkanSceneRenderer::Get().GetOutputTextureID(1)
+			: previewFramebuffer->GetColorAttachmentRendererID();
 		ImVec2 imageMin = previewPos;
 		ImVec2 imageMax = ImVec2(previewPos.x + previewWidth, previewPos.y + previewHeight);
 		

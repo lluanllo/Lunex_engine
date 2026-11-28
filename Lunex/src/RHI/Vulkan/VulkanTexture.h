@@ -48,6 +48,8 @@ namespace Lunex::RHI::Vk {
 		VkImageLayout GetLayout() const { return m_Layout; }
 		// Records a layout transition in `cmd` (no-op when already there)
 		void Transition(VkCommandBuffer cmd, VkImageLayout to) const;
+		// After barriers recorded by hand (e.g. per-mip blits): the layout the whole image is in now
+		void SetTrackedLayout(VkImageLayout layout) const { m_Layout = layout; }
 		VkSampler GetDefaultSampler() const;
 
 	private:

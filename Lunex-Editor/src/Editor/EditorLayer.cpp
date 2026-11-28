@@ -849,6 +849,7 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 		m_Framebuffer->ClearAttachment(1, -1);
 
 		const bool vulkan = RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan;
+		if (vulkan) VulkanSceneRenderer::Get().Clear2D();   // 2D batches of this frame only
 		switch (m_SceneState) {
 			case SceneState::Edit:
 			{
@@ -883,6 +884,14 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 						renderSystem->RenderPostLightingOverlays(m_EditorCamera);
 					}
 				}
+				else if (vulkan) {
+					// Sprites / particles (HDR) and icons / gizmos (overlay) for the Vulkan renderer
+					if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+						ProfileScope scope("Sprites, icons, gizmos");
+						renderSystem->RenderPostLighting(m_EditorCamera);
+						renderSystem->RenderPostLightingOverlays(m_EditorCamera);
+					}
+				}
 				break;
 			}
 			case SceneState::Simulate:
@@ -911,6 +920,12 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 						renderSystem->RenderPostLightingOverlays(m_EditorCamera);
 					}
 				}
+				else if (vulkan) {
+					if (auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>()) {
+						renderSystem->RenderPostLighting(m_EditorCamera);
+						renderSystem->RenderPostLightingOverlays(m_EditorCamera);
+					}
+				}
 				break;
 			}
 			case SceneState::Play:
@@ -935,6 +950,12 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 
 					// Post-processing (bloom + tone mapping) on complete scene
 					DeferredRenderer::ExecutePostProcessing(m_Framebuffer);
+				}
+				else if (vulkan) {
+					Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
+					auto* renderSystem = m_ActiveScene->GetSystem<SceneRenderSystem>();
+					if (camera && renderSystem)
+						renderSystem->RenderPostLightingRuntime(camera.GetComponent<CameraComponent>().Camera, m_ActiveScene->GetWorldTransform(camera));
 				}
 
 				// Scene switches requested by scripts are applied after the frame finished
@@ -987,6 +1008,8 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 				view.PickX = mouseX;
 				view.PickY = mouseY;
 			}
+			// Debug / collider overlays go through Renderer2D: record them before the scene is drawn
+			{ ProfileScope scope("Selection / debug overlay", true); OnOverlayRender(); }
 			if (hasView) {
 				ProfileScope scope("Vulkan scene", true);
 				VulkanSceneRenderer::Get().Render(*m_ActiveScene, view);
@@ -1017,7 +1040,7 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 		m_StatsPanel.SetHoveredEntity(m_HoveredEntity);
 		m_StatsPanel.SetContext(m_ActiveScene);
 
-		{ ProfileScope scope("Selection / debug overlay", true); OnOverlayRender(); }
+		if (!vulkan) { ProfileScope scope("Selection / debug overlay", true); OnOverlayRender(); }
 
 		m_Framebuffer->Unbind();
 
@@ -2062,6 +2085,21 @@ m_ThumbnailCaptureFrames = 120;   // once the start scene has rendered
 		auto previewSpec = m_CameraPreviewFramebuffer->GetSpecification();
 		if (previewSpec.Width != previewWidth || previewSpec.Height != previewHeight) {
 			m_CameraPreviewFramebuffer->Resize(previewWidth, previewHeight);
+		}
+
+		// Vulkan: the native renderer draws the preview into its second view
+		if (RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan) {
+			VulkanRenderView view;
+			view.ViewID = 1;
+			view.Width = previewWidth;
+			view.Height = previewHeight;
+			view.Projection = cameraComp.Camera.GetProjection();
+			view.View = glm::inverse(cameraWorldTransform);
+			view.CameraPosition = glm::vec3(cameraWorldTransform[3]);
+			view.DrawGrid = false;
+			view.Draw2D = false;
+			VulkanSceneRenderer::Get().Render(*m_ActiveScene, view);
+			return;
 		}
 
 		// ========================================

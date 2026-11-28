@@ -2075,6 +2075,49 @@ vec3 lnx_rotate_axis(vec3 v, vec3 axis, float angle) {
 		return shader;
 	}
 
+	std::chrono::steady_clock::time_point GraphClockStart() {
+		static const auto s_Start = std::chrono::steady_clock::now();
+		return s_Start;
+	}
+
+	void GraphRuntime::RefreshParams(const NodeGraph& graph) {
+		// Refresh only when the graph changed
+		if (m_ParamsVersion != graph.GetVersion() || m_Params.empty()) {
+			m_Params.assign(kMaxGraphParams, glm::vec4(0.0f));
+			for (size_t i = 0; i < m_Compiled.Params.size() && i + 1 < kMaxGraphParams; i++)
+				m_Params[i + 1] = EvaluateParam(graph, m_Compiled.Params[i]);
+			m_ParamsVersion = graph.GetVersion();
+		}
+	}
+
+	void GraphRuntime::RefreshTextures() {
+		if (m_Textures.size() == m_Compiled.TexturePaths.size()) return;
+		static auto& s_Cache = *new std::unordered_map<std::string, Ref<Texture2D>>();
+		m_Textures.clear();
+		for (const auto& path : m_Compiled.TexturePaths) {
+			auto& cached = s_Cache[path];
+			if (!cached || !cached->IsLoaded()) cached = Texture2D::Create(path);
+			m_Textures.push_back(cached && cached->IsLoaded() ? cached : nullptr);
+		}
+	}
+
+	void GraphRuntime::GatherData(const NodeGraph& graph, const std::unordered_map<std::string, glm::vec4>* overrides,
+		std::vector<glm::vec4>& outParams, std::vector<Ref<Texture2D>>& outTextures) {
+		RefreshParams(graph);
+		RefreshTextures();
+		const size_t used = std::min<size_t>(m_Compiled.Params.size() + 1, kMaxGraphParams);
+		outParams.assign(m_Params.begin(), m_Params.begin() + used);
+		if (overrides) {
+			for (const auto& [name, value] : *overrides) {
+				auto it = m_Compiled.NamedParams.find(name);
+				if (it != m_Compiled.NamedParams.end() && it->second < static_cast<int>(used)) outParams[it->second] = value;
+			}
+		}
+		const float time = std::chrono::duration<float>(std::chrono::steady_clock::now() - GraphClockStart()).count();
+		outParams[0] = glm::vec4(time, 0.0f, 0.0f, 0.0f);
+		outTextures = m_Textures;
+	}
+
 	Ref<Shader> GraphRuntime::Bind(bool deferred, const NodeGraph& graph, const std::unordered_map<std::string, glm::vec4>* overrides) {
 		return Bind(deferred ? Mode::Deferred : Mode::Forward, graph, overrides);
 	}
@@ -2084,15 +2127,8 @@ vec3 lnx_rotate_axis(vec3 v, vec3 axis, float angle) {
 		Ref<Shader> shader = GetOrCreateShader(mode);
 		if (!shader) return nullptr;
 
-		// ---- Params (refresh only when the graph changed) ----
-		if (m_ParamsVersion != graph.GetVersion() || m_Params.empty()) {
-			m_Params.assign(kMaxGraphParams, glm::vec4(0.0f));
-			for (size_t i = 0; i < m_Compiled.Params.size() && i + 1 < kMaxGraphParams; i++)
-				m_Params[i + 1] = EvaluateParam(graph, m_Compiled.Params[i]);
-			m_ParamsVersion = graph.GetVersion();
-		}
-
-		static const auto s_Start = std::chrono::steady_clock::now();
+		RefreshParams(graph);
+		static const auto s_Start = GraphClockStart();
 		// GL-owning statics are leaked on purpose: destroying them after the context is gone crashes at exit
 		static Ref<UniformBuffer>& s_ParamsUBO = *new Ref<UniformBuffer>(UniformBuffer::Create(sizeof(glm::vec4) * kMaxGraphParams, kGraphParamsBinding));
 
@@ -2113,16 +2149,7 @@ vec3 lnx_rotate_axis(vec3 v, vec3 axis, float angle) {
 
 		shader->Bind();
 
-		// ---- Textures ----
-		if (m_Textures.size() != m_Compiled.TexturePaths.size()) {
-			static auto& s_Cache = *new std::unordered_map<std::string, Ref<Texture2D>>();
-			m_Textures.clear();
-			for (const auto& path : m_Compiled.TexturePaths) {
-				auto& cached = s_Cache[path];
-				if (!cached || !cached->IsLoaded()) cached = Texture2D::Create(path);
-				m_Textures.push_back(cached && cached->IsLoaded() ? cached : nullptr);
-			}
-		}
+		RefreshTextures();
 		static Ref<Texture2D>& s_White = *new Ref<Texture2D>([] {
 			auto t = Texture2D::Create(1, 1);
 			uint32_t white = 0xFFFFFFFF;

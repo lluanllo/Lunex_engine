@@ -46,6 +46,8 @@ namespace Lunex  {
 			
 			// Particle batches: additive blending / no depth writes until reset (flushes on change)
 			static void SetParticleBlending(bool additive, bool depthWrite);
+			// Depth test of the following 2D geometry (billboards draw on top of the scene)
+			static void SetDepthTest(bool enabled);
 
 			// Billboard rendering (always faces camera)
 			static void DrawBillboard(const glm::vec3& position, const Ref<Texture2D>& texture, 

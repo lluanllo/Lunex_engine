@@ -248,12 +248,14 @@ namespace Lunex::RHI::Vk {
 		std::vector<VkPresentModeKHR> modes(pmCount);
 		vkGetPhysicalDeviceSurfacePresentModesKHR(m_PhysicalDevice, m_Surface, &pmCount, modes.data());
 		VkPresentModeKHR mode = VK_PRESENT_MODE_FIFO_KHR;
+		// VSync off: IMMEDIATE never waits for the compositor (like swap interval 0 in GL). MAILBOX in a
+		// window is paced by DWM on Windows: vkAcquireNextImageKHR blocks until it releases an image.
 		if (!m_VSync) {
-			if (std::find(modes.begin(), modes.end(), VK_PRESENT_MODE_MAILBOX_KHR) != modes.end()) mode = VK_PRESENT_MODE_MAILBOX_KHR;
-			else if (std::find(modes.begin(), modes.end(), VK_PRESENT_MODE_IMMEDIATE_KHR) != modes.end()) mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+			if (std::find(modes.begin(), modes.end(), VK_PRESENT_MODE_IMMEDIATE_KHR) != modes.end()) mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+			else if (std::find(modes.begin(), modes.end(), VK_PRESENT_MODE_MAILBOX_KHR) != modes.end()) mode = VK_PRESENT_MODE_MAILBOX_KHR;
 		}
 
-		uint32_t imageCount = std::max(caps.minImageCount + 1, 3u);
+		uint32_t imageCount = std::max(caps.minImageCount + 1, mode == VK_PRESENT_MODE_FIFO_KHR ? 3u : 4u);
 		if (caps.maxImageCount > 0) imageCount = std::min(imageCount, caps.maxImageCount);
 
 		VkSwapchainCreateInfoKHR info{ VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR };

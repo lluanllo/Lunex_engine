@@ -79,6 +79,11 @@ namespace Lunex {
 				const std::unordered_map<std::string, glm::vec4>* overrides = nullptr);
 			Ref<Shader> Bind(Mode mode, const Graph::NodeGraph& graph,
 				const std::unordered_map<std::string, glm::vec4>* overrides = nullptr);
+			// Backend-neutral data for one draw: params (slot 0 = time, then one vec4 per param,
+			// instance overrides applied) and the image textures (null = missing). Used by the
+			// Vulkan renderer, which builds its own pipelines from GetCompiled().Code.
+			void GatherData(const Graph::NodeGraph& graph, const std::unordered_map<std::string, glm::vec4>* overrides,
+				std::vector<glm::vec4>& outParams, std::vector<Ref<Texture2D>>& outTextures);
 			bool IsForward() const { return m_Compiled.IsValid() && m_Compiled.Forward; }
 			bool IsBlended() const { return m_Compiled.IsValid() && m_Compiled.Blended; }
 
@@ -86,6 +91,8 @@ namespace Lunex {
 
 		private:
 			Ref<Shader> GetOrCreateShader(Mode mode);
+			void RefreshParams(const Graph::NodeGraph& graph);
+			void RefreshTextures();
 
 			CompiledGraph m_Compiled;
 			Ref<Shader> m_Shaders[3];

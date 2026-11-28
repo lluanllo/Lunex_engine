@@ -15,6 +15,7 @@
 #include "Renderer/SkyboxRenderer.h"
 #include "Renderer/SkinningBuffer.h"
 #include "RHI/RHI.h"
+#include "Renderer/Vulkan/VulkanSceneRenderer.h"
 
 #include <algorithm>
 
@@ -124,7 +125,18 @@ namespace Lunex {
 
 	void SceneRenderSystem::RenderPostLighting(EditorCamera& camera) {
 		if (!m_Context || !m_Context->Registry) return;
-		if (RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan) return;   // VulkanSceneRenderer draws the scene
+		// Vulkan: VulkanSceneRenderer draws sky and glass; the 2D geometry goes to its HDR pass
+		const bool vulkan = RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan;
+		if (vulkan) {
+			VulkanSceneRenderer::Get().Set2DLayer(Vulkan2DBatch::Layer::Scene);
+			Renderer2D::BeginScene(camera);
+			RenderSprites(camera, camera.GetViewMatrix());
+			RenderCircles(camera, camera.GetViewMatrix());
+			ParticleSystem::DrawBillboards(m_Context->OwningScene, *m_Context->Registry, camera.GetPosition());
+			Renderer2D::EndScene();
+			VulkanSceneRenderer::Get().Set2DLayer(Vulkan2DBatch::Layer::Overlay);
+			return;
+		}
 		if (!DeferredRenderer::IsEnabled()) return; // Only needed for deferred path
 		
 		// ========================================
@@ -153,8 +165,8 @@ namespace Lunex {
 
 	void SceneRenderSystem::RenderPostLightingOverlays(EditorCamera& camera) {
 		if (!m_Context || !m_Context->Registry) return;
-		if (RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan) return;   // VulkanSceneRenderer draws the scene
-		if (!DeferredRenderer::IsEnabled()) return;
+		const bool vulkan = RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan;   // draws its own grid
+		if (!DeferredRenderer::IsEnabled() && !vulkan) return;
 		
 		// ========================================
 		// EDITOR OVERLAYS (Deferred path only)
@@ -163,11 +175,13 @@ namespace Lunex {
 		// ========================================
 		
 		// Grid renders here so it's not affected by bloom/tone mapping
-		Renderer2D::BeginScene(camera);
-		if (m_Settings.RenderGrid) {
-			GridRenderer::DrawGrid(camera);
+		if (!vulkan) {
+			Renderer2D::BeginScene(camera);
+			if (m_Settings.RenderGrid) {
+				GridRenderer::DrawGrid(camera);
+			}
+			Renderer2D::EndScene();
 		}
-		Renderer2D::EndScene();
 		
 		if (m_Settings.RenderBillboards || m_Settings.RenderGizmos) {
 			Renderer2D::BeginScene(camera);
@@ -195,7 +209,16 @@ namespace Lunex {
 
 	void SceneRenderSystem::RenderPostLightingRuntime(Camera& camera, const glm::mat4& cameraTransform) {
 		if (!m_Context || !m_Context->Registry) return;
-		if (RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan) return;   // VulkanSceneRenderer draws the scene
+		if (RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan) {
+			VulkanSceneRenderer::Get().Set2DLayer(Vulkan2DBatch::Layer::Scene);
+			Renderer2D::BeginScene(camera, cameraTransform);
+			RenderSprites(camera, cameraTransform);
+			RenderCircles(camera, cameraTransform);
+			ParticleSystem::DrawBillboards(m_Context->OwningScene, *m_Context->Registry, glm::vec3(cameraTransform[3]));
+			Renderer2D::EndScene();
+			VulkanSceneRenderer::Get().Set2DLayer(Vulkan2DBatch::Layer::Overlay);
+			return;
+		}
 		if (!DeferredRenderer::IsEnabled()) return;
 		
 		// Skybox (affected by bloom)
@@ -397,6 +420,7 @@ namespace Lunex {
 		// Render billboards - disable both depth test and depth write
 		// Billboards should always render on top of scene geometry
 		// Back-to-front sorting handles billboard-to-billboard ordering
+		Renderer2D::SetDepthTest(false);   // flushes what came before with the old state
 		auto* cmdList = RHI::GetImmediateCommandList();
 		if (cmdList) {
 			cmdList->SetDepthTestEnabled(false);
@@ -408,6 +432,7 @@ namespace Lunex {
 				cameraPosition, billboard.Size, billboard.EntityID);
 		}
 		
+		Renderer2D::SetDepthTest(true);
 		if (cmdList) {
 			cmdList->SetDepthTestEnabled(true);
 			cmdList->SetDepthMask(true);

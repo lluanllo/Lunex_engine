@@ -6,41 +6,13 @@
 #include "Shader.h"
 #include "UniformBuffer.h"
 #include "RHI/RHI.h"
+#include "Renderer2DVertex.h"
+#include "Vulkan/VulkanSceneRenderer.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 namespace Lunex {
-	struct QuadVertex {
-		glm::vec3 Position;
-		glm::vec4 Color;
-		glm::vec2 TexCoord;
-		
-		float TexIndex;
-		float TilingFactor;
-		
-		int EntityID;
-	};
-	
-	struct CircleVertex {
-		glm::vec3 WorldPosition;
-		glm::vec3 LocalPosition;
-		glm::vec4 Color;
-		float Thickness;
-		float Fade;
-		
-		// Editor-only
-		int EntityID;
-	};
-	
-	struct LineVertex {
-		glm::vec3 Position;
-		glm::vec4 Color;
-		
-		// Editor-only
-		int EntityID;
-	};
-	
 	struct Renderer2DData {
 		static const uint32_t MaxQuads = 20000;
 		static const uint32_t MaxVertices = MaxQuads * 4;
@@ -240,7 +212,40 @@ namespace Lunex {
 		s_DepthWrite = depthWrite;
 	}
 
+	static bool s_DepthTest = true;
+	void Renderer2D::SetDepthTest(bool enabled) {
+		if (enabled == s_DepthTest) return;
+		Flush();
+		StartBatch();
+		s_DepthTest = enabled;
+	}
+
 	void Renderer2D::Flush() {
+		// Vulkan: hand the batch to the Vulkan scene renderer (drawn in its next Render)
+		if (RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan) {
+			Vulkan2DBatch batch;
+			batch.DrawLayer = VulkanSceneRenderer::Get().Get2DLayer();
+			batch.ViewProjection = s_Data.CameraBuffer.ViewProjection;
+			auto copy = [](std::vector<uint8_t>& dst, const void* begin, const void* end) {
+				dst.assign(static_cast<const uint8_t*>(begin), static_cast<const uint8_t*>(end));
+			};
+			copy(batch.Quads, s_Data.QuadVertexBufferBase, s_Data.QuadVertexBufferPtr);
+			copy(batch.Circles, s_Data.CircleVertexBufferBase, s_Data.CircleVertexBufferPtr);
+			copy(batch.Lines, s_Data.LineVertexBufferBase, s_Data.LineVertexBufferPtr);
+			batch.QuadCount = s_Data.QuadIndexCount / 6;
+			batch.CircleCount = s_Data.CircleIndexCount / 6;
+			batch.LineVertexCount = s_Data.LineVertexCount;
+			if (batch.QuadCount) batch.Textures.assign(s_Data.TextureSlots.begin(), s_Data.TextureSlots.begin() + s_Data.TextureSlotIndex);
+			batch.LineWidth = s_Data.LineWidth;
+			batch.Additive = s_AdditiveBlend;
+			batch.DepthWrite = s_DepthWrite;
+			batch.DepthTest = s_DepthTest;
+			const uint32_t calls = (batch.QuadCount ? 1 : 0) + (batch.CircleCount ? 1 : 0) + (batch.LineVertexCount ? 1 : 0);
+			s_Data.Stats.DrawCalls += calls;
+			VulkanSceneRenderer::Get().Submit2D(std::move(batch));
+			return;
+		}
+
 		auto* cmdList = RHI::GetImmediateCommandList();
 		if (!cmdList) return;
 
