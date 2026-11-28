@@ -232,6 +232,8 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 			ProjectManager::SaveActive(projectPath);
 		});
 		
+		m_SettingsPanel.SetOnGraphicsAPISwitch([this](bool vulkan) { SwitchGraphicsAPI(vulkan); });
+
 		// ✅ Post-Processing autosave: save to project on every change
 		m_SettingsPanel.SetOnPostProcessChangedCallback([this]() {
 			auto project = ProjectManager::GetActiveProject();
@@ -1730,6 +1732,103 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 		}
 	}
 
+	// ============================================================================
+	// GRAPHICS API SWITCH
+	// ============================================================================
+
+	static std::filesystem::path APISwitchDirectory() {
+		return std::filesystem::temp_directory_path() / "Lunex" / "APISwitch";
+	}
+
+	void EditorLayer::SwitchGraphicsAPI(bool vulkan) {
+		if (m_SceneState != SceneState::Edit) OnSceneStop();
+		RHI::SetPreferredAPI(vulkan ? RHI::GraphicsAPI::Vulkan : RHI::GraphicsAPI::OpenGL);
+
+		std::vector<std::string> args;
+		auto project = ProjectManager::GetActiveProject();
+		if (project) args.push_back(project->GetProjectPath().string());
+		args.push_back(vulkan ? "--vulkan" : "--opengl");
+
+		// State of this session in a temp folder (the user's scene file is not touched)
+		if (project && m_EditorScene) {
+			std::error_code ec;
+			const std::filesystem::path dir = APISwitchDirectory();
+			std::filesystem::create_directories(dir, ec);
+			SerializeScene(m_EditorScene, dir / "Scene.lunex");
+			std::ofstream state(dir / "State.txt");
+			const glm::vec3 pos = m_EditorCamera.GetPosition();
+			const glm::vec3 fwd = m_EditorCamera.GetForwardDirection();
+			state << "Position " << pos.x << " " << pos.y << " " << pos.z << "\n";
+			state << "Forward " << fwd.x << " " << fwd.y << " " << fwd.z << "\n";
+			state << "Distance " << m_EditorCamera.GetDistance() << "\n";
+			state << "Ortho " << (m_EditorCamera.IsOrthographic() ? 1 : 0) << "\n";
+			for (Entity e : m_SceneHierarchyPanel.GetSelectedEntities())
+				if (e) state << "Selected " << static_cast<uint64_t>(e.GetUUID()) << "\n";
+			const WindowPlacement wp = GetMainWindowPlacement();
+			state << "Window " << wp.X << " " << wp.Y << " " << wp.Width << " " << wp.Height << " " << (wp.Maximized ? 1 : 0) << "\n";
+			state << "ScenePath " << m_EditorScenePath.string() << "\n";
+			state.close();
+			args.push_back("--restore-session");
+			args.push_back((dir / "State.txt").string());
+		}
+		LNX_LOG_INFO("Switching graphics API to {0}", vulkan ? "Vulkan" : "OpenGL");
+		if (RestartApplication(args)) Application::Get().Close();
+		else LNX_LOG_ERROR("Could not relaunch the editor; the new graphics API applies on the next start");
+	}
+
+	void EditorLayer::RestoreAfterGraphicsAPISwitch() {
+		const auto args = Application::Get().GetCommandLineArgs();
+		std::filesystem::path statePath;
+		for (int i = 1; i + 1 < args.Count; i++)
+			if (std::string(args[i]) == "--restore-session") statePath = args[i + 1];
+		if (statePath.empty() || !std::filesystem::exists(statePath)) return;
+
+		const std::filesystem::path scene = statePath.parent_path() / "Scene.lunex";
+		std::filesystem::path originalPath;
+		glm::vec3 pos(0.0f), fwd(0.0f, 0.0f, -1.0f);
+		float distance = 10.0f;
+		int ortho = 0;
+		std::vector<uint64_t> selected;
+		int win[5] = { 0, 0, 0, 0, 0 };
+		bool hasWindow = false;
+		std::ifstream in(statePath);
+		std::string key;
+		while (in >> key) {
+			if (key == "Position") in >> pos.x >> pos.y >> pos.z;
+			else if (key == "Forward") in >> fwd.x >> fwd.y >> fwd.z;
+			else if (key == "Distance") in >> distance;
+			else if (key == "Ortho") in >> ortho;
+			else if (key == "Selected") { uint64_t id = 0; in >> id; selected.push_back(id); }
+			else if (key == "Window") { in >> win[0] >> win[1] >> win[2] >> win[3] >> win[4]; hasWindow = true; }
+			else if (key == "ScenePath") {
+				std::string rest;
+				std::getline(in, rest);
+				if (!rest.empty() && rest[0] == ' ') rest.erase(0, 1);
+				originalPath = rest;
+			}
+		}
+		in.close();
+
+		if (std::filesystem::exists(scene)) {
+			OpenScene(scene);
+			m_EditorScenePath = originalPath;   // Save keeps writing to the user's scene
+		}
+		m_EditorCamera.SetDistance(distance);
+		m_EditorCamera.SetFromTransform(pos, fwd);
+		m_EditorCamera.SetOrthographic(ortho != 0);
+		for (size_t i = 0; i < selected.size(); i++) {
+			Entity e = m_ActiveScene->GetEntityByUUID(UUID(selected[i]));
+			if (e && i == 0) m_SceneHierarchyPanel.SetSelectedEntity(e);
+		}
+		UI_UpdateWindowTitle();
+		if (hasWindow) SetMainWindowPlacement({ win[0], win[1], win[2], win[3], win[4] != 0 });
+
+		std::error_code ec;
+		std::filesystem::remove(scene, ec);
+		std::filesystem::remove(statePath, ec);
+		LNX_LOG_INFO("Session restored after the graphics API switch ({0})", RHI::GraphicsAPIName(RHI::GetCurrentAPI()));
+	}
+
 	void EditorLayer::SerializeScene(Ref<Scene> scene, const std::filesystem::path& path) {
 		SceneSerializer serializer(scene);
 		serializer.Serialize(path.string());
@@ -1990,6 +2089,12 @@ m_ThumbnailCaptureFrames = 120;   // once the start scene has rendered
 
 		UI_UpdateWindowTitle();
 		m_ConsolePanel.AddLog("Project opened: " + project->GetName(), LogLevel::Info, "Project");
+
+		// Relaunched by a graphics API switch: bring back the scene, camera, selection and window
+		if (!m_APISwitchRestoreChecked) {
+			m_APISwitchRestoreChecked = true;
+			RestoreAfterGraphicsAPISwitch();
+		}
 	}
 
 	void EditorLayer::SaveProject() {

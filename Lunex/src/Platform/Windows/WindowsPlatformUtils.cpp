@@ -27,6 +27,23 @@ namespace Lunex {
 		return std::string();
 	}
 
+	WindowPlacement GetMainWindowPlacement() {
+		WindowPlacement p;
+		GLFWwindow* window = static_cast<GLFWwindow*>(Application::Get().GetWindow().GetNativeWindow());
+		glfwGetWindowPos(window, &p.X, &p.Y);
+		glfwGetWindowSize(window, &p.Width, &p.Height);
+		p.Maximized = glfwGetWindowAttrib(window, GLFW_MAXIMIZED) == GLFW_TRUE;
+		return p;
+	}
+
+	void SetMainWindowPlacement(const WindowPlacement& p) {
+		GLFWwindow* window = static_cast<GLFWwindow*>(Application::Get().GetWindow().GetNativeWindow());
+		if (p.Maximized) { glfwMaximizeWindow(window); return; }
+		if (p.Width <= 0 || p.Height <= 0) return;
+		glfwSetWindowPos(window, p.X, p.Y);
+		glfwSetWindowSize(window, p.Width, p.Height);
+	}
+
 	bool RestartApplication(const std::vector<std::string>& args) {
 		char exe[MAX_PATH] = {};
 		GetModuleFileNameA(nullptr, exe, MAX_PATH);

@@ -228,24 +228,28 @@ namespace Lunex {
 				TextWrapped(("Rendering with " + std::string(RenderPipelineRegistry::GetActive()->GetName()) + " until it is implemented.").c_str(), TextVariant::Muted);
 			AddSpacing(SpacingValues::SM);
 
-			// Graphics API (applied on restart: the window and every GPU resource depend on it)
+			// Graphics API: the window and every GPU resource depend on it, so the editor relaunches
+			// itself on the other API and restores the open scene, camera and selection
 			{
 				static const std::vector<std::string> apis = { "OpenGL 4.6", "Vulkan 1.3" };
 				int api = RHI::GetPreferredAPI() == RHI::GraphicsAPI::Vulkan ? 1 : 0;
-				if (PropertyDropdown("Graphics API", api, apis, "Backend used to talk to the GPU. Applied when the editor restarts."))
-					RHI::SetPreferredAPI(api == 1 ? RHI::GraphicsAPI::Vulkan : RHI::GraphicsAPI::OpenGL);
+				if (PropertyDropdown("Graphics API", api, apis, "Backend used to talk to the GPU. Switching keeps the open scene (unsaved changes included), camera and selection.")) {
+					const RHI::GraphicsAPI picked = api == 1 ? RHI::GraphicsAPI::Vulkan : RHI::GraphicsAPI::OpenGL;
+					RHI::SetPreferredAPI(picked);
+					if (picked != RHI::GetCurrentAPI() && m_OnGraphicsAPISwitch) m_OnGraphicsAPISwitch(api == 1);
+				}
 				const RHI::GraphicsAPI running = RHI::GetCurrentAPI();
 				TextWrapped((std::string("Running on ") + RHI::GraphicsAPIName(running) + " - " +
 					(RHI::RHIDevice::Get() ? RHI::RHIDevice::Get()->GetDeviceName() : std::string("?"))).c_str(), TextVariant::Muted);
 				if (RHI::GetPreferredAPI() != running) {
-					if (ImGui::Button("Restart editor now")) {
-						// Same project, saved preference decides the API
-						std::vector<std::string> args;
-						if (auto project = ProjectManager::GetActiveProject()) args.push_back(project->GetProjectPath().string());
-						if (RestartApplication(args)) Application::Get().Close();
+					if (ImGui::Button("Switch now")) {
+						if (m_OnGraphicsAPISwitch) m_OnGraphicsAPISwitch(RHI::GetPreferredAPI() == RHI::GraphicsAPI::Vulkan);
+						else {
+							std::vector<std::string> args;
+							if (auto project = ProjectManager::GetActiveProject()) args.push_back(project->GetProjectPath().string());
+							if (RestartApplication(args)) Application::Get().Close();
+						}
 					}
-					ImGui::SameLine();
-					TextWrapped("Save your scene first.", TextVariant::Muted);
 				}
 				AddSpacing(SpacingValues::SM);
 			}

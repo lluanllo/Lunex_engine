@@ -26,6 +26,8 @@ namespace Lunex {
 
 		// Callback invoked whenever any post-process setting changes (for autosave)
 		void SetOnPostProcessChangedCallback(const std::function<void()>& callback) { m_OnPostProcessChanged = callback; }
+		// Graphics API picked in the Render panel (true = Vulkan): the editor switches right away
+		void SetOnGraphicsAPISwitch(const std::function<void(bool)>& callback) { m_OnGraphicsAPISwitch = callback; }
 
 	private:
 		// Tab drawing helpers
@@ -60,5 +62,6 @@ namespace Lunex {
 
 		// Autosave callback
 		std::function<void()> m_OnPostProcessChanged;
+		std::function<void(bool)> m_OnGraphicsAPISwitch;
 	};
 }

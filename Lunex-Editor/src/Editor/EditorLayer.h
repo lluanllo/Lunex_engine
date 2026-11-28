@@ -69,6 +69,11 @@ namespace Lunex {
 			void SaveSceneAs();
 			
 			void SerializeScene(Ref<Scene> scene, const std::filesystem::path& path);
+
+			// Graphics API switch: relaunch on the other API keeping scene (unsaved too), camera, selection
+			void SwitchGraphicsAPI(bool vulkan);
+			void RestoreAfterGraphicsAPISwitch();
+			bool m_APISwitchRestoreChecked = false;
 			
 			void OnScenePlay();
 			void OnSceneSimulate();  
