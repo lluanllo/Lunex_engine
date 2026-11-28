@@ -43,6 +43,7 @@
 
 // ✅ Deferred Renderer
 #include "Renderer/Deferred/DeferredRenderer.h"
+#include "Renderer/Vulkan/VulkanSceneRenderer.h"
 
 // ✅ SceneRenderSystem for post-lighting overlays
 #include "Scene/Systems/SceneRenderSystem.h"
@@ -847,6 +848,7 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 		// Clear our entity ID attachment to -1
 		m_Framebuffer->ClearAttachment(1, -1);
 
+		const bool vulkan = RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan;
 		switch (m_SceneState) {
 			case SceneState::Edit:
 			{
@@ -863,7 +865,7 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 				}
 
 				// Execute deferred lighting pass into the scene framebuffer
-				if (DeferredRenderer::IsEnabled()) {
+				if (DeferredRenderer::IsEnabled() && !vulkan) {
 					{ ProfileScope scope("Lighting", true); DeferredRenderer::ExecuteLightingPass(m_Framebuffer); }
 
 					// Render skybox, grid, sprites AFTER lighting (affected by bloom)
@@ -893,7 +895,7 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 					m_ActiveScene->OnUpdateSimulation(ts, m_EditorCamera);
 				}
 
-				if (DeferredRenderer::IsEnabled()) {
+				if (DeferredRenderer::IsEnabled() && !vulkan) {
 					{ ProfileScope scope("Lighting", true); DeferredRenderer::ExecuteLightingPass(m_Framebuffer); }
 					
 					// Render skybox, grid, sprites AFTER lighting (affected by bloom)
@@ -918,7 +920,7 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 					m_ActiveScene->OnUpdateRuntime(ts);
 				}
 
-				if (DeferredRenderer::IsEnabled()) {
+				if (DeferredRenderer::IsEnabled() && !vulkan) {
 					{ ProfileScope scope("Lighting", true); DeferredRenderer::ExecuteLightingPass(m_Framebuffer); }
 					
 					// Render skybox, sprites AFTER lighting (runtime, affected by bloom)
@@ -950,7 +952,43 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 		int mouseX = (int)mx;
 		int mouseY = (int)my;
 
-		if (mouseX >= 0 && mouseY >= 0 && mouseX < (int)viewportSize.x && mouseY < (int)viewportSize.y) {
+		// Vulkan: native scene renderer (editor camera, or the primary camera while playing)
+		if (vulkan && m_ViewportSize.x > 0.0f && m_ViewportSize.y > 0.0f) {
+			VulkanRenderView view;
+			view.Width = (uint32_t)m_ViewportSize.x;
+			view.Height = (uint32_t)m_ViewportSize.y;
+			bool hasView = true;
+			if (m_SceneState == SceneState::Play) {
+				Entity camera = m_ActiveScene->GetPrimaryCameraEntity();
+				if (camera) {
+					const glm::mat4 world = m_ActiveScene->GetWorldTransform(camera);
+					view.Projection = camera.GetComponent<CameraComponent>().Camera.GetProjection();
+					view.View = glm::inverse(world);
+					view.CameraPosition = glm::vec3(world[3]);
+				}
+				else hasView = false;
+				view.DrawGrid = false;
+			}
+			else {
+				view.View = m_EditorCamera.GetViewMatrix();
+				view.Projection = m_EditorCamera.GetProjection();
+				view.CameraPosition = m_EditorCamera.GetPosition();
+			}
+			if (mouseX >= 0 && mouseY >= 0 && mouseX < (int)viewportSize.x && mouseY < (int)viewportSize.y) {
+				view.PickX = mouseX;
+				view.PickY = mouseY;
+			}
+			if (hasView) {
+				ProfileScope scope("Vulkan scene", true);
+				VulkanSceneRenderer::Get().Render(*m_ActiveScene, view);
+			}
+		}
+
+		if (vulkan) {
+			const int picked = VulkanSceneRenderer::Get().GetPickedEntity();
+			m_HoveredEntity = picked < 0 ? Entity() : Entity((entt::entity)picked, m_ActiveScene.get());
+		}
+		else if (mouseX >= 0 && mouseY >= 0 && mouseX < (int)viewportSize.x && mouseY < (int)viewportSize.y) {
 			int pixelData;
 			if (DeferredRenderer::IsEnabled()) {
 				// Read from G-Buffer entity ID attachment first (for 3D meshes)
@@ -1660,6 +1698,7 @@ m_MenuBarPanel.SetOnOpenOutlinePreferencesCallback([this]() { m_OutlinePreferenc
 	void EditorLayer::CaptureProjectThumbnail() {
 		auto project = ProjectManager::GetActiveProject();
 		if (!project || !m_ActiveScene || m_SceneState != SceneState::Edit) return;
+		if (RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan) return;   // thumbnails are read back through GL
 
 		uint32_t texture = 0, width = 0, height = 0;
 		Entity camera = m_ActiveScene->GetPrimaryCameraEntity();

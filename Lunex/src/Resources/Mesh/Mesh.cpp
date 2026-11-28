@@ -55,6 +55,8 @@ namespace Lunex {
 
 	void Mesh::SetBoneData(const std::vector<glm::ivec4>& boneIDs, const std::vector<glm::vec4>& boneWeights) {
 		if (boneIDs.size() != m_Vertices.size() || boneWeights.size() != m_Vertices.size()) return;
+		m_BoneIDs = boneIDs;
+		m_BoneWeights = boneWeights;
 
 		struct BoneVertex {
 			glm::ivec4 IDs;

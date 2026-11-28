@@ -52,6 +52,7 @@ namespace Lunex {
 
 	void SceneRenderSystem::RenderScene(EditorCamera& camera) {
 		if (!m_Context || !m_Context->Registry) return;
+		if (RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan) return;   // VulkanSceneRenderer draws the scene
 		
 		// ========== 3D RENDERING ==========
 		// Update lights first (syncs LightSystem, uploads SSBO)
@@ -123,6 +124,7 @@ namespace Lunex {
 
 	void SceneRenderSystem::RenderPostLighting(EditorCamera& camera) {
 		if (!m_Context || !m_Context->Registry) return;
+		if (RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan) return;   // VulkanSceneRenderer draws the scene
 		if (!DeferredRenderer::IsEnabled()) return; // Only needed for deferred path
 		
 		// ========================================
@@ -151,6 +153,7 @@ namespace Lunex {
 
 	void SceneRenderSystem::RenderPostLightingOverlays(EditorCamera& camera) {
 		if (!m_Context || !m_Context->Registry) return;
+		if (RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan) return;   // VulkanSceneRenderer draws the scene
 		if (!DeferredRenderer::IsEnabled()) return;
 		
 		// ========================================
@@ -192,6 +195,7 @@ namespace Lunex {
 
 	void SceneRenderSystem::RenderPostLightingRuntime(Camera& camera, const glm::mat4& cameraTransform) {
 		if (!m_Context || !m_Context->Registry) return;
+		if (RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan) return;   // VulkanSceneRenderer draws the scene
 		if (!DeferredRenderer::IsEnabled()) return;
 		
 		// Skybox (affected by bloom)
@@ -212,6 +216,7 @@ namespace Lunex {
 
 	void SceneRenderSystem::RenderSceneRuntime(Camera& camera, const glm::mat4& cameraTransform) {
 		if (!m_Context || !m_Context->Registry) return;
+		if (RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan) return;   // VulkanSceneRenderer draws the scene
 		
 		// ========== 3D RENDERING ==========
 		Renderer3D::UpdateLights(m_Context->OwningScene);

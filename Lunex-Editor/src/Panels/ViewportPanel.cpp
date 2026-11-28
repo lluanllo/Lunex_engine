@@ -18,6 +18,8 @@
 #include "ContentBrowserPanel.h"
 #include "AnimationEditorPanel.h"
 #include "Core/Application.h"
+#include "RHI/RHI.h"
+#include "Renderer/Vulkan/VulkanSceneRenderer.h"
 #include "Core/Input.h"
 #include "Scene/Components.h"
 #include "Math/Math.h"
@@ -147,7 +149,9 @@ namespace Lunex {
 	void ViewportPanel::RenderFramebufferImage(Ref<Framebuffer> framebuffer) {
 		using namespace UI;
 		
-		uint64_t textureID = framebuffer->GetColorAttachmentRendererID();
+		uint64_t textureID = RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan
+			? VulkanSceneRenderer::Get().GetOutputTextureID()
+			: framebuffer->GetColorAttachmentRendererID();
 		if (textureID == 0) return;
 		Image(static_cast<uint32_t>(textureID), Size(m_ViewportSize.x, m_ViewportSize.y), true);
 	}

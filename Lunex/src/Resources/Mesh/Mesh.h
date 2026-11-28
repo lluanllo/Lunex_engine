@@ -71,6 +71,9 @@ namespace Lunex {
 		// Skinning data (second vertex buffer, attribute locations 6 = bone ids, 7 = weights)
 		void SetBoneData(const std::vector<glm::ivec4>& boneIDs, const std::vector<glm::vec4>& boneWeights);
 		bool IsSkinned() const { return m_Skinned; }
+		// CPU copy of the skinning data (backends that upload their own buffers, e.g. Vulkan)
+		const std::vector<glm::ivec4>& GetBoneIDs() const { return m_BoneIDs; }
+		const std::vector<glm::vec4>& GetBoneWeights() const { return m_BoneWeights; }
 
 		// Transforms a local AABB by a matrix, returning the enclosing world AABB (Arvo's method)
 		static void TransformAABB(const glm::mat4& m, const glm::vec3& localMin, const glm::vec3& localMax,
@@ -89,6 +92,8 @@ namespace Lunex {
 		Ref<IndexBuffer> m_IndexBuffer;
 
 		Ref<VertexBuffer> m_BoneBuffer;
+		std::vector<glm::ivec4> m_BoneIDs;
+		std::vector<glm::vec4> m_BoneWeights;
 		bool m_Skinned = false;
 
 		glm::vec3 m_AABBMin = glm::vec3(0.0f);

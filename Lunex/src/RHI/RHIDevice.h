@@ -10,6 +10,11 @@
 
 #include <glm/glm.hpp>
 
+// windows.h defines DeviceCapabilities as a macro (DeviceCapabilitiesA/W)
+#ifdef DeviceCapabilities
+#undef DeviceCapabilities
+#endif
+
 namespace Lunex {
 namespace RHI {
 

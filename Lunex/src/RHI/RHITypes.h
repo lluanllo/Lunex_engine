@@ -585,6 +585,9 @@ namespace RHI {
 	// DEVICE CAPABILITIES
 	// ============================================================================
 	
+#ifdef DeviceCapabilities   // windows.h macro (DeviceCapabilitiesA/W)
+#undef DeviceCapabilities
+#endif
 	struct DeviceCapabilities {
 		// Limits
 		uint32_t MaxTextureSize = 0;
