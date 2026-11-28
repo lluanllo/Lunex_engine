@@ -63,6 +63,20 @@ namespace Lunex {
 		GraphicsAPI GetCurrentAPI();
 
 		// ============================================================================
+		// GRAPHICS API SELECTION (decided before the window exists)
+		// ============================================================================
+
+		// API for this run: --vulkan / --opengl on the command line, else the saved preference
+		GraphicsAPI ResolveStartupAPI(int argc, char** argv);
+		// Saved preference (%APPDATA%/Lunex/GraphicsAPI.txt), applied on the next start
+		GraphicsAPI GetPreferredAPI();
+		void SetPreferredAPI(GraphicsAPI api);
+		// API the window / context are being created for
+		GraphicsAPI GetRequestedAPI();
+		void SetRequestedAPI(GraphicsAPI api);
+		const char* GraphicsAPIName(GraphicsAPI api);
+
+		// ============================================================================
 		// GLOBAL COMMAND LIST ACCESS
 		// ============================================================================
 

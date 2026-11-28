@@ -4,6 +4,9 @@
 
 #include <glad/glad.h>
 
+#include <filesystem>
+#include <fstream>
+
 namespace Lunex {
 namespace RHI {
 
@@ -113,6 +116,56 @@ namespace RHI {
 	GraphicsAPI GetCurrentAPI() {
 		return s_CurrentAPI;
 	}
+
+	// ============================================================================
+	// GRAPHICS API SELECTION
+	// ============================================================================
+
+	static GraphicsAPI s_RequestedAPI = GraphicsAPI::OpenGL;
+
+	static std::filesystem::path PreferenceFile() {
+		char* appData = nullptr;
+		size_t len = 0;
+		std::filesystem::path base = std::filesystem::current_path();
+		if (_dupenv_s(&appData, &len, "APPDATA") == 0 && appData) { base = std::filesystem::path(appData) / "Lunex"; free(appData); }
+		return base / "GraphicsAPI.txt";
+	}
+
+	const char* GraphicsAPIName(GraphicsAPI api) {
+		switch (api) {
+			case GraphicsAPI::OpenGL: return "OpenGL";
+			case GraphicsAPI::Vulkan: return "Vulkan";
+			case GraphicsAPI::DirectX12: return "DirectX12";
+			case GraphicsAPI::Metal: return "Metal";
+			default: return "None";
+		}
+	}
+
+	GraphicsAPI GetPreferredAPI() {
+		std::ifstream in(PreferenceFile());
+		std::string value;
+		in >> value;
+		return value == "Vulkan" ? GraphicsAPI::Vulkan : GraphicsAPI::OpenGL;
+	}
+
+	void SetPreferredAPI(GraphicsAPI api) {
+		const auto file = PreferenceFile();
+		std::error_code ec;
+		std::filesystem::create_directories(file.parent_path(), ec);
+		std::ofstream(file, std::ios::trunc) << GraphicsAPIName(api);
+	}
+
+	GraphicsAPI ResolveStartupAPI(int argc, char** argv) {
+		for (int i = 1; i < argc; i++) {
+			const std::string a = argv[i] ? argv[i] : "";
+			if (a == "--vulkan") return GraphicsAPI::Vulkan;
+			if (a == "--opengl") return GraphicsAPI::OpenGL;
+		}
+		return GetPreferredAPI();
+	}
+
+	GraphicsAPI GetRequestedAPI() { return s_RequestedAPI; }
+	void SetRequestedAPI(GraphicsAPI api) { s_RequestedAPI = api; }
 	
 	RHICommandList* GetImmediateCommandList() {
 		return s_ImmediateCommandList.get();

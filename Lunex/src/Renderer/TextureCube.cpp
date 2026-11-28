@@ -10,6 +10,7 @@ namespace Lunex {
 			case RHI::GraphicsAPI::None:
 				LNX_CORE_ASSERT(false, "RHI::GraphicsAPI::None is currently not supported!");
 				return nullptr;
+			case RHI::GraphicsAPI::Vulkan:   // legacy GL path until this type is ported (GL calls are no-ops under Vulkan)
 			case RHI::GraphicsAPI::OpenGL:
 				return CreateRef<OpenGLTextureCube>(facePaths);
 			default:
@@ -25,6 +26,7 @@ namespace Lunex {
 			case RHI::GraphicsAPI::None:
 				LNX_CORE_ASSERT(false, "RHI::GraphicsAPI::None is currently not supported!");
 				return nullptr;
+			case RHI::GraphicsAPI::Vulkan:   // legacy GL path until this type is ported (GL calls are no-ops under Vulkan)
 			case RHI::GraphicsAPI::OpenGL:
 				return CreateRef<OpenGLTextureCube>(size, hdr, mipLevels);
 			default:
@@ -40,6 +42,7 @@ namespace Lunex {
 			case RHI::GraphicsAPI::None:
 				LNX_CORE_ASSERT(false, "RHI::GraphicsAPI::None is currently not supported!");
 				return nullptr;
+			case RHI::GraphicsAPI::Vulkan:   // legacy GL path until this type is ported (GL calls are no-ops under Vulkan)
 			case RHI::GraphicsAPI::OpenGL:
 				return OpenGLTextureCube::CreateFromHDRI(hdriPath, resolution);
 			default:

@@ -1,5 +1,6 @@
 #include "stpch.h"
 #include "OpenGLRHIContext.h"
+#include "RHI/Vulkan/VulkanDevice.h"
 #include "Log/Log.h"
 
 #include <GLFW/glfw3.h>
@@ -266,6 +267,8 @@ namespace RHI {
 		switch (api) {
 			case GraphicsAPI::OpenGL:
 				return CreateScope<OpenGLRHIContext>(windowHandle);
+			case GraphicsAPI::Vulkan:
+				return CreateScope<Vk::VulkanRHIContext>(windowHandle);
 			default:
 				LNX_LOG_ERROR("RHIContext::Create: Unsupported graphics API!");
 				return nullptr;

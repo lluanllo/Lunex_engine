@@ -1,5 +1,6 @@
 #include "stpch.h"
 #include "OpenGLRHIDevice.h"
+#include "RHI/Vulkan/VulkanDevice.h"
 #include "OpenGLRHIBuffer.h"
 #include "OpenGLRHITexture.h"
 #include "OpenGLRHIFramebuffer.h"
@@ -276,6 +277,8 @@ namespace RHI {
 		switch (api) {
 			case GraphicsAPI::OpenGL:
 				return CreateRef<OpenGLRHIDevice>();
+			case GraphicsAPI::Vulkan:
+				return CreateRef<Vk::VulkanRHIDevice>();
 			default:
 				LNX_LOG_ERROR("RHIDevice::Create: Unsupported graphics API!");
 				return nullptr;

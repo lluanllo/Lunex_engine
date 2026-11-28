@@ -143,6 +143,7 @@ namespace Lunex {
 			case RHI::GraphicsAPI::None:    
 				LNX_CORE_ASSERT(false, "RHI::GraphicsAPI::None is currently not supported!"); 
 				return nullptr;
+			case RHI::GraphicsAPI::Vulkan:   // legacy GL path until this type is ported (GL calls are no-ops under Vulkan)
 			case RHI::GraphicsAPI::OpenGL:  
 				return CreateRef<VertexBufferAdapter>(size);
 			default:
@@ -158,6 +159,7 @@ namespace Lunex {
 			case RHI::GraphicsAPI::None:    
 				LNX_CORE_ASSERT(false, "RHI::GraphicsAPI::None is currently not supported!"); 
 				return nullptr;
+			case RHI::GraphicsAPI::Vulkan:   // legacy GL path until this type is ported (GL calls are no-ops under Vulkan)
 			case RHI::GraphicsAPI::OpenGL:  
 				return CreateRef<VertexBufferAdapter>(vertices, size);
 			default:
@@ -173,6 +175,7 @@ namespace Lunex {
 			case RHI::GraphicsAPI::None:    
 				LNX_CORE_ASSERT(false, "RHI::GraphicsAPI::None is currently not supported!"); 
 				return nullptr;
+			case RHI::GraphicsAPI::Vulkan:   // legacy GL path until this type is ported (GL calls are no-ops under Vulkan)
 			case RHI::GraphicsAPI::OpenGL:  
 				return CreateRef<IndexBufferAdapter>(indices, count);
 			default:

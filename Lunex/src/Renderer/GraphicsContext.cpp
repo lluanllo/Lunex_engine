@@ -51,7 +51,15 @@ namespace Lunex {
 		Ref<RHI::RHISwapchain> m_Swapchain;
 	};
 	
+	// Vulkan: the swapchain lives in the Vulkan context; presenting happens at the end of the frame
+	class NullGraphicsContext : public GraphicsContext {
+	public:
+		void Init() override {}
+		void SwapBuffers() override {}
+	};
+
 	Scope<GraphicsContext> GraphicsContext::Create(void* window) {
+		if (RHI::GetRequestedAPI() == RHI::GraphicsAPI::Vulkan) return CreateScope<NullGraphicsContext>();
 		// Always create OpenGL context for now (independent of RHI::GetCurrentAPI)
 		// This allows window creation before RHI::Initialize is called
 		// RHI will be initialized later with the window handle

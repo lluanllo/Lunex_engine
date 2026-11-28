@@ -1,5 +1,7 @@
 #include "stpch.h"
 #include "WindowsWindow.h"
+#include "RHI/RHI.h"
+#include "RHI/Vulkan/VulkanContext.h"
 #include "Renderer/GraphicsContext.h"
 
 #include "Events/ApplicationEvent.h"
@@ -45,6 +47,9 @@ namespace Lunex {
 		}
 		{
 			LNX_PROFILE_SCOPE("glfwCreateWindow");
+			// Vulkan: no GL context on the window (the swapchain owns the surface)
+			glfwDefaultWindowHints();
+			if (RHI::GetRequestedAPI() == RHI::GraphicsAPI::Vulkan) glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 			m_Window = glfwCreateWindow((int)m_Data.Width, (int)m_Data.Height, m_Data.Title.c_str(), nullptr, nullptr);
 			++s_GLFWInitialized;
 			LNX_CORE_ASSERT(m_Window, "Could not create GLFW window!");
@@ -163,7 +168,10 @@ namespace Lunex {
 	void WindowsWindow::SetVSync(bool enabled) {
 		LNX_PROFILE_FUNCTION();
 		
-		if (enabled) {
+		if (RHI::GetRequestedAPI() == RHI::GraphicsAPI::Vulkan) {
+			if (RHI::Vk::VulkanContext::IsActive()) RHI::Vk::VulkanContext::Get().SetVSync(enabled);
+		}
+		else if (enabled) {
 			glfwSwapInterval(1);
 		}
 		else {

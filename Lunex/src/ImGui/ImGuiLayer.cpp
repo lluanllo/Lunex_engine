@@ -7,6 +7,10 @@
 #include "backends/imgui_impl_opengl3_loader.h"
 
 #include "Core/Application.h"
+#include "RHI/RHI.h"
+#include "RHI/Vulkan/VulkanContext.h"
+#include "RHI/Vulkan/VulkanTexture.h"
+#include "backends/imgui_impl_vulkan.h"
 
 // TEMPORARY
 #include <GLFW/glfw3.h>
@@ -14,6 +18,28 @@
 #include "ImGuizmo.h"
 
 namespace Lunex {	
+	// ---- Vulkan: engine texture IDs -> descriptor sets ----
+	static bool IsVulkan() { return RHI::GetCurrentAPI() == RHI::GraphicsAPI::Vulkan; }
+	// Leaked on purpose (static destruction runs after the Vulkan context is gone)
+	static Ref<RHI::Vk::VulkanTexture2D>& s_FallbackTexture = *new Ref<RHI::Vk::VulkanTexture2D>();
+	static uint64_t s_FallbackSet = 0;
+
+	// ImGui::Image() gets engine texture IDs (like GL names). Vulkan needs descriptor sets: translate
+	// every user texture of the frame; IDs of systems not ported yet show a neutral texture.
+	static void TranslateTextures(ImDrawData* drawData) {
+		if (!drawData) return;
+		auto& vk = RHI::Vk::VulkanContext::Get();
+		for (ImDrawList* list : drawData->CmdLists) {
+			for (ImDrawCmd& cmd : list->CmdBuffer) {
+				if (cmd.UserCallback || cmd.TexRef._TexData) continue;
+				const uint64_t id = cmd.TexRef._TexID;
+				uint64_t set = vk.ResolveImGuiTexture(id);
+				if (set == id || set == 0) set = s_FallbackSet;
+				cmd.TexRef._TexID = set;
+			}
+		}
+	}
+
 	ImGuiLayer::ImGuiLayer() : Layer("ImGuiLayer") {
 		
 	}
@@ -53,13 +79,48 @@ namespace Lunex {
 		GLFWwindow* window = static_cast<GLFWwindow*>(app.GetWindow().GetNativeWindow());
 		
 		// Setup Platform/Renderer bindings
-		ImGui_ImplGlfw_InitForOpenGL(window, true);
-		ImGui_ImplOpenGL3_Init("#version 410");
+		if (IsVulkan()) {
+			auto& vk = RHI::Vk::VulkanContext::Get();
+			ImGui_ImplGlfw_InitForVulkan(window, true);
+			static VkFormat s_SwapchainFormat = vk.GetSwapchainFormat();
+			ImGui_ImplVulkan_InitInfo info{};
+			info.ApiVersion = VK_API_VERSION_1_3;
+			info.Instance = vk.GetInstance();
+			info.PhysicalDevice = vk.GetPhysicalDevice();
+			info.Device = vk.GetDevice();
+			info.QueueFamily = vk.GetQueueFamily();
+			info.Queue = vk.GetQueue();
+			info.DescriptorPoolSize = 4096;   // icons, thumbnails, viewport images
+			info.MinImageCount = 2;
+			info.ImageCount = std::max(2u, vk.GetSwapchainImageCount());
+			info.UseDynamicRendering = true;
+			info.PipelineInfoMain.PipelineRenderingCreateInfo = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
+			info.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+			info.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &s_SwapchainFormat;
+			ImGui_ImplVulkan_Init(&info);
+			vk.SetImGuiReady(true);
+
+			RHI::TextureDesc desc(1, 1, RHI::TextureFormat::RGBA8);
+			const uint32_t grey = 0xFF1E1E1E;
+			s_FallbackTexture = CreateRef<RHI::Vk::VulkanTexture2D>(desc, &grey, sizeof(grey));
+			s_FallbackSet = vk.ResolveImGuiTexture(s_FallbackTexture->GetRendererID());
+		}
+		else {
+			ImGui_ImplGlfw_InitForOpenGL(window, true);
+			ImGui_ImplOpenGL3_Init("#version 410");
+		}
 	}
 	
 	void ImGuiLayer::OnDetach() {
 		LNX_PROFILE_FUNCTION();
-		ImGui_ImplOpenGL3_Shutdown();
+		if (IsVulkan()) {
+			RHI::Vk::VulkanContext::Get().WaitIdle();
+			RHI::Vk::VulkanContext::Get().SetImGuiReady(false);
+			ImGui_ImplVulkan_Shutdown();
+		}
+		else {
+			ImGui_ImplOpenGL3_Shutdown();
+		}
 		ImGui_ImplGlfw_Shutdown();
 		ImGui::DestroyContext();
 	}
@@ -74,7 +135,8 @@ namespace Lunex {
 	
 	void ImGuiLayer::Begin() {
 		LNX_PROFILE_FUNCTION();
-		ImGui_ImplOpenGL3_NewFrame();
+		if (IsVulkan()) ImGui_ImplVulkan_NewFrame();
+		else ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 		ImGuizmo::BeginFrame();
@@ -88,6 +150,19 @@ namespace Lunex {
 		
 		// Rendering
 		ImGui::Render();
+		if (IsVulkan()) {
+			TranslateTextures(ImGui::GetDrawData());
+			if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+				ImGui::UpdatePlatformWindows();
+				for (ImGuiViewport* viewport : ImGui::GetPlatformIO().Viewports)
+					if (viewport != ImGui::GetMainViewport()) TranslateTextures(viewport->DrawData);
+			}
+			RHI::Vk::VulkanContext::Get().EndFrame([](VkCommandBuffer cmd) {
+				ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+			});
+			if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) ImGui::RenderPlatformWindowsDefault();
+			return;
+		}
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 		
 		if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
