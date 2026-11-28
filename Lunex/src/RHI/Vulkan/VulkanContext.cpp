@@ -343,7 +343,7 @@ namespace Lunex::RHI::Vk {
 		}
 		FrameData& frame = m_Frames[m_FrameIndex];
 		vkWaitForFences(m_Device, 1, &frame.InFlight, VK_TRUE, UINT64_MAX);
-		FlushDeletions(frame);
+		FlushDeletions(false);
 
 		VkResult r = vkAcquireNextImageKHR(m_Device, m_Swapchain, UINT64_MAX, frame.ImageAvailable, VK_NULL_HANDLE, &m_ImageIndex);
 		if (r == VK_ERROR_OUT_OF_DATE_KHR) { m_SwapchainDirty = true; return false; }
@@ -433,14 +433,23 @@ namespace Lunex::RHI::Vk {
 		m_FrameNumber++;
 	}
 
-	void VulkanContext::FlushDeletions(FrameData& frame) {
-		for (auto& fn : frame.Deletions) fn();
-		frame.Deletions.clear();
+	void VulkanContext::FlushDeletions(bool all) {
+		// Frame N waits on the fence of frame N - kFramesInFlight: everything up to it is done
+		std::vector<std::function<void()>> ready;
+		{
+			std::lock_guard<std::mutex> lock(m_DeletionMutex);
+			while (!m_Deletions.empty() && (all || m_Deletions.front().first + kFramesInFlight <= m_FrameNumber)) {
+				ready.push_back(std::move(m_Deletions.front().second));
+				m_Deletions.pop_front();
+			}
+		}
+		for (auto& fn : ready) fn();
 	}
 
 	void VulkanContext::DeferDelete(std::function<void()> fn) {
 		if (!m_Device) return;
-		m_Frames[m_FrameIndex].Deletions.push_back(std::move(fn));
+		std::lock_guard<std::mutex> lock(m_DeletionMutex);
+		m_Deletions.emplace_back(m_FrameNumber, std::move(fn));
 	}
 
 	void VulkanContext::WaitIdle() { if (m_Device) vkDeviceWaitIdle(m_Device); }
@@ -648,8 +657,8 @@ namespace Lunex::RHI::Vk {
 	void VulkanContext::Shutdown() {
 		if (!m_Device) return;
 		vkDeviceWaitIdle(m_Device);
+		FlushDeletions(true);
 		for (auto& f : m_Frames) {
-			FlushDeletions(f);
 			vkDestroyFence(m_Device, f.InFlight, nullptr);
 			vkDestroySemaphore(m_Device, f.ImageAvailable, nullptr);
 			vkDestroyCommandPool(m_Device, f.Pool, nullptr);

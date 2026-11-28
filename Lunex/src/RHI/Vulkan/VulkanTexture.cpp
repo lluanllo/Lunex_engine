@@ -5,6 +5,7 @@
 #include "Log/Log.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -140,7 +141,15 @@ namespace Lunex::RHI::Vk {
 		VkMemoryRequirements req;
 		vkGetImageMemoryRequirements(ctx.GetDevice(), m_Image, &req);
 		m_Memory = ctx.Allocate(req, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		if (!m_Memory.IsValid()) {
+			LNX_LOG_ERROR("Vulkan: no memory for a {0}x{1} image", m_Desc.Width, m_Desc.Height);
+			vkDestroyImage(ctx.GetDevice(), m_Image, nullptr);
+			m_Image = VK_NULL_HANDLE;
+			return;
+		}
 		vkBindImageMemory(ctx.GetDevice(), m_Image, m_Memory.Memory, m_Memory.Offset);
+		static std::atomic<uint64_t> s_NextSerial{ 1 };
+		m_Serial = s_NextSerial++;
 
 		VkImageViewCreateInfo view{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
 		view.image = m_Image;

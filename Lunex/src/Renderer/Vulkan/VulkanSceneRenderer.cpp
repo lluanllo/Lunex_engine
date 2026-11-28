@@ -1385,7 +1385,9 @@ void main() { oColor = vColor; oEntity = vEntity; }
 			VulkanTexture2D* slots[kMaterialTextures] = {};
 			for (uint32_t i = 0; i < count && i < kMaterialTextures; i++) slots[i] = tex[i];
 			size_t key = flatNormalAt1 ? 1469598103934665603ull : 7809847782465536322ull;
-			for (uint32_t i = 0; i < kMaterialTextures; i++) key = (key ^ reinterpret_cast<size_t>(slots[i] ? slots[i]->GetView() : VK_NULL_HANDLE)) * 1099511628211ull;
+			// Keyed by image serials: a view handle can be reused by the driver after a resize or
+			// reload, which made a cached set point at a destroyed image (crash resizing the viewport)
+			for (uint32_t i = 0; i < kMaterialTextures; i++) key = (key ^ static_cast<size_t>(slots[i] ? slots[i]->GetSerial() : 0)) * 1099511628211ull;
 			auto it = r.MaterialSets.find(key);
 			if (it != r.MaterialSets.end()) return it->second;
 			auto& ctx = VulkanContext::Get();

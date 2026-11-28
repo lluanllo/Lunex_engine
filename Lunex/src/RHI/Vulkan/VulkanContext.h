@@ -18,6 +18,7 @@
 
 #include <vulkan/vulkan.h>
 
+#include <deque>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -45,7 +46,6 @@ namespace Lunex::RHI::Vk {
 		VkCommandBuffer Cmd = VK_NULL_HANDLE;
 		VkFence InFlight = VK_NULL_HANDLE;
 		VkSemaphore ImageAvailable = VK_NULL_HANDLE;
-		std::vector<std::function<void()>> Deletions;
 	};
 
 	class VulkanContext {
@@ -115,7 +115,8 @@ namespace Lunex::RHI::Vk {
 		bool CreateSwapchain();
 		void DestroySwapchain();
 		void RecreateSwapchain();
-		void FlushDeletions(FrameData& frame);
+		// Runs the deletions whose frame the GPU has finished (all of them with `all`)
+		void FlushDeletions(bool all);
 
 		GLFWwindow* m_Window = nullptr;
 		VkInstance m_Instance = VK_NULL_HANDLE;
@@ -141,6 +142,11 @@ namespace Lunex::RHI::Vk {
 		bool m_VSync = true;
 
 		FrameData m_Frames[kFramesInFlight];
+		// Deferred deletions tagged with the frame number they were requested in: any thread may
+		// add one, and one requested between frames (or in a skipped frame) still waits for every
+		// frame that could reference the resource
+		std::deque<std::pair<uint64_t, std::function<void()>>> m_Deletions;
+		std::mutex m_DeletionMutex;
 		uint32_t m_FrameIndex = 0;
 		uint64_t m_FrameNumber = 0;
 		uint32_t m_ImageIndex = 0;

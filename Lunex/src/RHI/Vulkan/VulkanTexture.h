@@ -51,6 +51,9 @@ namespace Lunex::RHI::Vk {
 		// After barriers recorded by hand (e.g. per-mip blits): the layout the whole image is in now
 		void SetTrackedLayout(VkImageLayout layout) const { m_Layout = layout; }
 		VkSampler GetDefaultSampler() const;
+		// Unique per created image (changes on Resize): cache key that never aliases a destroyed
+		// view, unlike the VkImageView handle the driver may hand out again
+		uint64_t GetSerial() const { return m_Serial; }
 
 	private:
 		void Create();
@@ -63,6 +66,7 @@ namespace Lunex::RHI::Vk {
 		Allocation m_Memory;
 		mutable VkImageLayout m_Layout = VK_IMAGE_LAYOUT_UNDEFINED;
 		mutable uint32_t m_ImGuiID = 0;
+		uint64_t m_Serial = 0;
 	};
 
 	// Image layout barrier covering every mip / layer
