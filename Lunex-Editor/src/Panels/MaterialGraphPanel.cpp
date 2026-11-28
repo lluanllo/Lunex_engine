@@ -24,27 +24,37 @@ namespace Lunex {
 		m_Editor->DrawNodeBody = [this](Node& node) { return DrawNodeBody(node); };
 		m_Editor->EnableGroups = true;
 		m_NodePreviews = std::make_unique<MaterialGraph::NodePreviewRenderer>(128);
-		m_Editor->DrawNodePreview = [this](Node& node, float width) {
-			if (!m_ShowNodePreviews) return;
+		m_Editor->GetNodePreview = [this](Node& node, ImTextureID& texture, ImVec2& uv0, ImVec2& uv1) {
+			if (!m_ShowNodePreviews) return false;
 			// Like Blender's node previews: textures, colors, vectors, converters (not shaders / constants)
 			const std::string& t = node.TypeName;
 			if (t == MaterialGraph::ValueNode || t == MaterialGraph::RGBNode || t == MaterialGraph::TimeNode ||
-				t == MaterialGraph::FloatNode || t == MaterialGraph::ColorNode || node.IsGroup() ||
-				t == GroupInputType || t == GroupOutputType) return;
-			if (const NodeTypeInfo* info = MaterialGraph::GetRegistry().Get(t); info && (info->Category == "Shader" || info->Category == "Output")) return;
+				t == MaterialGraph::FloatNode || t == MaterialGraph::ColorNode || node.IsGroup() || node.IsReroute() ||
+				t == GroupInputType || t == GroupOutputType) return false;
+			if (const NodeTypeInfo* info = MaterialGraph::GetRegistry().Get(t); info && (info->Category == "Shader" || info->Category == "Output")) return false;
 			uint32_t tex = 0;
-			glm::vec2 uv0, uv1;
-			if (!m_NodePreviews->GetTile(node.NodeID, tex, uv0, uv1)) return;
-			const float s = std::min(width, 150.0f);
-			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (width - s) * 0.5f);
-			ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(s, s), ImVec2(uv0.x, uv0.y), ImVec2(uv1.x, uv1.y));
+			glm::vec2 a, b;
+			if (!m_NodePreviews->GetTile(node.NodeID, tex, a, b)) return false;
+			texture = (ImTextureID)(intptr_t)tex;
+			uv0 = ImVec2(a.x, a.y);
+			uv1 = ImVec2(b.x, b.y);
+			return true;
+		};
+		// An image dropped from the Content Browser on the canvas: Image Texture node with it
+		m_Editor->OnCanvasDrop = [this](NodeGraph& g, const ImGuiPayload& payload, const glm::vec2& at) {
+			const auto* data = static_cast<const ContentBrowserPayload*>(payload.Data);
+			std::string ext = data->Extension;
+			for (char& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+			if (data->IsDirectory || !(ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".hdr" || ext == ".bmp")) return false;
+			Node* img = g.AddNode(MaterialGraph::ImageTexture, at);
+			if (!img) return false;
+			img->Properties["Path"] = data->FilePath;
+			img->Properties["Color Space"] = MaterialGraph::GuessColorSpace(data->FilePath);
+			return true;
 		};
 		m_Editor->OnPreviewNode = [this](NodeGraph& g, ID node, int output) { return PreviewNode(g, node, output); };
 		m_Editor->OnTextureSetup = [this](NodeGraph& g, ID node) { return TextureSetup(g, node); };
 		m_Editor->OnPrincipledTextureSetup = [this](NodeGraph& g, ID node) { return PrincipledTextureSetup(g, node); };
-		m_Preview = CreateRef<MaterialPreviewRenderer>();
-		m_Preview->SetResolution(m_PreviewSize, m_PreviewSize);
-		m_Preview->SetAutoRotate(true);
 	}
 
 	// ============================================================================
@@ -91,9 +101,8 @@ namespace Lunex {
 	}
 
 	void MaterialGraphPanel::OnUpdate(float deltaTime) {
+		(void)deltaTime;
 		if (!IsOpen()) return;
-		m_Preview->Update(deltaTime);
-		m_Preview->RenderPreview(m_Material);
 		if (m_ShowNodePreviews)
 			if (auto graph = m_Material->GetNodeGraph()) m_NodePreviews->Update(m_Editor->ResolveCurrentGraph(*graph));
 	}
@@ -139,7 +148,7 @@ namespace Lunex {
 
 			// Shortcut hints (Blender status bar)
 			ImGui::SetCursorPos(ImVec2(10.0f, ImGui::GetCursorPosY() + 3.0f));
-			ImGui::TextDisabled("Shift+A Add | Ctrl+G Group, Tab enter/exit | Ctrl+RMB drag Cut links | Shift+RMB drag Reroute | Drop node on link: insert | Ctrl+Shift+Click Preview | Ctrl+T / Ctrl+Shift+T Textures | F Link | Ctrl+X Dissolve | Alt+RMB Lazy connect | Ctrl+H Hide sockets");
+			ImGui::TextDisabled("Shift+A Add | G Move | Ctrl+G Group, Tab enter/exit | Ctrl+RMB drag Cut links | Shift+RMB drag Reroute | Drop node on link: insert | Drop image: Image Texture | Ctrl+Shift+Click Preview | Ctrl+T / Ctrl+Shift+T Textures | F Link | Ctrl+X Dissolve | Alt+RMB Lazy connect | Ctrl+H Hide sockets");
 		}
 		ImGui::End();
 		if (!open) Close();
@@ -173,28 +182,11 @@ namespace Lunex {
 			}
 		}
 
-		// Preview controls (right side, or right after the status when the window is narrow)
+		// Node previews toggle (right side, or right after the status when the window is narrow)
 		const float right = ImGui::GetWindowContentRegionMax().x;
 		const float afterStatus = ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x + 20.0f;
-		ImGui::SameLine(std::max(afterStatus, right - 420.0f));
-		ImGui::TextDisabled("Preview");
-		ImGui::SameLine();
-		static const char* shapes[] = { "Sphere", "Cube", "Plane", "Cylinder" };
-		static int shape = 0;
-		ImGui::SetNextItemWidth(110.0f);
-		if (ImGui::Combo("##shape", &shape, shapes, IM_ARRAYSIZE(shapes))) {
-			switch (shape) {
-				case 0: m_Preview->SetPreviewModel(Model::CreateSphere()); break;
-				case 1: m_Preview->SetPreviewModel(Model::CreateCube()); break;
-				case 2: m_Preview->SetPreviewModel(Model::CreatePlane()); break;
-				default: m_Preview->SetPreviewModel(Model::CreateCylinder()); break;
-			}
-		}
-		ImGui::SameLine();
-		bool rotate = m_Preview->GetAutoRotate();
+		ImGui::SameLine(std::max(afterStatus, right - 150.0f));
 		if (ImGui::Checkbox("Node previews", &m_ShowNodePreviews) && m_ShowNodePreviews) m_NodePreviews->Invalidate();
-		ImGui::SameLine();
-		if (ImGui::Checkbox("Rotate", &rotate)) m_Preview->SetAutoRotate(rotate);
 
 		ImGui::EndChild();
 		ImGui::PopStyleColor();
@@ -209,16 +201,6 @@ namespace Lunex {
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
 		ImGui::BeginChild("##sidebar", ImVec2(0, 0), ImGuiChildFlags_AlwaysUseWindowPadding);
 
-		// Square preview
-		const float w = ImGui::GetContentRegionAvail().x;
-		const uint32_t size = static_cast<uint32_t>(std::max(64.0f, w));
-		if (size != m_PreviewSize) { m_PreviewSize = size; m_Preview->SetResolution(size, size); }
-		if (uint32_t tex = m_Preview->GetPreviewTextureID())
-			ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(w, w), ImVec2(0, 1), ImVec2(1, 0));
-		else
-			ImGui::Dummy(ImVec2(w, w));
-
-		ImGui::Spacing();
 		if (auto graph = m_Material->GetNodeGraph()) DrawDetails(m_Editor->GetCurrentGraph() ? *m_Editor->GetCurrentGraph() : *graph);
 
 		if (!m_Messages.empty()) {
@@ -409,7 +391,11 @@ namespace Lunex {
 		const ID surface = output->FindInput("Surface")->PinID;
 
 		if (out.Type == Graph::PinType::Shader) {
+			// A shader goes straight to the output: the Viewer is not needed any more (Node Wrangler)
 			g.Connect(outPin, surface);
+			std::vector<ID> viewers;
+			for (const auto& n : g.GetNodes()) if (n.Properties.count("__viewer")) viewers.push_back(n.NodeID);
+			for (ID v : viewers) g.RemoveNode(v);
 		}
 		else {
 			// Viewer: an Emission shader showing the value (created once, like Node Wrangler)

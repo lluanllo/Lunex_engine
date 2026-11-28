@@ -111,6 +111,7 @@ namespace Lunex {
 		inline constexpr const char* UVMapNode       = "Mat.UVMap";
 		inline constexpr const char* VolumeInfoNode  = "Mat.VolumeInfo";
 		inline constexpr const char* WireframeNode   = "Mat.Wireframe";
+		inline constexpr const char* ScreenPositionNode = "Mat.ScreenPosition";
 
 		// ---- Output ----
 		inline constexpr const char* AOVOutput       = "Mat.AOVOutput";

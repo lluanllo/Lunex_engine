@@ -297,7 +297,8 @@ namespace Lunex::MaterialGraph {
 				n.Properties["Samples"] = "4";
 			});
 			reg(CameraDataNode, "Camera Data", "Input", kInput, 160.0f, [](Node& n) {
-				n.Outputs = { Out("View Vector", PinType::Vec3), Out("View Z Depth", PinType::Float), Out("View Distance", PinType::Float) };
+				n.Outputs = { Out("View Vector", PinType::Vec3), Out("View Z Depth", PinType::Float), Out("View Distance", PinType::Float),
+					Out("Camera Position", PinType::Vec3), Out("Camera Forward", PinType::Vec3) };
 			});
 			reg(ColorAttributeNode, "Color Attribute", "Input", kInput, 160.0f, [](Node& n) {
 				n.Outputs = { Out("Color", PinType::Color), Out("Alpha", PinType::Float) };
@@ -316,7 +317,7 @@ namespace Lunex::MaterialGraph {
 			}).Description = "Raster engine: only camera rays (Is Camera Ray = 1)";
 			reg(ObjectInfoNode, "Object Info", "Input", kInput, 160.0f, [](Node& n) {
 				n.Outputs = { Out("Location", PinType::Vec3), Out("Color", PinType::Color), Out("Alpha", PinType::Float), Out("Object Index", PinType::Float),
-					Out("Material Index", PinType::Float), Out("Random", PinType::Float) };
+					Out("Material Index", PinType::Float), Out("Random", PinType::Float), Out("Scale", PinType::Vec3) };
 			});
 			reg(ParticleInfoNode, "Particle Info", "Input", kInput, 150.0f, [](Node& n) {
 				n.Outputs = { Out("Index", PinType::Float), Out("Random", PinType::Float), Out("Age", PinType::Float), Out("Lifetime", PinType::Float),
@@ -344,6 +345,9 @@ namespace Lunex::MaterialGraph {
 				n.Inputs = { F("Size", 0.01f) };
 				n.Properties["Pixel Size"] = "0";
 			}).Toggles = { "Pixel Size" };
+			reg(ScreenPositionNode, "Screen Position", "Input", kInput, 160.0f, [](Node& n) {
+				n.Outputs = { Out("Screen UV", PinType::Vec3), Out("Pixel", PinType::Vec3), Out("Centered", PinType::Vec3), Out("Depth", PinType::Float) };
+			}).Description = "Position of the pixel on screen: 0..1 UV, pixel coordinates, -1..1 around the center, view depth";
 
 			// ---------------- Texture ----------------
 			auto& img = reg(ImageTexture, "Image Texture", "Texture", kTexture, 240.0f, [](Node& n) {

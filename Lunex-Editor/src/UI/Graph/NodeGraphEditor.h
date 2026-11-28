@@ -19,6 +19,11 @@
  *  - Node Wrangler: F / Shift+F make links, Ctrl+X dissolve, Alt+RMB drag lazy connect,
  *    Alt+S swap inputs, Ctrl+H hide unused sockets, Ctrl+Shift+Click preview output,
  *    Ctrl+T / Ctrl+Shift+T texture setups (hooks provided by the owning panel)
+ *  - G: grab (move) the selected nodes or the hovered one (reroutes too); LMB / Enter
+ *    confirms, RMB / Esc cancels
+ *  - Shift + right drag over links: one reroute per source socket (links leaving the same
+ *    output share it and fork from there)
+ *  - Node previews float above their node (they are not part of the node body)
  */
 
 #include "Graph/NodeGraph.h"
@@ -63,8 +68,12 @@ namespace Lunex::UI {
 
 		// Custom node body, drawn between the drop-downs and the inputs. Return true if changed.
 		std::function<bool(Graph::Node&)> DrawNodeBody;
-		// Optional preview image at the bottom of a node (Node Wrangler "node preview"); width = inner width
-		std::function<void(Graph::Node&, float width)> DrawNodePreview;
+		// Optional preview image drawn above a node (Blender node previews): return false for none
+		std::function<bool(Graph::Node&, ImTextureID& texture, ImVec2& uv0, ImVec2& uv1)> GetNodePreview;
+		// Something dropped on the empty canvas (e.g. an image from the Content Browser), at `position`
+		// in canvas space. Return true when nodes were added.
+		std::function<bool(Graph::NodeGraph&, const ImGuiPayload& payload, const glm::vec2& position)> OnCanvasDrop;
+		std::string CanvasDropPayload = "CONTENT_BROWSER_ITEM";
 
 		// Node Wrangler hooks (domain specific; return true when the graph changed)
 		std::function<bool(Graph::NodeGraph&, Graph::ID node, int outputIndex)> OnPreviewNode;   // Ctrl+Shift+Click
@@ -90,6 +99,7 @@ namespace Lunex::UI {
 		void HandleCreation(Graph::NodeGraph& graph, bool& changed);
 		void HandleDeletion(Graph::NodeGraph& graph, bool& changed);
 		void HandleShortcuts(Graph::NodeGraph& graph, bool& changed);
+		void HandleGrab(Graph::NodeGraph& graph, bool& changed);
 		void DrawPopups(Graph::NodeGraph& graph, bool& changed);
 		bool DrawAddMenu(Graph::NodeGraph& graph);
 		Graph::Node* SpawnNode(Graph::NodeGraph& graph, const std::string& typeName);
@@ -127,6 +137,13 @@ namespace Lunex::UI {
 		bool m_SuppressContextMenu = false;
 		Graph::ID m_PreviewNode = 0;
 		int m_PreviewOutput = 0;
+
+		// G grab: nodes moved with the mouse until confirmed / cancelled
+		bool m_Grabbing = false;
+		ImVec2 m_GrabStart{ 0, 0 };
+		std::vector<std::pair<Graph::ID, ImVec2>> m_GrabNodes;   // node, position before the grab
+		bool m_SwallowClick = false;                               // the click that ended a grab
+		ImVec2 m_CanvasMouse{ 0, 0 };                              // mouse in canvas space (last frame)
 
 		// Groups
 		std::vector<Graph::ID> m_GroupPath;            // group nodes entered, from the root

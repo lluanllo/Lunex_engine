@@ -1568,6 +1568,17 @@ vec3 lnx_rotate_axis(vec3 v, vec3 axis, float angle) {
 					Decl(n, "View Vector", T::Vec3, "normalize(" + id + "_v)");
 					Decl(n, "View Z Depth", T::Float, "-" + id + "_v.z");
 					Decl(n, "View Distance", T::Float, "length(" + id + "_v)");
+					Decl(n, "Camera Position", T::Vec3, "LNX_VIEWPOS");
+					Decl(n, "Camera Forward", T::Vec3, "normalize(-vec3(LNX_VIEW[0][2], LNX_VIEW[1][2], LNX_VIEW[2][2]))");
+					return;
+				}
+				if (t == ScreenPositionNode) {
+					Line("vec4 " + id + "_clip = LNX_VIEWPROJ * vec4(LNX_POS, 1.0);");
+					Line("vec2 " + id + "_ndc = " + id + "_clip.xy / max(abs(" + id + "_clip.w), 1e-6);");
+					Decl(n, "Screen UV", T::Vec3, "vec3(" + id + "_ndc * 0.5 + 0.5, 0.0)");
+					Decl(n, "Pixel", T::Vec3, "vec3(gl_FragCoord.xy, 0.0)");
+					Decl(n, "Centered", T::Vec3, "vec3(" + id + "_ndc, 0.0)");
+					Decl(n, "Depth", T::Float, "-(LNX_VIEW * vec4(LNX_POS, 1.0)).z");
 					return;
 				}
 				if (t == ColorAttributeNode) {
@@ -1591,6 +1602,7 @@ vec3 lnx_rotate_axis(vec3 v, vec3 axis, float angle) {
 					Decl(n, "Object Index", T::Float, "LNX_OBJECT_ID");
 					Decl(n, "Material Index", T::Float, "0.0");
 					Decl(n, "Random", T::Float, "lnx_hash14(vec4(LNX_OBJECT_ID, LNX_MODEL[3].xyz))");
+					Decl(n, "Scale", T::Vec3, "vec3(length(LNX_MODEL[0].xyz), length(LNX_MODEL[1].xyz), length(LNX_MODEL[2].xyz))");
 					return;
 				}
 				if (t == CurvesInfoNode || t == ParticleInfoNode || t == PointInfoNode || t == VolumeInfoNode) {

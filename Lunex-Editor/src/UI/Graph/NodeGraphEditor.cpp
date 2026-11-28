@@ -166,6 +166,7 @@ namespace Lunex::UI {
 
 		ed::SetCurrentEditor(m_Context);
 		ed::Begin(m_ID.c_str());
+		m_CanvasMouse = ImGui::GetMousePos();   // canvas space inside Begin / End
 
 		// Nodes (index loop: the body callbacks never add nodes, but be safe with references)
 		for (size_t i = 0; i < graph.GetNodes().size(); i++) {
@@ -186,6 +187,7 @@ namespace Lunex::UI {
 		HandleDeletion(graph, changed);
 		HandleCanvasTools(graph, changed);
 		HandleShortcuts(graph, changed);
+		HandleGrab(graph, changed);
 
 		// Keep node positions in the data model (saved with the asset)
 		for (auto& node : graph.GetNodes()) {
@@ -207,6 +209,21 @@ namespace Lunex::UI {
 
 		ed::End();
 		ed::SetCurrentEditor(nullptr);
+
+		// Drop on the canvas (an image from the Content Browser becomes an Image Texture node).
+		// Smaller targets (the image slot of a node) win over this one.
+		if (OnCanvasDrop) {
+			const ImRect canvas(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+			if (ImGui::BeginDragDropTargetCustom(canvas, ImGui::GetID("##canvasdrop"))) {
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(CanvasDropPayload.c_str())) {
+					if (OnCanvasDrop(graph, *payload, glm::vec2(m_CanvasMouse.x, m_CanvasMouse.y))) {
+						changed = true;
+						m_PositionsDirty = true;
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
+		}
 
 		DrawOverlays(root);
 
@@ -681,15 +698,6 @@ namespace Lunex::UI {
 			ImGui::SetCursorScreenPos(ImVec2(origin.x, next));
 		}
 
-		// ---- Preview (Node Wrangler style thumbnail of what the node outputs) ----
-		if (DrawNodePreview && !(node.Properties.count("__nopreview") && node.Properties.at("__nopreview") == "1")) {
-			ImGui::SetCursorScreenPos(ImVec2(origin.x + kMargin, ImGui::GetCursorScreenPos().y + 4.0f));
-			ImGui::BeginGroup();
-			DrawNodePreview(node, inner);
-			ImGui::EndGroup();
-			ImGui::SetCursorScreenPos(ImVec2(origin.x, ImGui::GetCursorScreenPos().y));
-		}
-
 		ImGui::Dummy(ImVec2(W, 6.0f));
 		ImGui::PopID();
 		ed::EndNode();
@@ -704,6 +712,19 @@ namespace Lunex::UI {
 			const float half = ed::GetStyle().NodeBorderWidth * 0.5f;
 			bg->AddRectFilled(ImVec2(nmin.x + half, nmin.y + half), ImVec2(nmax.x - half, headerBottom),
 				U32(color), ed::GetStyle().NodeRounding, ImDrawFlags_RoundCornersTop);
+		}
+
+		// ---- Preview: a square image floating above the node (Blender), not part of its body ----
+		ImTextureID previewTex{};
+		ImVec2 uv0, uv1;
+		if (GetNodePreview && !(node.Properties.count("__nopreview") && node.Properties.at("__nopreview") == "1") &&
+			GetNodePreview(node, previewTex, uv0, uv1)) {
+			ImDrawList* bg = ed::GetNodeBackgroundDrawList(ed::NodeId(node.NodeID));
+			const ImVec2 nmin = ImGui::GetItemRectMin(), nmax = ImGui::GetItemRectMax();
+			const float size = nmax.x - nmin.x;
+			const ImVec2 a(nmin.x, nmin.y - 6.0f - size), b(nmax.x, nmin.y - 6.0f);
+			bg->AddRectFilled(ImVec2(a.x - 1.0f, a.y - 1.0f), ImVec2(b.x + 1.0f, b.y + 1.0f), IM_COL32(15, 15, 15, 255), 3.0f);
+			bg->AddImage(previewTex, a, b, uv0, uv1);
 		}
 	}
 
@@ -884,7 +905,7 @@ namespace Lunex::UI {
 		const bool onEmpty = !ed::GetHoveredNode() && !ed::GetHoveredPin() && !ed::GetHoveredLink();
 
 		// ---- Box selection (drawn by us so it stays above the nodes) ----
-		if (hovered && onEmpty && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.KeyAlt && !m_Creating) {
+		if (hovered && onEmpty && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.KeyAlt && !m_Creating && !m_Grabbing && !m_SwallowClick) {
 			m_BoxSelecting = true;
 			m_BoxStart = mouse;
 		}
@@ -894,7 +915,7 @@ namespace Lunex::UI {
 		}
 
 		// ---- Ctrl + right drag: cut links (knife), Shift + right drag: add reroutes ----
-		if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right) && (io.KeyCtrl || io.KeyShift) && !io.KeyAlt) {
+		if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right) && (io.KeyCtrl || io.KeyShift) && !io.KeyAlt && !m_Grabbing) {
 			m_Stroke = io.KeyCtrl ? Stroke::Knife : Stroke::Reroute;
 			m_StrokePoints = { mouse };
 		}
@@ -924,14 +945,26 @@ namespace Lunex::UI {
 					for (const auto& h : hits) if (graph.RemoveLink(h.LinkID)) changed = true;
 				}
 				else {
+					// Links leaving the same output share one reroute: a single link from the socket
+					// to the reroute, and the original targets fork from it (Blender)
+					std::vector<std::pair<ID, std::vector<const Hit*>>> bySource;
 					for (const auto& h : hits) {
-						Node* reroute = graph.AddNode(RerouteType, { h.At.x - 8.0f, h.At.y - 8.0f });
+						auto it = std::find_if(bySource.begin(), bySource.end(), [&](const auto& s) { return s.first == h.From; });
+						if (it == bySource.end()) bySource.push_back({ h.From, { &h } });
+						else it->second.push_back(&h);
+					}
+					for (const auto& [from, group] : bySource) {
+						ImVec2 at(0.0f, 0.0f);
+						for (const Hit* h : group) { at.x += h->At.x; at.y += h->At.y; }
+						at.x /= static_cast<float>(group.size());
+						at.y /= static_cast<float>(group.size());
+						Node* reroute = graph.AddNode(RerouteType, { at.x - 8.0f, at.y - 8.0f });
 						if (!reroute) continue;
 						const ID rID = reroute->NodeID;
 						const ID rIn = reroute->Inputs[0].PinID, rOut = reroute->Outputs[0].PinID;
-						ed::SetNodePosition(ed::NodeId(rID), ImVec2(h.At.x - 8.0f, h.At.y - 8.0f));
-						graph.Connect(h.From, rIn);
-						graph.Connect(rOut, h.To);
+						ed::SetNodePosition(ed::NodeId(rID), ImVec2(at.x - 8.0f, at.y - 8.0f));
+						graph.Connect(from, rIn);
+						for (const Hit* h : group) graph.Connect(rOut, h->To);
 						changed = true;
 					}
 				}
@@ -1024,6 +1057,21 @@ namespace Lunex::UI {
 		std::vector<ed::NodeId> selected(static_cast<size_t>(std::max(ed::GetSelectedObjectCount(), 0)));
 		const int count = selected.empty() ? 0 : ed::GetSelectedNodes(selected.data(), static_cast<int>(selected.size()));
 		selected.resize(static_cast<size_t>(count));
+
+		// G: grab the selection (or the hovered node, e.g. a reroute, whose body is all socket)
+		if (!m_Grabbing && !io.KeyCtrl && !io.KeyShift && !io.KeyAlt && ImGui::IsKeyPressed(ImGuiKey_G, false)) {
+			const ed::NodeId hoveredNode = ed::GetHoveredNode();
+			std::vector<ID> grab;
+			const bool hoveredSelected = hoveredNode && std::find(selected.begin(), selected.end(), hoveredNode) != selected.end();
+			if (!selected.empty() && (!hoveredNode || hoveredSelected)) for (auto id : selected) grab.push_back(id.Get());
+			else if (hoveredNode) grab.push_back(hoveredNode.Get());
+			if (!grab.empty()) {
+				m_Grabbing = true;
+				m_GrabStart = ImGui::GetMousePos();
+				m_GrabNodes.clear();
+				for (ID id : grab) m_GrabNodes.push_back({ id, ed::GetNodePosition(ed::NodeId(id)) });
+			}
+		}
 
 		// Shift+A: add menu at the mouse
 		if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_A, false)) {
@@ -1139,6 +1187,28 @@ namespace Lunex::UI {
 				m_LazyFrom = 0;
 				m_SuppressContextMenu = true;
 			}
+		}
+	}
+
+	void NodeGraphEditor::HandleGrab(NodeGraph& graph, bool& changed) {
+		if (m_SwallowClick && !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::IsMouseDown(ImGuiMouseButton_Right)) m_SwallowClick = false;
+		if (!m_Grabbing) return;
+		const ImVec2 mouse = ImGui::GetMousePos();
+		const ImVec2 delta(mouse.x - m_GrabStart.x, mouse.y - m_GrabStart.y);
+		const bool cancel = ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsKeyPressed(ImGuiKey_Escape, false);
+		const bool confirm = !cancel && (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
+			ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false));
+		for (const auto& [id, start] : m_GrabNodes) {
+			if (!graph.FindNode(id)) continue;
+			const ImVec2 p = cancel ? start : ImVec2(start.x + delta.x, start.y + delta.y);
+			ed::SetNodePosition(ed::NodeId(id), p);
+		}
+		if (cancel || confirm) {
+			if (confirm && (delta.x != 0.0f || delta.y != 0.0f)) changed = true;
+			m_Grabbing = false;
+			m_GrabNodes.clear();
+			m_SwallowClick = true;
+			m_SuppressContextMenu = true;   // the right click that cancelled
 		}
 	}
 

@@ -6,14 +6,13 @@
  *
  * Opened from the Material Editor ("Node Editor"), from the Content Browser for graph
  * materials, or from the inspector. Layout:
- *   [toolbar: Save | Frame | compile status | preview shape]
- *   [preview + node details | node canvas]
+ *   [toolbar: Save | Frame | compile status | node previews]
+ *   [node details | node canvas]
  *   [shortcut hints]
  */
 
 #include "Core/Core.h"
 #include "Assets/Materials/MaterialAsset.h"
-#include "Renderer/MaterialPreviewRenderer.h"
 #include "Assets/Materials/MaterialGraphPreview.h"
 #include "../UI/Graph/NodeGraphEditor.h"
 
@@ -66,7 +65,6 @@ namespace Lunex {
 
 		Ref<MaterialAsset> m_Material;
 		std::unique_ptr<UI::NodeGraphEditor> m_Editor;
-		Ref<MaterialPreviewRenderer> m_Preview;
 		std::unique_ptr<MaterialGraph::NodePreviewRenderer> m_NodePreviews;
 		bool m_ShowNodePreviews = true;
 		std::unordered_map<std::string, Ref<Texture2D>> m_Thumbnails;
@@ -78,7 +76,6 @@ namespace Lunex {
 		bool m_Dirty = false;
 		int m_Focus = 0;
 		float m_SidebarRatio = 0.22f;
-		uint32_t m_PreviewSize = 256;
 	};
 
 } // namespace Lunex
